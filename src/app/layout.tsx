@@ -1,11 +1,14 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import { Lexend } from 'next/font/google'
+import localFont from 'next/font/local'
 import { NotificationsProvider } from '@/providers/NotificationsProvider'
 
-const lexend = Lexend({
-  subsets: ['latin'],
-  weight: ['400', '500', '900'],
+const lexend = localFont({
+  src: [
+    { path: '../../public/fonts/lexend/Lexend-Regular.ttf', weight: '400', style: 'normal' },
+    { path: '../../public/fonts/lexend/Lexend-Medium.ttf', weight: '500', style: 'normal' },
+    { path: '../../public/fonts/lexend/Lexend-Bold.ttf', weight: '900', style: 'normal' },
+  ],
   variable: '--font-lexend',
 })
 

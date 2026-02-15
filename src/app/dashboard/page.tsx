@@ -1,8 +1,9 @@
 ﻿'use client'
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { motion, useInView, type Transition } from 'framer-motion'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { motion } from 'framer-motion'
 import Image from 'next/image'
+import { List, type RowComponentProps } from 'react-window'
 import { supabase } from '@/lib/supabaseBrowser'
 import { useRouter } from 'next/navigation'
 import { useDailyResults } from '@/hooks/useDailyResults'
@@ -85,10 +86,32 @@ type QuestionOutcome = {
   is_correct?: boolean
 }
 
-const CARD_ANIMATION_DELAY_MS = 0
+type RankingRow = {
+  position?: number
+  rank?: number
+  displayName?: string
+  name?: string
+  username?: string
+  avatarId?: number
+  avatar_id?: number
+  score?: number
+  points?: number
+  isBot?: boolean
+}
+
+type RankingVirtualListData = {
+  rows: RankingRow[]
+  userRank: number | string | null
+}
+
 const CONTENT_ANIMATION_DELAY_MS = 320
 const REVIEW_FLOATING_CTA_DELAY_MS = 2000
 const MOST_FAILED_FETCH_MAX_RETRIES = 2
+const RANKING_VISIBLE_COUNT = 20
+const RANKING_MAX_COUNT = 25
+const RANKING_ROW_HEIGHT = 50
+const RANKING_LIST_MAX_HEIGHT = 620
+const RANKING_VIRTUALIZE_THRESHOLD = 20
 
 function formatMadridDate(value: string | null | undefined): string | null {
   if (!value) return null
@@ -117,6 +140,74 @@ function formatPercent(value: number | null | undefined): string {
   return `${value.toFixed(1)}`
 }
 
+function RankingVirtualRow({
+  index,
+  style,
+  rows,
+  userRank,
+}: RowComponentProps<RankingVirtualListData>) {
+  const row = rows[index]
+  const rankValue = row?.position ?? row?.rank ?? index + 1
+  const name = row?.displayName ?? row?.name ?? row?.username ?? 'Usuario'
+  const avatarId = Number(row?.avatarId ?? row?.avatar_id ?? 1)
+  const points = row?.score ?? row?.points ?? 0
+  const isCurrentUserRow =
+    userRank != null && Number(rankValue) === Number(userRank)
+  const rowOpacity =
+    index < RANKING_VISIBLE_COUNT
+      ? 1
+      : Math.max(0.42, 0.9 - (index - RANKING_VISIBLE_COUNT) * 0.12)
+
+  return (
+    <div style={style} className="px-1">
+      <div
+        className={`group grid grid-cols-[68px_minmax(0,1fr)_72px] items-center gap-2 border-b border-[#F0EBE8] px-2 py-1.5 transition-transform duration-200 hover:translate-x-[1px] ${
+          isCurrentUserRow ? 'bg-[#FFF3EF]' : ''
+        }`}
+        style={{ opacity: rowOpacity }}
+      >
+        <div
+          className={`font-bold ${
+            isCurrentUserRow ? 'text-[#C4655A]' : 'text-[#4B5563]'
+          }`}
+        >
+          {rankValue}.
+        </div>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="h-9 w-9 overflow-hidden rounded-full">
+            <Image
+              src={getAvatarUrl(avatarId)}
+              alt={name}
+              width={36}
+              height={36}
+              className="h-9 w-9 rounded-full object-cover ring-1 ring-white/30"
+            />
+          </div>
+          <span
+            className={`truncate font-semibold ${
+              isCurrentUserRow ? 'text-[#C4655A]' : 'text-[#374151]'
+            }`}
+          >
+            {name}
+          </span>
+          {row?.isBot && (
+            <span className="ml-1 rounded-full bg-[#FAF7F4] px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-[#C4655A]">
+              Bot
+            </span>
+          )}
+        </div>
+        <div
+          className={`text-right font-bold ${
+            isCurrentUserRow ? 'text-[#C4655A]' : 'text-[#4B5563]'
+          }`}
+        >
+          {points}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function LazyCard({
   className,
   children,
@@ -126,31 +217,11 @@ function LazyCard({
   children: ReactNode
   onInViewChange?: (inView: boolean) => void
 }) {
-  const ref = useRef<HTMLDivElement | null>(null)
-  const inView = useInView(ref, {
-    amount: 0.35,
-    once: false,
-    margin: '0px 0px -10% 0px',
-  })
   useEffect(() => {
-    onInViewChange?.(inView)
-  }, [inView, onInViewChange])
-  return (
-    <motion.div
-      ref={ref}
-      className={className}
-      initial={{ opacity: 0, y: 20, scale: 0.98 }}
-      animate={inView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 20, scale: 0.98 }}
-      transition={{
-        duration: 0.48,
-        ease: 'easeOut',
-        delay: CARD_ANIMATION_DELAY_MS / 1000,
-      }}
-      style={{ willChange: 'opacity, transform' }}
-    >
-      {children}
-    </motion.div>
-  )
+    onInViewChange?.(true)
+  }, [onInViewChange])
+
+  return <div className={className}>{children}</div>
 }
 
 export default function DashboardPage() {
@@ -258,9 +329,7 @@ export default function DashboardPage() {
     score: number
     totalTime: number
   } | null>(null)
-  const [resultsRefreshKey, setResultsRefreshKey] = useState(0)
-  const [scoreDistributionRefreshKey, setScoreDistributionRefreshKey] =
-    useState(0)
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0)
   const [animatedPercentile, setAnimatedPercentile] = useState(0)
   const [percentileOpenKey, setPercentileOpenKey] = useState(0)
   const [summary, setSummary] = useState<{
@@ -295,27 +364,35 @@ export default function DashboardPage() {
   const currentQuestion = questions[currentQuestionIndex]
   const currentSelection = selectedAnswers[currentQuestionIndex]
   const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
-  const reviewQuestionsFromDaily = dailyQuestions.map((item) => ({
-    reviewId: String(item.id),
-    questionId: String(item.id),
-    id: String(item.id),
-    category: item.subject,
-    question: item.statement,
-    correctAnswer: item.correctAnswer ?? null,
-    selectedAnswer: null,
-    isCorrect: null,
-    explanation: item.explanation ?? '',
-    hasImage: false,
-    imageUrl: null,
-    options: item.options,
-  }))
+  const reviewQuestionsFromDaily = useMemo(
+    () =>
+      dailyQuestions.map((item) => ({
+        reviewId: String(item.id),
+        questionId: String(item.id),
+        id: String(item.id),
+        category: item.subject,
+        question: item.statement,
+        correctAnswer: item.correctAnswer ?? null,
+        selectedAnswer: null,
+        isCorrect: null,
+        explanation: item.explanation ?? '',
+        hasImage: false,
+        imageUrl: null,
+        options: item.options,
+      })),
+    [dailyQuestions],
+  )
 
-  const scrollToReview = () => {
+  const refreshDashboardStats = useCallback(() => {
+    setDashboardRefreshKey((prev) => prev + 1)
+  }, [])
+
+  const scrollToReview = useCallback(() => {
     reviewSectionRef.current?.scrollIntoView({
       behavior: 'smooth',
       block: 'start',
     })
-  }
+  }, [])
 
   if (!API_URL) {
     throw new Error('API_URL no definida: revisa variables de entorno')
@@ -325,12 +402,12 @@ export default function DashboardPage() {
     ranking: resultsRanking,
     loading: resultsLoading,
     error: resultsError,
-  } = useDailyResults(showResults, resultsRefreshKey)
+  } = useDailyResults(showResults, dashboardRefreshKey)
   const {
     data: scoreDistribution,
     loading: scoreDistributionLoading,
     error: scoreDistributionError,
-  } = useScoreDistribution(scoreDistributionRefreshKey)
+  } = useScoreDistribution(dashboardRefreshKey)
   const mostFailedWeekOptions = mostFailedWeek?.options ?? []
   const mostFailedWeekCorrectIndex = normalizeOptionIndex(
     mostFailedWeek?.correctAnswer,
@@ -466,7 +543,7 @@ export default function DashboardPage() {
     percentileChartCycle,
   ])
 
-  const handleSummaryCardInViewChange = (visible: boolean) => {
+  const handleSummaryCardInViewChange = useCallback((visible: boolean) => {
     if (!showResults) {
       prevSummaryCardInViewRef.current = false
       return
@@ -475,9 +552,9 @@ export default function DashboardPage() {
       setSummaryChartCycle((prev) => prev + 1)
     }
     prevSummaryCardInViewRef.current = visible
-  }
+  }, [showResults])
 
-  const handleDistributionCardInViewChange = (visible: boolean) => {
+  const handleDistributionCardInViewChange = useCallback((visible: boolean) => {
     if (!showResults) {
       prevDistributionCardInViewRef.current = false
       return
@@ -486,9 +563,9 @@ export default function DashboardPage() {
       setDistributionChartCycle((prev) => prev + 1)
     }
     prevDistributionCardInViewRef.current = visible
-  }
+  }, [showResults])
 
-  const handlePercentileCardInViewChange = (visible: boolean) => {
+  const handlePercentileCardInViewChange = useCallback((visible: boolean) => {
     if (!showResults) {
       prevPercentileCardInViewRef.current = false
       return
@@ -497,7 +574,7 @@ export default function DashboardPage() {
       setPercentileChartCycle((prev) => prev + 1)
     }
     prevPercentileCardInViewRef.current = visible
-  }
+  }, [showResults])
 
   const getPercentileStyle = (value: number) => {
     if (value <= 20) return { color: '#D64545', glow: 'none' }
@@ -684,7 +761,7 @@ export default function DashboardPage() {
   const meToday = resultsData?.meToday
   const breakdown = resultsData?.breakdown ?? meToday?.breakdown
   const byQuestion = resultsData?.byQuestion
-  const mapToReviewQuestion = (
+  const mapToReviewQuestion = useCallback((
     item: Record<string, unknown>,
     index: number,
   ): Question | null => {
@@ -745,31 +822,49 @@ export default function DashboardPage() {
             : null,
       options,
     }
-  }
-  const reviewQuestionsFromResultsRaw: DailyReviewQuestion[] = Array.isArray(
-    resultsData?.reviewQuestions,
+  }, [])
+  const reviewQuestionsFromResultsRaw: DailyReviewQuestion[] = useMemo(
+    () =>
+      Array.isArray(resultsData?.reviewQuestions)
+        ? (resultsData.reviewQuestions as DailyReviewQuestion[])
+        : Array.isArray(dailyData?.reviewQuestions)
+          ? dailyData.reviewQuestions
+          : [],
+    [dailyData?.reviewQuestions, resultsData?.reviewQuestions],
   )
-    ? (resultsData.reviewQuestions as DailyReviewQuestion[])
-    : Array.isArray(dailyData?.reviewQuestions)
-      ? dailyData.reviewQuestions
-      : []
-  const reviewQuestionsFromResults = reviewQuestionsFromResultsRaw
-    .map((item, index: number) =>
-      mapToReviewQuestion(item as Record<string, unknown>, index),
-    )
-    .filter((q): q is Question => q !== null)
-  const reviewQuestionsFromByQuestion = Array.isArray(resultsData?.byQuestion)
-    ? resultsData.byQuestion
-        .map((item: unknown, index: number) =>
+  const reviewQuestionsFromResults = useMemo(
+    () =>
+      reviewQuestionsFromResultsRaw
+        .map((item, index: number) =>
           mapToReviewQuestion(item as Record<string, unknown>, index),
         )
-        .filter((q): q is Question => q !== null)
-    : []
-  const reviewQuestions = reviewQuestionsFromResults.length
-    ? reviewQuestionsFromResults
-    : reviewQuestionsFromByQuestion.length
-      ? reviewQuestionsFromByQuestion
-    : reviewQuestionsFromDaily
+        .filter((q): q is Question => q !== null),
+    [mapToReviewQuestion, reviewQuestionsFromResultsRaw],
+  )
+  const reviewQuestionsFromByQuestion = useMemo(
+    () =>
+      Array.isArray(resultsData?.byQuestion)
+        ? resultsData.byQuestion
+            .map((item: unknown, index: number) =>
+              mapToReviewQuestion(item as Record<string, unknown>, index),
+            )
+            .filter((q): q is Question => q !== null)
+        : [],
+    [mapToReviewQuestion, resultsData?.byQuestion],
+  )
+  const reviewQuestions = useMemo(
+    () =>
+      reviewQuestionsFromResults.length
+        ? reviewQuestionsFromResults
+        : reviewQuestionsFromByQuestion.length
+          ? reviewQuestionsFromByQuestion
+          : reviewQuestionsFromDaily,
+    [
+      reviewQuestionsFromByQuestion,
+      reviewQuestionsFromDaily,
+      reviewQuestionsFromResults,
+    ],
+  )
   const showReviewFloatingButton =
     showQuiz &&
     showResults &&
@@ -906,7 +1001,7 @@ export default function DashboardPage() {
     }, CONTENT_ANIMATION_DELAY_MS)
     return () => clearTimeout(timeout)
   }, [safeAccuracy, showResults])
-  const toFiniteNumber = (value: unknown, fallback = 0) => {
+  const toFiniteNumber = useCallback((value: unknown, fallback = 0) => {
     if (typeof value === 'number') {
       return Number.isFinite(value) ? value : fallback
     }
@@ -915,7 +1010,7 @@ export default function DashboardPage() {
       return Number.isFinite(parsed) ? parsed : fallback
     }
     return fallback
-  }
+  }, [])
   const questionsPoints = toFiniteNumber(
     breakdown?.knowledgeScore,
     correctCount * 200,
@@ -941,13 +1036,21 @@ export default function DashboardPage() {
       : summaryTrend >= 0
         ? Math.max(30, sparkEndY + 10)
         : Math.min(85, sparkEndY - 10)
-  const rankingList = Array.isArray(resultsRanking) ? resultsRanking : []
-  const RANKING_VISIBLE_COUNT = 20
-  const RANKING_MAX_COUNT = 25
-  const topRanking = rankingList.slice(0, RANKING_MAX_COUNT)
-  const userRankingEntry: RankingEntry | undefined = rankingList.find(
-    (entry: RankingEntry) =>
-      entry?.userId === userId || entry?.user_id === userId,
+  const rankingList = useMemo(
+    () => (Array.isArray(resultsRanking) ? resultsRanking : []),
+    [resultsRanking],
+  )
+  const topRanking = useMemo(
+    () => rankingList.slice(0, RANKING_MAX_COUNT),
+    [rankingList],
+  )
+  const userRankingEntry: RankingEntry | undefined = useMemo(
+    () =>
+      rankingList.find(
+        (entry: RankingEntry) =>
+          entry?.userId === userId || entry?.user_id === userId,
+      ),
+    [rankingList, userId],
   )
   const userRank =
     meToday?.rank ??
@@ -967,11 +1070,15 @@ export default function DashboardPage() {
     meToday?.score,
     totalScorePoints,
   )
-  const distributionScores = Array.isArray(scoreDistribution?.scores)
-    ? scoreDistribution?.scores.filter(
-        (value) => typeof value === 'number' && Number.isFinite(value),
-      )
-    : []
+  const distributionScores = useMemo(
+    () =>
+      Array.isArray(scoreDistribution?.scores)
+        ? scoreDistribution?.scores.filter(
+            (value) => typeof value === 'number' && Number.isFinite(value),
+          )
+        : [],
+    [scoreDistribution?.scores],
+  )
   const meanScore =
     typeof scoreDistribution?.mean === 'number' &&
     Number.isFinite(scoreDistribution.mean)
@@ -987,12 +1094,14 @@ export default function DashboardPage() {
     Number.isFinite(scoreDistribution.sameScoreCount)
       ? scoreDistribution.sameScoreCount
       : null
-  const minScore = distributionScores.length
-    ? Math.min(...distributionScores)
-    : null
-  const maxScore = distributionScores.length
-    ? Math.max(...distributionScores)
-    : null
+  const minScore = useMemo(
+    () => (distributionScores.length ? Math.min(...distributionScores) : null),
+    [distributionScores],
+  )
+  const maxScore = useMemo(
+    () => (distributionScores.length ? Math.max(...distributionScores) : null),
+    [distributionScores],
+  )
   const scorePadding =
     minScore !== null && maxScore !== null ? (maxScore - minScore) * 0.1 : 0
   const domainMin =
@@ -1006,19 +1115,19 @@ export default function DashboardPage() {
   const chartSpan = chartRight - chartLeft
   const chartHeight = chartBottom - chartTop
   const distributionVerticalScale = 1.35
-  const chartPositionForScore = (value: number | null) => {
+  const chartPositionForScore = useCallback((value: number | null) => {
     if (value === null || domainMin === null || domainMax === null) return 200
     if (domainMax === domainMin) return 200
     const ratio = (value - domainMin) / (domainMax - domainMin)
     return chartLeft + Math.min(1, Math.max(0, ratio)) * chartSpan
-  }
-  const scoreForChartPosition = (x: number) => {
+  }, [chartLeft, chartSpan, domainMax, domainMin])
+  const scoreForChartPosition = useCallback((x: number) => {
     if (domainMin === null || domainMax === null || chartSpan === 0) return null
     const clampedX = Math.max(chartLeft, Math.min(chartRight, x))
     const ratio = (clampedX - chartLeft) / chartSpan
     return domainMin + ratio * (domainMax - domainMin)
-  }
-  const buildKdePath = (scores: number[]) => {
+  }, [chartLeft, chartRight, chartSpan, domainMax, domainMin])
+  const buildKdePath = useCallback((scores: number[]) => {
     if (scores.length < 2 || domainMin === null || domainMax === null) {
       return { line: '', area: '', maxDensity: 0, bandwidth: 1 }
     }
@@ -1049,13 +1158,25 @@ export default function DashboardPage() {
       .join(' ')
     const area = `${line} L ${chartRight},${chartBottom} L ${chartLeft},${chartBottom} Z`
     return { line, area, maxDensity, bandwidth }
-  }
-  const distributionPaths = buildKdePath(distributionScores)
+  }, [
+    chartBottom,
+    chartHeight,
+    chartLeft,
+    chartPositionForScore,
+    chartRight,
+    distributionVerticalScale,
+    domainMax,
+    domainMin,
+  ])
+  const distributionPaths = useMemo(
+    () => buildKdePath(distributionScores),
+    [buildKdePath, distributionScores],
+  )
   const userScoreForChart =
     typeof userScore === 'number' && Number.isFinite(userScore)
       ? userScore
       : null
-  const computeKdeDensity = (value: number) => {
+  const computeKdeDensity = useCallback((value: number) => {
     if (!distributionScores.length) return 0
     const n = distributionScores.length
     const bandwidth = distributionPaths.bandwidth || 1
@@ -1065,7 +1186,7 @@ export default function DashboardPage() {
         return acc + Math.exp(-0.5 * z * z)
       }, 0) / n
     )
-  }
+  }, [distributionPaths.bandwidth, distributionScores])
   const userDensity =
     userScoreForChart !== null ? computeKdeDensity(userScoreForChart) : null
   const userScoreY =
@@ -1080,14 +1201,29 @@ export default function DashboardPage() {
   const meanX = chartPositionForScore(meanScore)
   const medianX = chartPositionForScore(medianScore)
   const userScoreX = chartPositionForScore(userScoreForChart)
-  const isInTopTen =
-    (typeof userRank === 'number' && userRank <= 10) ||
-    (userRankingEntry
+  const isInTopTen = useMemo(
+    () =>
+      (typeof userRank === 'number' && userRank <= 10) ||
+      (userRankingEntry
         ? topRanking.some(
-          (entry: RankingEntry) =>
-            entry?.userId === userId || entry?.user_id === userId,
-        )
-      : false)
+            (entry: RankingEntry) =>
+              entry?.userId === userId || entry?.user_id === userId,
+          )
+        : false),
+    [topRanking, userId, userRank, userRankingEntry],
+  )
+  const shouldVirtualizeRanking = topRanking.length > RANKING_VIRTUALIZE_THRESHOLD
+  const rankingListHeight = Math.min(
+    topRanking.length * RANKING_ROW_HEIGHT,
+    RANKING_LIST_MAX_HEIGHT,
+  )
+  const rankingVirtualData = useMemo(
+    () => ({
+      rows: topRanking as RankingRow[],
+      userRank,
+    }),
+    [topRanking, userRank],
+  )
 
   const resetQuizState = (nextQuestions: DailyQuestion[]) => {
     setCurrentQuestionIndex(0)
@@ -1279,8 +1415,7 @@ export default function DashboardPage() {
           setAuthMessage('Daily ya completado')
           setDailyCompleted(true)
           setShowResults(true)
-          setResultsRefreshKey((prev) => prev + 1)
-          setScoreDistributionRefreshKey((prev) => prev + 1)
+          refreshDashboardStats()
           return
         }
         const backendMessage =
@@ -1302,8 +1437,7 @@ export default function DashboardPage() {
         score: (data as { score?: number }).score ?? 0,
         totalTime: (data as { totalTime?: number }).totalTime ?? 0,
       })
-      setResultsRefreshKey((prev) => prev + 1)
-      setScoreDistributionRefreshKey((prev) => prev + 1)
+      refreshDashboardStats()
       setDailyCompleted(true)
       setShowResults(true)
     } catch (error) {
@@ -1395,8 +1529,7 @@ export default function DashboardPage() {
         setDailyCompleted(true)
         setShowResults(true)
         setShowQuiz(true)
-        setResultsRefreshKey((prev) => prev + 1)
-        setScoreDistributionRefreshKey((prev) => prev + 1)
+        refreshDashboardStats()
         return
       }
       const alreadyCompleted =
@@ -1414,8 +1547,7 @@ export default function DashboardPage() {
         setDailyCompleted(true)
         setShowResults(true)
         setShowQuiz(true)
-        setResultsRefreshKey((prev) => prev + 1)
-        setScoreDistributionRefreshKey((prev) => prev + 1)
+        refreshDashboardStats()
         setAuthMessage('Daily ya completado')
         return
       }
@@ -1457,8 +1589,7 @@ export default function DashboardPage() {
         setDailyCompleted(true)
         setShowResults(true)
         setShowQuiz(true)
-        setResultsRefreshKey((prev) => prev + 1)
-        setScoreDistributionRefreshKey((prev) => prev + 1)
+        refreshDashboardStats()
         setAuthMessage('Daily ya completado')
         return
       }
@@ -2109,18 +2240,16 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="relative grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">
-              <motion.article
-                layout
-                initial={false}
-                animate={{
-                  x: isMostFailedRevealed ? -14 : 0,
-                }}
-                transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+              <div
                 className={`relative overflow-hidden rounded-3xl border border-white/60 ring-1 ring-white/70 bg-white p-6 shadow-[0_18px_40px_rgba(125,138,150,0.16)] z-20 ${
                   isMostFailedRevealed
                     ? 'lg:col-start-1 lg:col-end-2'
                     : 'lg:col-span-2 lg:max-w-[760px] lg:mx-auto'
                 }`}
+                style={{
+                  transform: `translateX(${isMostFailedRevealed ? -14 : 0}px)`,
+                  transition: 'transform 420ms cubic-bezier(0.22, 1, 0.36, 1)',
+                }}
               >
                 <header className="flex items-start justify-between gap-4">
                   <div>
@@ -2263,22 +2392,19 @@ export default function DashboardPage() {
                     </p>
                   </>
                 )}
-              </motion.article>
+              </div>
 
-              <motion.aside
-                layout
-                initial={false}
-                animate={{
-                  opacity: isMostFailedRevealed ? 1 : 0,
-                  x: isMostFailedRevealed ? 0 : 28,
-                  scale: isMostFailedRevealed ? 1 : 0.985,
-                }}
-                transition={{ duration: 1.15, ease: [0.16, 1, 0.3, 1] }}
+              <aside
                 className={`bg-white rounded-3xl border border-white/60 ring-1 ring-white/70 p-6 shadow-[0_18px_40px_rgba(125,138,150,0.16)] ${
                   isMostFailedRevealed
                     ? 'lg:col-start-2 lg:col-end-3 relative z-10 pointer-events-auto'
                     : 'lg:absolute lg:top-0 lg:left-1/2 lg:-translate-x-1/2 lg:w-[760px] lg:max-w-full lg:z-0 pointer-events-none'
                 }`}
+                style={{
+                  opacity: isMostFailedRevealed ? 1 : 0,
+                  transform: `translateX(${isMostFailedRevealed ? 0 : 28}px) scale(${isMostFailedRevealed ? 1 : 0.985})`,
+                  transition: 'opacity 420ms ease-out, transform 420ms ease-out',
+                }}
               >
                 {shouldShowMostFailedDetails ? (
                   <>
@@ -2365,7 +2491,7 @@ export default function DashboardPage() {
                     Pulsa en &quot;Ver respuesta&quot; para mostrar explicación clínica y distribución.
                   </div>
                 )}
-              </motion.aside>
+              </aside>
             </div>
           )}
         </section>
@@ -3042,72 +3168,28 @@ export default function DashboardPage() {
                     </LazyCard>
 
                     <LazyCard className="relative isolate overflow-hidden bg-[#F3F0EE] rounded-3xl p-4 shadow-sm border border-[#E7DFDA] min-h-[320px] flex flex-col lg:col-start-3 lg:row-start-1 lg:row-span-2 lg:self-start lg:max-h-[47rem]">
-                      <motion.div
+                      <div
                         aria-hidden="true"
                         className="pointer-events-none absolute inset-0 rounded-3xl opacity-60"
                         style={{
                           background:
                             'linear-gradient(115deg, transparent 0%, rgba(255,255,255,0.35) 18%, transparent 34%)',
                         }}
-                        animate={{ x: ['-140%', '260%'] }}
-                        transition={{ duration: 1.35, repeat: Infinity, ease: 'linear', repeatDelay: 0.2 }}
                       />
-                      <motion.div
+                      <div
                         aria-hidden="true"
                         className="pointer-events-none absolute -top-24 -left-20 h-56 w-56 bg-[#E11D48] opacity-30 blur-3xl shadow-[0_20px_48px_rgba(225,29,72,0.14)]"
                         style={{ borderRadius: '58% 42% 63% 37% / 45% 55% 45% 55%' }}
-                        animate={{
-                          x: [0, 18, -14, 0],
-                          y: [0, -20, 12, 0],
-                          rotate: [0, 14, -12, 0],
-                          scale: [0.88, 1.14, 0.92, 1.08, 0.88],
-                          opacity: [0.34, 0.76, 0.38, 0.7, 0.34],
-                          borderRadius: [
-                            '58% 42% 63% 37% / 45% 55% 45% 55%',
-                            '44% 56% 48% 52% / 58% 42% 58% 42%',
-                            '52% 48% 61% 39% / 43% 57% 43% 57%',
-                            '58% 42% 63% 37% / 45% 55% 45% 55%',
-                          ],
-                        }}
-                        transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
                       />
-                      <motion.div
+                      <div
                         aria-hidden="true"
                         className="pointer-events-none absolute top-32 -right-24 h-64 w-64 bg-[#E11D48] opacity-26 blur-3xl shadow-[0_20px_48px_rgba(225,29,72,0.12)]"
                         style={{ borderRadius: '42% 58% 36% 64% / 58% 42% 58% 42%' }}
-                        animate={{
-                          x: [0, -18, 14, 0],
-                          y: [0, 18, -14, 0],
-                          rotate: [0, -16, 12, 0],
-                          scale: [0.88, 1.12, 0.92, 1.08, 0.88],
-                          opacity: [0.34, 0.74, 0.38, 0.68, 0.34],
-                          borderRadius: [
-                            '42% 58% 36% 64% / 58% 42% 58% 42%',
-                            '56% 44% 62% 38% / 47% 53% 47% 53%',
-                            '48% 52% 41% 59% / 61% 39% 61% 39%',
-                            '42% 58% 36% 64% / 58% 42% 58% 42%',
-                          ],
-                        }}
-                        transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
                       />
-                      <motion.div
+                      <div
                         aria-hidden="true"
                         className="pointer-events-none absolute -bottom-24 -left-16 h-52 w-52 bg-[#E11D48] opacity-24 blur-3xl shadow-[0_20px_48px_rgba(225,29,72,0.12)]"
                         style={{ borderRadius: '63% 37% 54% 46% / 41% 59% 41% 59%' }}
-                        animate={{
-                          x: [0, 16, -14, 0],
-                          y: [0, 16, -16, 0],
-                          rotate: [0, 12, -12, 0],
-                          scale: [0.88, 1.14, 0.92, 1.08, 0.88],
-                          opacity: [0.32, 0.72, 0.36, 0.66, 0.32],
-                          borderRadius: [
-                            '63% 37% 54% 46% / 41% 59% 41% 59%',
-                            '46% 54% 39% 61% / 55% 45% 55% 45%',
-                            '58% 42% 47% 53% / 44% 56% 44% 56%',
-                            '63% 37% 54% 46% / 41% 59% 41% 59%',
-                          ],
-                        }}
-                        transition={{ duration: 2.55, repeat: Infinity, ease: 'easeInOut' }}
                       />
                       <div className="relative z-10 flex items-center justify-between gap-2 mb-4">
                         <div className="flex items-center gap-2">
@@ -3127,140 +3209,51 @@ export default function DashboardPage() {
                         </span>
                       </div>
                       <div className="relative z-10 flex flex-1 min-h-0 flex-col">
-                        <div
-                          className="relative flex-1 min-h-0 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-                        >
-                          <table className="w-full border-collapse text-xs">
-                            <thead className="text-[9px] text-[#4B5563] uppercase tracking-widest">
-                              <tr className="border-b border-[#F0EBE8]">
-                                <th className="text-left font-bold pb-2">Puesto</th>
-                                <th className="text-center font-bold pb-2">Usuario</th>
-                                <th className="text-right font-bold pb-2">Puntos</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-[#F0EBE8]">
-                              {topRanking.length ? (
-                                topRanking.map((
-                                  row: {
-                                    position?: number
-                                    rank?: number
-                                    displayName?: string
-                                    name?: string
-                                    username?: string
-                                    avatarId?: number
-                                    avatar_id?: number
-                                    score?: number
-                                    points?: number
-                                    isBot?: boolean
-                                  },
-                                  index: number,
-                                ) => {
-                                  const rankValue =
-                                    row?.position ?? row?.rank ?? index + 1
-                                  const name =
-                                    row?.displayName ??
-                                    row?.name ??
-                                    row?.username ??
-                                    'Usuario'
-                                  const avatarId = Number(
-                                    row?.avatarId ?? row?.avatar_id ?? 1,
-                                  )
-                                  const points = row?.score ?? row?.points ?? 0
-                                  const isCurrentUserRow =
-                                    userRank != null &&
-                                    Number(rankValue) === Number(userRank)
-                                  const rowOpacity =
-                                    index < RANKING_VISIBLE_COUNT
-                                      ? 1
-                                      : Math.max(
-                                          0.42,
-                                          0.9 - (index - RANKING_VISIBLE_COUNT) * 0.12,
-                                        )
-                                  const rowAnimate = isCurrentUserRow
-                                    ? {
-                                        opacity: rowOpacity,
-                                        y: 0,
-                                        backgroundPosition: ['320% 0%', '-320% 0%'],
-                                      }
-                                    : { opacity: rowOpacity, y: 0 }
-                                  const rowTransition: Transition = isCurrentUserRow
-                                    ? {
-                                        duration: 0.35,
-                                        ease: 'easeOut' as const,
-                                        delay:
-                                          CONTENT_ANIMATION_DELAY_MS / 1000 +
-                                          Math.min(index, 14) * 0.03,
-                                        backgroundPosition: {
-                                          duration: 1.1,
-                                          repeat: Infinity,
-                                          repeatDelay: 2.8,
-                                          ease: 'linear' as const,
-                                          repeatType: 'loop' as const,
-                                        },
-                                      }
-                                    : {
-                                        duration: 0.35,
-                                        ease: 'easeOut' as const,
-                                        delay:
-                                          CONTENT_ANIMATION_DELAY_MS / 1000 +
-                                          Math.min(index, 14) * 0.03,
-                                      }
-                                  return (
-                                    <motion.tr
-                                      key={`${name}-${rankValue}`}
-                                      className={`group transition-transform duration-200 hover:translate-x-[1px] ${isCurrentUserRow ? 'bg-[#FFF3EF]' : ''}`}
-                                      initial={{ opacity: 0, y: 10 }}
-                                      animate={rowAnimate}
-                                      transition={rowTransition}
-                                      style={
-                                        isCurrentUserRow
-                                          ? {
-                                              backgroundImage:
-                                                'linear-gradient(108deg, rgba(255,225,216,1) 0%, rgba(255,225,216,1) 40%, rgba(255,255,255,0.9) 46%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.9) 54%, rgba(255,225,216,1) 60%, rgba(255,225,216,1) 100%)',
-                                              backgroundSize: '220% 100%',
-                                              backgroundPosition: '320% 0%',
-                                              backgroundRepeat: 'no-repeat',
-                                            }
-                                          : undefined
-                                      }
-                                    >
-                                      <td className={`py-1.5 font-bold ${isCurrentUserRow ? 'text-[#C4655A] rounded-l-lg' : 'text-[#4B5563]'}`}>
-                                        {rankValue}.
-                                      </td>
-                                      <td className="py-1.5 flex items-center gap-2.5 min-w-0">
-                                        <div className="w-9 h-9 rounded-full overflow-hidden">
-                                          <Image
-                                            src={getAvatarUrl(avatarId)}
-                                            alt={name}
-                                            width={36}
-                                            height={36}
-                                            className="w-9 h-9 object-cover rounded-full ring-1 ring-white/30"
-                                          />
-                                        </div>
-                                        <span className={`font-semibold truncate max-w-[150px] sm:max-w-[190px] ${isCurrentUserRow ? 'text-[#C4655A]' : 'text-[#374151]'}`}>
-                                          {name}
-                                        </span>
-                                        {row?.isBot && (
-                                          <span className="ml-1 rounded-full bg-[#FAF7F4] px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-[#C4655A]">
-                                            Bot
-                                          </span>
-                                        )}
-                                      </td>
-                                      <td className={`py-1.5 text-right font-bold ${isCurrentUserRow ? 'text-[#C4655A] rounded-r-lg' : 'text-[#4B5563]'}`}>
-                                        {points}
-                                      </td>
-                                    </motion.tr>
-                                  )
-                                })
-                              ) : (
-                                <tr>
-                                  <td colSpan={3} className="py-4 text-center text-xs text-[#7D8A96]">
-                                    Sin datos de ranking
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                          </table>
+                        <div className="relative flex-1 min-h-0 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                          <div className="grid grid-cols-[68px_minmax(0,1fr)_72px] border-b border-[#F0EBE8] pb-2 text-[9px] font-bold uppercase tracking-widest text-[#4B5563]">
+                            <span className="text-left">Puesto</span>
+                            <span className="text-center">Usuario</span>
+                            <span className="text-right">Puntos</span>
+                          </div>
+                          {topRanking.length ? (
+                            shouldVirtualizeRanking ? (
+                              <List
+                                defaultHeight={Math.max(rankingListHeight, RANKING_ROW_HEIGHT)}
+                                rowComponent={RankingVirtualRow}
+                                rowCount={topRanking.length}
+                                rowHeight={RANKING_ROW_HEIGHT}
+                                rowProps={rankingVirtualData}
+                                style={{
+                                  height: Math.max(rankingListHeight, RANKING_ROW_HEIGHT),
+                                  width: '100%',
+                                }}
+                              />
+                            ) : (
+                              <div className="pt-1">
+                                {topRanking.map((row: RankingRow, index: number) => (
+                                  <RankingVirtualRow
+                                    key={`${row?.displayName ?? row?.name ?? row?.username ?? 'Usuario'}-${row?.position ?? row?.rank ?? index + 1}`}
+                                    index={index}
+                                    ariaAttributes={{
+                                      role: 'listitem',
+                                      'aria-posinset': index + 1,
+                                      'aria-setsize': topRanking.length,
+                                    }}
+                                    style={{
+                                      height: RANKING_ROW_HEIGHT,
+                                      width: '100%',
+                                    }}
+                                    rows={rankingVirtualData.rows}
+                                    userRank={rankingVirtualData.userRank}
+                                  />
+                                ))}
+                              </div>
+                            )
+                          ) : (
+                            <div className="py-4 text-center text-xs text-[#7D8A96]">
+                              Sin datos de ranking
+                            </div>
+                          )}
                         </div>
                         <div className="pt-2">
                           {!isInTopTen && (
@@ -3268,25 +3261,13 @@ export default function DashboardPage() {
                               Tu puesto está fuera del top 20
                             </div>
                           )}
-                          <motion.div
+                          <div
                             className="p-3 bg-[#FFF8F6] rounded-2xl border border-[#E8A598]/25 shadow-[0_10px_24px_-20px_rgba(232,165,152,0.9)]"
-                            animate={{
-                              backgroundPosition: ['320% 0%', '-320% 0%'],
-                            }}
-                            transition={{
-                              backgroundPosition: {
-                                duration: 1.1,
-                                repeat: Infinity,
-                                repeatDelay: 2.8,
-                                ease: 'linear',
-                                repeatType: 'loop',
-                              },
-                            }}
                             style={{
                               backgroundImage:
                                 'linear-gradient(108deg, rgba(255,244,242,1) 0%, rgba(255,244,242,1) 40%, rgba(255,255,255,0.9) 46%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.9) 54%, rgba(255,244,242,1) 60%, rgba(255,244,242,1) 100%)',
                               backgroundSize: '220% 100%',
-                              backgroundPosition: '320% 0%',
+                              backgroundPosition: '0% 0%',
                               backgroundRepeat: 'no-repeat',
                             }}
                           >
@@ -3305,7 +3286,7 @@ export default function DashboardPage() {
                                 {userScore} pts
                               </span>
                             </div>
-                          </motion.div>
+                          </div>
                         </div>
                       </div>
                     </LazyCard>
@@ -3707,20 +3688,4 @@ export default function DashboardPage() {
     </div>
   )
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

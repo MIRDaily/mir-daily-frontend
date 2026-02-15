@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 
 interface Question {
   reviewId?: string | number | null
@@ -20,25 +20,21 @@ interface Props {
   questions: Question[]
 }
 
-export default function DailyReviewCarousel({ questions }: Props) {
+function DailyReviewCarousel({ questions }: Props) {
   const [index, setIndex] = useState(0)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-
-  if (!questions || questions.length === 0) {
-    return null
-  }
-
   const total = questions.length
+  const safeTotal = Math.max(total, 1)
 
-  const prev = () =>
+  const prev = useCallback(() =>
     setIndex((prevIndex) =>
       prevIndex === 0 ? questions.length - 1 : prevIndex - 1,
-    )
+    ), [questions.length])
 
-  const next = () =>
+  const next = useCallback(() =>
     setIndex((prevIndex) =>
       prevIndex === questions.length - 1 ? 0 : prevIndex + 1,
-    )
+    ), [questions.length])
 
   const resolveCorrectOptionIndex = (q: Question) => {
     if (q.correctAnswer == null) return -1
@@ -87,8 +83,17 @@ export default function DailyReviewCarousel({ questions }: Props) {
     )
   }
 
-  const getQuestionKey = (q: Question, i: number) =>
-    String(q.reviewId ?? q.id ?? i)
+  const getQuestionKey = useCallback((q: Question, i: number) =>
+    String(q.reviewId ?? q.id ?? i), [])
+  const adjacentIndexes = useMemo(() => {
+    const prevIndex = (index - 1 + safeTotal) % safeTotal
+    const nextIndex = (index + 1) % safeTotal
+    return { prevIndex, nextIndex }
+  }, [index, safeTotal])
+
+  if (!questions || questions.length === 0) {
+    return null
+  }
 
   return (
     <div className="w-full mt-20 px-2 sm:px-4">
@@ -111,10 +116,15 @@ export default function DailyReviewCarousel({ questions }: Props) {
           <div className="pointer-events-none absolute inset-y-0 right-0 z-[3] w-10 sm:w-20 bg-gradient-to-l from-[#FAF7F4] via-[#FAF7F4]/90 to-transparent" />
           {questions.map((q, i) => {
             const isActive = i === index
-            const prevIndex = (index - 1 + total) % total
-            const nextIndex = (index + 1) % total
-            const isSide = i === prevIndex || i === nextIndex
-            const xOffset = isActive ? 0 : i === prevIndex ? -290 : i === nextIndex ? 290 : 0
+            const isSide = i === adjacentIndexes.prevIndex || i === adjacentIndexes.nextIndex
+            const xOffset =
+              isActive
+                ? 0
+                : i === adjacentIndexes.prevIndex
+                  ? -290
+                  : i === adjacentIndexes.nextIndex
+                    ? 290
+                    : 0
             const questionKey = getQuestionKey(q, i)
             const isExpanded = expandedId === questionKey
             const correctOptionIndex = resolveCorrectOptionIndex(q)
@@ -268,3 +278,5 @@ export default function DailyReviewCarousel({ questions }: Props) {
     </div>
   )
 }
+
+export default memo(DailyReviewCarousel)
