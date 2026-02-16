@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type UIEvent } from 'react'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import { List, type RowComponentProps } from 'react-window'
@@ -161,19 +161,19 @@ function RankingVirtualRow({
   return (
     <div style={style} className="px-1">
       <div
-        className={`group grid grid-cols-[68px_minmax(0,1fr)_72px] items-center gap-2 border-b border-[#F0EBE8] px-2 py-1.5 transition-transform duration-200 hover:translate-x-[1px] ${
+        className={`group grid grid-cols-[34px_minmax(0,1fr)_48px] items-center gap-0 border-b border-[#F0EBE8] pl-0.5 pr-0.5 py-1.5 transition-transform duration-200 hover:translate-x-[1px] ${
           isCurrentUserRow ? 'bg-[#FFF3EF]' : ''
         }`}
         style={{ opacity: rowOpacity }}
       >
         <div
-          className={`font-bold ${
+          className={`justify-self-start text-left font-bold ${
             isCurrentUserRow ? 'text-[#C4655A]' : 'text-[#4B5563]'
           }`}
         >
           {rankValue}.
         </div>
-        <div className="flex min-w-0 items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-1">
           <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full">
             <Image
               src={getAvatarUrl(avatarId)}
@@ -184,9 +184,10 @@ function RankingVirtualRow({
             />
           </div>
           <span
-            className={`truncate font-semibold ${
+            className={`truncate text-sm font-semibold ${
               isCurrentUserRow ? 'text-[#C4655A]' : 'text-[#374151]'
             }`}
+            style={{ flex: 1, minWidth: 0 }}
           >
             {name}
           </span>
@@ -197,7 +198,7 @@ function RankingVirtualRow({
           )}
         </div>
         <div
-          className={`text-right font-bold ${
+          className={`justify-self-end text-right font-bold ${
             isCurrentUserRow ? 'text-[#C4655A]' : 'text-[#4B5563]'
           }`}
         >
@@ -1217,6 +1218,14 @@ export default function DashboardPage() {
     topRanking.length * RANKING_ROW_HEIGHT,
     RANKING_LIST_MAX_HEIGHT,
   )
+  const hasRankingOverflow = topRanking.length * RANKING_ROW_HEIGHT > RANKING_LIST_MAX_HEIGHT
+  const [isRankingAtBottom, setIsRankingAtBottom] = useState(false)
+  const showRankingScrollCue = hasRankingOverflow && !isRankingAtBottom
+  const handleRankingScroll = useCallback((event: UIEvent<HTMLElement>) => {
+    const el = event.currentTarget
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 2
+    setIsRankingAtBottom((prev) => (prev === atBottom ? prev : atBottom))
+  }, [])
   const rankingVirtualData = useMemo(
     () => ({
       rows: topRanking as RankingRow[],
@@ -1224,6 +1233,9 @@ export default function DashboardPage() {
     }),
     [topRanking, userRank],
   )
+  useEffect(() => {
+    setIsRankingAtBottom(false)
+  }, [hasRankingOverflow, topRanking.length])
 
   const resetQuizState = (nextQuestions: DailyQuestion[]) => {
     setCurrentQuestionIndex(0)
@@ -3209,8 +3221,11 @@ export default function DashboardPage() {
                         </span>
                       </div>
                       <div className="relative z-10 flex flex-1 min-h-0 flex-col">
-                        <div className="relative flex-1 min-h-0 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                          <div className="grid grid-cols-[68px_minmax(0,1fr)_72px] border-b border-[#F0EBE8] pb-2 text-[9px] font-bold uppercase tracking-widest text-[#4B5563]">
+                        <div
+                          className="relative flex-1 min-h-0 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                          onScroll={handleRankingScroll}
+                        >
+                          <div className="grid grid-cols-[34px_minmax(0,1fr)_48px] border-b border-[#F0EBE8] px-0.5 pb-2 text-[9px] font-bold uppercase tracking-widest text-[#4B5563]">
                             <span className="text-left">Puesto</span>
                             <span className="text-center">Usuario</span>
                             <span className="text-right">Puntos</span>
@@ -3219,6 +3234,8 @@ export default function DashboardPage() {
                             shouldVirtualizeRanking ? (
                               <List
                                 defaultHeight={Math.max(rankingListHeight, RANKING_ROW_HEIGHT)}
+                                className="[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                                onScroll={handleRankingScroll}
                                 rowComponent={RankingVirtualRow}
                                 rowCount={topRanking.length}
                                 rowHeight={RANKING_ROW_HEIGHT}
@@ -3226,6 +3243,8 @@ export default function DashboardPage() {
                                 style={{
                                   height: Math.max(rankingListHeight, RANKING_ROW_HEIGHT),
                                   width: '100%',
+                                  scrollbarWidth: 'none',
+                                  msOverflowStyle: 'none',
                                 }}
                               />
                             ) : (
@@ -3255,6 +3274,14 @@ export default function DashboardPage() {
                             </div>
                           )}
                         </div>
+                        {showRankingScrollCue && (
+                          <div className="pointer-events-none relative h-0">
+                            <div className="absolute left-1/2 -top-2 z-20 flex -translate-x-1/2 flex-col items-center gap-0.5 opacity-80">
+                              <span className="ranking-scroll-cue ranking-scroll-cue-1" />
+                              <span className="ranking-scroll-cue ranking-scroll-cue-2" />
+                            </div>
+                          </div>
+                        )}
                         <div className="pt-2">
                           {!isInTopTen && (
                             <div className="mb-2 text-center text-[11px] text-[#7D8A96]">

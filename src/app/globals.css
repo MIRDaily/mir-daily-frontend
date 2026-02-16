@@ -828,6 +828,28 @@ textarea:disabled {
   }
 }
 
+@keyframes rankingCuePulse {
+  0% {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  18% {
+    opacity: 0.8;
+  }
+  32% {
+    opacity: 0.15;
+    transform: translateY(2px);
+  }
+  42% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
 .review-scroll-cue {
   position: relative;
   width: 30px;
@@ -860,6 +882,41 @@ textarea:disabled {
 }
 
 .review-scroll-cue-2 {
+  animation-delay: 140ms;
+}
+
+.ranking-scroll-cue {
+  position: relative;
+  width: 30px;
+  height: 14px;
+  display: block;
+  animation: rankingCuePulse 2.15s ease-in-out infinite;
+}
+
+.ranking-scroll-cue::before,
+.ranking-scroll-cue::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  width: 16px;
+  height: 2.5px;
+  border-radius: 999px;
+  background: rgba(125, 138, 150, 0.88);
+}
+
+.ranking-scroll-cue::before {
+  left: 0;
+  transform: rotate(22deg);
+  transform-origin: right center;
+}
+
+.ranking-scroll-cue::after {
+  right: 0;
+  transform: rotate(-22deg);
+  transform-origin: left center;
+}
+
+.ranking-scroll-cue-2 {
   animation-delay: 140ms;
 }
 
@@ -937,6 +994,11 @@ textarea:disabled {
   }
 
   .review-scroll-cue {
+    animation: none;
+    opacity: 0.6;
+    transform: none;
+  }
+  .ranking-scroll-cue {
     animation: none;
     opacity: 0.6;
     transform: none;
