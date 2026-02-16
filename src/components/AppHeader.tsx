@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabaseBrowser'
 import NotificationsPopup from '@/components/NotificationsPopup'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
 
-type HeaderTab = 'estudio' | 'daily' | 'dashboard' | null
+type HeaderTab = 'studio' | 'daily' | 'dashboard' | null
 
 type AppHeaderProps = {
   activeTab?: HeaderTab
@@ -82,8 +82,8 @@ export default function AppHeader({
           </h1>
         </a>
         <div className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
-          <a className={getNavClass(activeTab, 'estudio')} href="#">
-            Estudio
+          <a className={getNavClass(activeTab, 'studio')} href="/studio">
+            Studio
           </a>
           <a className={getNavClass(activeTab, 'daily')} href="/dashboard">
             Daily

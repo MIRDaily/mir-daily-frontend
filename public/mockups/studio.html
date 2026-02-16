@@ -1,0 +1,80 @@
+﻿<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Studio - Mockup UI</title>
+    <link rel="stylesheet" href="./studio.css" />
+  </head>
+  <body>
+    <!-- App shell principal -->
+    <div class="studio-shell">
+      <!-- Header fijo -->
+      <header class="studio-header">
+        <div class="brand-block">
+          <span class="brand-dot" aria-hidden="true"></span>
+          <h1>Studio</h1>
+        </div>
+        <p class="header-subtitle">Hub central de estudio</p>
+      </header>
+
+      <!-- Contenido en 2 columnas: barra lateral + área principal -->
+      <div class="studio-layout">
+        <!-- Barra lateral izquierda -->
+        <aside class="studio-sidebar" aria-label="Secciones Studio">
+          <nav>
+            <a class="nav-item is-active" href="#simulacros">
+              <span class="nav-icon" aria-hidden="true">🧪</span>
+              <span>Simulacros</span>
+            </a>
+            <a class="nav-item" href="#flashcards">
+              <span class="nav-icon" aria-hidden="true">🗂️</span>
+              <span>Flashcards & Mazos</span>
+            </a>
+            <a class="nav-item" href="#sala-zen">
+              <span class="nav-icon" aria-hidden="true">🧘</span>
+              <span>Sala Zen</span>
+            </a>
+            <a class="nav-item" href="#biblioteca">
+              <span class="nav-icon" aria-hidden="true">📚</span>
+              <span>Biblioteca</span>
+            </a>
+          </nav>
+        </aside>
+
+        <!-- Área principal con tarjetas reutilizables -->
+        <main class="studio-main">
+          <section class="cards-grid" aria-label="Funciones Studio">
+            <!-- Tarjeta reutilizable -->
+            <article class="studio-card" id="simulacros">
+              <div class="card-icon" aria-hidden="true">🧪</div>
+              <h2>Simulacros</h2>
+              <p>Practica simulacros de exámenes</p>
+            </article>
+
+            <!-- Tarjeta reutilizable -->
+            <article class="studio-card" id="flashcards">
+              <div class="card-icon" aria-hidden="true">🗂️</div>
+              <h2>Flashcards & Mazos</h2>
+              <p>Estudia con tarjetas y mazos</p>
+            </article>
+
+            <!-- Tarjeta reutilizable -->
+            <article class="studio-card" id="sala-zen">
+              <div class="card-icon" aria-hidden="true">🧘</div>
+              <h2>Sala Zen</h2>
+              <p>Sesiones de enfoque/relax</p>
+            </article>
+
+            <!-- Tarjeta reutilizable -->
+            <article class="studio-card" id="biblioteca">
+              <div class="card-icon" aria-hidden="true">📚</div>
+              <h2>Biblioteca</h2>
+              <p>Material y esquemas de estudio</p>
+            </article>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
