@@ -1,5 +1,3 @@
-﻿import AppHeader from '@/components/AppHeader'
-
 type QuickStat = {
   label: string
   value: string
@@ -116,8 +114,6 @@ export default function StudioPage() {
       <div className="pointer-events-none fixed -right-[5%] -top-[10%] z-0 h-96 w-96 rounded-full bg-[#E8A598]/15 blur-3xl" />
       <div className="pointer-events-none fixed -bottom-[10%] -left-[5%] z-0 h-96 w-96 rounded-full bg-[#8BA888]/15 blur-3xl" />
 
-      {/* Header compartido global */}
-      <AppHeader activeTab="studio" />
 
       <main className="relative z-10 mx-auto w-full max-w-7xl px-6 py-8">
         <div className="flex flex-col gap-10">

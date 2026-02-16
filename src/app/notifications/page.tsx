@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import AppHeader from '@/components/AppHeader'
 import { useNotificationsFeed } from '@/hooks/useNotificationsFeed'
 import { formatNotificationTime, resolveNotificationIcon } from '@/service/api/notifications'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
@@ -66,7 +65,6 @@ export default function NotificationsPage() {
     <div className="relative min-h-screen overflow-x-hidden bg-[#FAF7F4] text-[#2D3748]">
       <div className="pointer-events-none absolute -top-28 -left-24 h-72 w-72 rounded-full bg-[#E8A598]/15 blur-3xl" />
       <div className="pointer-events-none absolute top-40 -right-24 h-72 w-72 rounded-full bg-[#7D8A96]/10 blur-3xl" />
-      <AppHeader activeTab={null} />
 
       <main className="relative max-w-5xl mx-auto px-4 sm:px-6 py-10">
         <section className="bg-white/90 border border-white/60 ring-1 ring-white/70 rounded-3xl p-6 sm:p-8 shadow-[0_18px_40px_rgba(125,138,150,0.16)]">

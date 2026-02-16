@@ -13,8 +13,8 @@ import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { getAvatarUrl } from '@/lib/avatar'
 import { parseApiError } from '@/lib/profile'
 import { getUserSummary } from '@/services/resultsService'
+import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
-import AppHeader from '@/components/AppHeader'
 import DailyReviewCarousel from '@/components/DailyReviewCarousel'
 import ZScoreComparisonCard from '@/components/ZScoreComparisonCard'
 
@@ -250,6 +250,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
   const authenticatedFetch = useAuthenticatedFetch()
+  const { setBlurred } = useHeaderUI()
   const { refreshUnreadCount } = useNotificationsContext()
   const [deckOrder, setDeckOrder] = useState([0, 1, 2])
   const [showQuiz, setShowQuiz] = useState(false)
@@ -1787,6 +1788,13 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
+    setBlurred(isEnvelopeOpening)
+    return () => {
+      setBlurred(false)
+    }
+  }, [isEnvelopeOpening, setBlurred])
+
+  useEffect(() => {
     if (!isEnvelopeOpening || openDurationMs <= 0) {
       setOpenProgress(0)
       openStartRef.current = null
@@ -1889,11 +1897,6 @@ export default function DashboardPage() {
 
   return (
     <div className="text-[#2D3748] antialiased bg-[#FAF7F4] min-h-screen flex flex-col hub-enter">
-      <AppHeader
-        activeTab="daily"
-        blurred={isEnvelopeOpening}
-      />
-
       <main className="relative z-0 flex-grow flex flex-col items-center justify-start pt-8 pb-20 px-4 overflow-x-hidden">
         <div
           className={`fixed inset-0 z-20 bg-[#FAF7F4]/80 backdrop-blur-xl transition-opacity duration-700 ${
