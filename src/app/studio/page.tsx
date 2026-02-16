@@ -1,6 +1,38 @@
 ﻿import AppHeader from '@/components/AppHeader'
 
-const quickStats = [
+type QuickStat = {
+  label: string
+  value: string
+  icon: string
+  iconClass: string
+}
+
+type OverviewCard = {
+  title: string
+  value: string
+  badge?: string
+  description: string
+  icon: string
+  tone: 'success' | 'error'
+}
+
+type StudioCard = {
+  id: string
+  icon: string
+  title: string
+  description: string
+  type: 'featured' | 'split-actions' | 'progress' | 'zen'
+  badge?: string
+  cta?: string
+  primaryAction?: string
+  secondaryAction?: string
+  progress?: number
+  meta?: string
+  linkOne?: string
+  linkTwo?: string
+}
+
+const quickStats: ReadonlyArray<QuickStat> = [
   {
     label: 'Racha',
     value: '12 días',
@@ -15,7 +47,7 @@ const quickStats = [
   },
 ] as const
 
-const overviewCards = [
+const overviewCards: ReadonlyArray<OverviewCard> = [
   {
     title: 'Progreso Mensual',
     value: '+182',
@@ -33,7 +65,7 @@ const overviewCards = [
   },
 ] as const
 
-const studioCards = [
+const studioCards: ReadonlyArray<StudioCard> = [
   {
     id: 'simulacros',
     icon: 'psychology_alt',
