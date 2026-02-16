@@ -174,7 +174,7 @@ function RankingVirtualRow({
           {rankValue}.
         </div>
         <div className="flex min-w-0 items-center gap-2.5">
-          <div className="h-9 w-9 overflow-hidden rounded-full">
+          <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full">
             <Image
               src={getAvatarUrl(avatarId)}
               alt={name}
