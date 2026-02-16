@@ -2,9 +2,9 @@
 
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseBrowser'
+import { useAuth } from '@/hooks/useAuth'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
-import { extractProfile, parseApiError, USERNAME_REGEX } from '@/lib/profile'
+import { parseApiError, USERNAME_REGEX } from '@/lib/profile'
 
 function normalizeUsernameInput(value: string) {
   let normalized = value.trim().toLowerCase()
@@ -21,6 +21,7 @@ function normalizeUsernameInput(value: string) {
 
 export default function CompleteProfilePage() {
   const router = useRouter()
+  const { user, loading, refreshUser } = useAuth()
   const authenticatedFetch = useAuthenticatedFetch()
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
 
@@ -31,30 +32,21 @@ export default function CompleteProfilePage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (loading) return
+
     let cancelled = false
     const checkProfile = async () => {
       try {
-        const { data } = await supabase.auth.getSession()
-        if (!data.session) {
+        if (!user) {
           router.replace('/auth')
           return
         }
-        if (!cancelled && data.session.user?.email) {
+        if (!cancelled && user.email) {
           setUsername((prev) =>
-            prev || normalizeUsernameInput(data.session.user.email ?? ''),
+            prev || normalizeUsernameInput(user.email ?? ''),
           )
         }
-        if (!apiUrl) {
-          throw new Error('API_URL no definida: revisa variables de entorno')
-        }
-        const response = await authenticatedFetch(`${apiUrl}/api/profile`)
-        if (response.status === 401) return
-        if (!response.ok) {
-          throw new Error(await parseApiError(response))
-        }
-        const payload = await response.json().catch(() => ({}))
-        const profile = extractProfile(payload)
-        if (profile.username) {
+        if (user.username) {
           router.replace('/dashboard')
           return
         }
@@ -73,7 +65,7 @@ export default function CompleteProfilePage() {
     return () => {
       cancelled = true
     }
-  }, [apiUrl, authenticatedFetch, router])
+  }, [apiUrl, authenticatedFetch, loading, router, user])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -119,6 +111,7 @@ export default function CompleteProfilePage() {
         setError('No se pudo completar el registro.')
         return
       }
+      await refreshUser()
       router.replace('/dashboard')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo completar el registro.')

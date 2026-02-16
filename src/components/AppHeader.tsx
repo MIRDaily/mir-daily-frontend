@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useProfile } from '@/hooks/useProfile'
@@ -33,17 +34,30 @@ export default function AppHeader({
   const { profile, loading: profileLoading } = useProfile()
   const { unreadCount, refreshUnreadCount } = useNotificationsContext()
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const notificationRef = useRef<HTMLDivElement | null>(null)
+  const profileMenuRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
-      if (!notificationRef.current) return
-      if (!notificationRef.current.contains(event.target as Node)) {
+      if (
+        notificationRef.current &&
+        !notificationRef.current.contains(event.target as Node)
+      ) {
         setIsNotificationOpen(false)
+      }
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsProfileMenuOpen(false)
       }
     }
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsNotificationOpen(false)
+      if (event.key === 'Escape') {
+        setIsNotificationOpen(false)
+        setIsProfileMenuOpen(false)
+      }
     }
     document.addEventListener('mousedown', handlePointerDown)
     document.addEventListener('keydown', handleEscape)
@@ -65,7 +79,7 @@ export default function AppHeader({
       } ${className}`.trim()}
     >
       <div className="relative max-w-7xl mx-auto flex items-center justify-between">
-        <a className="flex items-center gap-3 group" href="/dashboard">
+        <Link className="flex items-center gap-3 group" href="/dashboard">
           <div className="size-8 text-[#E8A598] flex items-center justify-center transition-transform group-hover:scale-105">
             <svg
               className="size-8"
@@ -80,17 +94,17 @@ export default function AppHeader({
           <h1 className="text-2xl font-bold tracking-tight text-[#7D8A96] group-hover:text-[#E8A598] transition-colors">
             MIR<span className="text-[#E8A598]">Daily</span>
           </h1>
-        </a>
+        </Link>
         <div className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
-          <a className={getNavClass(activeTab, 'studio')} href="/studio">
+          <Link className={getNavClass(activeTab, 'studio')} href="/studio">
             Studio
-          </a>
-          <a className={getNavClass(activeTab, 'daily')} href="/dashboard">
+          </Link>
+          <Link className={getNavClass(activeTab, 'daily')} href="/dashboard">
             Daily
-          </a>
-          <a className={getNavClass(activeTab, 'dashboard')} href="/dashboard">
+          </Link>
+          <Link className={getNavClass(activeTab, 'dashboard')} href="/dashboard">
             Dashboard
-          </a>
+          </Link>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
           <div className="relative" ref={notificationRef}>
@@ -98,8 +112,11 @@ export default function AppHeader({
               type="button"
               aria-label="Notificaciones"
               aria-expanded={isNotificationOpen}
-              onClick={() => setIsNotificationOpen((prev) => !prev)}
-              className={`relative size-10 rounded-full border-2 border-white shadow-[0_10px_22px_rgba(125,138,150,0.2),inset_0_1px_0_rgba(255,255,255,0.9)] flex items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-[#E8A598]/30 ${
+              onClick={() => {
+                setIsProfileMenuOpen(false)
+                setIsNotificationOpen((prev) => !prev)
+              }}
+              className={`relative size-10 rounded-full border-2 border-white shadow-[0_10px_22px_rgba(125,138,150,0.2),inset_0_1px_0_rgba(255,255,255,0.9)] flex items-center justify-center transition-all duration-150 active:scale-95 active:translate-y-0 focus:outline-none focus:ring-2 focus:ring-[#E8A598]/30 ${
                 isNotificationOpen
                   ? 'text-[#E8A598] bg-[#FAF7F4] ring-2 ring-[#E8A598]/20'
                   : 'text-[#7D8A96] bg-white/90 hover:text-[#E8A598] hover:bg-[#FAF7F4] hover:ring-2 hover:ring-[#E8A598]/20 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(125,138,150,0.24),inset_0_1px_0_rgba(255,255,255,0.92)]'
@@ -117,10 +134,16 @@ export default function AppHeader({
               onClose={() => setIsNotificationOpen(false)}
             />
           </div>
-          <div className="relative group ml-1">
+          <div className="relative ml-1" ref={profileMenuRef}>
             <button
               type="button"
-              className="flex w-[176px] items-center gap-2 rounded-full border-2 border-white shadow-[0_12px_26px_rgba(125,138,150,0.2),inset_0_1px_0_rgba(255,255,255,0.9)] cursor-pointer hover:ring-2 hover:ring-[#E8A598]/20 transition-all pl-1 pr-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#E8A598]/30 bg-white/90 hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(125,138,150,0.24),inset_0_1px_0_rgba(255,255,255,0.95)]"
+              aria-label="Perfil"
+              aria-expanded={isProfileMenuOpen}
+              onClick={() => {
+                setIsNotificationOpen(false)
+                setIsProfileMenuOpen((prev) => !prev)
+              }}
+              className="flex w-[176px] items-center gap-2 rounded-full border-2 border-white shadow-[0_12px_26px_rgba(125,138,150,0.2),inset_0_1px_0_rgba(255,255,255,0.9)] cursor-pointer hover:ring-2 hover:ring-[#E8A598]/20 transition-all duration-150 active:scale-[0.98] active:translate-y-0 pl-1 pr-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#E8A598]/30 bg-white/90 hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(125,138,150,0.24),inset_0_1px_0_rgba(255,255,255,0.95)]"
             >
               <div className="size-10 rounded-full overflow-hidden">
                 {profileLoading ? (
@@ -144,17 +167,18 @@ export default function AppHeader({
                 </span>
               )}
             </button>
-            <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-soft border border-[#7D8A96]/10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-right z-50">
+            <div className={`absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-soft border border-[#7D8A96]/10 transition-all duration-200 transform origin-top-right z-50 ${isProfileMenuOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
               <div className="py-1">
-                <a className="block px-4 py-2 text-sm text-[#7D8A96] hover:bg-[#FAF7F4] hover:text-[#E8A598]" href="/profile">
+                <Link className="block px-4 py-2 text-sm text-[#7D8A96] hover:bg-[#FAF7F4] hover:text-[#E8A598]" href="/profile" onClick={() => setIsProfileMenuOpen(false)}>
                   Mi Perfil
-                </a>
-                <a className="block px-4 py-2 text-sm text-[#7D8A96] hover:bg-[#FAF7F4] hover:text-[#E8A598]" href="#">
+                </Link>
+                <a className="block px-4 py-2 text-sm text-[#7D8A96] hover:bg-[#FAF7F4] hover:text-[#E8A598]" href="#" onClick={() => setIsProfileMenuOpen(false)}>
                   Configuración
                 </a>
                 <div className="border-t border-[#7D8A96]/10 my-1"></div>
                 <button
                   onClick={async () => {
+                    setIsProfileMenuOpen(false)
                     await supabase.auth.signOut()
                     router.replace('/auth')
                   }}

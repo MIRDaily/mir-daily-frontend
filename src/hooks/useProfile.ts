@@ -1,18 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useAuth } from '@/hooks/useAuth'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { AVATAR_CATALOG } from '@/lib/avatar'
 import { parseApiError, USERNAME_REGEX } from '@/lib/profile'
+import type { AuthUser } from '@/providers/AuthProvider'
 
-export type UserProfile = {
-  id: string
-  email: string
-  display_name: string
-  username: string
-  avatar_id: number
-  created_at: string
-}
+export type UserProfile = AuthUser
 
 const AVATAR_CATALOG_SET = new Set<number>(AVATAR_CATALOG)
 const USERNAME_LOCK_STORAGE_KEY = 'profile.username_lock_until'
@@ -27,11 +22,10 @@ type UsernameUpdateResult = UpdateResult & {
 }
 
 export function useProfile() {
+  const { user, loading, setUser, refreshUser } = useAuth()
   const authenticatedFetch = useAuthenticatedFetch()
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
 
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [updatingDisplayName, setUpdatingDisplayName] = useState(false)
   const [updatingAvatar, setUpdatingAvatar] = useState(false)
@@ -51,71 +45,28 @@ export function useProfile() {
   }, [])
 
   const refreshProfile = useCallback(async () => {
-    if (!apiUrl) {
-      setError('API_URL no definida: revisa variables de entorno')
-      return false
-    }
+    setError(null)
     try {
-      const response = await authenticatedFetch(`${apiUrl}/api/profile`)
-      if (response.status === 401) return false
-      if (!response.ok) {
-        throw new Error(await parseApiError(response))
-      }
-      const payload = (await response.json().catch(() => null)) as UserProfile | null
-      if (!payload) {
-        throw new Error('Perfil invalido.')
-      }
-      setProfile(payload)
-      return true
+      const next = await refreshUser()
+      return !!next
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo cargar el perfil.')
       return false
     }
-  }, [apiUrl, authenticatedFetch])
-
-  useEffect(() => {
-    let cancelled = false
-
-    const loadProfile = async () => {
-      if (!apiUrl) {
-        setError('API_URL no definida: revisa variables de entorno')
-        setLoading(false)
-        return
-      }
-
-      setLoading(true)
-      setError(null)
-      try {
-        const ok = await refreshProfile()
-        if (!ok && cancelled) return
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'No se pudo cargar el perfil.')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void loadProfile()
-    return () => {
-      cancelled = true
-    }
-  }, [apiUrl, refreshProfile])
+  }, [refreshUser])
 
   const updateDisplayName = useCallback(
     async (name: string): Promise<UpdateResult> => {
-      if (!profile) {
+      if (!user) {
         return { ok: false, error: 'Perfil no disponible.' }
       }
+
       const nextDisplayName = name.trim()
-      const previousDisplayName = profile.display_name
+      const previousDisplayName = user.display_name
 
       setUpdatingDisplayName(true)
       setError(null)
-      setProfile((prev) => (prev ? { ...prev, display_name: nextDisplayName } : prev))
+      setUser((prev) => (prev ? { ...prev, display_name: nextDisplayName } : prev))
 
       try {
         const response = await authenticatedFetch(`${apiUrl}/api/profile/display-name`, {
@@ -129,11 +80,12 @@ export function useProfile() {
         if (!response.ok) {
           throw new Error(await parseApiError(response))
         }
+
         return { ok: true }
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'No se pudo actualizar el nombre.'
-        setProfile((prev) =>
+        setUser((prev) =>
           prev ? { ...prev, display_name: previousDisplayName } : prev,
         )
         setError(message)
@@ -142,23 +94,23 @@ export function useProfile() {
         setUpdatingDisplayName(false)
       }
     },
-    [apiUrl, authenticatedFetch, profile],
+    [apiUrl, authenticatedFetch, setUser, user],
   )
 
   const updateAvatar = useCallback(
     async (avatarId: number): Promise<UpdateResult> => {
-      if (!profile) {
+      if (!user) {
         return { ok: false, error: 'Perfil no disponible.' }
       }
       if (!AVATAR_CATALOG_SET.has(avatarId)) {
         return { ok: false, error: 'Avatar invalido.' }
       }
 
-      const previousAvatarId = profile.avatar_id
+      const previousAvatarId = user.avatar_id
 
       setUpdatingAvatar(true)
       setError(null)
-      setProfile((prev) => (prev ? { ...prev, avatar_id: avatarId } : prev))
+      setUser((prev) => (prev ? { ...prev, avatar_id: avatarId } : prev))
 
       try {
         const response = await authenticatedFetch(`${apiUrl}/api/profile/avatar`, {
@@ -176,19 +128,19 @@ export function useProfile() {
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'No se pudo actualizar el avatar.'
-        setProfile((prev) => (prev ? { ...prev, avatar_id: previousAvatarId } : prev))
+        setUser((prev) => (prev ? { ...prev, avatar_id: previousAvatarId } : prev))
         setError(message)
         return { ok: false, error: message }
       } finally {
         setUpdatingAvatar(false)
       }
     },
-    [apiUrl, authenticatedFetch, profile],
+    [apiUrl, authenticatedFetch, setUser, user],
   )
 
   const updateUsername = useCallback(
     async (username: string): Promise<UsernameUpdateResult> => {
-      if (!profile) {
+      if (!user) {
         return { ok: false, error: 'Perfil no disponible.' }
       }
       const normalizedUsername = username.trim().toLowerCase()
@@ -213,7 +165,7 @@ export function useProfile() {
           if (typeof window !== 'undefined') {
             window.sessionStorage.removeItem(USERNAME_LOCK_STORAGE_KEY)
           }
-          await refreshProfile()
+          await refreshUser()
           return { ok: true }
         }
 
@@ -249,12 +201,12 @@ export function useProfile() {
         setUpdatingUsername(false)
       }
     },
-    [apiUrl, authenticatedFetch, profile, refreshProfile],
+    [apiUrl, authenticatedFetch, refreshUser, user],
   )
 
   return useMemo(
     () => ({
-      profile,
+      profile: user,
       loading,
       error,
       updatingDisplayName,
@@ -269,7 +221,6 @@ export function useProfile() {
     [
       error,
       loading,
-      profile,
       refreshProfile,
       updateAvatar,
       updateDisplayName,
@@ -277,7 +228,9 @@ export function useProfile() {
       updatingAvatar,
       updatingDisplayName,
       updatingUsername,
+      user,
       usernameLockedUntil,
     ],
   )
 }
+

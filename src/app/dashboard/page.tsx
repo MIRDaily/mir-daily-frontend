@@ -4,14 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { motion, useInView } from 'framer-motion'
 import Image from 'next/image'
 import { List, type RowComponentProps } from 'react-window'
-import { supabase } from '@/lib/supabaseBrowser'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/hooks/useAuth'
 import { useDailyResults } from '@/hooks/useDailyResults'
 import type { RankingEntry } from '@/hooks/useDailyResults'
 import { useScoreDistribution } from '@/hooks/useScoreDistribution'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { getAvatarUrl } from '@/lib/avatar'
-import { extractProfile, parseApiError } from '@/lib/profile'
+import { parseApiError } from '@/lib/profile'
 import { getUserSummary } from '@/services/resultsService'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
 import AppHeader from '@/components/AppHeader'
@@ -248,6 +248,7 @@ function LazyCard({
 
 export default function DashboardPage() {
   const router = useRouter()
+  const { user, loading: authLoading } = useAuth()
   const authenticatedFetch = useAuthenticatedFetch()
   const { refreshUnreadCount } = useNotificationsContext()
   const [deckOrder, setDeckOrder] = useState([0, 1, 2])
@@ -1531,13 +1532,12 @@ export default function DashboardPage() {
         return
       }
     }
-    const { data } = await supabase.auth.getUser()
-    if (!data.user) {
+    if (!user) {
       setAuthMessage('Necesitas iniciar sesión para abrir el cuestionario.')
       setTimeout(() => router.replace('/auth'), 900)
       return
     }
-    const currentUserId = data.user.id
+    const currentUserId = user.id
     setUserId(currentUserId)
     if (isEnvelopeOpening) return
     setDailyFlowLoading(true)
@@ -1733,44 +1733,25 @@ export default function DashboardPage() {
   }, [refreshUnreadCount])
 
   useEffect(() => {
-    let isMounted = true
-    const checkProfileAccess = async () => {
-      try {
-        const { data } = await supabase.auth.getSession()
-        if (!data.session) {
-          router.replace('/auth')
-          return
-        }
-        setUserId(data.session.user.id)
-        const response = await authenticatedFetch(`${API_URL}/api/profile`)
-        if (response.status === 401) return
-        if (!response.ok) {
-          throw new Error(await parseApiError(response))
-        }
-        const payload = await response.json().catch(() => ({}))
-        const profile = extractProfile(payload)
-        if (!profile.username) {
-          router.replace('/complete-profile')
-          return
-        }
-        if (!isMounted) return
-        setProfileCheckError(null)
-      } catch (err) {
-        if (!isMounted) return
-        setProfileCheckError(
-          err instanceof Error ? err.message : 'No se pudo validar el perfil.',
-        )
-      } finally {
-        if (isMounted) {
-          setIsCheckingProfile(false)
-        }
-      }
+    if (authLoading) return
+
+    if (!user) {
+      router.replace('/auth')
+      setIsCheckingProfile(false)
+      return
     }
-    void checkProfileAccess()
-    return () => {
-      isMounted = false
+
+    setUserId(user.id)
+
+    if (!user.username) {
+      router.replace('/complete-profile')
+      setIsCheckingProfile(false)
+      return
     }
-  }, [API_URL, authenticatedFetch, router])
+
+    setProfileCheckError(null)
+    setIsCheckingProfile(false)
+  }, [authLoading, router, user])
 
   useEffect(() => {
     if (!userId) return
@@ -2170,7 +2151,7 @@ export default function DashboardPage() {
                 </button>
               </div>
             )}
-            <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
+            <div className="mt-2 flex w-full justify-center">
               <button
                 className="relative bg-[#E8A598] hover:bg-[#d68c7f] text-white font-bold py-3.5 px-10 rounded-2xl shadow-[0_10px_20px_-5px_rgba(232,165,152,0.5)] transition-all duration-300 transform hover:-translate-y-1 hover:shadow-[0_15px_25px_-5px_rgba(232,165,152,0.6)] flex items-center justify-center gap-2 group min-w-[200px]"
                 onClick={handleOpenQuiz}
@@ -2187,21 +2168,6 @@ export default function DashboardPage() {
                     : dailyCompleted
                       ? 'Revisar tu Daily'
                       : 'Abrir Sobre'}
-                </span>
-              </button>
-              <button
-                className="relative bg-[#7D8A96]/70 text-white font-bold py-3.5 px-8 rounded-2xl shadow-[0_10px_20px_-5px_rgba(125,138,150,0.2)] transition-all duration-300 flex items-center justify-center gap-2 min-w-[200px] cursor-not-allowed"
-                disabled
-                aria-disabled="true"
-              >
-                <span className="material-symbols-outlined text-2xl opacity-70">
-                  groups
-                </span>
-                <span className="text-lg tracking-wide opacity-80">
-                  Multijugador
-                </span>
-                <span className="absolute -top-2 -right-2 rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#C4655A] shadow">
-                  Proximamente
                 </span>
               </button>
             </div>
@@ -3736,4 +3702,3 @@ export default function DashboardPage() {
     </div>
   )
 }
-

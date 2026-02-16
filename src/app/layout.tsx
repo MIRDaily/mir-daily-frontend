@@ -1,7 +1,7 @@
 import './globals.css'
 import type { Metadata } from 'next'
 import localFont from 'next/font/local'
-import { NotificationsProvider } from '@/providers/NotificationsProvider'
+import { AppProviders } from '@/providers/AppProviders'
 
 const lexend = localFont({
   src: [
@@ -31,7 +31,7 @@ export default function RootLayout({
         />
       </head>
       <body className="font-display">
-        <NotificationsProvider>{children}</NotificationsProvider>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   )
