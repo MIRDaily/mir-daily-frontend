@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type UIEvent } from 'react'
-import { motion } from 'framer-motion'
+import { motion, useInView } from 'framer-motion'
 import Image from 'next/image'
 import { List, type RowComponentProps } from 'react-window'
 import { supabase } from '@/lib/supabaseBrowser'
@@ -107,6 +107,7 @@ type RankingVirtualListData = {
 const CONTENT_ANIMATION_DELAY_MS = 320
 const REVIEW_FLOATING_CTA_DELAY_MS = 2000
 const MOST_FAILED_FETCH_MAX_RETRIES = 2
+const CARD_ANIMATION_DELAY_MS = 0
 const RANKING_VISIBLE_COUNT = 20
 const RANKING_MAX_COUNT = 25
 const RANKING_ROW_HEIGHT = 50
@@ -218,11 +219,31 @@ function LazyCard({
   children: ReactNode
   onInViewChange?: (inView: boolean) => void
 }) {
+  const ref = useRef<HTMLDivElement | null>(null)
+  const inView = useInView(ref, {
+    amount: 0.35,
+    once: false,
+    margin: '0px 0px -10% 0px',
+  })
   useEffect(() => {
-    onInViewChange?.(true)
-  }, [onInViewChange])
-
-  return <div className={className}>{children}</div>
+    onInViewChange?.(inView)
+  }, [inView, onInViewChange])
+  return (
+    <motion.div
+      ref={ref}
+      className={className}
+      initial={{ opacity: 0, y: 20, scale: 0.98 }}
+      animate={inView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 20, scale: 0.98 }}
+      transition={{
+        duration: 0.48,
+        ease: 'easeOut',
+        delay: CARD_ANIMATION_DELAY_MS / 1000,
+      }}
+      style={{ willChange: 'opacity, transform' }}
+    >
+      {children}
+    </motion.div>
+  )
 }
 
 export default function DashboardPage() {
