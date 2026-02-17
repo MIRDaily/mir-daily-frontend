@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useProfile } from '@/hooks/useProfile'
 import { getAvatarUrl } from '@/lib/avatar'
+import { getOnboardingDeferredFlag } from '@/lib/onboarding'
 import { supabase } from '@/lib/supabaseBrowser'
 import NotificationsPopup from '@/components/NotificationsPopup'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
@@ -36,6 +37,7 @@ export default function AppHeader({
   const { unreadCount, refreshUnreadCount } = useNotificationsContext()
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+  const [profileHref, setProfileHref] = useState('/profile')
   const notificationRef = useRef<HTMLDivElement | null>(null)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
 
@@ -72,6 +74,10 @@ export default function AppHeader({
     if (!isNotificationOpen) return
     refreshUnreadCount({ debounced: true })
   }, [isNotificationOpen, refreshUnreadCount])
+
+  useEffect(() => {
+    setProfileHref(getOnboardingDeferredFlag() ? '/onboarding' : '/profile')
+  }, [isProfileMenuOpen])
 
   return (
     <nav
@@ -191,7 +197,7 @@ export default function AppHeader({
             </button>
             <div className={`absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-soft border border-[#7D8A96]/10 transition-all duration-200 transform origin-top-right z-50 ${isProfileMenuOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
               <div className="py-1">
-                <Link className="block px-4 py-2 text-sm text-[#7D8A96] hover:bg-[#FAF7F4] hover:text-[#E8A598]" href="/profile" onClick={() => setIsProfileMenuOpen(false)}>
+                <Link className="block px-4 py-2 text-sm text-[#7D8A96] hover:bg-[#FAF7F4] hover:text-[#E8A598]" href={profileHref} onClick={() => setIsProfileMenuOpen(false)}>
                   Mi Perfil
                 </Link>
                 <a className="block px-4 py-2 text-sm text-[#7D8A96] hover:bg-[#FAF7F4] hover:text-[#E8A598]" href="#" onClick={() => setIsProfileMenuOpen(false)}>

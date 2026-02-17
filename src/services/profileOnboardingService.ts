@@ -1,0 +1,91 @@
+import { parseApiError } from '@/lib/profile'
+
+export type University = {
+  id: number
+  name: string
+  country: string
+}
+
+export type MainGoal = 'prepare_mir' | 'reinforce_degree' | 'explore'
+
+export type OnboardingPayload = {
+  displayName: string
+  username: string
+  medicalYear: number | null
+  mirSpecialty: string | null
+  mainGoal: MainGoal | null
+  universityId: number | null
+  customUniversity: string | null
+  profilePublic: boolean
+}
+
+type AuthenticatedFetch = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>
+
+export async function fetchUniversities(
+  apiUrl: string,
+  authenticatedFetch: AuthenticatedFetch,
+): Promise<University[]> {
+  const response = await authenticatedFetch(`${apiUrl}/api/profile/universities`)
+  if (!response.ok) {
+    throw new Error(await parseApiError(response))
+  }
+
+  const payload = (await response.json().catch(() => null)) as
+    | { universities?: unknown }
+    | null
+  if (!payload || !Array.isArray(payload.universities)) return []
+
+  return payload.universities
+    .filter(
+      (item): item is University =>
+        !!item &&
+        typeof item === 'object' &&
+        typeof (item as University).id === 'number' &&
+        typeof (item as University).name === 'string' &&
+        typeof (item as University).country === 'string',
+    )
+    .sort((a, b) => a.country.localeCompare(b.country) || a.name.localeCompare(b.name))
+}
+
+export async function submitOnboarding(
+  apiUrl: string,
+  authenticatedFetch: AuthenticatedFetch,
+  body: OnboardingPayload,
+) {
+  const response = await authenticatedFetch(`${apiUrl}/api/profile/onboarding`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    throw new Error(await parseApiError(response))
+  }
+
+  return response
+}
+
+export async function updateAvatarRealtime(
+  apiUrl: string,
+  authenticatedFetch: AuthenticatedFetch,
+  avatarId: number,
+) {
+  const response = await authenticatedFetch(`${apiUrl}/api/profile/avatar`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ avatarId }),
+  })
+
+  if (!response.ok) {
+    throw new Error(await parseApiError(response))
+  }
+
+  return response
+}

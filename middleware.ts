@@ -52,6 +52,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  if (pathname.startsWith('/onboarding') && !session) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/auth'
+    return NextResponse.redirect(url)
+  }
+
   if (pathname.startsWith('/dashboard') && !session) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth'
@@ -62,5 +68,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/auth/:path*', '/dashboard/:path*', '/complete-profile'],
+  matcher: ['/auth/:path*', '/dashboard/:path*', '/complete-profile', '/onboarding'],
 }

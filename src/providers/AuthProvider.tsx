@@ -21,6 +21,17 @@ export type AuthUser = {
   display_name: string
   username: string
   avatar_id: number
+  medical_year: number | null
+  mir_specialty: string | null
+  main_goal: 'prepare_mir' | 'reinforce_degree' | 'explore' | null
+  university: {
+    id: number
+    name: string
+    country: string
+  } | null
+  profile_public: boolean
+  onboarding_completed: boolean
+  mustUpdateDisplayName: boolean
   created_at: string
 }
 
@@ -61,6 +72,58 @@ function coerceAuthUser(payload: unknown, fallbackSession: Session): AuthUser | 
       : typeof source.avatarId === 'number'
         ? source.avatarId
         : 1
+  const medicalYear =
+    typeof source.medical_year === 'number'
+      ? source.medical_year
+      : typeof source.medicalYear === 'number'
+        ? source.medicalYear
+        : null
+  const mirSpecialty =
+    typeof source.mir_specialty === 'string'
+      ? source.mir_specialty
+      : typeof source.mirSpecialty === 'string'
+        ? source.mirSpecialty
+        : null
+  const mainGoal =
+    source.main_goal === 'prepare_mir' ||
+    source.main_goal === 'reinforce_degree' ||
+    source.main_goal === 'explore'
+      ? source.main_goal
+      : source.mainGoal === 'prepare_mir' ||
+          source.mainGoal === 'reinforce_degree' ||
+          source.mainGoal === 'explore'
+        ? source.mainGoal
+        : null
+  const university =
+    source.university &&
+    typeof source.university === 'object' &&
+    typeof (source.university as Record<string, unknown>).id === 'number' &&
+    typeof (source.university as Record<string, unknown>).name === 'string' &&
+    typeof (source.university as Record<string, unknown>).country === 'string'
+      ? {
+          id: (source.university as Record<string, unknown>).id as number,
+          name: (source.university as Record<string, unknown>).name as string,
+          country: (source.university as Record<string, unknown>).country as string,
+        }
+      : null
+  const profilePublic =
+    typeof source.profile_public === 'boolean'
+      ? source.profile_public
+      : typeof source.profilePublic === 'boolean'
+        ? source.profilePublic
+        : false
+  const onboardingCompleted =
+    typeof source.onboarding_completed === 'boolean'
+      ? source.onboarding_completed
+      : typeof source.onboardingCompleted === 'boolean'
+        ? source.onboardingCompleted
+        : false
+  const mustUpdateDisplayName =
+    typeof source.mustUpdateDisplayName === 'boolean'
+      ? source.mustUpdateDisplayName
+      : typeof source.must_update_display_name === 'boolean'
+        ? source.must_update_display_name
+        : false
   const createdAt =
     typeof source.created_at === 'string'
       ? source.created_at
@@ -72,6 +135,13 @@ function coerceAuthUser(payload: unknown, fallbackSession: Session): AuthUser | 
     display_name: displayName,
     username,
     avatar_id: avatarId,
+    medical_year: medicalYear,
+    mir_specialty: mirSpecialty,
+    main_goal: mainGoal,
+    university,
+    profile_public: profilePublic,
+    onboarding_completed: onboardingCompleted,
+    mustUpdateDisplayName,
     created_at: createdAt,
   }
 }
