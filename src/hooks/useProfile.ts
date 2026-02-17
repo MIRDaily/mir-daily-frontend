@@ -113,13 +113,25 @@ export function useProfile() {
       setUser((prev) => (prev ? { ...prev, avatar_id: avatarId } : prev))
 
       try {
-        const response = await authenticatedFetch(`${apiUrl}/api/profile/avatar`, {
-          method: 'POST',
+        const avatarUrl = `${apiUrl}/api/profile/avatar`
+        const requestInit = {
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ avatarId }),
+        } as const
+
+        let response = await authenticatedFetch(avatarUrl, {
+          method: 'POST',
+          ...requestInit,
         })
+
+        if (response.status === 404) {
+          response = await authenticatedFetch(avatarUrl, {
+            method: 'PATCH',
+            ...requestInit,
+          })
+        }
 
         if (!response.ok) {
           throw new Error(await parseApiError(response))
@@ -145,7 +157,7 @@ export function useProfile() {
       }
       const normalizedUsername = username.trim().toLowerCase()
       if (!USERNAME_REGEX.test(normalizedUsername)) {
-        return { ok: false, error: 'Username invalido.' }
+        return { ok: false, error: 'El username debe tener entre 3 y 20 caracteres.' }
       }
 
       setUpdatingUsername(true)
@@ -233,4 +245,3 @@ export function useProfile() {
     ],
   )
 }
-

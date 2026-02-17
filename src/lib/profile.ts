@@ -1,9 +1,9 @@
-export const USERNAME_REGEX = /^[a-z0-9._]{3,30}$/
+export const USERNAME_REGEX = /^[a-z0-9._]{3,20}$/
 export const DISPLAY_NAME_REGEX = /^[A-Za-z0-9 ]{2,16}$/
 export const CUSTOM_UNIVERSITY_MAX_LENGTH = 80
 
 export function normalizeUsernameInput(value: string) {
-  return value.trim().toLowerCase().slice(0, 30)
+  return value.trim().toLowerCase().slice(0, 20)
 }
 
 export function normalizeDisplayNameInput(value: string) {

@@ -105,13 +105,25 @@ export async function updateAvatarRealtime(
   authenticatedFetch: AuthenticatedFetch,
   avatarId: number,
 ) {
-  const response = await authenticatedFetch(`${apiUrl}/api/profile/avatar`, {
-    method: 'POST',
+  const avatarUrl = `${apiUrl}/api/profile/avatar`
+  const requestInit = {
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ avatarId }),
+  } as const
+
+  let response = await authenticatedFetch(avatarUrl, {
+    method: 'POST',
+    ...requestInit,
   })
+
+  if (response.status === 404) {
+    response = await authenticatedFetch(avatarUrl, {
+      method: 'PATCH',
+      ...requestInit,
+    })
+  }
 
   if (!response.ok) {
     throw new Error(await parseApiError(response))

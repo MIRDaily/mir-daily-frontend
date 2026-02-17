@@ -242,7 +242,7 @@ function StepTwo({
             <RequiredIndicator />
           </label>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {goalOptions.map((goal) => {
+            {goalOptions.map((goal, index) => {
               const selected = state.mainGoal === goal.value
               return (
                 <button
@@ -260,15 +260,22 @@ function StepTwo({
                       : 'border-transparent bg-white text-[#7D8A96] hover:border-[#E8A598]/50 hover:bg-white/80'
                   }`}
                 >
-                  <div
+                  <motion.div
                     className={`mb-2 flex size-11 items-center justify-center rounded-full shadow-sm ${
                       selected
                         ? 'bg-white text-[#E8A598]'
                         : 'bg-gray-50 text-[#7D8A96]/60 transition-colors group-hover:text-[#E8A598]'
                     }`}
+                    animate={{ y: [0, -4, 0] }}
+                    transition={{
+                      duration: 0.38,
+                      ease: 'easeInOut',
+                      repeat: Infinity,
+                      repeatDelay: 2.8 + index * 0.35,
+                    }}
                   >
                     <span className="material-symbols-outlined">{goal.icon}</span>
-                  </div>
+                  </motion.div>
                   <span className={`text-sm ${selected ? 'font-bold' : 'font-medium'}`}>{goal.label}</span>
                   {selected ? (
                     <div className="absolute right-2 top-2 text-[#E8A598]">
@@ -339,6 +346,7 @@ function StepTwo({
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
+                  maxLength={20}
                 />
               </div>
               {usernameCheckStatus !== 'idle' ? (
@@ -605,25 +613,24 @@ function StepThree({
         <label className="mb-8 flex items-center justify-between rounded-xl border border-[#E9E4E1] bg-white px-4 py-3">
           <div>
             <p className="text-sm font-semibold text-[#4B5563]">Perfil publico</p>
-            <p className="text-xs text-[#7D8A96]">Tu perfil solo sera visible si activas esta opcion.</p>
+            <p className="text-xs text-[#7D8A96]">
+              Tu perfil solo sera visible si activas esta opcion (puedes cambiarlo mas adelante).
+            </p>
           </div>
-          <button
-            type="button"
-            onClick={() =>
-              setState((prev) => ({
-                ...prev,
-                profilePublic: !prev.profilePublic,
-              }))
-            }
-            className={`h-7 w-12 rounded-full p-1 transition ${state.profilePublic ? 'bg-[#E8A598]' : 'bg-[#E9E4E1]'}`}
-            aria-label="Cambiar visibilidad del perfil"
-          >
-            <span
-              className={`block h-5 w-5 rounded-full bg-white transition ${
-                state.profilePublic ? 'translate-x-5' : ''
-              }`}
-            />
-          </button>
+          <div className="group/lock relative">
+            <button
+              type="button"
+              disabled
+              aria-disabled="true"
+              className="h-7 w-12 cursor-not-allowed rounded-full bg-[#E9E4E1] p-1 transition opacity-70"
+              aria-label="Cambiar visibilidad del perfil"
+            >
+              <span className="block h-5 w-5 rounded-full bg-white transition" />
+            </button>
+            <p className="pointer-events-none absolute right-0 top-9 hidden w-64 rounded-lg border border-[#E9E4E1] bg-white px-3 py-2 text-xs text-[#7D8A96] shadow-sm group-hover/lock:block">
+              Todos los perfiles serán privados por el momento.
+            </p>
+          </div>
         </label>
 
         <button
@@ -919,6 +926,8 @@ export default function OnboardingWizard() {
     mirSpecialtyId: null,
     profilePublic: false,
   })
+  const currentUserId = user?.id ?? null
+  const currentUserUsername = user?.username ?? ''
 
   useEffect(() => {
     if (!user) return
@@ -934,15 +943,15 @@ export default function OnboardingWizard() {
       useCustomUniversity: false,
       medicalYear: user.medical_year ?? null,
       mirSpecialtyId: user.mir_specialty?.id ?? null,
-      profilePublic: user.profile_public ?? false,
+      profilePublic: false,
     })
   }, [user])
 
   useEffect(() => {
-    if (!apiUrl || !user || step !== 2) return
+    if (!apiUrl || !currentUserId || step !== 2) return
 
     const normalizedUsername = normalizeUsernameInput(state.username)
-    const currentUsername = normalizeUsernameInput(user.username ?? '')
+    const currentUsername = normalizeUsernameInput(currentUserUsername)
 
     if (!normalizedUsername) {
       setUsernameCheckStatus('idle')
@@ -952,7 +961,7 @@ export default function OnboardingWizard() {
 
     if (!USERNAME_REGEX.test(normalizedUsername)) {
       setUsernameCheckStatus('invalid')
-      setUsernameCheckMessage('Formato inválido. Usa solo a-z, 0-9, punto o guion bajo (3-30).')
+      setUsernameCheckMessage('El username debe tener entre 3 y 20 caracteres.')
       return
     }
 
@@ -983,7 +992,7 @@ export default function OnboardingWizard() {
         }
 
         setUsernameCheckStatus('unavailable')
-        setUsernameCheckMessage('Ya está en uso ❌')
+        setUsernameCheckMessage('Este nombre de usuario ya está en uso.')
       } catch (err) {
         if (requestSeq !== usernameRequestSeqRef.current) return
         if (err instanceof DOMException && err.name === 'AbortError') return
@@ -998,7 +1007,7 @@ export default function OnboardingWizard() {
       clearTimeout(timeoutId)
       controller.abort()
     }
-  }, [apiUrl, authenticatedFetch, state.username, step, user])
+  }, [apiUrl, authenticatedFetch, currentUserId, currentUserUsername, state.username, step])
 
   const loadUniversities = useCallback(async () => {
     if (!apiUrl || !user) return
@@ -1059,11 +1068,14 @@ export default function OnboardingWizard() {
     const normalizedDisplayName = normalizeDisplayNameInput(state.displayName)
     const normalizedUsername = normalizeUsernameInput(state.username)
 
+    if (!state.mainGoal) {
+      return 'Debes seleccionar tu objetivo principal para continuar.'
+    }
     if (!DISPLAY_NAME_REGEX.test(normalizedDisplayName)) {
-      return 'El display name debe tener 2-16 caracteres, solo letras, números y espacios.'
+      return 'El nombre visible debe tener entre 2 y 16 caracteres.'
     }
     if (!USERNAME_REGEX.test(normalizedUsername)) {
-      return 'El username debe cumplir: ^[a-z0-9._]{3,30}$.'
+      return 'El username debe tener entre 3 y 20 caracteres.'
     }
     if (user?.mustUpdateDisplayName && normalizedDisplayName === normalizeDisplayNameInput(user.display_name)) {
       return 'Debes corregir tu display name para continuar.'
@@ -1073,10 +1085,10 @@ export default function OnboardingWizard() {
         return 'Comprobando disponibilidad del username...'
       }
       if (usernameCheckStatus === 'unavailable') {
-        return 'Ese username ya está en uso.'
+        return 'Este nombre de usuario ya está en uso.'
       }
       if (usernameCheckStatus === 'invalid') {
-        return 'El username debe cumplir: ^[a-z0-9._]{3,30}$.'
+        return 'El username debe tener entre 3 y 20 caracteres.'
       }
       if (usernameCheckStatus === 'error') {
         return usernameCheckMessage ?? 'No se pudo validar el username.'
@@ -1085,6 +1097,7 @@ export default function OnboardingWizard() {
     }
     return null
   }, [
+    state.mainGoal,
     state.displayName,
     state.username,
     user?.display_name,
@@ -1227,7 +1240,7 @@ export default function OnboardingWizard() {
                       onRetryUniversities={loadUniversities}
                       usernameCheckStatus={usernameCheckStatus}
                       usernameCheckMessage={usernameCheckMessage}
-                      canContinue={usernameCheckStatus === 'available'}
+                      canContinue={usernameCheckStatus === 'available' && state.mainGoal !== null}
                       onBack={() => setStep(1)}
                       onNext={() => {
                         const validationError = validateStepTwo()

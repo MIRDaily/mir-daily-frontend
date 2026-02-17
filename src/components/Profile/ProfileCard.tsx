@@ -62,7 +62,7 @@ export default function ProfileCard() {
 
   const trimmedDraft = displayNameDraft.trim()
   const isNameUnchanged = trimmedDraft === (profile?.display_name ?? '').trim()
-  const isNameValid = trimmedDraft.length >= 2 && trimmedDraft.length <= 40
+  const isNameValid = trimmedDraft.length >= 2 && trimmedDraft.length <= 16
   const usernameValue = usernameDraft ?? profile?.username ?? ''
   const normalizedUsername = usernameValue.trim().toLowerCase()
   const isUsernameValid = USERNAME_REGEX.test(normalizedUsername)
@@ -104,7 +104,7 @@ export default function ProfileCard() {
 
   const saveDisplayName = async () => {
     if (!isNameValid) {
-      setNameValidationError('El display name debe tener entre 2 y 40 caracteres.')
+      setNameValidationError('El nombre visible debe tener entre 2 y 16 caracteres.')
       return
     }
     if (isNameUnchanged) return
@@ -137,9 +137,7 @@ export default function ProfileCard() {
 
   const handleUsernameChange = async () => {
     if (!isUsernameValid) {
-      setUsernameValidationError(
-        'Formato invalido. Usa 3-30: minusculas, numeros, punto y guion bajo.',
-      )
+      setUsernameValidationError('El username debe tener entre 3 y 20 caracteres.')
       return
     }
     if (isUsernameUnchanged || isUsernameLocked) return
@@ -292,6 +290,7 @@ export default function ProfileCard() {
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}
+                    maxLength={20}
                     disabled={updatingUsername || isUsernameLocked}
                   />
                   <button
@@ -343,7 +342,7 @@ export default function ProfileCard() {
                       value={displayNameDraft}
                       onChange={(event) => setDisplayNameDraft(event.target.value)}
                       className="w-full rounded-xl border border-[#E9E4E1] bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8A598]/30"
-                      maxLength={40}
+                      maxLength={16}
                     />
                     <div className="flex gap-2">
                       <button
