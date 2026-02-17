@@ -11,6 +11,18 @@ type ToastState = {
   message: string
 } | null
 
+const MAIN_GOAL_LABEL: Record<'prepare_mir' | 'reinforce_degree' | 'explore', string> = {
+  prepare_mir: 'Preparar MIR',
+  reinforce_degree: 'Reforzar carrera',
+  explore: 'Explorar',
+}
+
+function formatMedicalYear(value: number | null | undefined) {
+  if (value === null || value === undefined) return 'No definido'
+  if (value === 0) return 'Medico graduado'
+  return `${value}o de medicina`
+}
+
 export default function ProfileCard() {
   const {
     profile,
@@ -69,6 +81,13 @@ export default function ProfileCard() {
     ? new Date(profile.created_at).toLocaleDateString('es-ES')
     : '--'
   const profileTitle = profile?.display_name || 'Usuario MIRDaily'
+  const mainGoalLabel =
+    profile?.main_goal ? MAIN_GOAL_LABEL[profile.main_goal] : 'Sin objetivo'
+  const universityLabel = profile?.university
+    ? `${profile.university.name} (${profile.university.country})`
+    : 'Sin universidad'
+  const mirSpecialtyLabel = profile?.mir_specialty?.name ?? 'Sin especialidad'
+  const profileVisibilityLabel = profile?.profile_public ? 'Perfil publico' : 'Perfil privado'
 
   const openNameEditor = () => {
     if (!profile) return
@@ -169,24 +188,45 @@ export default function ProfileCard() {
     <section className="overflow-hidden rounded-3xl border border-[#E9E4E1] bg-white shadow-[0_18px_50px_rgba(45,55,72,0.07)]">
       <div className="relative border-b border-[#E9E4E1] bg-[linear-gradient(120deg,#fffdfb_0%,#fff5ef_55%,#fde8df_100%)] p-6 md:p-8">
         <div className="absolute -top-16 -right-16 h-44 w-44 rounded-full bg-[#E8A598]/15 blur-2xl" />
-        <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="rounded-full border border-[#E8A598]/30 bg-white p-1 shadow-sm">
-              <AvatarBadge
-                avatarId={profile?.avatar_id ?? 1}
-                size={84}
-                alt={`Avatar de ${profileTitle}`}
-                textSizeClassName="text-2xl"
-              />
+        <div className="relative flex flex-col gap-6">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="rounded-full border border-[#E8A598]/30 bg-white p-1 shadow-sm">
+                <AvatarBadge
+                  avatarId={profile?.avatar_id ?? 1}
+                  size={84}
+                  alt={`Avatar de ${profileTitle}`}
+                  textSizeClassName="text-2xl"
+                />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-[#2D3748]">{profileTitle}</h2>
+                <p className="text-sm text-[#7D8A96]">@{profile?.username ?? '--'}</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight text-[#2D3748]">{profileTitle}</h2>
-              <p className="text-sm text-[#7D8A96]">@{profile?.username ?? '--'}</p>
+            <div className="inline-flex items-center gap-2 self-start rounded-full border border-[#E9E4E1] bg-white px-3 py-1.5 text-xs font-semibold text-[#7D8A96]">
+              <span className="material-symbols-outlined text-[15px]">event</span>
+              Miembro desde {createdAtText}
             </div>
           </div>
-          <div className="inline-flex items-center gap-2 self-start rounded-full border border-[#E9E4E1] bg-white px-3 py-1.5 text-xs font-semibold text-[#7D8A96]">
-            <span className="material-symbols-outlined text-[15px]">event</span>
-            Miembro desde {createdAtText}
+
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E9E4E1] bg-white px-3 py-1 text-xs font-semibold text-[#7D8A96]">
+              <span className="material-symbols-outlined text-[15px]">flag</span>
+              {mainGoalLabel}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E9E4E1] bg-white px-3 py-1 text-xs font-semibold text-[#7D8A96]">
+              <span className="material-symbols-outlined text-[15px]">school</span>
+              {formatMedicalYear(profile?.medical_year)}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E9E4E1] bg-white px-3 py-1 text-xs font-semibold text-[#7D8A96]">
+              <span className="material-symbols-outlined text-[15px]">stethoscope</span>
+              {mirSpecialtyLabel}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E9E4E1] bg-white px-3 py-1 text-xs font-semibold text-[#7D8A96]">
+              <span className="material-symbols-outlined text-[15px]">visibility</span>
+              {profileVisibilityLabel}
+            </span>
           </div>
         </div>
       </div>
@@ -209,6 +249,32 @@ export default function ProfileCard() {
                 <p className="mt-1 text-sm text-[#2D3748]">
                   <span className="font-semibold">Username actual:</span> {profile.username}
                 </p>
+              </div>
+
+              <div className="rounded-2xl border border-[#E9E4E1] bg-white p-5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#7D8A96]">
+                  Perfil academico
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-[#E9E4E1] bg-[#FAF7F4] px-4 py-3">
+                    <p className="text-xs text-[#7D8A96]">Objetivo principal</p>
+                    <p className="mt-1 text-sm font-semibold text-[#2D3748]">{mainGoalLabel}</p>
+                  </div>
+                  <div className="rounded-xl border border-[#E9E4E1] bg-[#FAF7F4] px-4 py-3">
+                    <p className="text-xs text-[#7D8A96]">Curso actual</p>
+                    <p className="mt-1 text-sm font-semibold text-[#2D3748]">
+                      {formatMedicalYear(profile.medical_year)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-[#E9E4E1] bg-[#FAF7F4] px-4 py-3">
+                    <p className="text-xs text-[#7D8A96]">Especialidad MIR</p>
+                    <p className="mt-1 text-sm font-semibold text-[#2D3748]">{mirSpecialtyLabel}</p>
+                  </div>
+                  <div className="rounded-xl border border-[#E9E4E1] bg-[#FAF7F4] px-4 py-3">
+                    <p className="text-xs text-[#7D8A96]">Universidad</p>
+                    <p className="mt-1 text-sm font-semibold text-[#2D3748]">{universityLabel}</p>
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -326,6 +392,22 @@ export default function ProfileCard() {
               <li>Usa display name para mostrar tu identidad en ranking.</li>
               <li>El avatar se refleja sin recargar la pagina.</li>
             </ul>
+          </div>
+          <div className="mt-4 rounded-2xl border border-[#E9E4E1] bg-white p-4">
+            <h3 className="text-sm font-bold uppercase tracking-wide text-[#7D8A96]">
+              Preferencias actuales
+            </h3>
+            <div className="mt-3 space-y-2 text-sm text-[#4B5563]">
+              <p>
+                <span className="font-semibold">Objetivo:</span> {mainGoalLabel}
+              </p>
+              <p>
+                <span className="font-semibold">Visibilidad:</span> {profileVisibilityLabel}
+              </p>
+              <p>
+                <span className="font-semibold">Facultad:</span> {universityLabel}
+              </p>
+            </div>
           </div>
           {error ? (
             <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
