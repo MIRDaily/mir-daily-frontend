@@ -22,7 +22,10 @@ export type AuthUser = {
   username: string
   avatar_id: number
   medical_year: number | null
-  mir_specialty: string | null
+  mir_specialty: {
+    id: number
+    name: string
+  } | null
   main_goal: 'prepare_mir' | 'reinforce_degree' | 'explore' | null
   university: {
     id: number
@@ -79,11 +82,15 @@ function coerceAuthUser(payload: unknown, fallbackSession: Session): AuthUser | 
         ? source.medicalYear
         : null
   const mirSpecialty =
-    typeof source.mir_specialty === 'string'
-      ? source.mir_specialty
-      : typeof source.mirSpecialty === 'string'
-        ? source.mirSpecialty
-        : null
+    source.mir_specialty &&
+    typeof source.mir_specialty === 'object' &&
+    typeof (source.mir_specialty as Record<string, unknown>).id === 'number' &&
+    typeof (source.mir_specialty as Record<string, unknown>).name === 'string'
+      ? {
+          id: (source.mir_specialty as Record<string, unknown>).id as number,
+          name: (source.mir_specialty as Record<string, unknown>).name as string,
+        }
+      : null
   const mainGoal =
     source.main_goal === 'prepare_mir' ||
     source.main_goal === 'reinforce_degree' ||

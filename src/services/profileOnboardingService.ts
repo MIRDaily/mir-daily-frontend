@@ -8,11 +8,16 @@ export type University = {
 
 export type MainGoal = 'prepare_mir' | 'reinforce_degree' | 'explore'
 
+export type MirSpecialty = {
+  id: number
+  name: string
+}
+
 export type OnboardingPayload = {
   displayName: string
   username: string
   medicalYear: number | null
-  mirSpecialty: string | null
+  mirSpecialtyId: number | null
   mainGoal: MainGoal | null
   universityId: number | null
   customUniversity: string | null
@@ -70,6 +75,31 @@ export async function submitOnboarding(
   return response
 }
 
+export async function fetchMirSpecialties(
+  apiUrl: string,
+  authenticatedFetch: AuthenticatedFetch,
+): Promise<MirSpecialty[]> {
+  const response = await authenticatedFetch(`${apiUrl}/api/profile/mir-specialties`)
+  if (!response.ok) {
+    throw new Error(await parseApiError(response))
+  }
+
+  const payload = (await response.json().catch(() => null)) as
+    | { specialties?: unknown }
+    | null
+  if (!payload || !Array.isArray(payload.specialties)) return []
+
+  return payload.specialties
+    .filter(
+      (item): item is MirSpecialty =>
+        !!item &&
+        typeof item === 'object' &&
+        typeof (item as MirSpecialty).id === 'number' &&
+        typeof (item as MirSpecialty).name === 'string',
+    )
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
 export async function updateAvatarRealtime(
   apiUrl: string,
   authenticatedFetch: AuthenticatedFetch,
@@ -88,4 +118,27 @@ export async function updateAvatarRealtime(
   }
 
   return response
+}
+
+export async function checkUsernameAvailability(
+  apiUrl: string,
+  authenticatedFetch: AuthenticatedFetch,
+  username: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  const response = await authenticatedFetch(`${apiUrl}/api/profile/check-username`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ username }),
+    signal,
+  })
+
+  if (!response.ok) {
+    throw new Error(await parseApiError(response))
+  }
+
+  const payload = (await response.json().catch(() => null)) as { available?: unknown } | null
+  return payload?.available === true
 }

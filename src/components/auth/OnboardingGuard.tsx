@@ -21,7 +21,7 @@ export default function OnboardingGuard() {
 
     const isDeferred = getOnboardingDeferredFlag()
 
-    if (!user.onboarding_completed && pathname !== '/onboarding') {
+    if (!user.onboarding_completed && !isDeferred && pathname !== '/onboarding') {
       router.replace('/onboarding')
       return
     }
