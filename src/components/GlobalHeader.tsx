@@ -10,6 +10,7 @@ type HeaderTab = 'studio' | 'daily' | 'dashboard' | null
 function shouldShowHeader(pathname: string): boolean {
   return (
     pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/panel') ||
     pathname.startsWith('/studio') ||
     pathname.startsWith('/profile') ||
     pathname.startsWith('/notifications')
@@ -18,6 +19,7 @@ function shouldShowHeader(pathname: string): boolean {
 
 function resolveActiveTab(pathname: string): HeaderTab {
   if (pathname.startsWith('/studio')) return 'studio'
+  if (pathname.startsWith('/panel')) return 'dashboard'
   if (pathname.startsWith('/dashboard')) return 'daily'
   return null
 }
@@ -33,4 +35,3 @@ export default function GlobalHeader() {
 
   return <AppHeader activeTab={activeTab} blurred={blurred} />
 }
-

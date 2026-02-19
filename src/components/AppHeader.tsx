@@ -123,7 +123,7 @@ export default function AppHeader({
             )}
             Daily
           </Link>
-          <Link className={getNavClass(activeTab, 'dashboard')} href="/dashboard">
+          <Link className={getNavClass(activeTab, 'dashboard')} href="/panel">
             {activeTab === 'dashboard' && (
               <motion.span
                 layoutId="header-active-tab-indicator"
@@ -131,7 +131,7 @@ export default function AppHeader({
                 transition={{ type: 'spring', stiffness: 450, damping: 36 }}
               />
             )}
-            Dashboard
+            Panel
           </Link>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">

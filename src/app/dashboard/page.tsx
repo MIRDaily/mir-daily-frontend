@@ -1925,7 +1925,7 @@ export default function DashboardPage() {
               onClick={rotateLeft}
               disabled={isEnvelopeOpening}
               aria-label="Rotar sobres a la izquierda"
-              className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-30 size-11 rounded-full bg-white/90 border border-[#F0EAE6] text-[#7D8A96] shadow-soft opacity-0 scale-95 pointer-events-none transition-all duration-300 group-hover/deck:opacity-100 group-hover/deck:scale-100 group-hover/deck:pointer-events-auto hover:text-[#E8A598] hover:border-[#E8A598]/50 disabled:opacity-0 disabled:pointer-events-none"
+              className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-30 inline-flex w-11 h-11 aspect-square shrink-0 items-center justify-center p-0 leading-none rounded-full bg-white/90 border border-[#F0EAE6] text-[#7D8A96] shadow-soft opacity-0 scale-95 pointer-events-none transition-all duration-300 group-hover/deck:opacity-100 group-hover/deck:scale-100 group-hover/deck:pointer-events-auto hover:text-[#E8A598] hover:border-[#E8A598]/50 active:scale-90 active:translate-y-px active:shadow-sm disabled:opacity-0 disabled:pointer-events-none"
             >
               <span className="material-symbols-outlined text-2xl">
                 chevron_left
@@ -1937,7 +1937,7 @@ export default function DashboardPage() {
               onClick={rotateRight}
               disabled={isEnvelopeOpening}
               aria-label="Rotar sobres a la derecha"
-              className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 z-30 size-11 rounded-full bg-white/90 border border-[#F0EAE6] text-[#7D8A96] shadow-soft opacity-0 scale-95 pointer-events-none transition-all duration-300 group-hover/deck:opacity-100 group-hover/deck:scale-100 group-hover/deck:pointer-events-auto hover:text-[#E8A598] hover:border-[#E8A598]/50 disabled:opacity-0 disabled:pointer-events-none"
+              className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 z-30 inline-flex w-11 h-11 aspect-square shrink-0 items-center justify-center p-0 leading-none rounded-full bg-white/90 border border-[#F0EAE6] text-[#7D8A96] shadow-soft opacity-0 scale-95 pointer-events-none transition-all duration-300 group-hover/deck:opacity-100 group-hover/deck:scale-100 group-hover/deck:pointer-events-auto hover:text-[#E8A598] hover:border-[#E8A598]/50 active:scale-90 active:translate-y-px active:shadow-sm disabled:opacity-0 disabled:pointer-events-none"
             >
               <span className="material-symbols-outlined text-2xl">
                 chevron_right
