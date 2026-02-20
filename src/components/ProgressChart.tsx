@@ -231,7 +231,7 @@ export default function ProgressChart({
             Score
           </span>
           <span className="inline-flex items-center gap-1 text-[#7D8A96]">
-            <span className="h-2 w-2 rounded-full bg-[#7D8A96]" />
+            <span className="h-2 w-2 rounded-full bg-[#E8A598]" />
             Tiempo medio
           </span>
           {chart.hasCorrectSeries && (
@@ -285,7 +285,7 @@ export default function ProgressChart({
                   y={y + 3}
                   textAnchor="start"
                   fontSize="10"
-                  fill="#7D8A96"
+                  fill="#E8A598"
                   fontWeight="600"
                 >
                   {Math.round(rightValue)}s
@@ -348,7 +348,7 @@ export default function ProgressChart({
             stroke="#8BA888"
             strokeLinecap="round"
             strokeLinejoin="round"
-            strokeWidth="3"
+            strokeWidth="4.5"
             initial={false}
             animate={{
               pathLength: drawActive ? 1 : 0,
@@ -359,11 +359,11 @@ export default function ProgressChart({
           <motion.path
             d={chart.avgTimePath}
             fill="none"
-            stroke="#7D8A96"
+            stroke="#E8A598"
             strokeDasharray="6 5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            strokeWidth="2.5"
+            strokeWidth="4"
             initial={false}
             animate={{
               pathLength: drawActive ? 1 : 0,
@@ -378,7 +378,7 @@ export default function ProgressChart({
               stroke="#D7B977"
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeWidth="2.5"
+              strokeWidth="4"
               initial={false}
               animate={{
                 pathLength: drawActive ? 1 : 0,
@@ -418,7 +418,7 @@ export default function ProgressChart({
                   cx={point.x}
                   cy={point.yAvgTime}
                   r={hoveredIndex === index ? 3 : 0}
-                  fill="#7D8A96"
+                  fill="#E8A598"
                 />
                 {point.yCorrect != null && (
                   <circle

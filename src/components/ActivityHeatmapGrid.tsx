@@ -121,7 +121,10 @@ export default function ActivityHeatmapGrid({
           const tooltip = `${currentDay ? formatDate(currentDay.date) : 'Sin fecha'} • ${getActivityLabel(level)}`
           const cellStyle: CSSProperties = {}
 
-          if (introPhase === 'cells') {
+          if (introPhase === 'idle') {
+            cellStyle.opacity = 0
+            cellStyle.transform = 'scale(0.92)'
+          } else if (introPhase === 'cells') {
             cellStyle.animation = `panelHeatmapCellIn 360ms ease-out ${index * 22}ms both`
           } else if (introPhase === 'glow' && level === 2) {
             cellStyle.animation = 'panelHeatmapGreenGlow 940ms cubic-bezier(0.16,1,0.3,1) 0ms both'
