@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import type {
   ActivityHeatmapDay,
   ActivityHeatmapResponse,
@@ -11,6 +11,7 @@ type ActivityHeatmapGridProps = {
   loading: boolean
   error: string | null
   onRetry: () => void
+  introPhase?: 'idle' | 'cells' | 'glow' | 'reveal' | 'done'
 }
 
 const WEEK_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] as const
@@ -43,6 +44,7 @@ export default function ActivityHeatmapGrid({
   loading,
   error,
   onRetry,
+  introPhase = 'done',
 }: ActivityHeatmapGridProps) {
   const cells = useMemo(() => {
     const days = data?.days ?? []
@@ -117,12 +119,20 @@ export default function ActivityHeatmapGrid({
           const currentDay: ActivityHeatmapDay | null = day
           const level = currentDay?.level ?? 0
           const tooltip = `${currentDay ? formatDate(currentDay.date) : 'Sin fecha'} • ${getActivityLabel(level)}`
+          const cellStyle: CSSProperties = {}
+
+          if (introPhase === 'cells') {
+            cellStyle.animation = `panelHeatmapCellIn 360ms ease-out ${index * 22}ms both`
+          } else if (introPhase === 'glow' && level === 2) {
+            cellStyle.animation = 'panelHeatmapGreenGlow 940ms cubic-bezier(0.16,1,0.3,1) 0ms both'
+          }
 
           return (
             <div key={`activity-heatmap-cell-${index}`} className="group/cell relative">
               <div
                 className={`h-8 rounded-md ${getLevelStyle(level)} transition-transform duration-150 group-hover/cell:scale-[1.03]`}
                 aria-label={tooltip}
+                style={cellStyle}
               />
               <span className="pointer-events-none absolute left-1/2 top-[-8px] z-20 w-max -translate-x-1/2 -translate-y-full rounded bg-[#374151] px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/cell:opacity-100">
                 {tooltip}
@@ -163,7 +173,7 @@ export default function ActivityHeatmapGrid({
             {data.stats.totalActiveDays}
           </span>
           <span className="pointer-events-none absolute -top-2 left-1/2 z-20 w-max -translate-x-1/2 -translate-y-full rounded bg-[#374151] px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/badge:opacity-100">
-            Días activos: {data.stats.totalActiveDays}
+            Dias activos: {data.stats.totalActiveDays}
           </span>
         </div>
         <div className="group/badge relative flex h-12 items-center justify-center gap-1 rounded-lg border border-[#E8A598]/45 bg-[#FAF7F4]">
@@ -174,7 +184,7 @@ export default function ActivityHeatmapGrid({
             {data.stats.totalDailyDays}
           </span>
           <span className="pointer-events-none absolute -top-2 left-1/2 z-20 w-max -translate-x-1/2 -translate-y-full rounded bg-[#374151] px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/badge:opacity-100">
-            Días con daily: {data.stats.totalDailyDays}
+            Dias con daily: {data.stats.totalDailyDays}
           </span>
         </div>
       </div>

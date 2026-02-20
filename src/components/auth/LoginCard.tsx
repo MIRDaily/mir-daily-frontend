@@ -3,6 +3,22 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabaseBrowser'
 
+function buildOAuthRedirectUrl(): string {
+  const envRedirect = process.env.NEXT_PUBLIC_AUTH_REDIRECT_URL?.trim()
+  if (envRedirect) return envRedirect
+
+  const { protocol, hostname, port, origin } = window.location
+  const isLocal =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '0.0.0.0'
+
+  if (!isLocal) return `${origin}/auth/callback`
+
+  const localPort = port || '3000'
+  return `${protocol}//localhost:${localPort}/auth/callback`
+}
+
 export default function LoginCard({
   onSwitch,
   onRecover,
@@ -104,7 +120,7 @@ export default function LoginCard({
               await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                  redirectTo: `${window.location.origin}/auth/callback`,
+                  redirectTo: buildOAuthRedirectUrl(),
                 },
               })
             if (authError) {
@@ -146,7 +162,7 @@ export default function LoginCard({
               await supabase.auth.signInWithOAuth({
                 provider: 'apple',
                 options: {
-                  redirectTo: `${window.location.origin}/auth/callback`,
+                  redirectTo: buildOAuthRedirectUrl(),
                 },
               })
             if (authError) {

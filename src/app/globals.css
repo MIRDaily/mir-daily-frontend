@@ -924,6 +924,57 @@ textarea:disabled {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
+.panel-metric-flip-wrap {
+  perspective: 1200px;
+}
+
+.panel-metric-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 760ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.panel-metric-flip-inner.is-revealed {
+  transform: rotateY(180deg);
+}
+
+.panel-metric-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+}
+
+.panel-metric-back {
+  transform: rotateY(180deg);
+}
+
+@keyframes panelHeatmapCellIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes panelHeatmapGreenGlow {
+  0% {
+    box-shadow: 0 0 0 rgba(139, 168, 136, 0);
+  }
+  35% {
+    box-shadow: 0 0 22px rgba(139, 168, 136, 0.95), 0 0 42px rgba(139, 168, 136, 0.75);
+    transform: scale(1.05);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(139, 168, 136, 0);
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hub-enter .hub-anim,
   .hub-enter .hub-anim-soft,
@@ -1001,6 +1052,10 @@ textarea:disabled {
   .ranking-scroll-cue {
     animation: none;
     opacity: 0.6;
+    transform: none;
+  }
+  .panel-metric-flip-inner {
+    transition: none;
     transform: none;
   }
 

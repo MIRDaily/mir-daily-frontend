@@ -76,3 +76,29 @@ export async function fetchScoreDistribution(signal?: AbortSignal) {
 
   return res.json();
 }
+
+export type TimeSeriesPoint = {
+  date: string;
+  score: number;
+  avgTime: number;
+  correct?: number;
+};
+
+export type TimeSeriesResponse = {
+  status?: "ok" | "insufficient_data";
+  points?: TimeSeriesPoint[];
+  totalPoints?: number;
+  avgScore30?: number;
+  avgTime30?: number;
+};
+
+export async function fetchTimeSeries(signal?: AbortSignal) {
+  const res = await fetchWithAuth("/api/stats/timeseries", signal);
+
+  if (!res.ok) {
+    const message = await readError(res, `Timeseries error (${res.status})`);
+    throw new Error(message);
+  }
+
+  return (await res.json()) as TimeSeriesResponse;
+}

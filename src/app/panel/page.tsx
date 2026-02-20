@@ -1,8 +1,10 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ActivityHeatmapGrid from '@/components/ActivityHeatmapGrid'
+import ProgressChart from '@/components/ProgressChart'
 import { useActivityHeatmap } from '@/hooks/useActivityHeatmap'
+import { useTimeSeries } from '@/hooks/useTimeSeries'
 
 type SubjectCard = {
   name: string
@@ -27,17 +29,88 @@ function cardTone(tone: SubjectCard['tone']): string {
   return 'bg-[#C4655A]'
 }
 
+function formatQuestions(value: number | null): string {
+  if (typeof value !== 'number') return '--'
+  return new Intl.NumberFormat('es-ES').format(Math.round(value))
+}
+
+function formatScore(value: number | null): string {
+  if (typeof value !== 'number') return '--'
+  return `${Math.round(value)}`
+}
+
+function formatSeconds(value: number | null): string {
+  if (typeof value !== 'number') return '--'
+  return `${Math.round(value)}s`
+}
+
+type IntroPhase = 'idle' | 'cells' | 'glow' | 'reveal' | 'done'
+
+function PanelMetricCard({
+  title,
+  value,
+  subtitle,
+  reveal,
+  delayMs,
+}: {
+  title: string
+  value: string
+  subtitle?: string
+  reveal: boolean
+  delayMs: number
+}) {
+  return (
+    <div className="rounded-xl border border-[#EAE0D5] bg-[#FAF7F4] p-4">
+      <div className="panel-metric-flip-wrap h-[88px]">
+        <div
+          className={`panel-metric-flip-inner ${reveal ? 'is-revealed' : ''}`}
+          style={{ transitionDelay: `${delayMs}ms` }}
+        >
+          <div className="panel-metric-face panel-metric-front">
+            <p className="text-xs font-bold uppercase tracking-wider text-[#7D8A96]">
+              {title}
+            </p>
+            <p className="mt-2 text-3xl font-black text-[#CFC5BB]">...</p>
+            <p className="mt-1 text-sm font-bold text-[#B8AEA4]">Preparando</p>
+          </div>
+          <div className="panel-metric-face panel-metric-back">
+            <p className="text-xs font-bold uppercase tracking-wider text-[#7D8A96]">
+              {title}
+            </p>
+            <p className="mt-2 text-3xl font-black text-[#141514]">{value}</p>
+            <p className="mt-1 text-sm font-bold text-[#7D8A96]">
+              {subtitle ?? ''}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function PanelPage() {
   const [searchTerm, setSearchTerm] = useState('')
+  const [introPhase, setIntroPhase] = useState<IntroPhase>('idle')
+  const introStartedRef = useRef(false)
+  const introTimersRef = useRef<number[]>([])
   const {
     data: activityHeatmapData,
     loading: activityHeatmapLoading,
     error: activityHeatmapError,
     refetch: refetchActivityHeatmap,
   } = useActivityHeatmap()
+  const {
+    data: timeSeriesData,
+    loading: timeSeriesLoading,
+    error: timeSeriesError,
+    refetch: refetchTimeSeries,
+  } = useTimeSeries()
   const handleRetryActivityHeatmap = useCallback(() => {
     void refetchActivityHeatmap()
   }, [refetchActivityHeatmap])
+  const handleRetryTimeSeries = useCallback(() => {
+    void refetchTimeSeries()
+  }, [refetchTimeSeries])
 
   const visibleSubjects = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase()
@@ -46,6 +119,46 @@ export default function PanelPage() {
       subject.name.toLowerCase().includes(normalized),
     )
   }, [searchTerm])
+
+  const totalPoints = timeSeriesData?.totalPoints ?? 0
+  const hasPoints = totalPoints > 0
+  const scoreValue =
+    hasPoints && typeof timeSeriesData?.avgScore30 === 'number'
+      ? formatScore(timeSeriesData.avgScore30)
+      : '--'
+  const avgTimeValue =
+    hasPoints && typeof timeSeriesData?.avgTime30 === 'number'
+      ? formatSeconds(timeSeriesData.avgTime30)
+      : '--'
+  const totalPointsValue = hasPoints ? formatQuestions(totalPoints) : '--'
+  const shouldRevealCards = introPhase === 'reveal' || introPhase === 'done'
+  const shouldDrawChart = introPhase === 'reveal' || introPhase === 'done'
+
+  useEffect(() => {
+    if (introStartedRef.current) return
+    if (activityHeatmapLoading || timeSeriesLoading) return
+    if (!activityHeatmapData || !timeSeriesData) return
+
+    introStartedRef.current = true
+    const cellsTimer = window.setTimeout(() => {
+      setIntroPhase('cells')
+    }, 0)
+    const glowTimer = window.setTimeout(() => {
+      setIntroPhase('glow')
+    }, 980)
+    const revealTimer = window.setTimeout(() => {
+      setIntroPhase('reveal')
+    }, 2280)
+    const doneTimer = window.setTimeout(() => {
+      setIntroPhase('done')
+    }, 3180)
+    introTimersRef.current = [cellsTimer, glowTimer, revealTimer, doneTimer]
+
+    return () => {
+      introTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+      introTimersRef.current = []
+    }
+  }, [activityHeatmapData, activityHeatmapLoading, timeSeriesData, timeSeriesLoading])
 
   return (
     <div className="min-h-screen bg-[#FAF7F4] text-[#141514]">
@@ -60,100 +173,40 @@ export default function PanelPage() {
                 Analisis predictivo consolidado de tu rendimiento.
               </p>
             </div>
-            <div className="inline-flex items-center gap-2 rounded-lg border border-[#EAE0D5] bg-white px-4 py-2 shadow-sm">
-              <span className="material-symbols-outlined text-[#E8A598]">
-                auto_awesome
-              </span>
-              <span className="text-sm font-bold text-[#7D8A96]">
-                Prediccion IA Activa
-              </span>
-            </div>
           </div>
 
           <div className="rounded-2xl border border-[#EAE0D5] bg-white p-6 shadow-sm md:p-8">
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
               <div className="space-y-5">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <div className="rounded-xl border border-[#EAE0D5] bg-[#FAF7F4] p-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-[#7D8A96]">
-                      Aciertos promedio
-                    </p>
-                    <p className="mt-2 text-4xl font-black text-[#141514]">72%</p>
-                    <p className="mt-1 text-sm font-bold text-[#8BA888]">
-                      +5.2% tendencia
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-[#EAE0D5] bg-[#FAF7F4] p-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-[#7D8A96]">
-                      Preguntas contestadas
-                    </p>
-                    <p className="mt-2 text-3xl font-black text-[#141514]">
-                      25.432
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-[#EAE0D5] bg-[#FAF7F4] p-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-[#7D8A96]">
-                      Tiempo medio
-                    </p>
-                    <p className="mt-2 text-3xl font-black text-[#141514]">58s</p>
-                  </div>
+                  <PanelMetricCard
+                    title="Puntuacion promedio"
+                    value={timeSeriesLoading ? '...' : scoreValue}
+                    subtitle="Ultimos 30 dailys"
+                    reveal={shouldRevealCards}
+                    delayMs={0}
+                  />
+                  <PanelMetricCard
+                    title="Preguntas contestadas"
+                    value={timeSeriesLoading ? '...' : totalPointsValue}
+                    reveal={shouldRevealCards}
+                    delayMs={90}
+                  />
+                  <PanelMetricCard
+                    title="Tiempo medio"
+                    value={timeSeriesLoading ? '...' : avgTimeValue}
+                    reveal={shouldRevealCards}
+                    delayMs={180}
+                  />
                 </div>
 
-                <div className="rounded-xl border border-[#EAE0D5] bg-[#FAF7F4] p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="inline-flex rounded-lg border border-[#EAE0D5] bg-white p-1">
-                      <button
-                        type="button"
-                        className="rounded-md bg-[#E8A598] px-4 py-1.5 text-sm font-bold text-white"
-                      >
-                        Daily Diario
-                      </button>
-                      <button
-                        type="button"
-                        className="px-4 py-1.5 text-sm font-medium text-[#7D8A96]"
-                      >
-                        Preguntas
-                      </button>
-                    </div>
-                    <div className="hidden gap-3 text-xs sm:flex">
-                      <span className="font-medium text-[#8BA888]">● Aciertos</span>
-                      <span className="font-medium text-[#C4655A]">● Fallos</span>
-                      <span className="font-medium text-[#7D8A96]">● Blancas</span>
-                    </div>
-                  </div>
-                  <svg
-                    className="h-[220px] w-full"
-                    preserveAspectRatio="none"
-                    viewBox="0 0 800 250"
-                  >
-                    <line stroke="#ECE7E2" strokeWidth="1" x1="0" x2="800" y1="200" y2="200" />
-                    <line stroke="#ECE7E2" strokeWidth="1" x1="0" x2="800" y1="150" y2="150" />
-                    <line stroke="#ECE7E2" strokeWidth="1" x1="0" x2="800" y1="100" y2="100" />
-                    <line stroke="#ECE7E2" strokeWidth="1" x1="0" x2="800" y1="50" y2="50" />
-                    <path
-                      d="M0,160 C100,150 200,100 400,90 S600,60 800,50"
-                      fill="none"
-                      stroke="#8BA888"
-                      strokeLinecap="round"
-                      strokeWidth="3"
-                    />
-                    <path
-                      d="M0,190 C150,200 300,180 500,160 S700,165 800,170"
-                      fill="none"
-                      stroke="#C4655A"
-                      strokeLinecap="round"
-                      strokeWidth="3"
-                    />
-                    <path
-                      d="M0,220 C200,230 400,210 600,225 S750,220 800,220"
-                      fill="none"
-                      stroke="#7D8A96"
-                      strokeDasharray="4 4"
-                      strokeLinecap="round"
-                      strokeWidth="2"
-                    />
-                  </svg>
-                </div>
+                <ProgressChart
+                  data={timeSeriesData}
+                  loading={timeSeriesLoading}
+                  error={timeSeriesError}
+                  onRetry={handleRetryTimeSeries}
+                  drawActive={shouldDrawChart}
+                />
               </div>
 
               <div className="space-y-4">
@@ -170,6 +223,7 @@ export default function PanelPage() {
                   loading={activityHeatmapLoading}
                   error={activityHeatmapError}
                   onRetry={handleRetryActivityHeatmap}
+                  introPhase={introPhase}
                 />
               </div>
             </div>
