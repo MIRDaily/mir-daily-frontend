@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 type QuickStat = {
   label: string
   value: string
@@ -268,17 +270,17 @@ export default function StudioPage() {
                           <div className="h-2 rounded-full bg-[#8BA888]" style={{ width: `${card.progress}%` }} />
                         </div>
                       </div>
-                      <a
+                      <Link
                         className="mb-3 flex w-fit items-center gap-1 text-sm font-semibold text-[#E8A598] hover:underline"
-                        href="#"
+                        href="/studio/mazos"
                       >
                         {card.linkOne}
                         <span className="material-symbols-outlined text-base">play_circle</span>
-                      </a>
-                      <a className="flex w-fit items-center gap-1 text-sm font-semibold hover:text-[#E8A598]" href="#">
+                      </Link>
+                      <Link className="flex w-fit items-center gap-1 text-sm font-semibold hover:text-[#E8A598]" href="/studio/mazos">
                         {card.linkTwo}
                         <span className="material-symbols-outlined text-base">arrow_forward</span>
-                      </a>
+                      </Link>
                     </div>
                   ) : null}
 

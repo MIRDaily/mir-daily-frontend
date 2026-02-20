@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
+import { LayoutGroup, motion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useProfile } from '@/hooks/useProfile'
@@ -102,38 +102,43 @@ export default function AppHeader({
             MIR<span className="text-[#E8A598]">Daily</span>
           </h1>
         </Link>
-        <div className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
-          <Link className={getNavClass(activeTab, 'studio')} href="/studio">
-            {activeTab === 'studio' && (
-              <motion.span
-                layoutId="header-active-tab-indicator"
-                className="absolute left-0 right-0 -bottom-0.5 h-0.5 rounded-full bg-[#E8A598]"
-                transition={{ type: 'spring', stiffness: 450, damping: 36 }}
-              />
-            )}
-            Studio
-          </Link>
-          <Link className={getNavClass(activeTab, 'daily')} href="/dashboard">
-            {activeTab === 'daily' && (
-              <motion.span
-                layoutId="header-active-tab-indicator"
-                className="absolute left-0 right-0 -bottom-0.5 h-0.5 rounded-full bg-[#E8A598]"
-                transition={{ type: 'spring', stiffness: 450, damping: 36 }}
-              />
-            )}
-            Daily
-          </Link>
-          <Link className={getNavClass(activeTab, 'dashboard')} href="/panel">
-            {activeTab === 'dashboard' && (
-              <motion.span
-                layoutId="header-active-tab-indicator"
-                className="absolute left-0 right-0 -bottom-0.5 h-0.5 rounded-full bg-[#E8A598]"
-                transition={{ type: 'spring', stiffness: 450, damping: 36 }}
-              />
-            )}
-            Panel
-          </Link>
-        </div>
+        <LayoutGroup id="header-tabs">
+          <div className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
+            <Link className={getNavClass(activeTab, 'studio')} href="/studio">
+              {activeTab === 'studio' && (
+                <motion.span
+                  initial={false}
+                  layoutId="header-active-tab-indicator"
+                  className="absolute left-0 right-0 -bottom-0.5 h-0.5 rounded-full bg-[#E8A598]"
+                  transition={{ type: 'spring', stiffness: 450, damping: 36 }}
+                />
+              )}
+              Studio
+            </Link>
+            <Link className={getNavClass(activeTab, 'daily')} href="/dashboard">
+              {activeTab === 'daily' && (
+                <motion.span
+                  initial={false}
+                  layoutId="header-active-tab-indicator"
+                  className="absolute left-0 right-0 -bottom-0.5 h-0.5 rounded-full bg-[#E8A598]"
+                  transition={{ type: 'spring', stiffness: 450, damping: 36 }}
+                />
+              )}
+              Daily
+            </Link>
+            <Link className={getNavClass(activeTab, 'dashboard')} href="/panel">
+              {activeTab === 'dashboard' && (
+                <motion.span
+                  initial={false}
+                  layoutId="header-active-tab-indicator"
+                  className="absolute left-0 right-0 -bottom-0.5 h-0.5 rounded-full bg-[#E8A598]"
+                  transition={{ type: 'spring', stiffness: 450, damping: 36 }}
+                />
+              )}
+              Panel
+            </Link>
+          </div>
+        </LayoutGroup>
         <div className="flex items-center gap-2 sm:gap-4">
           <div className="relative" ref={notificationRef}>
             <button
