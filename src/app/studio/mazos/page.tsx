@@ -1,74 +1,86 @@
 'use client'
 
-import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseBrowser'
 
 type Deck = {
-  id: string
+  id: string | number
   name: string
+  subject?: string | null
+  totalItems?: number | null
+  masteryPercentage?: number | null
+  dueToday?: number | null
   deleted_at?: string | null
 }
 
-type DeckItem = {
-  id: string
-  question_id?: string | number | null
-  questionId?: string | number | null
+type DeckTheme = {
+  cardClass: string
+  badgeClass: string
+  progressClass: string
+  dueValueClass: string
+  subjectClass: string
 }
-
-type MockDeckCard = {
-  slug: string
-  title: string
-  subject: string
-  cards: number
-  dueToday: number
-  mastered: number
-  color: string
-}
-
-const mockDecks: ReadonlyArray<MockDeckCard> = [
-  {
-    slug: 'digestivo-esofago',
-    title: 'Esofago y Estomago',
-    subject: 'Digestivo',
-    cards: 128,
-    dueToday: 24,
-    mastered: 68,
-    color: 'from-[#FCEEE9] to-white',
-  },
-  {
-    slug: 'cardio-ecg-basico',
-    title: 'ECG Basico',
-    subject: 'Cardiologia',
-    cards: 96,
-    dueToday: 15,
-    mastered: 72,
-    color: 'from-[#EEF5EE] to-white',
-  },
-  {
-    slug: 'neuro-sindromes',
-    title: 'Sindrome Neurologico',
-    subject: 'Neurologia',
-    cards: 84,
-    dueToday: 12,
-    mastered: 49,
-    color: 'from-[#EEF2F7] to-white',
-  },
-  {
-    slug: 'infecciosas-antibioticos',
-    title: 'Antibioticos Clave',
-    subject: 'Infecciosas',
-    cards: 112,
-    dueToday: 31,
-    mastered: 54,
-    color: 'from-[#FFF4EC] to-white',
-  },
-]
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL
 
 if (!API_URL) {
   throw new Error('NEXT_PUBLIC_API_URL no definida.')
+}
+
+function toSafeNumber(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return 0
+  return parsed
+}
+
+function clampPercent(value: unknown): number {
+  const num = toSafeNumber(value)
+  if (num < 0) return 0
+  if (num > 100) return 100
+  return Math.round(num)
+}
+
+function getDeckTheme(subject?: string | null): DeckTheme {
+  const value = String(subject || '').toLowerCase()
+
+  if (value.includes('cardio')) {
+    return {
+      cardClass: 'bg-gradient-to-br from-[#EEF5EE] to-white border border-[#E6EFE6]',
+      badgeClass: 'bg-white/80 text-slate-500',
+      progressClass: 'bg-emerald-500',
+      dueValueClass: 'text-[#8BA888]',
+      subjectClass: 'text-[#7FA07B]',
+    }
+  }
+
+  if (value.includes('neuro')) {
+    return {
+      cardClass: 'bg-gradient-to-br from-[#EEF2F7] to-white border border-[#E5EAF1]',
+      badgeClass: 'bg-white/80 text-slate-500',
+      progressClass: 'bg-slate-500',
+      dueValueClass: 'text-[#7D8A96]',
+      subjectClass: 'text-[#7D8A96]',
+    }
+  }
+
+  if (value.includes('infecc')) {
+    return {
+      cardClass: 'bg-gradient-to-br from-[#FFF4EC] to-white border border-[#F6E7DB]',
+      badgeClass: 'bg-white/80 text-slate-500',
+      progressClass: 'bg-emerald-500',
+      dueValueClass: 'text-[#E8A598]',
+      subjectClass: 'text-[#C79374]',
+    }
+  }
+
+  return {
+    cardClass: 'bg-gradient-to-br from-[#FCEEE9] to-white border border-[#F2E3DE]',
+    badgeClass: 'bg-white/80 text-slate-500',
+    progressClass: 'bg-emerald-500',
+    dueValueClass: 'text-[#E8A598]',
+    subjectClass: 'text-[#D49A8D]',
+  }
 }
 
 async function readError(res: Response, fallback: string): Promise<string> {
@@ -121,157 +133,134 @@ async function createDeck(token: string, name: string): Promise<void> {
   }
 }
 
-async function deleteDeck(token: string, id: string): Promise<void> {
-  const res = await fetch(`${API_URL}/api/studio/decks/${id}/delete`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
+async function fetchDeckItemsCount(deckId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('deck_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('deck_id', deckId)
+    .is('deleted_at', null)
 
-  if (!res.ok) {
-    throw new Error(await readError(res, `No se pudo eliminar el mazo (${res.status})`))
-  }
-}
-
-async function restoreDeck(token: string, id: string): Promise<void> {
-  const res = await fetch(`${API_URL}/api/studio/decks/${id}/restore`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-
-  if (!res.ok) {
-    throw new Error(await readError(res, `No se pudo restaurar el mazo (${res.status})`))
-  }
-}
-
-async function fetchItems(token: string, id: string): Promise<DeckItem[]> {
-  const res = await fetch(`${API_URL}/api/studio/decks/${id}/items`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-
-  if (!res.ok) {
-    throw new Error(await readError(res, `No se pudieron cargar los items (${res.status})`))
+  if (error) {
+    throw new Error(error.message || 'No se pudo contar los items del mazo.')
   }
 
-  const payload = (await res.json().catch(() => null)) as
-    | DeckItem[]
-    | { items?: DeckItem[] }
-    | null
-  if (Array.isArray(payload)) return payload
-  if (payload && Array.isArray(payload.items)) return payload.items
-  return []
+  return typeof count === 'number' ? count : 0
 }
 
-async function addItem(
-  token: string,
-  deckId: string,
-  questionId: string,
-): Promise<void> {
-  const res = await fetch(`${API_URL}/api/studio/decks/${deckId}/items`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ questionId }),
-  })
+function DeckCard({
+  deck,
+  onStudy,
+  onEdit,
+}: {
+  deck: Deck
+  onStudy: () => void
+  onEdit: () => void
+}) {
+  const mastery = clampPercent(deck.masteryPercentage)
+  const totalItems = Math.max(0, Math.round(toSafeNumber(deck.totalItems)))
+  const dueToday = Math.max(0, Math.round(toSafeNumber(deck.dueToday)))
+  const subject = (deck.subject || 'PERSONAL').toUpperCase()
+  const theme = getDeckTheme(deck.subject)
 
-  if (!res.ok) {
-    throw new Error(await readError(res, `No se pudo anadir el item (${res.status})`))
-  }
-}
+  return (
+    <article
+      className={`rounded-2xl p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${theme.cardClass}`}
+    >
+      <p className={`text-xs uppercase tracking-wide ${theme.subjectClass}`}>{subject}</p>
 
-async function removeItem(
-  token: string,
-  deckId: string,
-  itemId: string,
-): Promise<void> {
-  const res = await fetch(`${API_URL}/api/studio/decks/${deckId}/items/${itemId}`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
+      <div className="mt-3 flex items-start justify-between gap-3">
+        <h3 className="text-lg font-semibold text-slate-800">{deck.name || `Mazo ${deck.id}`}</h3>
+        <span className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${theme.badgeClass}`}>
+          {totalItems} cards
+        </span>
+      </div>
 
-  if (!res.ok) {
-    throw new Error(await readError(res, `No se pudo eliminar el item (${res.status})`))
-  }
-}
+      <div className="mt-5">
+        <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
+          <span>Dominio</span>
+          <span>{mastery}%</span>
+        </div>
+        <div className="h-2 rounded-full bg-slate-100">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${theme.progressClass}`}
+            style={{ width: `${mastery}%` }}
+          />
+        </div>
+      </div>
 
-function deckLabel(deck: Deck): string {
-  return deck.name || `Mazo ${deck.id}`
-}
+      <div className="mt-5 flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+        <span className="text-sm font-medium text-slate-500">Para hoy</span>
+        <span className={`text-lg font-bold ${theme.dueValueClass}`}>{dueToday}</span>
+      </div>
 
-function itemQuestionId(item: DeckItem): string {
-  const value = item.question_id ?? item.questionId
-  if (value == null) return 'Sin ID'
-  return String(value)
+      <div className="mt-5 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onStudy}
+          className="rounded-xl bg-[#E8A598] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+        >
+          Estudiar
+        </button>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-800"
+        >
+          Editar
+        </button>
+      </div>
+    </article>
+  )
 }
 
 export default function StudioDecksPage() {
+  const router = useRouter()
   const [token, setToken] = useState<string>('')
   const [decks, setDecks] = useState<Deck[]>([])
   const [decksLoading, setDecksLoading] = useState(true)
   const [decksError, setDecksError] = useState<string | null>(null)
 
+  const [showCreateForm, setShowCreateForm] = useState(false)
   const [newDeckName, setNewDeckName] = useState('')
-  const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null)
+  const [isCreatingDeck, setIsCreatingDeck] = useState(false)
 
-  const [items, setItems] = useState<DeckItem[]>([])
-  const [itemsLoading, setItemsLoading] = useState(false)
-  const [itemsError, setItemsError] = useState<string | null>(null)
-  const [questionId, setQuestionId] = useState('')
-
-  const loadDecks = useCallback(
-    async (authToken: string) => {
-      setDecksLoading(true)
-      setDecksError(null)
-      try {
-        const result = await fetchDecks(authToken)
-        setDecks(result)
-        if (!selectedDeckId && result.length > 0) {
-          setSelectedDeckId(String(result[0].id))
-        } else if (
-          selectedDeckId &&
-          !result.some((deck) => String(deck.id) === String(selectedDeckId))
-        ) {
-          setSelectedDeckId(result.length > 0 ? String(result[0].id) : null)
-        }
-      } catch (err) {
-        setDecksError(
-          err instanceof Error ? err.message : 'No se pudieron cargar los mazos.',
-        )
-      } finally {
-        setDecksLoading(false)
-      }
-    },
-    [selectedDeckId],
-  )
-
-  const loadItems = useCallback(async (authToken: string, deckId: string) => {
-    setItemsLoading(true)
-    setItemsError(null)
+  const loadDecks = useCallback(async (authToken: string) => {
+    setDecksLoading(true)
+    setDecksError(null)
     try {
-      const result = await fetchItems(authToken, deckId)
-      setItems(result)
-    } catch (err) {
-      setItemsError(
-        err instanceof Error ? err.message : 'No se pudieron cargar los items.',
+      const result = await fetchDecks(authToken)
+      const activeDecks = result.filter((deck) => deck.deleted_at == null)
+      const counts = await Promise.all(
+        activeDecks.map(async (deck) => {
+          try {
+            const count = await fetchDeckItemsCount(String(deck.id))
+            return [String(deck.id), count] as const
+          } catch (err) {
+            console.error(err)
+            return [String(deck.id), toSafeNumber(deck.totalItems)] as const
+          }
+        }),
       )
-      setItems([])
+
+      const countMap = Object.fromEntries(counts)
+      setDecks(
+        activeDecks.map((deck) => ({
+          ...deck,
+          totalItems: countMap[String(deck.id)] ?? toSafeNumber(deck.totalItems),
+        })),
+      )
+    } catch (err) {
+      setDecksError(
+        err instanceof Error ? err.message : 'No se pudieron cargar los mazos.',
+      )
     } finally {
-      setItemsLoading(false)
+      setDecksLoading(false)
     }
   }, [])
 
   useEffect(() => {
     let mounted = true
+
     const loadSessionAndDecks = async () => {
       const {
         data: { session },
@@ -291,320 +280,131 @@ export default function StudioDecksPage() {
     }
 
     void loadSessionAndDecks()
+
     return () => {
       mounted = false
     }
   }, [loadDecks])
 
-  useEffect(() => {
-    if (!token || !selectedDeckId) {
-      setItems([])
-      return
-    }
-    void loadItems(token, selectedDeckId)
-  }, [loadItems, selectedDeckId, token])
-
-  const selectedDeck = useMemo(
-    () => decks.find((deck) => String(deck.id) === String(selectedDeckId)) ?? null,
-    [decks, selectedDeckId],
+  const sortedDecks = useMemo(
+    () =>
+      [...decks].sort((a, b) =>
+        String(a.name || '').localeCompare(String(b.name || ''), 'es', {
+          sensitivity: 'base',
+        }),
+      ),
+    [decks],
   )
 
   const handleCreateDeck = async () => {
     if (!token) return
     const trimmedName = newDeckName.trim()
     if (!trimmedName) return
-    setDecksError(null)
 
+    setDecksError(null)
+    setIsCreatingDeck(true)
     try {
       await createDeck(token, trimmedName)
       setNewDeckName('')
+      setShowCreateForm(false)
       await loadDecks(token)
     } catch (err) {
       setDecksError(err instanceof Error ? err.message : 'No se pudo crear el mazo.')
-    }
-  }
-
-  const handleDeleteDeck = async (deckId: string) => {
-    if (!token) return
-    setDecksError(null)
-
-    try {
-      await deleteDeck(token, deckId)
-      await loadDecks(token)
-    } catch (err) {
-      setDecksError(err instanceof Error ? err.message : 'No se pudo eliminar el mazo.')
-    }
-  }
-
-  const handleRestoreDeck = async (deckId: string) => {
-    if (!token) return
-    setDecksError(null)
-
-    try {
-      await restoreDeck(token, deckId)
-      await loadDecks(token)
-    } catch (err) {
-      setDecksError(err instanceof Error ? err.message : 'No se pudo restaurar el mazo.')
-    }
-  }
-
-  const handleAddItem = async () => {
-    if (!token || !selectedDeckId) return
-    const trimmedQuestionId = questionId.trim()
-    if (!trimmedQuestionId) {
-      setItemsError('Introduce un ID de pregunta.')
-      return
-    }
-
-    setItemsError(null)
-    try {
-      await addItem(token, selectedDeckId, trimmedQuestionId)
-      setQuestionId('')
-      await loadItems(token, selectedDeckId)
-    } catch (err) {
-      setItemsError(err instanceof Error ? err.message : 'No se pudo anadir el item.')
-    }
-  }
-
-  const handleRemoveItem = async (itemId: string) => {
-    if (!token || !selectedDeckId) return
-    setItemsError(null)
-    try {
-      await removeItem(token, selectedDeckId, itemId)
-      await loadItems(token, selectedDeckId)
-    } catch (err) {
-      setItemsError(err instanceof Error ? err.message : 'No se pudo eliminar el item.')
+    } finally {
+      setIsCreatingDeck(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF7F4] text-[#2C3E50]">
+    <div className="min-h-screen bg-[#FAF7F4] text-slate-800">
       <main className="mx-auto w-full max-w-7xl px-6 py-8">
-        <section className="mb-6 flex items-center justify-between">
+        <section className="mb-6 flex items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-[#7D8A96]">
-              Studio / Mazos
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Studio
             </p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight">Gestion de Mazos</h1>
+            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-800">
+              Tus mazos
+            </h1>
           </div>
-          <Link
-            href="/studio"
-            className="rounded-xl border border-[#EAE4E2] bg-white px-4 py-2 text-sm font-semibold text-[#7D8A96] hover:border-[#E8A598]/50"
+          <button
+            type="button"
+            onClick={() => setShowCreateForm((prev) => !prev)}
+            className="rounded-xl bg-[#E8A598] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
           >
-            Volver a Studio
-          </Link>
+            Crear mazo
+          </button>
         </section>
 
-        <section className="mb-5 rounded-2xl border border-[#EAE4E2] bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-lg font-bold text-[#2c3e50]">Crear mazo</h2>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <input
-              type="text"
-              value={newDeckName}
-              onChange={(event) => setNewDeckName(event.target.value)}
-              placeholder="Nombre del mazo..."
-              className="h-11 flex-1 rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 text-sm outline-none focus:border-[#E8A598]"
-            />
-            <button
-              type="button"
-              onClick={() => void handleCreateDeck()}
-              className="h-11 rounded-xl bg-[#E8A598] px-5 text-sm font-semibold text-white hover:bg-[#d18d80]"
-            >
-              Crear
-            </button>
-          </div>
-        </section>
-
-        <section className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-          <article className="rounded-2xl border border-[#EAE4E2] bg-white p-5 shadow-sm">
-            <h2 className="mb-3 text-lg font-bold text-[#2c3e50]">Lista de mazos</h2>
-            {decksLoading ? <p className="text-sm text-[#7D8A96]">Cargando...</p> : null}
-            {decksError ? (
-              <p className="mb-3 rounded-lg border border-[#E8A598]/35 bg-[#FFF8F6] px-3 py-2 text-sm text-[#C4655A]">
-                {decksError}
-              </p>
-            ) : null}
-            <div className="space-y-2">
-              {decks.map((deck) => {
-                const id = String(deck.id)
-                const isDeleted = deck.deleted_at != null
-                return (
-                  <div
-                    key={id}
-                    className="rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-3"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="truncate text-sm font-semibold text-[#2c3e50]">
-                        {deckLabel(deck)}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedDeckId(id)}
-                          className="rounded-lg border border-[#EAE4E2] bg-white px-3 py-1.5 text-xs font-bold text-[#7D8A96] hover:border-[#E8A598]/50"
-                        >
-                          Ver Items
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleDeleteDeck(id)}
-                          className="rounded-lg border border-[#E8A598]/40 bg-[#FFF8F6] px-3 py-1.5 text-xs font-bold text-[#C4655A]"
-                        >
-                          Eliminar
-                        </button>
-                        {isDeleted ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleRestoreDeck(id)}
-                            className="rounded-lg border border-[#8BA888]/35 bg-[#EEF7EE] px-3 py-1.5 text-xs font-bold text-[#8BA888]"
-                          >
-                            Restaurar
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-              {!decksLoading && decks.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-[#EAE4E2] bg-[#FAF7F4] px-3 py-4 text-sm text-[#7D8A96]">
-                  No hay mazos todavia.
-                </p>
-              ) : null}
+        {showCreateForm ? (
+          <section className="mb-6 rounded-2xl border border-[#EAE4E2] bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                type="text"
+                value={newDeckName}
+                onChange={(event) => setNewDeckName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    void handleCreateDeck()
+                  }
+                }}
+                placeholder="Nombre del mazo..."
+                className="h-11 flex-1 rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 text-sm outline-none focus:border-[#E8A598]"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleCreateDeck()}
+                  disabled={isCreatingDeck || !newDeckName.trim()}
+                  className="h-11 rounded-xl bg-[#E8A598] px-5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isCreatingDeck ? 'Creando...' : 'Crear'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateForm(false)
+                    setNewDeckName('')
+                  }}
+                  className="h-11 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
-          </article>
+          </section>
+        ) : null}
 
-          <article className="rounded-2xl border border-[#EAE4E2] bg-white p-5 shadow-sm">
-            <h2 className="mb-3 text-lg font-bold text-[#2c3e50]">
-              {selectedDeck ? `Items de: ${deckLabel(selectedDeck)}` : 'Items del mazo'}
-            </h2>
-            {!selectedDeck ? (
-              <p className="rounded-lg border border-dashed border-[#EAE4E2] bg-[#FAF7F4] px-3 py-4 text-sm text-[#7D8A96]">
-                Selecciona un mazo para gestionar sus items.
-              </p>
-            ) : (
-              <>
-                <div className="mb-3 flex flex-col gap-2 sm:flex-row">
-                  <input
-                    type="text"
-                    value={questionId}
-                    onChange={(event) => setQuestionId(event.target.value)}
-                    placeholder="ID de pregunta..."
-                    className="h-10 flex-1 rounded-lg border border-[#EAE4E2] bg-[#FAF7F4] px-3 text-sm outline-none focus:border-[#E8A598]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void handleAddItem()}
-                    className="h-10 rounded-lg bg-[#8BA888] px-4 text-sm font-semibold text-white hover:bg-[#769573]"
-                  >
-                    Anadir
-                  </button>
-                </div>
-                {itemsError ? (
-                  <p className="mb-3 rounded-lg border border-[#E8A598]/35 bg-[#FFF8F6] px-3 py-2 text-sm text-[#C4655A]">
-                    {itemsError}
-                  </p>
-                ) : null}
-                {itemsLoading ? (
-                  <p className="text-sm text-[#7D8A96]">Cargando items...</p>
-                ) : (
-                  <div className="space-y-2">
-                    {items.map((item) => (
-                      <div
-                        key={String(item.id)}
-                        className="flex items-center justify-between rounded-lg border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2"
-                      >
-                        <div>
-                          <p className="text-sm font-semibold text-[#2c3e50]">
-                            Pregunta #{itemQuestionId(item)}
-                          </p>
-                          <p className="text-xs text-[#7D8A96]">Item ID: {item.id}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void handleRemoveItem(String(item.id))}
-                          className="rounded-md px-2 py-1 text-xs font-bold text-[#C4655A] hover:bg-[#FFF0EE]"
-                        >
-                          Eliminar item
-                        </button>
-                      </div>
-                    ))}
-                    {!itemsLoading && items.length === 0 ? (
-                      <p className="rounded-lg border border-dashed border-[#EAE4E2] bg-[#FAF7F4] px-3 py-4 text-sm text-[#7D8A96]">
-                        Este mazo no tiene items.
-                      </p>
-                    ) : null}
-                  </div>
-                )}
-              </>
-            )}
-          </article>
-        </section>
+        {decksError ? (
+          <p className="mb-6 rounded-xl border border-[#E8A598]/30 bg-[#FFF8F6] px-4 py-3 text-sm text-[#C4655A]">
+            {decksError}
+          </p>
+        ) : null}
 
-        <section className="mt-8 rounded-2xl border border-[#EAE4E2] bg-white p-5 shadow-sm">
-          <div className="mb-5">
-            <h2 className="text-lg font-bold text-[#2c3e50]">Mockup de Mazos</h2>
-            <p className="mt-1 text-sm text-[#7D8A96]">
-              Vista visual como referencia de experiencia.
+        {decksLoading ? (
+          <div className="rounded-2xl border border-dashed border-[#EAE4E2] bg-white p-8 text-center text-sm text-slate-500">
+            Cargando mazos...
+          </div>
+        ) : sortedDecks.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[#EAE4E2] bg-white p-8 text-center">
+            <p className="text-sm font-medium text-slate-700">Aun no tienes mazos</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Crea tu primer mazo para empezar a organizar tu estudio.
             </p>
           </div>
-
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {mockDecks.map((deck) => (
-              <article
-                key={deck.slug}
-                className={`rounded-2xl border border-[#EAE4E2] bg-gradient-to-br ${deck.color} p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-[#7D8A96]">
-                      {deck.subject}
-                    </p>
-                    <h3 className="mt-1 text-xl font-bold">{deck.title}</h3>
-                  </div>
-                  <span className="rounded-lg bg-white/80 px-2 py-1 text-xs font-bold text-[#7D8A96]">
-                    {deck.cards} cards
-                  </span>
-                </div>
-
-                <div className="mt-5 space-y-3">
-                  <div>
-                    <div className="mb-1 flex items-center justify-between text-xs font-semibold text-[#7D8A96]">
-                      <span>Dominio</span>
-                      <span>{deck.mastered}%</span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-white">
-                      <div
-                        className="h-full rounded-full bg-[#8BA888]"
-                        style={{ width: `${deck.mastered}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl border border-[#EAE4E2] bg-white px-3 py-2 text-sm">
-                    <span className="font-medium text-[#7D8A96]">Para hoy</span>
-                    <span className="font-bold text-[#E8A598]">{deck.dueToday}</span>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex items-center gap-3">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-lg bg-[#E8A598] px-3 py-2 text-sm font-semibold text-white hover:bg-[#d18d80]"
-                  >
-                    Estudiar
-                    <span className="material-symbols-outlined text-base">play_arrow</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-lg border border-[#EAE4E2] bg-white px-3 py-2 text-sm font-semibold text-[#7D8A96] hover:border-[#E8A598]/50"
-                  >
-                    Editar
-                  </button>
-                </div>
-              </article>
+        ) : (
+          <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {sortedDecks.map((deck) => (
+              <DeckCard
+                key={String(deck.id)}
+                deck={deck}
+                onStudy={() => router.push(`/studio/${deck.id}`)}
+                onEdit={() => router.push(`/studio/${deck.id}`)}
+              />
             ))}
-          </div>
-        </section>
+          </section>
+        )}
       </main>
     </div>
   )

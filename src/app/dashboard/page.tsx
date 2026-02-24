@@ -11,6 +11,7 @@ import type { RankingEntry } from '@/hooks/useDailyResults'
 import { useScoreDistribution } from '@/hooks/useScoreDistribution'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { getAvatarUrl } from '@/lib/avatar'
+import { supabase } from '@/lib/supabaseBrowser'
 import { parseApiError } from '@/lib/profile'
 import { getUserSummary } from '@/services/resultsService'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
@@ -102,6 +103,137 @@ type RankingRow = {
 type RankingVirtualListData = {
   rows: RankingRow[]
   userRank: number | string | null
+}
+
+type StudioDeck = {
+  id: string | number
+  name: string
+  deleted_at?: string | null
+}
+
+type StudioDeckItem = {
+  id: string | number
+  question_id?: string | number | null
+  questionId?: string | number | null
+}
+
+type QuestionDeckMembershipMap = Record<string, Record<string, boolean>>
+type QuestionDeckItemIdMap = Record<string, Record<string, string>>
+
+type StudioDecksPayload = StudioDeck[] | { decks?: StudioDeck[] } | null
+
+async function fetchStudioDecks(token: string): Promise<StudioDeck[]> {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL
+  if (!apiUrl) {
+    throw new Error('NEXT_PUBLIC_API_URL no definida.')
+  }
+
+  const res = await fetch(`${apiUrl}/api/studio/decks`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  if (!res.ok) {
+    throw new Error('Error loading decks')
+  }
+
+  const payload = (await res.json().catch(() => null)) as StudioDecksPayload
+  if (Array.isArray(payload)) return payload
+  if (payload && Array.isArray(payload.decks)) return payload.decks
+  return []
+}
+
+async function addQuestionToDeck(token: string, deckId: string, questionId: string) {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL
+  if (!apiUrl) {
+    throw new Error('NEXT_PUBLIC_API_URL no definida.')
+  }
+
+  const res = await fetch(`${apiUrl}/api/studio/decks/${deckId}/items`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      questionIds: [questionId],
+    }),
+  })
+
+  if (!res.ok) {
+    throw new Error('Error saving question')
+  }
+
+  return res.json()
+}
+
+async function createStudioDeck(token: string, name: string) {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL
+  if (!apiUrl) {
+    throw new Error('NEXT_PUBLIC_API_URL no definida.')
+  }
+
+  const res = await fetch(`${apiUrl}/api/studio/decks`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ name }),
+  })
+
+  if (!res.ok) {
+    throw new Error('Error creating deck')
+  }
+
+  return res.json().catch(() => null)
+}
+
+async function fetchStudioDeckItems(token: string, deckId: string): Promise<StudioDeckItem[]> {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL
+  if (!apiUrl) {
+    throw new Error('NEXT_PUBLIC_API_URL no definida.')
+  }
+
+  const res = await fetch(`${apiUrl}/api/studio/decks/${deckId}/items`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  if (!res.ok) {
+    throw new Error('Error loading deck items')
+  }
+
+  const payload = (await res.json().catch(() => null)) as
+    | StudioDeckItem[]
+    | { items?: StudioDeckItem[] }
+    | null
+
+  if (Array.isArray(payload)) return payload
+  if (payload && Array.isArray(payload.items)) return payload.items
+  return []
+}
+
+async function removeQuestionFromDeck(token: string, deckId: string, itemId: string) {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL
+  if (!apiUrl) {
+    throw new Error('NEXT_PUBLIC_API_URL no definida.')
+  }
+
+  const res = await fetch(`${apiUrl}/api/studio/decks/${deckId}/items/${itemId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  if (!res.ok) {
+    throw new Error('Error removing question')
+  }
+
+  return res.json().catch(() => null)
 }
 
 const CONTENT_ANIMATION_DELAY_MS = 320
@@ -301,6 +433,24 @@ export default function DashboardPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [authMessage, setAuthMessage] = useState<string | null>(null)
+  const [decks, setDecks] = useState<StudioDeck[]>([])
+  const [showSelectorFor, setShowSelectorFor] = useState<string | null>(null)
+  const [savingQuestionId, setSavingQuestionId] = useState<string | null>(null)
+  const [loadingDecks, setLoadingDecks] = useState(false)
+  const [creatingDeckFromPopup, setCreatingDeckFromPopup] = useState(false)
+  const [newDeckNameFromPopup, setNewDeckNameFromPopup] = useState('')
+  const [showCreateDeckForm, setShowCreateDeckForm] = useState(false)
+  const [savedQuestionIds, setSavedQuestionIds] = useState<Record<string, boolean>>({})
+  const [questionDeckMembership, setQuestionDeckMembership] =
+    useState<QuestionDeckMembershipMap>({})
+  const [questionDeckItemIds, setQuestionDeckItemIds] = useState<QuestionDeckItemIdMap>({})
+  const [checkingMembershipQuestionId, setCheckingMembershipQuestionId] = useState<string | null>(
+    null,
+  )
+  const [, setSaveQuestionMessage] = useState<{
+    type: 'success' | 'error'
+    text: string
+  } | null>(null)
   const [isCheckingProfile, setIsCheckingProfile] = useState(true)
   const [profileCheckError, setProfileCheckError] = useState<string | null>(null)
   const [showResults, setShowResults] = useState(false)
@@ -327,6 +477,7 @@ export default function DashboardPage() {
 
   const openTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const exitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveQuestionMessageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const openStartRef = useRef<number | null>(null)
   const openRafRef = useRef<number | null>(null)
   const questionStartRef = useRef<number | null>(null)
@@ -345,6 +496,7 @@ export default function DashboardPage() {
   const [mostFailedStatementExpanded, setMostFailedStatementExpanded] = useState(false)
   const [mostFailedExplanationExpanded, setMostFailedExplanationExpanded] = useState(false)
   const hasFetchedMostFailedRef = useRef(false)
+  const hasLoadedDailyDecksRef = useRef(false)
 
   const [quizResult, setQuizResult] = useState<{
     correctCount: number
@@ -386,8 +538,16 @@ export default function DashboardPage() {
   })
   const questions = dailyQuestions.length ? dailyQuestions : fallbackQuestions
   const currentQuestion = questions[currentQuestionIndex]
+  const currentQuestionId = currentQuestion ? String(currentQuestion.id) : null
   const currentSelection = selectedAnswers[currentQuestionIndex]
   const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
+  const currentQuestionDeckMap = currentQuestionId
+    ? questionDeckMembership[currentQuestionId] ?? {}
+    : {}
+  const isCurrentQuestionSaved = currentQuestionId
+    ? Boolean(savedQuestionIds[currentQuestionId]) ||
+      Object.values(currentQuestionDeckMap).some(Boolean)
+    : false
   const reviewQuestionsFromDaily = useMemo(
     () =>
       dailyQuestions.map((item) => ({
@@ -411,12 +571,268 @@ export default function DashboardPage() {
     setDashboardRefreshKey((prev) => prev + 1)
   }, [])
 
+  const showSaveQuestionFeedback = useCallback(
+    (type: 'success' | 'error', text: string) => {
+      setSaveQuestionMessage({ type, text })
+      if (saveQuestionMessageTimeoutRef.current) {
+        clearTimeout(saveQuestionMessageTimeoutRef.current)
+      }
+      saveQuestionMessageTimeoutRef.current = setTimeout(() => {
+        setSaveQuestionMessage(null)
+      }, 2500)
+    },
+    [],
+  )
+
+  const handleToggleQuestionInDeck = useCallback(
+    async (deckId: string, questionId: string, deckName: string) => {
+      try {
+        setSavingQuestionId(questionId)
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        if (!session) {
+          showSaveQuestionFeedback('error', 'Inicia sesión para guardar preguntas')
+          return
+        }
+
+        const alreadyInDeck = Boolean(questionDeckMembership[questionId]?.[deckId])
+
+        if (alreadyInDeck) {
+          let itemId = questionDeckItemIds[questionId]?.[deckId] ?? null
+
+          if (!itemId) {
+            const items = await fetchStudioDeckItems(session.access_token, deckId)
+            const matched = items.find((item) => {
+              const itemQuestionId = item.question_id ?? item.questionId
+              return itemQuestionId != null && String(itemQuestionId) === questionId
+            })
+            itemId = matched ? String(matched.id) : null
+          }
+
+          if (!itemId) {
+            throw new Error('No se encontró el item en el mazo')
+          }
+
+          await removeQuestionFromDeck(session.access_token, deckId, itemId)
+
+          setQuestionDeckMembership((prev) => ({
+            ...prev,
+            [questionId]: {
+              ...(prev[questionId] ?? {}),
+              [deckId]: false,
+            },
+          }))
+          setQuestionDeckItemIds((prev) => {
+            const current = { ...(prev[questionId] ?? {}) }
+            delete current[deckId]
+            return {
+              ...prev,
+              [questionId]: current,
+            }
+          })
+          const hasAnyDeckAfterRemove = Object.entries(
+            questionDeckMembership[questionId] ?? {},
+          ).some(([entryDeckId, exists]) => {
+            if (entryDeckId === deckId) return false
+            return Boolean(exists)
+          })
+          setSavedQuestionIds((prev) => ({ ...prev, [questionId]: hasAnyDeckAfterRemove }))
+          showSaveQuestionFeedback('success', `Eliminada de ${deckName}`)
+          return
+        }
+
+        await addQuestionToDeck(session.access_token, deckId, questionId)
+
+        const itemsAfterSave = await fetchStudioDeckItems(session.access_token, deckId)
+        const matchedAfterSave = itemsAfterSave.find((item) => {
+          const itemQuestionId = item.question_id ?? item.questionId
+          return itemQuestionId != null && String(itemQuestionId) === questionId
+        })
+
+        setSavedQuestionIds((prev) => ({ ...prev, [questionId]: true }))
+        setQuestionDeckMembership((prev) => ({
+          ...prev,
+          [questionId]: {
+            ...(prev[questionId] ?? {}),
+            [deckId]: true,
+          },
+        }))
+        if (matchedAfterSave) {
+          setQuestionDeckItemIds((prev) => ({
+            ...prev,
+            [questionId]: {
+              ...(prev[questionId] ?? {}),
+              [deckId]: String(matchedAfterSave.id),
+            },
+          }))
+        }
+        showSaveQuestionFeedback('success', `Añadida a ${deckName}`)
+      } catch (err) {
+        console.error(err)
+        showSaveQuestionFeedback('error', 'Error al actualizar el mazo')
+      } finally {
+        setSavingQuestionId(null)
+      }
+    },
+    [questionDeckItemIds, questionDeckMembership, showSaveQuestionFeedback],
+  )
+
+  const loadQuestionMembership = useCallback(
+    async (questionId: string) => {
+      if (!user || decks.length === 0) return
+      if (questionDeckMembership[questionId]) return
+
+      try {
+        setCheckingMembershipQuestionId(questionId)
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        if (!session) return
+
+        const results = await Promise.all(
+          decks.map(async (deck) => {
+            const deckId = String(deck.id)
+            const items = await fetchStudioDeckItems(session.access_token, deckId)
+            const matched = items.find((item) => {
+              const itemQuestionId = item.question_id ?? item.questionId
+              return itemQuestionId != null && String(itemQuestionId) === questionId
+            })
+            return [deckId, matched ? String(matched.id) : null] as const
+          }),
+        )
+
+        const membershipMap = Object.fromEntries(
+          results.map(([deckId, itemId]) => [deckId, Boolean(itemId)]),
+        ) as Record<string, boolean>
+        const itemIdMap = Object.fromEntries(
+          results.filter(([, itemId]) => Boolean(itemId)) as Array<[string, string]>,
+        )
+
+        setQuestionDeckMembership((prev) => ({
+          ...prev,
+          [questionId]: membershipMap,
+        }))
+        setQuestionDeckItemIds((prev) => ({
+          ...prev,
+          [questionId]: itemIdMap,
+        }))
+        setSavedQuestionIds((prev) => ({
+          ...prev,
+          [questionId]: Object.values(membershipMap).some(Boolean),
+        }))
+      } catch (err) {
+        console.error(err)
+      } finally {
+        setCheckingMembershipQuestionId((prev) => (prev === questionId ? null : prev))
+      }
+    },
+    [decks, questionDeckMembership, user],
+  )
+
+  const handleToggleQuestionDeckSelector = useCallback(
+    async (questionId: string) => {
+      if (showSelectorFor === questionId) {
+        setShowSelectorFor(null)
+        return
+      }
+
+      setShowSelectorFor(questionId)
+      await loadQuestionMembership(questionId)
+    },
+    [loadQuestionMembership, showSelectorFor],
+  )
+
+  const handleCreateDeckFromPopup = useCallback(async () => {
+    const trimmedName = newDeckNameFromPopup.trim()
+    if (!trimmedName) return
+
+    try {
+      setCreatingDeckFromPopup(true)
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session) {
+        showSaveQuestionFeedback('error', 'Inicia sesión para crear mazos')
+        return
+      }
+
+      await createStudioDeck(session.access_token, trimmedName)
+      const loadedDecks = await fetchStudioDecks(session.access_token)
+      setDecks(loadedDecks.filter((deck) => deck.deleted_at == null))
+      setNewDeckNameFromPopup('')
+      setShowCreateDeckForm(false)
+      showSaveQuestionFeedback('success', 'Mazo creado')
+    } catch (err) {
+      console.error(err)
+      showSaveQuestionFeedback('error', 'Error al crear el mazo')
+    } finally {
+      setCreatingDeckFromPopup(false)
+    }
+  }, [newDeckNameFromPopup, showSaveQuestionFeedback])
+
   const scrollToReview = useCallback(() => {
     reviewSectionRef.current?.scrollIntoView({
       behavior: 'smooth',
       block: 'start',
     })
   }, [])
+
+  useEffect(() => {
+    return () => {
+      if (saveQuestionMessageTimeoutRef.current) {
+        clearTimeout(saveQuestionMessageTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    setShowSelectorFor(null)
+  }, [currentQuestionIndex])
+
+  useEffect(() => {
+    if (showSelectorFor) return
+    setShowCreateDeckForm(false)
+    setNewDeckNameFromPopup('')
+  }, [showSelectorFor])
+
+  useEffect(() => {
+    if (!showQuiz || authLoading || !user || hasLoadedDailyDecksRef.current) return
+
+    let cancelled = false
+
+    const loadDecksForBookmark = async () => {
+      try {
+        setLoadingDecks(true)
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        if (!session || cancelled) return
+
+        const loadedDecks = await fetchStudioDecks(session.access_token)
+        if (cancelled) return
+
+        setDecks(loadedDecks.filter((deck) => deck.deleted_at == null))
+        hasLoadedDailyDecksRef.current = true
+      } catch (err) {
+        console.error(err)
+      } finally {
+        if (!cancelled) {
+          setLoadingDecks(false)
+        }
+      }
+    }
+
+    void loadDecksForBookmark()
+
+    return () => {
+      cancelled = true
+    }
+  }, [authLoading, showQuiz, user])
 
   if (!API_URL) {
     throw new Error('API_URL no definida: revisa variables de entorno')
@@ -792,16 +1208,7 @@ export default function DashboardPage() {
     const optionsFromArray = Array.isArray(item?.options)
       ? item.options.filter((opt): opt is string => typeof opt === 'string')
       : []
-    const optionsFromColumns = [
-      item?.option_1,
-      item?.option_2,
-      item?.option_3,
-      item?.option_4,
-    ].filter((opt): opt is string => typeof opt === 'string')
-    const options =
-      optionsFromArray.length > 0
-        ? optionsFromArray
-        : optionsFromColumns
+    const options = optionsFromArray
     if (!options.length) return null
     const rawCorrectAnswer =
       item?.correctAnswer ??
@@ -1344,16 +1751,7 @@ export default function DashboardPage() {
         const optionsFromArray = Array.isArray(question.options)
           ? question.options.filter((opt): opt is string => typeof opt === 'string')
           : []
-        const optionsFromColumns = [
-          question.option_1,
-          question.option_2,
-          question.option_3,
-          question.option_4,
-        ].filter((opt): opt is string => typeof opt === 'string')
-        const options =
-          optionsFromArray.length >= 2
-            ? optionsFromArray
-            : optionsFromColumns
+        const options = optionsFromArray
 
         const idValue =
           typeof question.id === 'string' || typeof question.id === 'number'
@@ -1646,7 +2044,7 @@ export default function DashboardPage() {
     const subjectsForBurst = extractBurstSubjects(questionsForToday)
     setBurstSubjects(subjectsForBurst)
     setShowSubjectBurst(true)
-    const centerDeckId = decks[deckOrder[1]]?.id ?? null
+    const centerDeckId = hubDecks[deckOrder[1]]?.id ?? null
     setOpeningDeckId(centerDeckId)
     setIsEnvelopeOpening(true)
     const lastCardIndex = Math.max(subjectsForBurst.length - 1, 0)
@@ -1823,7 +2221,7 @@ export default function DashboardPage() {
     }
   }, [isEnvelopeOpening, openDurationMs])
 
-  const decks = [
+  const hubDecks = [
     {
       id: 'weekly',
       label: 'SEMANAL',
@@ -1945,7 +2343,7 @@ export default function DashboardPage() {
             </button>
 
             {deckOrder.map((deckIndex, positionIndex) => {
-              const deck = decks[deckIndex]
+              const deck = hubDecks[deckIndex]
               const role =
                 positionIndex === 1
                   ? 'center'
@@ -2450,9 +2848,18 @@ export default function DashboardPage() {
                         Distribucion de respuestas
                       </p>
                       <div className="space-y-3">
-                        {['A', 'B', 'C', 'D'].map((label, index) => {
-                          const value = Number(mostFailedWeek.distribution?.[label] ?? 0)
+                        {Object.entries(mostFailedWeek.distribution ?? {})
+                          .sort(([a], [b]) => a.localeCompare(b))
+                          .map(([label, rawValue], index) => {
+                          const value = Number(rawValue ?? 0)
                           const clampedValue = Math.max(0, Math.min(100, value))
+                          const correctLabel =
+                            mostFailedWeekCorrectIndex == null
+                              ? null
+                              : String.fromCharCode(65 + mostFailedWeekCorrectIndex)
+                          const isCorrectBar =
+                            (correctLabel != null && label.trim().toUpperCase() === correctLabel) ||
+                            index === mostFailedWeekCorrectIndex
                           return (
                             <div key={label} className="flex items-center gap-3">
                               <span className="w-4 text-xs font-bold text-[#7D8A96]">
@@ -2473,7 +2880,7 @@ export default function DashboardPage() {
                                     delay: 0.22 * index,
                                   }}
                                   className={`h-full rounded-full ${
-                                    index === mostFailedWeekCorrectIndex
+                                    isCorrectBar
                                       ? 'bg-[#8BA888]'
                                       : 'bg-[#E8A598]'
                                   }`}
@@ -3529,12 +3936,189 @@ export default function DashboardPage() {
               </div>
 
               <div className="space-y-8 w-full">
-                <div>
+                <div className="relative pr-14">
                   {showSubjects && (
                     <span className="inline-block px-4 py-1.5 rounded-full bg-white border border-[#E9E4E1] text-[11px] font-bold tracking-[0.1em] text-[#7D8A96] uppercase mb-6">
                       {currentQuestion?.subject}
                     </span>
                   )}
+                  {currentQuestionId ? (
+                    <div className="absolute right-0 top-0">
+                      <button
+                        type="button"
+                        onClick={() => void handleToggleQuestionDeckSelector(currentQuestionId)}
+                        disabled={savingQuestionId === currentQuestionId}
+                        className={`relative flex h-11 w-11 items-center justify-center rounded-2xl border bg-white shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+                          isCurrentQuestionSaved
+                            ? 'border-[#8BA888]/40 text-[#6E8D6B]'
+                            : 'border-[#E9E4E1] text-[#7D8A96] hover:border-[#E8A598]/40 hover:text-[#C4655A]'
+                        }`}
+                        aria-label="Guardar pregunta en un mazo"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">
+                          {isCurrentQuestionSaved ? 'bookmark_added' : 'bookmark'}
+                        </span>
+                      </button>
+
+                      {showSelectorFor === currentQuestionId ? (
+                        <div className="absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-[#E9E4E1] bg-white p-2 shadow-xl shadow-[#2D3748]/8">
+                          <p className="px-2 pb-2 pt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[#7D8A96]">
+                            Guardar en mazo
+                          </p>
+                          <div className="mb-2">
+                            {!showCreateDeckForm ? (
+                              <button
+                                type="button"
+                                onClick={() => setShowCreateDeckForm(true)}
+                                className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#E9E4E1] bg-[#FAF7F4] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[#7D8A96] transition-colors hover:border-[#E8A598]/40 hover:text-[#C4655A]"
+                              >
+                                <span className="material-symbols-outlined text-base">add</span>
+                                Nuevo mazo
+                              </button>
+                            ) : (
+                              <div className="rounded-xl border border-[#E9E4E1] bg-[#FAF7F4] p-2">
+                                <div className="mb-2 flex items-center justify-between">
+                                  <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#7D8A96]">
+                                    Crear mazo
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setShowCreateDeckForm(false)
+                                      setNewDeckNameFromPopup('')
+                                    }}
+                                    className="rounded-md p-1 text-[#7D8A96] transition-colors hover:bg-white hover:text-[#C4655A]"
+                                    aria-label="Cerrar creación de mazo"
+                                  >
+                                    <span className="material-symbols-outlined text-base">
+                                      close
+                                    </span>
+                                  </button>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={newDeckNameFromPopup}
+                                    onChange={(event) =>
+                                      setNewDeckNameFromPopup(event.target.value)
+                                    }
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter') {
+                                        event.preventDefault()
+                                        void handleCreateDeckFromPopup()
+                                      }
+                                    }}
+                                    placeholder="Nombre del mazo..."
+                                    className="h-9 flex-1 rounded-lg border border-[#E9E4E1] bg-white px-3 text-sm text-[#374151] outline-none focus:border-[#E8A598]"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleCreateDeckFromPopup()}
+                                    disabled={
+                                      creatingDeckFromPopup || !newDeckNameFromPopup.trim()
+                                    }
+                                    className="inline-flex h-9 items-center justify-center rounded-lg border border-[#E9E4E1] bg-white px-3 text-xs font-bold uppercase tracking-wide text-[#7D8A96] transition-colors hover:border-[#E8A598]/40 hover:text-[#C4655A] disabled:cursor-not-allowed disabled:opacity-50"
+                                    aria-label="Crear mazo"
+                                  >
+                                    {creatingDeckFromPopup ? (
+                                      '...'
+                                    ) : (
+                                      <span className="material-symbols-outlined text-base">
+                                        keyboard_return
+                                      </span>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          <div className="max-h-56 space-y-1 overflow-y-auto">
+                            {!user ? (
+                              <p className="px-2 py-2 text-sm text-[#7D8A96]">
+                                Inicia sesión para guardar preguntas.
+                              </p>
+                            ) : loadingDecks ? (
+                              <p className="px-2 py-2 text-sm text-[#7D8A96]">
+                                Cargando mazos...
+                              </p>
+                            ) : decks.length === 0 ? (
+                              <p className="px-2 py-2 text-sm text-[#7D8A96]">
+                                No tienes mazos activos.
+                              </p>
+                            ) : (
+                              <>
+                                {checkingMembershipQuestionId === currentQuestionId &&
+                                !questionDeckMembership[currentQuestionId] ? (
+                                  <p className="px-2 py-2 text-xs text-[#7D8A96]">
+                                    Comprobando si ya está guardada...
+                                  </p>
+                                ) : null}
+                                {decks.map((deck) => {
+                                  const deckId = String(deck.id)
+                                  const alreadyInDeck = Boolean(currentQuestionDeckMap[deckId])
+                                  const isSavingThisQuestion =
+                                    savingQuestionId === currentQuestionId
+                                  return (
+                                    <button
+                                      key={deckId}
+                                      type="button"
+                                      onClick={() =>
+                                        void handleToggleQuestionInDeck(
+                                          deckId,
+                                          currentQuestionId,
+                                          deck.name || `Mazo ${deck.id}`,
+                                        )
+                                      }
+                                      disabled={isSavingThisQuestion}
+                                      className={`group flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition-colors disabled:opacity-60 ${
+                                        alreadyInDeck
+                                          ? 'bg-[#EEF7EE] text-[#6E8D6B] hover:bg-[#FFF0EE] hover:text-[#C4655A]'
+                                          : 'text-[#374151] hover:bg-[#FAF7F4]'
+                                      }`}
+                                    >
+                                      <span className="truncate pr-2 font-medium">
+                                        {deck.name || `Mazo ${deck.id}`}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                        {alreadyInDeck ? (
+                                          <>
+                                            <span className="text-[11px] font-bold uppercase tracking-wide group-hover:hidden">
+                                              Guardada
+                                            </span>
+                                            <span className="hidden text-[11px] font-bold uppercase tracking-wide group-hover:inline">
+                                              Quitar
+                                            </span>
+                                          </>
+                                        ) : (
+                                          <span className="text-[11px] font-bold uppercase tracking-wide text-[#7D8A96]">
+                                            Guardar
+                                          </span>
+                                        )}
+                                        {alreadyInDeck ? (
+                                          <span className="relative inline-flex h-4 w-4 items-center justify-center">
+                                            <span className="material-symbols-outlined absolute text-base text-[#6E8D6B] transition-all duration-150 group-hover:scale-75 group-hover:opacity-0">
+                                              check_circle
+                                            </span>
+                                            <span className="material-symbols-outlined absolute text-base text-[#C4655A] opacity-0 scale-75 transition-all duration-150 group-hover:scale-100 group-hover:opacity-100">
+                                              remove_circle
+                                            </span>
+                                          </span>
+                                        ) : (
+                                          <span className="material-symbols-outlined text-base text-[#7D8A96]">
+                                            add
+                                          </span>
+                                        )}
+                                      </div>
+                                    </button>
+                                  )
+                                })}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <h1 className="text-[28px] sm:text-[32px] font-bold leading-tight text-[#2D3748] tracking-tight">
                     {currentQuestion?.statement}
                   </h1>

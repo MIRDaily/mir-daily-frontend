@@ -36,6 +36,14 @@ function DailyReviewCarousel({ questions }: Props) {
       prevIndex === questions.length - 1 ? 0 : prevIndex + 1,
     ), [questions.length])
 
+  const resolveLetterOptionIndex = (value: string, optionsLength: number) => {
+    const normalized = value.trim().toUpperCase()
+    if (normalized.length !== 1) return -1
+    const code = normalized.charCodeAt(0)
+    if (code < 65 || code >= 65 + optionsLength) return -1
+    return code - 65
+  }
+
   const resolveCorrectOptionIndex = (q: Question) => {
     if (q.correctAnswer == null) return -1
 
@@ -45,9 +53,8 @@ function DailyReviewCarousel({ questions }: Props) {
     }
 
     const normalized = q.correctAnswer.trim().toUpperCase()
-    if (['A', 'B', 'C', 'D'].includes(normalized)) {
-      return normalized.charCodeAt(0) - 65
-    }
+    const letterIndex = resolveLetterOptionIndex(normalized, q.options.length)
+    if (letterIndex >= 0) return letterIndex
 
     const numeric = Number(normalized)
     if (Number.isFinite(numeric)) {
@@ -70,9 +77,8 @@ function DailyReviewCarousel({ questions }: Props) {
         : -1
     }
     const normalized = q.selectedAnswer.trim().toUpperCase()
-    if (['A', 'B', 'C', 'D'].includes(normalized)) {
-      return normalized.charCodeAt(0) - 65
-    }
+    const letterIndex = resolveLetterOptionIndex(normalized, q.options.length)
+    if (letterIndex >= 0) return letterIndex
     const numeric = Number(normalized)
     if (Number.isFinite(numeric)) {
       const asIndex = numeric - 1
