@@ -600,7 +600,7 @@ export default function DashboardPage() {
         const alreadyInDeck = Boolean(questionDeckMembership[questionId]?.[deckId])
 
         if (alreadyInDeck) {
-          let itemId = questionDeckItemIds[questionId]?.[deckId] ?? null
+          let itemId: string | null = questionDeckItemIds[questionId]?.[deckId] ?? null
 
           if (!itemId) {
             const items = await fetchStudioDeckItems(session.access_token, deckId)
