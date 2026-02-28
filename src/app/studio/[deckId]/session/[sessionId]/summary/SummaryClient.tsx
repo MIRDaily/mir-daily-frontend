@@ -1,0 +1,217 @@
+"use client"
+
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { supabase } from '@/lib/supabaseBrowser'
+
+type SessionFinalMetrics = {
+  duration_seconds?: number | null
+  answered?: number | null
+  correct?: number | null
+  wrong?: number | null
+  end_reason?: string | null
+  items_served?: number | null
+}
+
+type SessionPayload = {
+  success?: boolean
+  status?: string
+  session?: {
+    status?: string
+    final_metrics?: SessionFinalMetrics | null
+  } | null
+  final_metrics?: SessionFinalMetrics | null
+}
+
+type SummaryClientProps = {
+  deckId: string
+  sessionId: string
+}
+
+function toSafeNumber(value: number | null | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+function SummaryErrorState({ deckId, message }: { deckId: string; message: string }) {
+  return (
+    <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6">
+      <div className="mx-auto max-w-3xl">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h1 className="text-xl font-semibold text-slate-900">No se pudo cargar el resumen</h1>
+          <p className="mt-2 text-sm text-slate-600">{message}</p>
+          <Link
+            href={`/studio/${deckId}`}
+            className="mt-5 inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            Volver al mazo
+          </Link>
+        </div>
+      </div>
+    </main>
+  )
+}
+
+export default function SummaryClient({ deckId, sessionId }: SummaryClientProps) {
+  const [loading, setLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [finalMetrics, setFinalMetrics] = useState<SessionFinalMetrics | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadSummary() {
+      const backendUrl = 'https://mir-daily-backend-production.up.railway.app'
+
+      if (!deckId || !sessionId) {
+        if (!cancelled) {
+          setErrorMessage('No fue posible obtener el resumen de la sesion. Intenta de nuevo desde el mazo.')
+          setLoading(false)
+        }
+        return
+      }
+
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession()
+
+      if (sessionError || !session?.access_token) {
+        if (!cancelled) {
+          setErrorMessage('No encontramos tu sesion activa. Inicia sesion otra vez e intenta nuevamente.')
+          setLoading(false)
+        }
+        return
+      }
+
+      const response = await fetch(`${backendUrl}/api/studio/sessions/${sessionId}`, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+
+      if (response.status === 401) {
+        if (!cancelled) {
+          setErrorMessage('Tu sesion de autenticacion expiro. Vuelve al mazo para iniciar una nueva sesion.')
+          setLoading(false)
+        }
+        return
+      }
+
+      if (response.status === 404) {
+        if (!cancelled) {
+          setErrorMessage('La sesion de estudio no existe o ya no esta disponible.')
+          setLoading(false)
+        }
+        return
+      }
+
+      const data = (await response.json().catch(() => null)) as SessionPayload | null
+
+      if (!data || data.success !== true) {
+        if (!cancelled) {
+          setErrorMessage('No fue posible obtener el resumen de la sesion. Intenta de nuevo desde el mazo.')
+          setLoading(false)
+        }
+        return
+      }
+
+      const metrics = data.session?.final_metrics ?? data.final_metrics
+
+      if (!metrics) {
+        if (!cancelled) {
+          setErrorMessage('No fue posible obtener el resumen de la sesion. Intenta de nuevo desde el mazo.')
+          setLoading(false)
+        }
+        return
+      }
+
+      if (!cancelled) {
+        setFinalMetrics(metrics)
+        setLoading(false)
+      }
+    }
+
+    void loadSummary()
+
+    return () => {
+      cancelled = true
+    }
+  }, [deckId, sessionId])
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6">
+        <div className="mx-auto max-w-3xl">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h1 className="text-xl font-semibold text-slate-900">Cargando resumen</h1>
+            <p className="mt-2 text-sm text-slate-600">Obteniendo metricas de la sesion...</p>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  if (errorMessage || !finalMetrics) {
+    return (
+      <SummaryErrorState
+        deckId={deckId}
+        message={errorMessage ?? 'No fue posible obtener el resumen de la sesion. Intenta de nuevo desde el mazo.'}
+      />
+    )
+  }
+
+  const durationSeconds = toSafeNumber(finalMetrics.duration_seconds)
+  const answered = toSafeNumber(finalMetrics.answered)
+  const correct = toSafeNumber(finalMetrics.correct)
+  const wrong = toSafeNumber(finalMetrics.wrong)
+  const endReason = finalMetrics.end_reason ?? 'unknown'
+  const itemsServed = toSafeNumber(finalMetrics.items_served)
+
+  return (
+    <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6">
+      <div className="mx-auto max-w-3xl space-y-6">
+        <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Studio Session
+          </p>
+          <h1 className="mt-2 text-2xl font-bold text-slate-900">Resumen de sesion</h1>
+          <p className="mt-2 text-sm text-slate-600">Session ID: {sessionId}</p>
+        </header>
+
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">duration_seconds</p>
+            <p className="mt-1 text-2xl font-bold text-slate-900">{durationSeconds}</p>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">items_served</p>
+            <p className="mt-1 text-2xl font-bold text-slate-900">{itemsServed}</p>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">answered</p>
+            <p className="mt-1 text-2xl font-bold text-slate-900">{answered}</p>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">correct</p>
+            <p className="mt-1 text-2xl font-bold text-emerald-700">{correct}</p>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">wrong</p>
+            <p className="mt-1 text-2xl font-bold text-rose-700">{wrong}</p>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">end_reason</p>
+            <p className="mt-1 text-lg font-semibold capitalize text-slate-900">{endReason}</p>
+          </article>
+        </section>
+      </div>
+    </main>
+  )
+}
