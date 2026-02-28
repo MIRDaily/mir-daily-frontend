@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseBrowser";
+import { debugFetch } from "@/lib/debugRSC";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
@@ -13,7 +14,9 @@ async function fetchWithAuth(path: string, signal?: AbortSignal) {
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
-  return fetch(`${API_URL}${path}`, { signal, headers });
+  return debugFetch(`resultsService${path}`, () =>
+    fetch(`${API_URL}${path}`, { signal, headers }),
+  );
 }
 
 async function readError(res: Response, fallback: string) {

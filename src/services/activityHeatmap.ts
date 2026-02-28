@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabaseBrowser'
+import { debugFetch } from '@/lib/debugRSC'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL
 
@@ -54,13 +55,15 @@ export async function fetchActivityHeatmap(
     throw new Error('No hay sesion activa.')
   }
 
-  const response = await fetch(`${API_URL}/api/stats/activity-heatmap`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    signal,
-  })
+  const response = await debugFetch('activityHeatmap.fetchActivityHeatmap', () =>
+    fetch(`${API_URL}/api/stats/activity-heatmap`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      signal,
+    }),
+  )
 
   if (!response.ok) {
     throw new Error(await readError(response))

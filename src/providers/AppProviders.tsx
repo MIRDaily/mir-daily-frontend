@@ -10,7 +10,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     <AuthProvider>
       <HeaderUIProvider>
         <NotificationsProvider>
-          <OnboardingGuard />
+          {/* <OnboardingGuard /> */}
           {children}
         </NotificationsProvider>
       </HeaderUIProvider>

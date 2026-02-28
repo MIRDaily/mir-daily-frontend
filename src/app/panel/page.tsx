@@ -5,6 +5,7 @@ import ActivityHeatmapGrid from '@/components/ActivityHeatmapGrid'
 import ProgressChart from '@/components/ProgressChart'
 import { useActivityHeatmap } from '@/hooks/useActivityHeatmap'
 import { useTimeSeries } from '@/hooks/useTimeSeries'
+import { debugRender } from '@/lib/debugRSC'
 
 type SubjectCard = {
   name: string
@@ -89,6 +90,8 @@ function PanelMetricCard({
 }
 
 export default function PanelPage() {
+  debugRender('PanelPage')
+
   const [searchTerm, setSearchTerm] = useState('')
   const [introPhase, setIntroPhase] = useState<IntroPhase>('idle')
   const introStartedRef = useRef(false)

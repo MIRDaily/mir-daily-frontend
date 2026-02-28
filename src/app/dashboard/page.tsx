@@ -11,6 +11,7 @@ import type { RankingEntry } from '@/hooks/useDailyResults'
 import { useScoreDistribution } from '@/hooks/useScoreDistribution'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { getAvatarUrl } from '@/lib/avatar'
+import { debugFetch, debugRender } from '@/lib/debugRSC'
 import { supabase } from '@/lib/supabaseBrowser'
 import { parseApiError } from '@/lib/profile'
 import { getUserSummary } from '@/services/resultsService'
@@ -128,11 +129,13 @@ async function fetchStudioDecks(token: string): Promise<StudioDeck[]> {
     throw new Error('NEXT_PUBLIC_API_URL no definida.')
   }
 
-  const res = await fetch(`${apiUrl}/api/studio/decks`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
+  const res = await debugFetch('Dashboard.fetchStudioDecks', () =>
+    fetch(`${apiUrl}/api/studio/decks`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }),
+  )
 
   if (!res.ok) {
     throw new Error('Error loading decks')
@@ -150,16 +153,18 @@ async function addQuestionToDeck(token: string, deckId: string, questionId: stri
     throw new Error('NEXT_PUBLIC_API_URL no definida.')
   }
 
-  const res = await fetch(`${apiUrl}/api/studio/decks/${deckId}/items`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      questionIds: [questionId],
+  const res = await debugFetch('Dashboard.addQuestionToDeck', () =>
+    fetch(`${apiUrl}/api/studio/decks/${deckId}/items`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        questionIds: [questionId],
+      }),
     }),
-  })
+  )
 
   if (!res.ok) {
     throw new Error('Error saving question')
@@ -174,14 +179,16 @@ async function createStudioDeck(token: string, name: string) {
     throw new Error('NEXT_PUBLIC_API_URL no definida.')
   }
 
-  const res = await fetch(`${apiUrl}/api/studio/decks`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ name }),
-  })
+  const res = await debugFetch('Dashboard.createStudioDeck', () =>
+    fetch(`${apiUrl}/api/studio/decks`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ name }),
+    }),
+  )
 
   if (!res.ok) {
     throw new Error('Error creating deck')
@@ -196,11 +203,13 @@ async function fetchStudioDeckItems(token: string, deckId: string): Promise<Stud
     throw new Error('NEXT_PUBLIC_API_URL no definida.')
   }
 
-  const res = await fetch(`${apiUrl}/api/studio/decks/${deckId}/items`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
+  const res = await debugFetch('Dashboard.fetchStudioDeckItems', () =>
+    fetch(`${apiUrl}/api/studio/decks/${deckId}/items`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }),
+  )
 
   if (!res.ok) {
     throw new Error('Error loading deck items')
@@ -222,12 +231,14 @@ async function removeQuestionFromDeck(token: string, deckId: string, itemId: str
     throw new Error('NEXT_PUBLIC_API_URL no definida.')
   }
 
-  const res = await fetch(`${apiUrl}/api/studio/decks/${deckId}/items/${itemId}`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
+  const res = await debugFetch('Dashboard.removeQuestionFromDeck', () =>
+    fetch(`${apiUrl}/api/studio/decks/${deckId}/items/${itemId}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }),
+  )
 
   if (!res.ok) {
     throw new Error('Error removing question')
@@ -379,6 +390,8 @@ function LazyCard({
 }
 
 export default function DashboardPage() {
+  debugRender('DashboardPage')
+
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
   const authenticatedFetch = useAuthenticatedFetch()

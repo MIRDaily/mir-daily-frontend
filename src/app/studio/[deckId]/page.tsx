@@ -75,6 +75,13 @@ type DeckSummaryResponse = {
   summary?: Partial<Record<keyof DeckSummary, number | null>> | null
 }
 
+type DeckBootstrapResponse = {
+  deck: Deck | null
+  items: Item[]
+  summary: DeckSummary | null
+  summaryError?: string | null
+}
+
 type StartStudySessionResponse = {
   sessionId: string
   limit: number
@@ -138,10 +145,10 @@ async function readError(res: Response, fallback: string): Promise<string> {
   return text || fallback
 }
 
-async function fetchDecks(token: string): Promise<Deck[]> {
-  if (!API_URL) throw new Error('NEXT_PUBLIC_API_URL no definida.')
+async function fetchDeckBootstrap(token: string, deckId: string): Promise<DeckBootstrapResponse> {
+  if (!deckId) throw new Error('deckId no valido.')
 
-  const res = await fetch(`${API_URL}/api/studio/decks`, {
+  const res = await fetch(`/api/studio/decks/${deckId}/bootstrap`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -149,41 +156,16 @@ async function fetchDecks(token: string): Promise<Deck[]> {
   })
 
   if (!res.ok) {
-    throw new Error(await readError(res, `No se pudieron cargar los mazos (${res.status})`))
+    throw new Error(await readError(res, `No se pudo cargar el mazo (${res.status})`))
   }
 
-  const payload = (await res.json().catch(() => null)) as
-    | Deck[]
-    | { decks?: Deck[] }
-    | null
+  const payload = (await res.json().catch(() => null)) as DeckBootstrapResponse | null
 
-  if (Array.isArray(payload)) return payload
-  if (payload && Array.isArray(payload.decks)) return payload.decks
-  return []
-}
-
-async function fetchDeckItems(token: string, deckId: string): Promise<Item[]> {
-  if (!API_URL) throw new Error('NEXT_PUBLIC_API_URL no definida.')
-
-  const res = await fetch(`${API_URL}/api/studio/decks/${deckId}/items`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-
-  if (!res.ok) {
-    throw new Error(await readError(res, `No se pudieron cargar los items (${res.status})`))
+  if (!payload) {
+    throw new Error('No se recibieron datos validos del mazo.')
   }
 
-  const payload = (await res.json().catch(() => null)) as
-    | Item[]
-    | { items?: Item[] }
-    | null
-
-  if (Array.isArray(payload)) return payload
-  if (payload && Array.isArray(payload.items)) return payload.items
-  return []
+  return payload
 }
 
 function normalizeSummaryCount(value: number | null | undefined): number {
@@ -396,9 +378,20 @@ function getSortedQuestionOptions(item: Item): QuestionOption[] {
     .map(({ option }) => option)
 }
 
+// Studio option_index viene 1-based desde DB.
+// Lo convertimos a 0-based para generar letras correctamente.
+
 function getOptionLetter(option: QuestionOption, fallbackIndex: number): string {
-  const index = typeof option.option_index === 'number' ? option.option_index : fallbackIndex
-  const safeIndex = Number.isFinite(index) && index >= 0 ? Math.floor(index) : fallbackIndex
+  const index =
+    typeof option.option_index === 'number'
+      ? option.option_index - 1   // 👈 ajuste a 0-based
+      : fallbackIndex
+
+  const safeIndex =
+    Number.isFinite(index) && index >= 0
+      ? Math.floor(index)
+      : fallbackIndex
+
   return String.fromCharCode(65 + safeIndex)
 }
 
@@ -423,6 +416,9 @@ export default function StudioDeckDetailPage() {
   const [deckSummaryError, setDeckSummaryError] = useState<string | null>(null)
   const [studySubmitting, setStudySubmitting] = useState(false)
   const [studyActionError, setStudyActionError] = useState<string | null>(null)
+  const [selectedOption, setSelectedOption] = useState<number | null>(null)
+  const [isAnswered, setIsAnswered] = useState(false)
+  const [isLoadingNext, setIsLoadingNext] = useState(false)
   const sessionClosedRef = useRef(false)
 
   useEffect(() => {
@@ -442,6 +438,9 @@ export default function StudioDeckDetailPage() {
       setDeckSummaryError(null)
       setStudySubmitting(false)
       setStudyActionError(null)
+      setSelectedOption(null)
+      setIsAnswered(false)
+      setIsLoadingNext(false)
       sessionClosedRef.current = false
 
       try {
@@ -459,35 +458,20 @@ export default function StudioDeckDetailPage() {
           throw new Error('No hay sesion activa.')
         }
 
-        const summaryPromise: Promise<
-          { ok: true; value: DeckSummary } | { ok: false; error: string }
-        > = getDeckSummary(deckId)
-          .then((value) => ({ ok: true as const, value }))
-          .catch((err: unknown) => ({
-            ok: false as const,
-            error: err instanceof Error ? err.message : 'No se pudo cargar el summary.',
-          }))
-
-        const [allDecks, deckItems, summaryResult] = await Promise.all([
-          fetchDecks(token),
-          fetchDeckItems(token, deckId),
-          summaryPromise,
-        ])
-
-        const selectedDeck =
-          allDecks.find((current) => String(current.id) === deckId && current.deleted_at == null) ??
-          null
+        // Fetch bootstrap data in one request to avoid client-side waterfalls and reduce
+        // total time-to-interactive while keeping the same UI behavior.
+        const bootstrap = await fetchDeckBootstrap(token, deckId)
 
         if (!mounted) return
 
-        setDeck(selectedDeck)
-        setItems(deckItems)
-        if (summaryResult.ok) {
-          setDeckSummary(summaryResult.value)
+        setDeck(bootstrap.deck)
+        setItems(bootstrap.items)
+        if (bootstrap.summary) {
+          setDeckSummary(bootstrap.summary)
           setDeckSummaryError(null)
         } else {
           setDeckSummary(EMPTY_DECK_SUMMARY)
-          setDeckSummaryError(summaryResult.error)
+          setDeckSummaryError(bootstrap.summaryError ?? 'No se pudo cargar el summary.')
         }
       } catch (err) {
         if (!mounted) return
@@ -527,6 +511,9 @@ export default function StudioDeckDetailPage() {
   const clearStudySession = () => {
     setStudySessionId(null)
     setStudyItem(null)
+    setSelectedOption(null)
+    setIsAnswered(false)
+    setIsLoadingNext(false)
     saveStudySessionId(null)
   }
 
@@ -597,6 +584,8 @@ export default function StudioDeckDetailPage() {
       }
 
       setStudyItem(response.item)
+      setSelectedOption(null)
+      setIsAnswered(false)
     } catch (err) {
       setStudyActionError(err instanceof Error ? err.message : 'No se pudo cargar el siguiente item.')
     } finally {
@@ -611,6 +600,9 @@ export default function StudioDeckDetailPage() {
     setStudyActionError(null)
     setStudyClosing(false)
     setStudyItem(null)
+    setSelectedOption(null)
+    setIsAnswered(false)
+    setIsLoadingNext(false)
     sessionClosedRef.current = false
 
     clearStudySession()
@@ -646,7 +638,7 @@ export default function StudioDeckDetailPage() {
   if (studyMode) {
     const currentItem = studyItem
     const currentOptions = currentItem ? getSortedQuestionOptions(currentItem) : []
-    const isStudyBusy = studyLoading || studySubmitting || studyClosing
+    const isStudyBusy = studyLoading || studySubmitting || studyClosing || isLoadingNext
 
     const handleSelectOption = async (option: QuestionOption, optionIndex: number) => {
       if (!currentItem) return
@@ -664,13 +656,13 @@ export default function StudioDeckDetailPage() {
 
       if (isStudyBusy) return
 
-      setStudyActionError(null)
-
       const selectedOption =
         typeof option.option_index === 'number' ? option.option_index : optionIndex + 1
       const optimisticStatus = option.is_correct ? 'correct' : 'incorrect'
-      const previousStudyItem = currentItem
 
+      setStudyActionError(null)
+      setSelectedOption(selectedOption)
+      setIsAnswered(true)
       setStudySubmitting(true)
       setStudyItem((prev) => (prev ? patchItemProgressStatus(prev, optimisticStatus) : prev))
 
@@ -704,14 +696,36 @@ export default function StudioDeckDetailPage() {
             )
           })
 
-        await Promise.all([loadNextStudyItem(), refreshSummaryPromise])
+        await refreshSummaryPromise
       } catch (err) {
-        setStudyItem(previousStudyItem)
+        setSelectedOption(null)
+        setIsAnswered(false)
         setStudyActionError(
           err instanceof Error ? err.message : 'No se pudo registrar la respuesta.',
         )
       } finally {
         setStudySubmitting(false)
+      }
+    }
+
+    const handleNextQuestion = async () => {
+      if (!isAnswered || isStudyBusy) return
+
+      setIsLoadingNext(true)
+      setStudyActionError(null)
+
+      try {
+        // Esperamos el fade-out antes de cargar el siguiente item.
+        await new Promise((resolve) => {
+          setTimeout(resolve, 200)
+        })
+        await loadNextStudyItem()
+      } catch (err) {
+        setStudyActionError(
+          err instanceof Error ? err.message : 'No se pudo cargar el siguiente item.',
+        )
+      } finally {
+        setIsLoadingNext(false)
       }
     }
 
@@ -726,43 +740,79 @@ export default function StudioDeckDetailPage() {
               <p className="text-sm font-medium text-slate-700">Cerrando sesión...</p>
             </div>
           ) : null}
-          {!studyClosing && studyLoading ? <div>Cargando...</div> : null}
-          {!studyClosing && !studyLoading && currentItem ? (
-            <div>{currentItem.questions?.statement || currentItem.statement || 'Item'}</div>
-          ) : null}
-          {!studyClosing &&
-          !studyLoading &&
-          currentItem &&
-          currentOptions.length > 0 ? (
-            <div className="mt-4 space-y-2">
-              {currentOptions.map((option, optionIndex) => (
-                <button
-                  type="button"
-                  key={String(option.id ?? `${option.option_index ?? optionIndex}-${optionIndex}`)}
-                  onClick={() => {
-                    void handleSelectOption(option, optionIndex)
-                  }}
-                  disabled={isStudyBusy}
-                  className="flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left"
-                >
-                  <span className="text-sm font-semibold text-slate-500">
-                    {getOptionLetter(option, optionIndex)}
-                  </span>
-                  <span className="text-sm text-slate-800">{option.option_text}</span>
-                  {option.is_correct ? (
-                    <span className="ml-auto text-xs font-semibold text-emerald-700">
-                      Correcta
-                    </span>
-                  ) : null}
-                </button>
-              ))}
+          {!studyClosing && studyLoading && !currentItem ? <div>Cargando...</div> : null}
+          {!studyClosing && currentItem ? (
+            <div className={`transition-opacity duration-200 ${isLoadingNext ? 'opacity-0' : 'opacity-100'}`}>
+              <div>{currentItem.questions?.statement || currentItem.statement || 'Item'}</div>
             </div>
           ) : null}
           {!studyClosing &&
-          !studyLoading &&
+          currentItem &&
+          currentOptions.length > 0 ? (
+            <div
+              className={`mt-4 space-y-2 transition-opacity duration-200 ${isLoadingNext ? 'opacity-0' : 'opacity-100'}`}
+            >
+              {currentOptions.map((option, optionIndex) => {
+                const optionValue =
+                  typeof option.option_index === 'number' ? option.option_index : optionIndex + 1
+                const isSelected = selectedOption === optionValue
+                const showCorrect = isAnswered && option.is_correct === true
+                const showIncorrectSelected = isAnswered && isSelected && option.is_correct !== true
+
+                const feedbackClass = showCorrect
+                  ? 'border-emerald-300 bg-emerald-50'
+                  : showIncorrectSelected
+                    ? 'border-rose-300 bg-rose-50'
+                    : 'border-slate-200 bg-slate-50'
+
+                const feedbackTextClass = showCorrect
+                  ? 'text-emerald-800'
+                  : showIncorrectSelected
+                    ? 'text-rose-800'
+                    : 'text-slate-800'
+
+                return (
+                  <button
+                    type="button"
+                    key={String(option.id ?? `${option.option_index ?? optionIndex}-${optionIndex}`)}
+                    onClick={() => {
+                      void handleSelectOption(option, optionIndex)
+                    }}
+                    disabled={isStudyBusy || isAnswered}
+                    className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${feedbackClass}`}
+                  >
+                    <span className="text-sm font-semibold text-slate-500">
+                      {getOptionLetter(option, optionIndex)}
+                    </span>
+                    <span className={`text-sm ${feedbackTextClass}`}>{option.option_text}</span>
+                    {showCorrect ? (
+                      <span className="ml-auto text-xs font-semibold text-emerald-700">
+                        Correcta
+                      </span>
+                    ) : null}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
+          {!studyClosing &&
           currentItem &&
           currentOptions.length === 0 ? (
             <p className="mt-4 text-sm text-slate-600">Este item no tiene opciones disponibles.</p>
+          ) : null}
+          {!studyClosing && currentItem && currentOptions.length > 0 && isAnswered ? (
+            <div className={`mt-4 transition-opacity duration-200 ${isLoadingNext ? 'opacity-0' : 'opacity-100'}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleNextQuestion()
+                }}
+                disabled={isStudyBusy}
+                className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Siguiente
+              </button>
+            </div>
           ) : null}
           {studyActionError ? <p className="mt-4 text-sm text-red-600">{studyActionError}</p> : null}
         </div>
@@ -883,5 +933,3 @@ export default function StudioDeckDetailPage() {
     </main>
   )
 }
-
-

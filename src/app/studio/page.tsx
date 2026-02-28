@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { debugRender } from '@/lib/debugRSC'
 
 type QuickStat = {
   label: string
@@ -109,6 +110,8 @@ const studioCards: ReadonlyArray<StudioCard> = [
 ] as const
 
 export default function StudioPage() {
+  debugRender('StudioPage')
+
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[#FAF7F4] text-[#7D8A96]">
       {/* Fondo decorativo */}

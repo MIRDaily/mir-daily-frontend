@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import localFont from 'next/font/local'
 import GlobalHeader from '@/components/GlobalHeader'
 import { AppProviders } from '@/providers/AppProviders'
+import { debugRender } from '@/lib/debugRSC'
 
 const lexend = localFont({
   src: [
@@ -23,6 +24,8 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  debugRender('RootLayout')
+
   return (
     <html lang="es" className={lexend.variable}>
       <head>
