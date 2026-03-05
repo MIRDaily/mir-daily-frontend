@@ -15,11 +15,11 @@ type QuestionOption = {
   id?: string | number | null
   option_index?: number | null
   option_text?: string | null
-  is_correct?: boolean | null
 }
 
 type ItemQuestion = {
   statement?: string | null
+  correct_answer?: number | string | null
   question_options?: QuestionOption[] | null
 }
 
@@ -378,6 +378,15 @@ function getSortedQuestionOptions(item: Item): QuestionOption[] {
     .map(({ option }) => option)
 }
 
+function getQuestionCorrectIndex(item: Item): number | null {
+  const raw = item.questions?.correct_answer
+  const parsed =
+    typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : Number.NaN
+
+  if (!Number.isFinite(parsed)) return null
+  return Math.trunc(parsed)
+}
+
 // Studio option_index viene 1-based desde DB.
 // Lo convertimos a 0-based para generar letras correctamente.
 
@@ -414,11 +423,13 @@ export default function StudioDeckDetailPage() {
   const [deckSummary, setDeckSummary] = useState<DeckSummary>(EMPTY_DECK_SUMMARY)
   const [deckSummaryLoading, setDeckSummaryLoading] = useState(true)
   const [deckSummaryError, setDeckSummaryError] = useState<string | null>(null)
-  const [studySubmitting, setStudySubmitting] = useState(false)
   const [studyActionError, setStudyActionError] = useState<string | null>(null)
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [isAnswered, setIsAnswered] = useState(false)
   const [isLoadingNext, setIsLoadingNext] = useState(false)
+  const [nextQuestionCache, setNextQuestionCache] = useState<Item | null>(null)
+  const [nextEndReason, setNextEndReason] = useState<'done' | 'limitReached' | 'expired' | null>(null)
+  const [preloadInFlight, setPreloadInFlight] = useState(false)
   const sessionClosedRef = useRef(false)
 
   useEffect(() => {
@@ -436,11 +447,12 @@ export default function StudioDeckDetailPage() {
       setDeckSummary(EMPTY_DECK_SUMMARY)
       setDeckSummaryLoading(true)
       setDeckSummaryError(null)
-      setStudySubmitting(false)
       setStudyActionError(null)
       setSelectedOption(null)
       setIsAnswered(false)
       setIsLoadingNext(false)
+      setNextQuestionCache(null)
+      setPreloadInFlight(false)
       sessionClosedRef.current = false
 
       try {
@@ -514,6 +526,9 @@ export default function StudioDeckDetailPage() {
     setSelectedOption(null)
     setIsAnswered(false)
     setIsLoadingNext(false)
+    setNextQuestionCache(null)
+    setNextEndReason(null)
+    setPreloadInFlight(false)
     saveStudySessionId(null)
   }
 
@@ -593,8 +608,56 @@ export default function StudioDeckDetailPage() {
     }
   }
 
+  const preloadNextQuestion = async (
+    sessionIdOverride?: string,
+    ignoreExistingCache = false,
+  ): Promise<void> => {
+    const activeSessionId = sessionIdOverride ?? studySessionId
+
+    if (
+      !activeSessionId ||
+      preloadInFlight ||
+      (!ignoreExistingCache && nextQuestionCache) ||
+      sessionClosedRef.current
+    ) {
+      return
+    }
+
+    setPreloadInFlight(true)
+    try {
+      const response = await getNextDeckItem(deckId, activeSessionId)
+
+      if ('expired' in response && response.expired) {
+        setNextQuestionCache(null)
+        setNextEndReason('expired')
+        return
+      }
+
+      if ('limitReached' in response && response.limitReached) {
+        setNextQuestionCache(null)
+        setNextEndReason('limitReached')
+        return
+      }
+
+      if ('done' in response && response.done) {
+        setNextQuestionCache(null)
+        setNextEndReason('done')
+        return
+      }
+
+      setNextQuestionCache(response.item)
+      setNextEndReason(null)
+    } catch (err) {
+      setStudyActionError(
+        err instanceof Error ? err.message : 'No se pudo precargar la siguiente pregunta.',
+      )
+    } finally {
+      setPreloadInFlight(false)
+    }
+  }
+
   const handleStartStudy = async () => {
-    if (studyLoading || studySubmitting || studyClosing) return
+    if (studyLoading || studyClosing) return
 
     setStudyMode(true)
     setStudyActionError(null)
@@ -603,6 +666,9 @@ export default function StudioDeckDetailPage() {
     setSelectedOption(null)
     setIsAnswered(false)
     setIsLoadingNext(false)
+    setNextQuestionCache(null)
+    setNextEndReason(null)
+    setPreloadInFlight(false)
     sessionClosedRef.current = false
 
     clearStudySession()
@@ -638,9 +704,10 @@ export default function StudioDeckDetailPage() {
   if (studyMode) {
     const currentItem = studyItem
     const currentOptions = currentItem ? getSortedQuestionOptions(currentItem) : []
-    const isStudyBusy = studyLoading || studySubmitting || studyClosing || isLoadingNext
+    const currentCorrectIndex = currentItem ? getQuestionCorrectIndex(currentItem) : null
+    const isStudyBusy = studyLoading || studyClosing || isLoadingNext
 
-    const handleSelectOption = async (option: QuestionOption, optionIndex: number) => {
+    const handleSelectOption = (option: QuestionOption, optionIndex: number) => {
       if (!currentItem) return
       if (!studySessionId) {
         setStudyActionError('No hay una sesion de estudio activa.')
@@ -658,75 +725,95 @@ export default function StudioDeckDetailPage() {
 
       const selectedOption =
         typeof option.option_index === 'number' ? option.option_index : optionIndex + 1
-      const optimisticStatus = option.is_correct ? 'correct' : 'incorrect'
+      const isCorrectSelection =
+        currentCorrectIndex != null && selectedOption === currentCorrectIndex
+      const optimisticStatus =
+        currentCorrectIndex == null
+          ? currentItem.progress?.status
+          : isCorrectSelection
+            ? 'correct'
+            : 'incorrect'
 
       setStudyActionError(null)
       setSelectedOption(selectedOption)
       setIsAnswered(true)
-      setStudySubmitting(true)
       setStudyItem((prev) => (prev ? patchItemProgressStatus(prev, optimisticStatus) : prev))
 
-      try {
-        const result = await logDeckItemStudy(deckId, {
-          deckItemId: resolvedDeckItemId,
-          selectedOption,
-          sessionId: studySessionId,
+      void logDeckItemStudy(deckId, {
+        deckItemId: resolvedDeckItemId,
+        selectedOption,
+        sessionId: studySessionId,
+      })
+        .then((result) => {
+          setStudyItem((prev) => {
+            if (!prev) return prev
+            return {
+              ...patchItemProgressStatus(prev, result.progress?.status),
+              progress: {
+                ...(prev.progress ?? {}),
+                ...(result.progress ?? {}),
+                status: result.progress?.status ?? prev.progress?.status ?? null,
+              },
+            }
+          })
+        })
+        .catch((err: unknown) => {
+          setStudyActionError(
+            err instanceof Error ? err.message : 'No se pudo registrar la respuesta.',
+          )
         })
 
-        setStudyItem((prev) => {
-          if (!prev) return prev
-          return {
-            ...patchItemProgressStatus(prev, result.progress?.status),
-            progress: {
-              ...(prev.progress ?? {}),
-              ...(result.progress ?? {}),
-              status: result.progress?.status ?? prev.progress?.status ?? null,
-            },
-          }
+      void getDeckSummary(deckId)
+        .then((summary) => {
+          setDeckSummary(summary)
+          setDeckSummaryError(null)
+        })
+        .catch((summaryErr: unknown) => {
+          setDeckSummaryError(
+            summaryErr instanceof Error ? summaryErr.message : 'No se pudo cargar el summary.',
+          )
         })
 
-        const refreshSummaryPromise: Promise<void> = getDeckSummary(deckId)
-          .then((summary) => {
-            setDeckSummary(summary)
-            setDeckSummaryError(null)
-          })
-          .catch((summaryErr: unknown) => {
-            setDeckSummaryError(
-              summaryErr instanceof Error ? summaryErr.message : 'No se pudo cargar el summary.',
-            )
-          })
-
-        await refreshSummaryPromise
-      } catch (err) {
-        setSelectedOption(null)
-        setIsAnswered(false)
-        setStudyActionError(
-          err instanceof Error ? err.message : 'No se pudo registrar la respuesta.',
-        )
-      } finally {
-        setStudySubmitting(false)
-      }
+      void preloadNextQuestion(studySessionId)
     }
 
     const handleNextQuestion = async () => {
       if (!isAnswered || isStudyBusy) return
 
-      setIsLoadingNext(true)
-      setStudyActionError(null)
+      if (nextQuestionCache) {
+        setIsLoadingNext(true)
+        setStudyActionError(null)
 
-      try {
-        // Esperamos el fade-out antes de cargar el siguiente item.
-        await new Promise((resolve) => {
-          setTimeout(resolve, 200)
-        })
-        await loadNextStudyItem()
-      } catch (err) {
-        setStudyActionError(
-          err instanceof Error ? err.message : 'No se pudo cargar el siguiente item.',
-        )
-      } finally {
+        const cachedItem = nextQuestionCache
+        setStudyItem(cachedItem)
+        setNextQuestionCache(null)
+        setNextEndReason(null)
+        setSelectedOption(null)
+        setIsAnswered(false)
         setIsLoadingNext(false)
+        void preloadNextQuestion(undefined, true)
+        return
       }
+
+      if (nextEndReason) {
+        const activeSessionId = studySessionId
+        if (!activeSessionId) {
+          setStudyActionError('No hay una sesion de estudio activa.')
+          return
+        }
+
+        setStudyActionError(null)
+        try {
+          await closeStudySessionAndNavigate(activeSessionId)
+        } catch (err) {
+          setStudyActionError(
+            err instanceof Error ? err.message : 'No se pudo cerrar la sesion de estudio.',
+          )
+        }
+        return
+      }
+
+      void preloadNextQuestion(undefined, true)
     }
 
     return (
@@ -755,9 +842,10 @@ export default function StudioDeckDetailPage() {
               {currentOptions.map((option, optionIndex) => {
                 const optionValue =
                   typeof option.option_index === 'number' ? option.option_index : optionIndex + 1
+                const isCorrect = currentCorrectIndex != null && optionValue === currentCorrectIndex
                 const isSelected = selectedOption === optionValue
-                const showCorrect = isAnswered && option.is_correct === true
-                const showIncorrectSelected = isAnswered && isSelected && option.is_correct !== true
+                const showCorrect = isAnswered && isCorrect
+                const showIncorrectSelected = isAnswered && isSelected && !isCorrect
 
                 const feedbackClass = showCorrect
                   ? 'border-emerald-300 bg-emerald-50'
@@ -793,6 +881,27 @@ export default function StudioDeckDetailPage() {
                   </button>
                 )
               })}
+              {currentItem?.questions?.explanation ? (
+                <div
+                  className={`transform-gpu overflow-hidden border bg-neutral-50 transition-[max-height,opacity,transform,margin,padding,border-radius,filter,background-color,border-color] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                    isAnswered
+                      ? 'mt-6 max-h-80 translate-y-0 scale-100 rounded-xl border-neutral-200 bg-neutral-50 p-4 opacity-100 blur-0'
+                      : 'mt-0 max-h-0 -translate-y-1 scale-[0.985] rounded-2xl border-transparent bg-neutral-50/60 p-0 opacity-0 blur-[2px]'
+                  }`}
+                  aria-hidden={!isAnswered}
+                >
+                  <div
+                    className={`transition-opacity duration-500 ${
+                      isAnswered ? 'opacity-100 delay-100' : 'opacity-0 delay-0'
+                    }`}
+                  >
+                    <h4 className="mb-2 text-sm font-semibold text-neutral-700">Explicación</h4>
+                    <p className="text-sm leading-relaxed text-neutral-700">
+                      {currentItem.questions.explanation}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
           {!studyClosing &&
@@ -802,14 +911,14 @@ export default function StudioDeckDetailPage() {
           ) : null}
           {!studyClosing && currentItem && currentOptions.length > 0 && isAnswered ? (
             <div className={`mt-4 transition-opacity duration-200 ${isLoadingNext ? 'opacity-0' : 'opacity-100'}`}>
-              <button
-                type="button"
-                onClick={() => {
-                  void handleNextQuestion()
-                }}
-                disabled={isStudyBusy}
-                className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleNextQuestion()
+                  }}
+                  disabled={isStudyBusy || (nextQuestionCache == null && nextEndReason == null)}
+                  className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
                 Siguiente
               </button>
             </div>
@@ -838,7 +947,7 @@ export default function StudioDeckDetailPage() {
             onClick={() => {
               void handleStartStudy()
             }}
-            disabled={studyLoading || studySubmitting}
+            disabled={studyLoading}
             className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
           >
             Estudiar
@@ -894,38 +1003,51 @@ export default function StudioDeckDetailPage() {
             <p className="text-sm text-slate-600">Este mazo no tiene items.</p>
           ) : (
             <ul className="space-y-3">
-              {items.map((item, index) => (
-                <li key={String(item.id)} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Pregunta {index + 1}
-                  </p>
-                  <p className="mt-2 text-sm text-slate-800">
-                    {item.questions?.statement?.trim() ||
-                      item.statement?.trim() ||
-                      `Item ${index + 1}`}
-                  </p>
-                  {getSortedQuestionOptions(item).length > 0 ? (
-                    <div className="mt-3 space-y-2">
-                      {getSortedQuestionOptions(item).map((option, optionIndex) => (
-                        <div
-                          key={String(option.id ?? `${String(item.id)}-${option.option_index ?? optionIndex}`)}
-                          className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
-                        >
-                          <span className="text-xs font-semibold text-slate-500">
-                            {getOptionLetter(option, optionIndex)}
-                          </span>
-                          <span className="text-sm text-slate-700">{option.option_text}</span>
-                          {option.is_correct ? (
-                            <span className="ml-auto text-xs font-semibold text-emerald-700">
-                              Correcta
-                            </span>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </li>
-              ))}
+              {items.map((item, index) => {
+                const itemOptions = getSortedQuestionOptions(item)
+                const itemCorrectIndex = getQuestionCorrectIndex(item)
+
+                return (
+                  <li key={String(item.id)} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Pregunta {index + 1}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-800">
+                      {item.questions?.statement?.trim() ||
+                        item.statement?.trim() ||
+                        `Item ${index + 1}`}
+                    </p>
+                    {itemOptions.length > 0 ? (
+                      <div className="mt-3 space-y-2">
+                        {itemOptions.map((option, optionIndex) => {
+                          const optionValue =
+                            typeof option.option_index === 'number'
+                              ? option.option_index
+                              : optionIndex + 1
+                          const isCorrect = itemCorrectIndex != null && optionValue === itemCorrectIndex
+
+                          return (
+                            <div
+                              key={String(option.id ?? `${String(item.id)}-${option.option_index ?? optionIndex}`)}
+                              className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                            >
+                              <span className="text-xs font-semibold text-slate-500">
+                                {getOptionLetter(option, optionIndex)}
+                              </span>
+                              <span className="text-sm text-slate-700">{option.option_text}</span>
+                              {isCorrect ? (
+                                <span className="ml-auto text-xs font-semibold text-emerald-700">
+                                  Correcta
+                                </span>
+                              ) : null}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : null}
+                  </li>
+                )
+              })}
             </ul>
           )}
         </section>
