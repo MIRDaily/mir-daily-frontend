@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
@@ -94,10 +94,12 @@ type SubjectPerformanceResponse = {
 }
 
 type StudyStatus = 'new' | 'failed' | 'learning' | 'mastered'
+type StudyRequestMode = 'normal' | 'smart'
 
 type StudyFilters = {
   subjects: string[]
   status: StudyStatus | null
+  mode: StudyRequestMode
 }
 
 type SubjectFilterOption = {
@@ -168,6 +170,17 @@ const EMPTY_DECK_SUMMARY: DeckSummary = {
   failed: 0,
   learning: 0,
   mastered: 0,
+}
+const SMART_REVIEW_STATUS_PRIORITY: StudyStatus[] = ['failed', 'learning', 'new', 'mastered']
+
+function isAllSubjectValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase()
+  return normalized === 'all subjects' || normalized === 'all'
+}
+
+function isAllStatusValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase()
+  return normalized === 'all status' || normalized === 'all' || normalized === 'todas' || normalized === 'todos'
 }
 
 async function readError(res: Response, fallback: string): Promise<string> {
@@ -406,20 +419,28 @@ async function getNextDeckItem(
     throw new Error('No hay sesion activa.')
   }
 
-  const url = new URL(`${API_URL}/api/studio/decks/${deckId}/next`)
-  url.searchParams.set('sessionId', sessionId)
-  if (Array.isArray(filters?.subjects) && filters.subjects.length > 0) {
-    filters.subjects.forEach((subject) => {
-      if (subject) {
-        url.searchParams.append('subject', subject)
-      }
+  const subjects =
+    Array.isArray(filters?.subjects)
+      ? filters.subjects
+          .map((subject) => (typeof subject === 'string' ? subject.trim() : ''))
+          .filter((subject) => Boolean(subject) && !isAllSubjectValue(subject))
+      : []
+  const status =
+    typeof filters?.status === 'string' && !isAllStatusValue(filters.status) ? filters.status : null
+
+  const params = new URLSearchParams({ sessionId })
+  if (subjects.length > 0) {
+    subjects.forEach((subject) => {
+      params.append('subject', subject)
     })
   }
-  if (filters?.status) {
-    url.searchParams.set('status', filters.status)
+  if (status) {
+    params.set('status', status)
   }
 
-  const res = await fetch(url.toString(), {
+  const url = `${API_URL}/api/studio/decks/${deckId}/next?${params.toString()}`
+
+  const res = await fetch(url, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -520,7 +541,7 @@ function getQuestionCorrectIndex(item: Item): number | null {
 function getOptionLetter(option: QuestionOption, fallbackIndex: number): string {
   const index =
     typeof option.option_index === 'number'
-      ? option.option_index - 1   // 👈 ajuste a 0-based
+      ? option.option_index - 1 // ajuste a 0-based
       : fallbackIndex
 
   const safeIndex =
@@ -554,7 +575,12 @@ export default function StudioDeckDetailPage() {
   const [subjectFilterOptions, setSubjectFilterOptions] = useState<SubjectFilterOption[]>([])
   const [subjectFilter, setSubjectFilter] = useState<string[]>([])
   const [statusFilter, setStatusFilter] = useState<StudyStatus | null>(null)
-  const [studyFilters, setStudyFilters] = useState<StudyFilters>({ subjects: [], status: null })
+  const [studyRequestMode, setStudyRequestMode] = useState<StudyRequestMode>('normal')
+  const [studyFilters, setStudyFilters] = useState<StudyFilters>({
+    subjects: [],
+    status: null,
+    mode: 'normal',
+  })
   const [subjectPerformance, setSubjectPerformance] = useState<SubjectPerformance[]>([])
   const [studyActionError, setStudyActionError] = useState<string | null>(null)
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
@@ -592,7 +618,8 @@ export default function StudioDeckDetailPage() {
       setSubjectFilterOptions([])
       setSubjectFilter([])
       setStatusFilter(null)
-      setStudyFilters({ subjects: [], status: null })
+      setStudyRequestMode('normal')
+      setStudyFilters({ subjects: [], status: null, mode: 'normal' })
       setSubjectPerformance([])
       setStudyActionError(null)
       setSelectedOption(null)
@@ -961,6 +988,30 @@ export default function StudioDeckDetailPage() {
     closeStudyLimitModal(Math.trunc(parsed))
   }
 
+  const getNextStudyItemWithMode = async (
+    sessionId: string,
+    filters: StudyFilters,
+  ): Promise<NextDeckItemResponse> => {
+    if (filters.mode !== 'smart') {
+      return getNextDeckItem(deckId, sessionId, filters)
+    }
+
+    for (const status of SMART_REVIEW_STATUS_PRIORITY) {
+      const response = await getNextDeckItem(deckId, sessionId, {
+        ...filters,
+        status,
+      })
+
+      if ('expired' in response && response.expired) return response
+      if ('limitReached' in response && response.limitReached) return response
+      if ('done' in response && response.done) continue
+      if ('item' in response && !response.item) continue
+      return response
+    }
+
+    return { done: true }
+  }
+
   const loadNextStudyItem = async (
     sessionIdOverride?: string,
     filtersOverride?: StudyFilters,
@@ -977,7 +1028,7 @@ export default function StudioDeckDetailPage() {
     setStudyLoading(true)
 
     try {
-      const response = await getNextDeckItem(deckId, activeSessionId, activeFilters)
+      const response = await getNextStudyItemWithMode(activeSessionId, activeFilters)
 
       if ('expired' in response && response.expired) {
         await closeStudySessionAndNavigate(activeSessionId)
@@ -1023,7 +1074,7 @@ export default function StudioDeckDetailPage() {
 
     setPreloadInFlight(true)
     try {
-      const response = await getNextDeckItem(deckId, activeSessionId, activeFilters)
+      const response = await getNextStudyItemWithMode(activeSessionId, activeFilters)
 
       if ('expired' in response && response.expired) {
         setNextQuestionCache(null)
@@ -1062,6 +1113,7 @@ export default function StudioDeckDetailPage() {
     const selectedFilters: StudyFilters = {
       subjects: [...subjectFilter],
       status: statusFilter,
+      mode: studyRequestMode,
     }
     setStudyFilters(selectedFilters)
 
@@ -1107,23 +1159,6 @@ export default function StudioDeckDetailPage() {
     const currentCorrectIndex = currentItem ? getQuestionCorrectIndex(currentItem) : null
     const isStudyBusy = studyLoading || studyClosing || isLoadingNext
     const isInitialStudyLoading = !studyClosing && studyLoading && !currentItem
-    const activeSubjectLabel =
-      studyFilters.subjects.length === 0
-        ? 'All subjects'
-        : studyFilters.subjects.length === 1
-          ? studyFilters.subjects[0]
-          : `${studyFilters.subjects.length} subjects`
-    const activeStatusLabel =
-      studyFilters.status == null
-        ? 'Todas'
-        : STUDY_STATUS_OPTIONS.find((option) => option.value === studyFilters.status)?.label ??
-          studyFilters.status
-    const activeStatusDotClass =
-      studyFilters.status == null
-        ? 'bg-slate-400'
-        : STUDY_STATUS_OPTIONS.find((option) => option.value === studyFilters.status)?.dotClass ??
-          'bg-slate-400'
-
     const handleSelectOption = (option: QuestionOption, optionIndex: number) => {
       if (!currentItem) return
       if (!studySessionId) {
@@ -1236,11 +1271,6 @@ export default function StudioDeckDetailPage() {
     return (
       <div className="p-6">
         <h2 className="mb-4 text-xl font-semibold">Modo estudio</h2>
-        <p className="mb-3 flex items-center gap-2 text-sm text-slate-600">
-          <span>Studying: {activeSubjectLabel} •</span>
-          <span className={`inline-block h-2.5 w-2.5 rounded-full ${activeStatusDotClass}`} />
-          <span>{activeStatusLabel}</span>
-        </p>
 
         <div className="mb-6 rounded-xl bg-white p-6 shadow-sm">
           {studyClosing ? (
@@ -1491,7 +1521,7 @@ export default function StudioDeckDetailPage() {
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              🆕 Nuevas
+              Nuevas
             </p>
             <p className="mt-2 text-2xl font-bold text-slate-900">
               {deckSummaryLoading ? '--' : deckSummary.new}
@@ -1500,7 +1530,7 @@ export default function StudioDeckDetailPage() {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              🔴 Falladas
+              Falladas
             </p>
             <p className="mt-2 text-2xl font-bold text-slate-900">
               {deckSummaryLoading ? '--' : deckSummary.failed}
@@ -1509,7 +1539,7 @@ export default function StudioDeckDetailPage() {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              🟡 En aprendizaje
+              En aprendizaje
             </p>
             <p className="mt-2 text-2xl font-bold text-slate-900">
               {deckSummaryLoading ? '--' : deckSummary.learning}
@@ -1518,7 +1548,7 @@ export default function StudioDeckDetailPage() {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              🟢 Dominadas
+              Dominadas
             </p>
             <p className="mt-2 text-2xl font-bold text-slate-900">
               {deckSummaryLoading ? '--' : deckSummary.mastered}
@@ -1634,6 +1664,38 @@ export default function StudioDeckDetailPage() {
             </p>
 
             <div className="mt-4">
+              <p className="mb-2 text-sm font-medium text-slate-700">MODO DE ESTUDIO</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStudyRequestMode('normal')
+                  }}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    studyRequestMode === 'normal'
+                      ? 'border-[#E8A598] bg-[#FFF4F1] text-[#C4655A]'
+                      : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
+                  }`}
+                >
+                  Normal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStudyRequestMode('smart')
+                  }}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    studyRequestMode === 'smart'
+                      ? 'border-[#E8A598] bg-[#FFF4F1] text-[#C4655A]'
+                      : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
+                  }`}
+                >
+                  Smart Review
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4">
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 FILTROS
               </label>
@@ -1697,14 +1759,22 @@ export default function StudioDeckDetailPage() {
                 <p className="mb-2 text-sm font-medium text-slate-700">
                   PRIORIDAD
                 </p>
-                <div className="flex flex-wrap gap-2">
+                <div
+                  aria-disabled={studyRequestMode === 'smart'}
+                  className={`flex flex-wrap gap-2 ${
+                    studyRequestMode === 'smart' ? 'opacity-45' : ''
+                  }`}
+                >
                   <button
                     type="button"
+                    disabled={studyRequestMode === 'smart'}
                     onClick={() => {
                       setStatusFilter(null)
                     }}
                     className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                      statusFilter == null
+                      studyRequestMode === 'smart'
+                        ? 'cursor-not-allowed border-slate-300 bg-slate-100 text-slate-400'
+                        : statusFilter == null
                         ? 'border-[#E8A598] bg-[#FFF4F1] text-[#C4655A]'
                         : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
                     }`}
@@ -1717,11 +1787,14 @@ export default function StudioDeckDetailPage() {
                       <button
                         key={option.value}
                         type="button"
+                        disabled={studyRequestMode === 'smart'}
                         onClick={() => {
                           setStatusFilter(option.value)
                         }}
                         className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                          selected
+                          studyRequestMode === 'smart'
+                            ? 'cursor-not-allowed border-slate-300 bg-slate-100 text-slate-400'
+                            : selected
                             ? 'border-[#E8A598] bg-[#FFF4F1] text-[#C4655A]'
                             : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
                         }`}
@@ -1793,3 +1866,4 @@ export default function StudioDeckDetailPage() {
     </main>
   )
 }
+

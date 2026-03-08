@@ -3084,7 +3084,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="border-t border-[#7D8A96]/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-[#7D8A96]/60">
-            <p>Â© 2024 MIRDaily. Todos los derechos reservados.</p>
+            <p>© 2024 MIRDaily. Todos los derechos reservados.</p>
             <div className="flex gap-4">
               <a className="hover:text-[#E8A598] transition-colors" href="#">
                 Privacidad
