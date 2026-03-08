@@ -1480,6 +1480,7 @@ export default function DashboardPage() {
       : summaryTrend >= 0
         ? Math.max(30, sparkEndY + 10)
         : Math.min(85, sparkEndY - 10)
+  const sparkPeakY = Math.max(14, sparkMidY - 8)
   const rankingList = useMemo(
     () => (Array.isArray(resultsRanking) ? resultsRanking : []),
     [resultsRanking],
@@ -3332,11 +3333,11 @@ export default function DashboardPage() {
                           key={`summary-sparkline-${summaryChartCycle}`}
                           className="w-full h-full"
                           preserveAspectRatio="none"
-                          viewBox="0 0 400 100"
+                          viewBox="0 -24 400 124"
                         >
                           <path
                             className="summary-sparkline"
-                            d={`M0,85 Q80,80 160,${sparkMidY} T300,${sparkMidY - 8} T400,${sparkEndY}`}
+                            d={`M0,85 Q80,80 160,${sparkMidY} T300,${sparkPeakY} T400,${sparkEndY}`}
                             fill="none"
                             stroke="#8BA888"
                             strokeLinecap="round"
@@ -3345,7 +3346,7 @@ export default function DashboardPage() {
                           <circle className="summary-sparkline-head" cx="400" cy={sparkEndY} fill="#8BA888" r="5"></circle>
                           <path
                             className="summary-sparkline-fill"
-                            d={`M0,85 Q80,80 160,${sparkMidY} T300,${sparkMidY - 8} T400,${sparkEndY} L400,100 L0,100 Z`}
+                            d={`M0,85 Q80,80 160,${sparkMidY} T300,${sparkPeakY} T400,${sparkEndY} L400,100 L0,100 Z`}
                             fill="#8BA888"
                             opacity="0.1"
                           ></path>

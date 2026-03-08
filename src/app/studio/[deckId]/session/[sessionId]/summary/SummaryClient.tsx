@@ -13,6 +13,32 @@ type SessionFinalMetrics = {
   items_served?: number | null
 }
 
+type SessionTopicMetric = {
+  topic_id?: number | null
+  topic?: string | null
+  subject?: string | null
+  answered?: number | null
+  correct?: number | null
+  accuracy?: number | null
+}
+
+type SessionSubjectMetric = {
+  subject?: string | null
+  answered?: number | null
+  accuracy?: number | null
+}
+
+type TopicPerformance = {
+  key: string
+  topic: string
+  accuracy: number
+}
+
+type SubjectPerformance = {
+  subject: string
+  accuracy: number
+}
+
 type SessionPayload = {
   success?: boolean
   status?: string
@@ -21,6 +47,8 @@ type SessionPayload = {
     final_metrics?: SessionFinalMetrics | null
   } | null
   final_metrics?: SessionFinalMetrics | null
+  topics?: SessionTopicMetric[] | null
+  subjects?: SessionSubjectMetric[] | null
 }
 
 type SummaryClientProps = {
@@ -55,6 +83,8 @@ export default function SummaryClient({ deckId, sessionId }: SummaryClientProps)
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [finalMetrics, setFinalMetrics] = useState<SessionFinalMetrics | null>(null)
+  const [topicPerformance, setTopicPerformance] = useState<TopicPerformance[]>([])
+  const [subjectPerformance, setSubjectPerformance] = useState<SubjectPerformance[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -129,6 +159,34 @@ export default function SummaryClient({ deckId, sessionId }: SummaryClientProps)
 
       if (!cancelled) {
         setFinalMetrics(metrics)
+        const normalizedTopics = (Array.isArray(data.topics) ? data.topics : [])
+          .map((topic, index) => {
+            const label =
+              typeof topic?.topic === 'string' && topic.topic.trim().length > 0
+                ? topic.topic.trim()
+                : 'Sin tema'
+            const topicId = Number(topic?.topic_id)
+            const key = Number.isFinite(topicId)
+              ? `topic-${Math.trunc(topicId)}`
+              : `topic-${index}-${label.toLowerCase()}`
+            const accuracy = Math.max(0, Math.min(100, Math.round(toSafeNumber(topic?.accuracy))))
+            return { key, topic: label, accuracy }
+          })
+          .sort((a, b) => a.accuracy - b.accuracy || a.topic.localeCompare(b.topic))
+
+        const normalizedSubjects = (Array.isArray(data.subjects) ? data.subjects : [])
+          .map((subject) => {
+            const label =
+              typeof subject?.subject === 'string' && subject.subject.trim().length > 0
+                ? subject.subject.trim()
+                : 'Sin asignatura'
+            const accuracy = Math.max(0, Math.min(100, Math.round(toSafeNumber(subject?.accuracy))))
+            return { subject: label, accuracy }
+          })
+          .sort((a, b) => a.subject.localeCompare(b.subject))
+
+        setTopicPerformance(normalizedTopics)
+        setSubjectPerformance(normalizedSubjects)
         setLoading(false)
       }
     }
@@ -210,6 +268,44 @@ export default function SummaryClient({ deckId, sessionId }: SummaryClientProps)
             <p className="text-sm font-medium text-slate-500">end_reason</p>
             <p className="mt-1 text-lg font-semibold capitalize text-slate-900">{endReason}</p>
           </article>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900">Topics performance</h2>
+          {topicPerformance.length > 0 ? (
+            <ul className="mt-4 space-y-3">
+              {topicPerformance.map((topic) => (
+                <li
+                  key={topic.key}
+                  className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"
+                >
+                  <span className="text-sm font-medium text-slate-700">{topic.topic}</span>
+                  <span className="text-sm font-semibold text-slate-900">{topic.accuracy}%</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-slate-600">No topic metrics available yet</p>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900">Subject performance</h2>
+          {subjectPerformance.length > 0 ? (
+            <ul className="mt-4 space-y-3">
+              {subjectPerformance.map((subject) => (
+                <li
+                  key={subject.subject}
+                  className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"
+                >
+                  <span className="text-sm font-medium text-slate-700">{subject.subject}</span>
+                  <span className="text-sm font-semibold text-slate-900">{subject.accuracy}%</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-slate-600">No subject metrics available yet</p>
+          )}
         </section>
       </div>
     </main>

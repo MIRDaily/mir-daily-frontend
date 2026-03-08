@@ -20,6 +20,7 @@ type QuestionOption = {
 type ItemQuestion = {
   statement?: string | null
   correct_answer?: number | string | null
+  explanation?: string | null
   question_options?: QuestionOption[] | null
 }
 
@@ -75,6 +76,36 @@ type DeckSummaryResponse = {
   summary?: Partial<Record<keyof DeckSummary, number | null>> | null
 }
 
+type DeckSubjectsResponse = {
+  subjects?: Array<{
+    subject?: string | null
+    count?: number | null
+  }> | null
+}
+
+type SubjectPerformance = {
+  subject: string
+  accuracy: number
+  total: number
+}
+
+type SubjectPerformanceResponse = {
+  subjects?: SubjectPerformance[] | null
+}
+
+type StudyStatus = 'new' | 'failed' | 'learning' | 'mastered'
+
+type StudyFilters = {
+  subjects: string[]
+  status: StudyStatus | null
+}
+
+type SubjectFilterOption = {
+  value: string
+  label: string
+  count: number
+}
+
 type DeckBootstrapResponse = {
   deck: Deck | null
   items: Item[]
@@ -122,6 +153,16 @@ type NextDeckItemResponse =
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL
 const STUDY_SESSION_STORAGE_KEY_PREFIX = 'studio:deck:study-session:'
+const STUDY_STATUS_OPTIONS: Array<{
+  value: StudyStatus
+  label: string
+  dotClass: string
+}> = [
+  { value: 'new', label: 'Nuevas', dotClass: 'bg-blue-500' },
+  { value: 'failed', label: 'Falladas', dotClass: 'bg-rose-500' },
+  { value: 'learning', label: 'En aprendizaje', dotClass: 'bg-amber-500' },
+  { value: 'mastered', label: 'Dominadas', dotClass: 'bg-emerald-500' },
+]
 const EMPTY_DECK_SUMMARY: DeckSummary = {
   new: 0,
   failed: 0,
@@ -208,6 +249,78 @@ async function getDeckSummary(deckId: string): Promise<DeckSummary> {
   }
 }
 
+async function getDeckSubjects(deckId: string): Promise<DeckSubjectsResponse> {
+  if (!API_URL) throw new Error('NEXT_PUBLIC_API_URL no definida.')
+  if (!deckId) throw new Error('deckId no valido.')
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  const token = session?.access_token ?? ''
+
+  if (!token) {
+    throw new Error('No hay sesion activa.')
+  }
+
+  const res = await fetch(`${API_URL}/api/studio/decks/${deckId}/subjects`, {
+    method: 'GET',
+    cache: 'no-store',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  if (!res.ok) {
+    throw new Error(await readError(res, `No se pudo cargar asignaturas del mazo (${res.status})`))
+  }
+
+  return (await res.json().catch(() => ({}))) as DeckSubjectsResponse
+}
+
+async function getSubjectPerformance(deckId: string): Promise<SubjectPerformance[]> {
+  if (!API_URL) throw new Error('NEXT_PUBLIC_API_URL no definida.')
+  if (!deckId) throw new Error('deckId no valido.')
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  const token = session?.access_token ?? ''
+
+  if (!token) {
+    throw new Error('No hay sesion activa.')
+  }
+
+  const res = await fetch(`${API_URL}/api/studio/decks/${deckId}/subject-performance`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  if (!res.ok) {
+    throw new Error(await readError(res, `No se pudo cargar acierto por asignatura (${res.status})`))
+  }
+
+  const payload = (await res.json().catch(() => null)) as SubjectPerformanceResponse | null
+  const subjects = Array.isArray(payload?.subjects) ? payload.subjects : []
+
+  return subjects
+    .filter((entry) => Boolean(entry?.subject))
+    .map((entry) => ({
+      subject: entry.subject,
+      accuracy:
+        typeof entry.accuracy === 'number' && Number.isFinite(entry.accuracy)
+          ? Math.max(0, Math.min(100, Math.round(entry.accuracy)))
+          : 0,
+      total:
+        typeof entry.total === 'number' && Number.isFinite(entry.total) && entry.total >= 0
+          ? Math.trunc(entry.total)
+          : 0,
+    }))
+}
+
 async function logDeckItemStudy(
   deckId: string,
   payload: LogDeckItemStudyPayload,
@@ -274,7 +387,11 @@ async function startDeckStudySession(
   return (await res.json()) as StartStudySessionResponse
 }
 
-async function getNextDeckItem(deckId: string, sessionId: string): Promise<NextDeckItemResponse> {
+async function getNextDeckItem(
+  deckId: string,
+  sessionId: string,
+  filters?: StudyFilters,
+): Promise<NextDeckItemResponse> {
   if (!API_URL) throw new Error('NEXT_PUBLIC_API_URL no definida.')
   if (!deckId) throw new Error('deckId no valido.')
   if (!sessionId) throw new Error('sessionId no valido.')
@@ -291,6 +408,16 @@ async function getNextDeckItem(deckId: string, sessionId: string): Promise<NextD
 
   const url = new URL(`${API_URL}/api/studio/decks/${deckId}/next`)
   url.searchParams.set('sessionId', sessionId)
+  if (Array.isArray(filters?.subjects) && filters.subjects.length > 0) {
+    filters.subjects.forEach((subject) => {
+      if (subject) {
+        url.searchParams.append('subject', subject)
+      }
+    })
+  }
+  if (filters?.status) {
+    url.searchParams.set('status', filters.status)
+  }
 
   const res = await fetch(url.toString(), {
     method: 'GET',
@@ -423,6 +550,12 @@ export default function StudioDeckDetailPage() {
   const [deckSummary, setDeckSummary] = useState<DeckSummary>(EMPTY_DECK_SUMMARY)
   const [deckSummaryLoading, setDeckSummaryLoading] = useState(true)
   const [deckSummaryError, setDeckSummaryError] = useState<string | null>(null)
+  const [deckSubjects, setDeckSubjects] = useState<{ name: string; percent: number }[]>([])
+  const [subjectFilterOptions, setSubjectFilterOptions] = useState<SubjectFilterOption[]>([])
+  const [subjectFilter, setSubjectFilter] = useState<string[]>([])
+  const [statusFilter, setStatusFilter] = useState<StudyStatus | null>(null)
+  const [studyFilters, setStudyFilters] = useState<StudyFilters>({ subjects: [], status: null })
+  const [subjectPerformance, setSubjectPerformance] = useState<SubjectPerformance[]>([])
   const [studyActionError, setStudyActionError] = useState<string | null>(null)
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [isAnswered, setIsAnswered] = useState(false)
@@ -430,6 +563,14 @@ export default function StudioDeckDetailPage() {
   const [nextQuestionCache, setNextQuestionCache] = useState<Item | null>(null)
   const [nextEndReason, setNextEndReason] = useState<'done' | 'limitReached' | 'expired' | null>(null)
   const [preloadInFlight, setPreloadInFlight] = useState(false)
+  const [isContentVisible, setIsContentVisible] = useState(false)
+  const [isStudyLimitModalOpen, setIsStudyLimitModalOpen] = useState(false)
+  const [isStudyLimitModalVisible, setIsStudyLimitModalVisible] = useState(false)
+  const [studyLimitInput, setStudyLimitInput] = useState('20')
+  const [studyLimitError, setStudyLimitError] = useState<string | null>(null)
+  const studyLimitResolverRef = useRef<((value: number | null) => void) | null>(null)
+  const studyLimitCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const studyLimitPendingValueRef = useRef<number | null>(null)
   const sessionClosedRef = useRef(false)
 
   useEffect(() => {
@@ -447,6 +588,12 @@ export default function StudioDeckDetailPage() {
       setDeckSummary(EMPTY_DECK_SUMMARY)
       setDeckSummaryLoading(true)
       setDeckSummaryError(null)
+      setDeckSubjects([])
+      setSubjectFilterOptions([])
+      setSubjectFilter([])
+      setStatusFilter(null)
+      setStudyFilters({ subjects: [], status: null })
+      setSubjectPerformance([])
       setStudyActionError(null)
       setSelectedOption(null)
       setIsAnswered(false)
@@ -501,7 +648,220 @@ export default function StudioDeckDetailPage() {
     }
   }, [deckId])
 
-  if (loading) return <div>Cargando...</div>
+  useEffect(() => {
+    let mounted = true
+
+    if (!deckId) {
+      setDeckSubjects([])
+      return () => {
+        mounted = false
+      }
+    }
+
+    void getDeckSubjects(deckId)
+      .then((data) => {
+        if (!mounted) return
+
+        const subjects = Array.isArray(data.subjects) ? data.subjects : []
+        const entries = subjects
+          .map((entry) => {
+            const name =
+              typeof entry?.subject === 'string' ? entry.subject.trim() : ''
+            const count = Number(entry?.count)
+            if (!name || !Number.isFinite(count) || count <= 0) return null
+            return {
+              name,
+              count: Math.trunc(count),
+            }
+          })
+          .filter((entry): entry is { name: string; count: number } => entry !== null)
+
+        const options = entries
+          .map((entry) => ({
+            value: entry.name,
+            label: entry.name,
+            count: entry.count,
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label))
+
+        setSubjectFilterOptions(options)
+
+        const total = entries.reduce((acc, entry) => acc + entry.count, 0)
+        if (total <= 0) {
+          setDeckSubjects([])
+          return
+        }
+
+        const topSubjects = entries
+          .map((entry) => ({
+            name: entry.name,
+            percent: Math.round((entry.count / total) * 100),
+          }))
+          .sort((a, b) => b.percent - a.percent)
+          .slice(0, 5)
+
+        setDeckSubjects(topSubjects)
+      })
+      .catch(() => {
+        if (mounted) {
+          setDeckSubjects([])
+          setSubjectFilterOptions([])
+        }
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [deckId, isStudyLimitModalOpen])
+
+  useEffect(() => {
+    let mounted = true
+
+    if (!deckId) {
+      setSubjectPerformance([])
+      return () => {
+        mounted = false
+      }
+    }
+
+    void getSubjectPerformance(deckId)
+      .then((subjects) => {
+        if (!mounted) return
+        setSubjectPerformance(subjects)
+      })
+      .catch(() => {
+        if (mounted) setSubjectPerformance([])
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [deckId])
+
+  useEffect(() => {
+    if (loading) {
+      setIsContentVisible(false)
+      return
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      setIsContentVisible(true)
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+    }
+  }, [loading, deckId])
+
+  useEffect(() => {
+    return () => {
+      if (studyLimitCloseTimeoutRef.current) {
+        clearTimeout(studyLimitCloseTimeoutRef.current)
+        studyLimitCloseTimeoutRef.current = null
+      }
+      const resolver = studyLimitResolverRef.current
+      studyLimitResolverRef.current = null
+      studyLimitPendingValueRef.current = null
+      resolver?.(null)
+    }
+  }, [])
+
+  if (loading)
+    return (
+      <div className="relative flex min-h-[70vh] items-center justify-center overflow-hidden">
+        <div
+          className="absolute h-56 w-56 rounded-full blur-3xl"
+          style={{
+            backgroundColor: '#E8A598',
+            opacity: 0.28,
+            animation: 'studioBlobA 4.4s ease-in-out infinite',
+          }}
+        />
+        <div
+          className="absolute h-40 w-40 rounded-full blur-2xl"
+          style={{
+            backgroundColor: '#E8A598',
+            opacity: 0.2,
+            animation: 'studioBlobB 3.6s ease-in-out infinite',
+          }}
+        />
+
+        <div className="relative flex h-24 w-24 items-center justify-center">
+          <div
+            className="absolute inset-0 rounded-[42%]"
+            style={{
+              border: '3px solid rgba(232,165,152,0.45)',
+              animation: 'studioMorph 2.8s ease-in-out infinite',
+            }}
+          />
+          <div
+            className="absolute inset-[10px] rounded-[46%]"
+            style={{
+              border: '3px solid #E8A598',
+              animation: 'studioMorph 2.8s ease-in-out infinite reverse',
+            }}
+          />
+          <div
+            className="h-3 w-3 rounded-full"
+            style={{
+              backgroundColor: '#E8A598',
+              animation: 'studioPulse 1.7s ease-in-out infinite',
+            }}
+          />
+        </div>
+
+        <p className="sr-only">Cargando mazo</p>
+
+        <style jsx>{`
+          @keyframes studioMorph {
+            0% {
+              transform: rotate(0deg) scale(1);
+              border-radius: 42% 58% 46% 54% / 53% 45% 55% 47%;
+            }
+            50% {
+              transform: rotate(180deg) scale(1.08);
+              border-radius: 57% 43% 62% 38% / 41% 63% 37% 59%;
+            }
+            100% {
+              transform: rotate(360deg) scale(1);
+              border-radius: 42% 58% 46% 54% / 53% 45% 55% 47%;
+            }
+          }
+
+          @keyframes studioBlobA {
+            0%,
+            100% {
+              transform: translate(-14px, -10px) scale(1);
+            }
+            50% {
+              transform: translate(12px, 10px) scale(1.08);
+            }
+          }
+
+          @keyframes studioBlobB {
+            0%,
+            100% {
+              transform: translate(10px, 14px) scale(1);
+            }
+            50% {
+              transform: translate(-10px, -12px) scale(0.92);
+            }
+          }
+
+          @keyframes studioPulse {
+            0%,
+            100% {
+              transform: scale(0.8);
+              opacity: 0.65;
+            }
+            50% {
+              transform: scale(1.25);
+              opacity: 1;
+            }
+          }
+        `}</style>
+      </div>
+    )
 
   if (error) return <div>Error: {error}</div>
 
@@ -554,23 +914,59 @@ export default function StudioDeckDetailPage() {
     }
   }
 
-  const askStudyLimit = (message: string): number | null => {
-    if (typeof window === 'undefined') return null
+  const requestStudyLimit = (): Promise<number | null> =>
+    new Promise((resolve) => {
+      if (studyLimitCloseTimeoutRef.current) {
+        clearTimeout(studyLimitCloseTimeoutRef.current)
+        studyLimitCloseTimeoutRef.current = null
+      }
 
-    const raw = window.prompt(message, '20')
-    if (raw == null) return null
+      studyLimitResolverRef.current = resolve
+      setStudyLimitInput('20')
+      setStudyLimitError(null)
+      setIsStudyLimitModalOpen(true)
+      setIsStudyLimitModalVisible(false)
+      window.requestAnimationFrame(() => {
+        setIsStudyLimitModalVisible(true)
+      })
+    })
 
-    const parsed = Number(raw)
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      setStudyActionError('Ingresa un numero valido mayor a 0.')
-      return null
+  const closeStudyLimitModal = (value: number | null) => {
+    studyLimitPendingValueRef.current = value
+    setIsStudyLimitModalVisible(false)
+
+    if (studyLimitCloseTimeoutRef.current) {
+      clearTimeout(studyLimitCloseTimeoutRef.current)
     }
 
-    return Math.trunc(parsed)
+    studyLimitCloseTimeoutRef.current = setTimeout(() => {
+      studyLimitCloseTimeoutRef.current = null
+      setIsStudyLimitModalOpen(false)
+      setStudyLimitError(null)
+      const resolver = studyLimitResolverRef.current
+      const resolvedValue = studyLimitPendingValueRef.current
+      studyLimitResolverRef.current = null
+      studyLimitPendingValueRef.current = null
+      resolver?.(resolvedValue)
+    }, 260)
   }
 
-  const loadNextStudyItem = async (sessionIdOverride?: string): Promise<void> => {
+  const confirmStudyLimit = () => {
+    const parsed = Number(studyLimitInput)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setStudyLimitError('Ingresa un numero valido mayor a 0.')
+      return
+    }
+
+    closeStudyLimitModal(Math.trunc(parsed))
+  }
+
+  const loadNextStudyItem = async (
+    sessionIdOverride?: string,
+    filtersOverride?: StudyFilters,
+  ): Promise<void> => {
     const activeSessionId = sessionIdOverride ?? studySessionId
+    const activeFilters = filtersOverride ?? studyFilters
 
     if (!activeSessionId) {
       setStudyActionError('No hay una sesion de estudio activa.')
@@ -581,7 +977,7 @@ export default function StudioDeckDetailPage() {
     setStudyLoading(true)
 
     try {
-      const response = await getNextDeckItem(deckId, activeSessionId)
+      const response = await getNextDeckItem(deckId, activeSessionId, activeFilters)
 
       if ('expired' in response && response.expired) {
         await closeStudySessionAndNavigate(activeSessionId)
@@ -611,8 +1007,10 @@ export default function StudioDeckDetailPage() {
   const preloadNextQuestion = async (
     sessionIdOverride?: string,
     ignoreExistingCache = false,
+    filtersOverride?: StudyFilters,
   ): Promise<void> => {
     const activeSessionId = sessionIdOverride ?? studySessionId
+    const activeFilters = filtersOverride ?? studyFilters
 
     if (
       !activeSessionId ||
@@ -625,7 +1023,7 @@ export default function StudioDeckDetailPage() {
 
     setPreloadInFlight(true)
     try {
-      const response = await getNextDeckItem(deckId, activeSessionId)
+      const response = await getNextDeckItem(deckId, activeSessionId, activeFilters)
 
       if ('expired' in response && response.expired) {
         setNextQuestionCache(null)
@@ -659,6 +1057,14 @@ export default function StudioDeckDetailPage() {
   const handleStartStudy = async () => {
     if (studyLoading || studyClosing) return
 
+    const limit = await requestStudyLimit()
+    if (limit == null) return
+    const selectedFilters: StudyFilters = {
+      subjects: [...subjectFilter],
+      status: statusFilter,
+    }
+    setStudyFilters(selectedFilters)
+
     setStudyMode(true)
     setStudyActionError(null)
     setStudyClosing(false)
@@ -672,12 +1078,6 @@ export default function StudioDeckDetailPage() {
     sessionClosedRef.current = false
 
     clearStudySession()
-
-    const limit = askStudyLimit('¿Cuántas tarjetas quieres estudiar?')
-    if (limit == null) {
-      setStudyMode(false)
-      return
-    }
 
     setStudyLoading(true)
     try {
@@ -693,7 +1093,7 @@ export default function StudioDeckDetailPage() {
       sessionClosedRef.current = false
       setStudySessionId(session.sessionId)
       saveStudySessionId(session.sessionId)
-      await loadNextStudyItem(session.sessionId)
+      await loadNextStudyItem(session.sessionId, selectedFilters)
     } catch (err) {
       setStudyActionError(err instanceof Error ? err.message : 'No se pudo iniciar la sesion.')
       setStudyMode(false)
@@ -706,6 +1106,23 @@ export default function StudioDeckDetailPage() {
     const currentOptions = currentItem ? getSortedQuestionOptions(currentItem) : []
     const currentCorrectIndex = currentItem ? getQuestionCorrectIndex(currentItem) : null
     const isStudyBusy = studyLoading || studyClosing || isLoadingNext
+    const isInitialStudyLoading = !studyClosing && studyLoading && !currentItem
+    const activeSubjectLabel =
+      studyFilters.subjects.length === 0
+        ? 'All subjects'
+        : studyFilters.subjects.length === 1
+          ? studyFilters.subjects[0]
+          : `${studyFilters.subjects.length} subjects`
+    const activeStatusLabel =
+      studyFilters.status == null
+        ? 'Todas'
+        : STUDY_STATUS_OPTIONS.find((option) => option.value === studyFilters.status)?.label ??
+          studyFilters.status
+    const activeStatusDotClass =
+      studyFilters.status == null
+        ? 'bg-slate-400'
+        : STUDY_STATUS_OPTIONS.find((option) => option.value === studyFilters.status)?.dotClass ??
+          'bg-slate-400'
 
     const handleSelectOption = (option: QuestionOption, optionIndex: number) => {
       if (!currentItem) return
@@ -819,6 +1236,11 @@ export default function StudioDeckDetailPage() {
     return (
       <div className="p-6">
         <h2 className="mb-4 text-xl font-semibold">Modo estudio</h2>
+        <p className="mb-3 flex items-center gap-2 text-sm text-slate-600">
+          <span>Studying: {activeSubjectLabel} •</span>
+          <span className={`inline-block h-2.5 w-2.5 rounded-full ${activeStatusDotClass}`} />
+          <span>{activeStatusLabel}</span>
+        </p>
 
         <div className="mb-6 rounded-xl bg-white p-6 shadow-sm">
           {studyClosing ? (
@@ -827,7 +1249,6 @@ export default function StudioDeckDetailPage() {
               <p className="text-sm font-medium text-slate-700">Cerrando sesión...</p>
             </div>
           ) : null}
-          {!studyClosing && studyLoading && !currentItem ? <div>Cargando...</div> : null}
           {!studyClosing && currentItem ? (
             <div className={`transition-opacity duration-200 ${isLoadingNext ? 'opacity-0' : 'opacity-100'}`}>
               <div>{currentItem.questions?.statement || currentItem.statement || 'Item'}</div>
@@ -925,6 +1346,101 @@ export default function StudioDeckDetailPage() {
           ) : null}
           {studyActionError ? <p className="mt-4 text-sm text-red-600">{studyActionError}</p> : null}
         </div>
+        {isInitialStudyLoading ? (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-50/75 backdrop-blur-[2px]">
+            <div
+              className="absolute h-52 w-52 rounded-full blur-3xl"
+              style={{
+                backgroundColor: '#E8A598',
+                opacity: 0.26,
+                animation: 'studioBlobA 4.4s ease-in-out infinite',
+              }}
+            />
+            <div
+              className="absolute h-36 w-36 rounded-full blur-2xl"
+              style={{
+                backgroundColor: '#E8A598',
+                opacity: 0.2,
+                animation: 'studioBlobB 3.6s ease-in-out infinite',
+              }}
+            />
+
+            <div className="relative flex h-24 w-24 items-center justify-center">
+              <div
+                className="absolute inset-0 rounded-[42%]"
+                style={{
+                  border: '3px solid rgba(232,165,152,0.45)',
+                  animation: 'studioMorph 2.8s ease-in-out infinite',
+                }}
+              />
+              <div
+                className="absolute inset-[10px] rounded-[46%]"
+                style={{
+                  border: '3px solid #E8A598',
+                  animation: 'studioMorph 2.8s ease-in-out infinite reverse',
+                }}
+              />
+              <div
+                className="h-3 w-3 rounded-full"
+                style={{
+                  backgroundColor: '#E8A598',
+                  animation: 'studioPulse 1.7s ease-in-out infinite',
+                }}
+              />
+            </div>
+
+            <p className="sr-only">Cargando pregunta</p>
+
+            <style jsx>{`
+              @keyframes studioMorph {
+                0% {
+                  transform: rotate(0deg) scale(1);
+                  border-radius: 42% 58% 46% 54% / 53% 45% 55% 47%;
+                }
+                50% {
+                  transform: rotate(180deg) scale(1.08);
+                  border-radius: 57% 43% 62% 38% / 41% 63% 37% 59%;
+                }
+                100% {
+                  transform: rotate(360deg) scale(1);
+                  border-radius: 42% 58% 46% 54% / 53% 45% 55% 47%;
+                }
+              }
+
+              @keyframes studioBlobA {
+                0%,
+                100% {
+                  transform: translate(-14px, -10px) scale(1);
+                }
+                50% {
+                  transform: translate(12px, 10px) scale(1.08);
+                }
+              }
+
+              @keyframes studioBlobB {
+                0%,
+                100% {
+                  transform: translate(10px, 14px) scale(1);
+                }
+                50% {
+                  transform: translate(-10px, -12px) scale(0.92);
+                }
+              }
+
+              @keyframes studioPulse {
+                0%,
+                100% {
+                  transform: scale(0.8);
+                  opacity: 0.65;
+                }
+                50% {
+                  transform: scale(1.25);
+                  opacity: 1;
+                }
+              }
+            `}</style>
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -932,7 +1448,11 @@ export default function StudioDeckDetailPage() {
   const deckTitle = deck.name || deck.title || `Mazo ${deckId}`
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6">
+    <main
+      className={`min-h-screen bg-slate-50 px-4 py-6 sm:px-6 transition-opacity duration-500 ease-out ${
+        isContentVisible ? 'opacity-100' : 'opacity-0'
+      }`}
+    >
       <div className="mx-auto max-w-5xl space-y-6">
         <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -940,18 +1460,32 @@ export default function StudioDeckDetailPage() {
               Workspace de aprendizaje
             </p>
             <h1 className="mt-1 text-2xl font-bold text-slate-900">{deckTitle}</h1>
+            {deckSubjects.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {deckSubjects.map((subject) => (
+                  <span
+                    key={subject.name}
+                    className="rounded-full border bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
+                  >
+                    {subject.name} {subject.percent}%
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              void handleStartStudy()
-            }}
-            disabled={studyLoading}
-            className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-          >
-            Estudiar
-          </button>
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[260px]">
+            <button
+              type="button"
+              onClick={() => {
+                void handleStartStudy()
+              }}
+              disabled={studyLoading}
+              className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Estudiar
+            </button>
+          </div>
         </header>
 
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-4">
@@ -992,6 +1526,30 @@ export default function StudioDeckDetailPage() {
           </div>
         </section>
         {deckSummaryError ? <p className="text-sm text-slate-600">{deckSummaryError}</p> : null}
+        {subjectPerformance.length > 0 ? (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-2 font-semibold text-slate-900">Acierto por asignatura</h3>
+            <div className="space-y-3">
+              {subjectPerformance.map((subject) => (
+                <div
+                  key={subject.subject}
+                  className="grid grid-cols-1 items-center gap-2 text-sm sm:grid-cols-[minmax(0,1fr)_14rem_auto]"
+                >
+                  <span className="truncate text-slate-700">{subject.subject}</span>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className="h-full rounded-full bg-slate-900 transition-all"
+                      style={{ width: `${subject.accuracy}%` }}
+                    />
+                  </div>
+                  <span className="font-medium text-slate-900 sm:w-12 sm:text-right">
+                    {subject.accuracy}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
@@ -1052,6 +1610,186 @@ export default function StudioDeckDetailPage() {
           )}
         </section>
       </div>
+      {isStudyLimitModalOpen ? (
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-[2px] transition-all duration-300 ease-out ${
+            isStudyLimitModalVisible ? 'bg-slate-900/45 opacity-100' : 'bg-slate-900/0 opacity-0'
+          }`}
+        >
+          <div
+            className={`w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-xl transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+              subjectFilterOptions.length > 8 ? 'max-w-2xl' : 'max-w-md'
+            } ${
+              isStudyLimitModalVisible
+                ? 'translate-y-0 scale-100 opacity-100'
+                : 'translate-y-3 scale-[0.97] opacity-0'
+            }`}
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Configurar sesión
+            </p>
+            <h3 className="mt-1 text-lg font-semibold text-slate-900">¿Cuántas tarjetas quieres estudiar?</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Elige el numero de preguntas que quieres ver en esta sesion.
+            </p>
+
+            <div className="mt-4">
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                FILTROS
+              </label>
+              <div className="rounded-xl border border-[#E8A598]/60 bg-[#E8A598]/25 px-3 py-2">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Asignaturas
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubjectFilter([])
+                    }}
+                    className="text-xs font-medium text-slate-500 hover:text-slate-700"
+                  >
+                    Limpiar
+                  </button>
+                </div>
+                <div
+                  className={`space-y-2 transition-[max-height] duration-300 ease-out ${
+                    subjectFilterOptions.length > 8 ? 'max-h-52 overflow-y-auto pr-1' : 'max-h-80'
+                  }`}
+                >
+                  {subjectFilterOptions.length === 0 ? (
+                    <p className="text-sm text-slate-500">No hay asignaturas disponibles.</p>
+                  ) : (
+                    subjectFilterOptions.map((option) => {
+                      const checked = subjectFilter.includes(option.value)
+                      return (
+                        <label
+                          key={option.value}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                        >
+                          <span className="truncate">{option.label}</span>
+                          <span className="flex items-center gap-2">
+                            <span className="text-xs text-slate-500">({option.count})</span>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(event) => {
+                                const enabled = event.target.checked
+                                setSubjectFilter((prev) => {
+                                  if (enabled) {
+                                    if (prev.includes(option.value)) return prev
+                                    return [...prev, option.value]
+                                  }
+                                  return prev.filter((entry) => entry !== option.value)
+                                })
+                              }}
+                              className="h-4 w-4 rounded border-slate-300 text-[#E8A598] focus:ring-[#E8A598]/40"
+                            />
+                          </span>
+                        </label>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <p className="mb-2 text-sm font-medium text-slate-700">
+                  PRIORIDAD
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatusFilter(null)
+                    }}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                      statusFilter == null
+                        ? 'border-[#E8A598] bg-[#FFF4F1] text-[#C4655A]'
+                        : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
+                    }`}
+                  >
+                    Todos
+                  </button>
+                  {STUDY_STATUS_OPTIONS.map((option) => {
+                    const selected = statusFilter === option.value
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setStatusFilter(option.value)
+                        }}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                          selected
+                            ? 'border-[#E8A598] bg-[#FFF4F1] text-[#C4655A]'
+                            : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
+                        }`}
+                      >
+                        <span className={`inline-block h-2.5 w-2.5 rounded-full ${option.dotClass}`} />
+                        <span>{option.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label htmlFor="study-limit-input" className="mb-2 block text-sm font-medium text-slate-700">
+                Número de tarjetas
+              </label>
+              <input
+                id="study-limit-input"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={studyLimitInput}
+                autoFocus
+                onChange={(event) => {
+                  const digitsOnly = event.target.value.replace(/\D+/g, '')
+                  setStudyLimitInput(digitsOnly)
+                  if (studyLimitError) setStudyLimitError(null)
+                }}
+                onFocus={(event) => {
+                  event.currentTarget.select()
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    confirmStudyLimit()
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    closeStudyLimitModal(null)
+                  }
+                }}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-[#E8A598] focus:ring-4 focus:ring-[#E8A598]/25"
+              />
+              {studyLimitError ? <p className="mt-2 text-sm text-rose-600">{studyLimitError}</p> : null}
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  closeStudyLimitModal(null)
+                }}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmStudyLimit}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Empezar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   )
 }
