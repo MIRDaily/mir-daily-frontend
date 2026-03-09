@@ -273,17 +273,20 @@ export default function StudioPage() {
                           <div className="h-2 rounded-full bg-[#8BA888]" style={{ width: `${card.progress}%` }} />
                         </div>
                       </div>
-                      <Link
-                        className="mb-3 flex w-fit items-center gap-1 text-sm font-semibold text-[#E8A598] hover:underline"
-                        href="/studio/mazos"
-                      >
-                        {card.linkOne}
-                        <span className="material-symbols-outlined text-base">play_circle</span>
-                      </Link>
-                      <Link className="flex w-fit items-center gap-1 text-sm font-semibold hover:text-[#E8A598]" href="/studio/mazos">
-                        {card.linkTwo}
-                        <span className="material-symbols-outlined text-base">arrow_forward</span>
-                      </Link>
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <Link
+                          className="flex flex-1 items-center justify-center rounded-xl bg-[#E8A598] px-4 py-3 text-base font-medium text-white shadow-md shadow-[#E8A598]/20 transition-colors hover:bg-[#d18d80]"
+                          href="/studio/mazos"
+                        >
+                          {card.linkOne}
+                        </Link>
+                        <Link
+                          className="flex flex-1 items-center justify-center rounded-xl border border-[#7D8A96]/30 bg-white px-4 py-3 text-base font-medium transition-colors hover:border-[#7D8A96]/50 hover:bg-[#F2EFED]"
+                          href="/studio/mazos"
+                        >
+                          {card.linkTwo}
+                        </Link>
+                      </div>
                     </div>
                   ) : null}
 

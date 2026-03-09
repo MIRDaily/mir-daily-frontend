@@ -2,6 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import DeckTrashList from '@/components/studio/DeckTrashList'
+import DeckItemsList from '@/components/studio/DeckItemsList'
+import UndoDeleteToast from '@/components/studio/UndoDeleteToast'
+import {
+  fetchDeckItemsTrash,
+  restoreDeckItem,
+  softDeleteDeckItem,
+  type DeckTrashItem,
+} from '@/lib/studio/trash'
 import { supabase } from '@/lib/supabaseBrowser'
 
 type Deck = {
@@ -47,6 +56,13 @@ type Item = {
   statement?: string | null
   questions?: ItemQuestion | null
   progress?: ItemProgress | null
+}
+
+type UndoDeckItem = {
+  key: string
+  item: Item
+  itemIndex: number
+  deckItemId: number
 }
 
 type LogDeckItemStudyQuestionPayload = {
@@ -582,6 +598,23 @@ export default function StudioDeckDetailPage() {
     mode: 'normal',
   })
   const [subjectPerformance, setSubjectPerformance] = useState<SubjectPerformance[]>([])
+  const [activeDeckTab, setActiveDeckTab] = useState<'items' | 'trash'>('items')
+  const [trashCount, setTrashCount] = useState(0)
+  const [trashCountLoading, setTrashCountLoading] = useState(true)
+  const [trashItems, setTrashItems] = useState<DeckTrashItem[]>([])
+  const [trashItemsLoading, setTrashItemsLoading] = useState(false)
+  const [trashItemsError, setTrashItemsError] = useState<string | null>(null)
+  const [restoringTrashItemIds, setRestoringTrashItemIds] = useState<Set<string>>(new Set())
+  const [deletingItemIds, setDeletingItemIds] = useState<Set<string>>(new Set())
+  const [undoItem, setUndoItem] = useState<UndoDeckItem | null>(null)
+  const [undoBusy, setUndoBusy] = useState(false)
+  const [undoToast, setUndoToast] = useState<{
+    message: string
+    tone: 'neutral' | 'success' | 'error'
+    showAction: boolean
+    isVisible: boolean
+  } | null>(null)
+  const [deckItemsActionError, setDeckItemsActionError] = useState<string | null>(null)
   const [studyActionError, setStudyActionError] = useState<string | null>(null)
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [isAnswered, setIsAnswered] = useState(false)
@@ -598,6 +631,141 @@ export default function StudioDeckDetailPage() {
   const studyLimitCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const studyLimitPendingValueRef = useRef<number | null>(null)
   const sessionClosedRef = useRef(false)
+  const undoExpireTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const undoToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const undoToastExitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const undoToastReplaceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const undoToastAnimationFrameRef = useRef<number | null>(null)
+  const pendingDeleteRequestsRef = useRef<Map<string, Promise<void>>>(new Map())
+  const TOAST_EXIT_ANIMATION_MS = 220
+
+  const clearUndoExpireTimeout = () => {
+    if (!undoExpireTimeoutRef.current) return
+    clearTimeout(undoExpireTimeoutRef.current)
+    undoExpireTimeoutRef.current = null
+  }
+
+  const clearUndoToastTimeout = () => {
+    if (!undoToastTimeoutRef.current) return
+    clearTimeout(undoToastTimeoutRef.current)
+    undoToastTimeoutRef.current = null
+  }
+
+  const clearUndoToastExitTimeout = () => {
+    if (!undoToastExitTimeoutRef.current) return
+    clearTimeout(undoToastExitTimeoutRef.current)
+    undoToastExitTimeoutRef.current = null
+  }
+
+  const clearUndoToastReplaceTimeout = () => {
+    if (!undoToastReplaceTimeoutRef.current) return
+    clearTimeout(undoToastReplaceTimeoutRef.current)
+    undoToastReplaceTimeoutRef.current = null
+  }
+
+  const clearUndoToastAnimationFrame = () => {
+    if (undoToastAnimationFrameRef.current == null) return
+    window.cancelAnimationFrame(undoToastAnimationFrameRef.current)
+    undoToastAnimationFrameRef.current = null
+  }
+
+  const showUndoToast = ({
+    message,
+    tone,
+    showAction,
+  }: {
+    message: string
+    tone: 'neutral' | 'success' | 'error'
+    showAction: boolean
+  }) => {
+    clearUndoToastAnimationFrame()
+    clearUndoToastExitTimeout()
+    setUndoToast({
+      message,
+      tone,
+      showAction,
+      isVisible: false,
+    })
+    undoToastAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      undoToastAnimationFrameRef.current = null
+      setUndoToast((prev) => {
+        if (!prev || prev.message !== message || prev.tone !== tone || prev.showAction !== showAction) {
+          return prev
+        }
+        return {
+          ...prev,
+          isVisible: true,
+        }
+      })
+    })
+  }
+
+  const hideUndoToast = () => {
+    setUndoToast((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        isVisible: false,
+      }
+    })
+
+    clearUndoToastExitTimeout()
+    undoToastExitTimeoutRef.current = setTimeout(() => {
+      undoToastExitTimeoutRef.current = null
+      setUndoToast(null)
+    }, TOAST_EXIT_ANIMATION_MS)
+  }
+
+  const showTimedDeckToast = (message: string, tone: 'neutral' | 'success' | 'error') => {
+    const mountToastAndAutoHide = () => {
+      showUndoToast({ message, tone, showAction: false })
+      clearUndoToastTimeout()
+      undoToastTimeoutRef.current = setTimeout(() => {
+        undoToastTimeoutRef.current = null
+        hideUndoToast()
+      }, 2500)
+    }
+
+    clearUndoToastReplaceTimeout()
+    if (undoToast) {
+      clearUndoToastExitTimeout()
+      setUndoToast((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          isVisible: false,
+        }
+      })
+      undoToastReplaceTimeoutRef.current = setTimeout(() => {
+        undoToastReplaceTimeoutRef.current = null
+        mountToastAndAutoHide()
+      }, TOAST_EXIT_ANIMATION_MS)
+      return
+    }
+
+    mountToastAndAutoHide()
+  }
+
+  const loadDeckTrashItems = async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true
+    if (!silent) setTrashItemsLoading(true)
+    setTrashItemsError(null)
+
+    try {
+      const trash = await fetchDeckItemsTrash(deckId)
+      setTrashItems(trash)
+      setTrashCount(trash.length)
+    } catch (err) {
+      setTrashItems([])
+      setTrashCount(0)
+      setTrashItemsError(
+        err instanceof Error ? err.message : 'No se pudo cargar la papelera de preguntas.',
+      )
+    } finally {
+      if (!silent) setTrashItemsLoading(false)
+      setTrashCountLoading(false)
+    }
+  }
 
   useEffect(() => {
     let mounted = true
@@ -621,6 +789,18 @@ export default function StudioDeckDetailPage() {
       setStudyRequestMode('normal')
       setStudyFilters({ subjects: [], status: null, mode: 'normal' })
       setSubjectPerformance([])
+      setActiveDeckTab('items')
+      setTrashCount(0)
+      setTrashCountLoading(true)
+      setTrashItems([])
+      setTrashItemsLoading(false)
+      setTrashItemsError(null)
+      setRestoringTrashItemIds(new Set())
+      setDeletingItemIds(new Set())
+      setUndoItem(null)
+      setUndoBusy(false)
+      setUndoToast(null)
+      setDeckItemsActionError(null)
       setStudyActionError(null)
       setSelectedOption(null)
       setIsAnswered(false)
@@ -628,6 +808,12 @@ export default function StudioDeckDetailPage() {
       setNextQuestionCache(null)
       setPreloadInFlight(false)
       sessionClosedRef.current = false
+      clearUndoExpireTimeout()
+      clearUndoToastTimeout()
+      clearUndoToastExitTimeout()
+      clearUndoToastReplaceTimeout()
+      clearUndoToastAnimationFrame()
+      pendingDeleteRequestsRef.current.clear()
 
       try {
         if (!deckId) {
@@ -766,6 +952,41 @@ export default function StudioDeckDetailPage() {
   }, [deckId])
 
   useEffect(() => {
+    let mounted = true
+
+    if (!deckId) {
+      setTrashCount(0)
+      setTrashCountLoading(false)
+      return () => {
+        mounted = false
+      }
+    }
+
+    setTrashCountLoading(true)
+    void fetchDeckItemsTrash(deckId)
+      .then((trash) => {
+        if (!mounted) return
+        setTrashCount(trash.length)
+      })
+      .catch(() => {
+        if (!mounted) return
+        setTrashCount(0)
+      })
+      .finally(() => {
+        if (mounted) setTrashCountLoading(false)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [deckId])
+
+  useEffect(() => {
+    if (activeDeckTab !== 'trash' || !deckId) return
+    void loadDeckTrashItems()
+  }, [activeDeckTab, deckId])
+
+  useEffect(() => {
     if (loading) {
       setIsContentVisible(false)
       return
@@ -786,6 +1007,12 @@ export default function StudioDeckDetailPage() {
         clearTimeout(studyLimitCloseTimeoutRef.current)
         studyLimitCloseTimeoutRef.current = null
       }
+      clearUndoExpireTimeout()
+      clearUndoToastTimeout()
+      clearUndoToastExitTimeout()
+      clearUndoToastReplaceTimeout()
+      clearUndoToastAnimationFrame()
+      pendingDeleteRequestsRef.current.clear()
       const resolver = studyLimitResolverRef.current
       studyLimitResolverRef.current = null
       studyLimitPendingValueRef.current = null
@@ -1153,6 +1380,154 @@ export default function StudioDeckDetailPage() {
       setStudyLoading(false)
     }
   }
+
+  const handleDeleteDeckItem = async (entryId: string) => {
+    if (studyLoading || studyClosing) return
+    if (undoBusy) return
+
+    const itemIndex = items.findIndex((item) => String(item.id) === entryId)
+    if (itemIndex < 0) return
+    const item = items[itemIndex]
+
+    const shouldDelete = window.confirm(
+      '¿Eliminar esta pregunta del mazo?\n\nPodrás restaurarla durante 24 horas.',
+    )
+    if (!shouldDelete) return
+
+    const deckItemId = resolveDeckItemId(item)
+    if (deckItemId == null) {
+      setDeckItemsActionError('No se pudo identificar el item del mazo.')
+      return
+    }
+
+    const itemKey = String(item.id)
+    clearUndoExpireTimeout()
+    clearUndoToastTimeout()
+    clearUndoToastExitTimeout()
+    clearUndoToastReplaceTimeout()
+    clearUndoToastAnimationFrame()
+    setDeckItemsActionError(null)
+    setUndoItem({
+      key: itemKey,
+      item,
+      itemIndex,
+      deckItemId,
+    })
+    showUndoToast({ message: 'Pregunta eliminada del mazo', tone: 'neutral', showAction: true })
+    undoExpireTimeoutRef.current = setTimeout(() => {
+      undoExpireTimeoutRef.current = null
+      setUndoItem(null)
+      hideUndoToast()
+    }, 6000)
+    setDeletingItemIds((prev) => {
+      const next = new Set(prev)
+      next.add(itemKey)
+      return next
+    })
+    setItems((prev) => prev.filter((entry) => String(entry.id) !== itemKey))
+    setTrashCount((prev) => prev + 1)
+
+    const deletePromise = softDeleteDeckItem(deckId, deckItemId)
+    pendingDeleteRequestsRef.current.set(itemKey, deletePromise)
+
+    try {
+      await deletePromise
+    } catch (err) {
+      clearUndoExpireTimeout()
+      setItems((prev) => {
+        if (prev.some((entry) => String(entry.id) === itemKey)) return prev
+        const next = [...prev]
+        const insertIndex = Math.max(0, Math.min(itemIndex, next.length))
+        next.splice(insertIndex, 0, item)
+        return next
+      })
+      setTrashCount((prev) => Math.max(0, prev - 1))
+      setUndoItem((prev) => (prev?.key === itemKey ? null : prev))
+      hideUndoToast()
+      setDeckItemsActionError(
+        err instanceof Error ? err.message : 'No se pudo eliminar la pregunta del mazo.',
+      )
+    } finally {
+      pendingDeleteRequestsRef.current.delete(itemKey)
+      setDeletingItemIds((prev) => {
+        const next = new Set(prev)
+        next.delete(itemKey)
+        return next
+      })
+    }
+  }
+
+  const handleUndoDelete = async () => {
+    if (!undoItem || undoBusy) return
+
+    const currentUndoItem = undoItem
+    clearUndoExpireTimeout()
+    setUndoBusy(true)
+    setDeckItemsActionError(null)
+
+    try {
+      const pendingDelete = pendingDeleteRequestsRef.current.get(currentUndoItem.key)
+      if (pendingDelete) {
+        await pendingDelete
+      }
+
+      await restoreDeckItem(deckId, currentUndoItem.deckItemId)
+      setItems((prev) => {
+        if (prev.some((entry) => String(entry.id) === currentUndoItem.key)) return prev
+        const next = [...prev]
+        const insertIndex = Math.max(0, Math.min(currentUndoItem.itemIndex, next.length))
+        next.splice(insertIndex, 0, currentUndoItem.item)
+        return next
+      })
+      setTrashCount((prev) => Math.max(0, prev - 1))
+      setUndoItem(null)
+      showTimedDeckToast('Pregunta restaurada', 'success')
+    } catch (err) {
+      setUndoItem(null)
+      showTimedDeckToast(
+        err instanceof Error ? err.message : 'No se pudo restaurar la pregunta.',
+        'error',
+      )
+    } finally {
+      clearUndoExpireTimeout()
+      setUndoBusy(false)
+    }
+  }
+
+  const handleRestoreTrashItem = async (itemId: number) => {
+    const key = String(itemId)
+    if (restoringTrashItemIds.has(key)) return
+
+    setTrashItemsError(null)
+    setRestoringTrashItemIds((prev) => {
+      const next = new Set(prev)
+      next.add(key)
+      return next
+    })
+
+    try {
+      await restoreDeckItem(deckId, itemId)
+      setTrashItems((prev) => prev.filter((item) => Number(item.id) !== itemId))
+      setTrashCount((prev) => Math.max(0, prev - 1))
+      showTimedDeckToast('Pregunta restaurada', 'success')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo restaurar la pregunta.'
+      setTrashItemsError(message)
+      showTimedDeckToast(message, 'error')
+    } finally {
+      setRestoringTrashItemIds((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+    }
+  }
+
+  const handleExpireTrashItem = (itemId: string) => {
+    setTrashItems((prev) => prev.filter((item) => String(item.id) !== itemId))
+    setTrashCount((prev) => Math.max(0, prev - 1))
+  }
+
   if (studyMode) {
     const currentItem = studyItem
     const currentOptions = currentItem ? getSortedQuestionOptions(currentItem) : []
@@ -1476,6 +1851,28 @@ export default function StudioDeckDetailPage() {
   }
 
   const deckTitle = deck.name || deck.title || `Mazo ${deckId}`
+  const deckItemEntries = items.map((item, index) => {
+    const itemOptions = getSortedQuestionOptions(item)
+    const itemCorrectIndex = getQuestionCorrectIndex(item)
+
+    return {
+      id: String(item.id),
+      index,
+      statement: item.questions?.statement?.trim() || item.statement?.trim() || `Item ${index + 1}`,
+      options: itemOptions.map((option, optionIndex) => {
+        const optionValue =
+          typeof option.option_index === 'number' ? option.option_index : optionIndex + 1
+        const isCorrect = itemCorrectIndex != null && optionValue === itemCorrectIndex
+        return {
+          key: String(option.id ?? `${String(item.id)}-${option.option_index ?? optionIndex}`),
+          letter: getOptionLetter(option, optionIndex),
+          text: option.option_text?.trim() ?? '',
+          isCorrect,
+        }
+      }),
+      deleting: deletingItemIds.has(String(item.id)),
+    }
+  })
 
   return (
     <main
@@ -1504,14 +1901,40 @@ export default function StudioDeckDetailPage() {
             ) : null}
           </div>
 
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[260px]">
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[340px] sm:flex-row sm:items-center sm:justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveDeckTab('trash')
+              }}
+              aria-label="Papelera de preguntas"
+              title="Papelera"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50"
+            >
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-4 w-4"
+              >
+                <path d="M3 6h18" />
+                <path d="M8 6V4h8v2" />
+                <path d="M19 6l-1 14H6L5 6" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+              </svg>
+            </button>
             <button
               type="button"
               onClick={() => {
                 void handleStartStudy()
               }}
               disabled={studyLoading}
-              className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-w-[132px] items-center justify-center rounded-xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Estudiar
             </button>
@@ -1519,7 +1942,7 @@ export default function StudioDeckDetailPage() {
         </header>
 
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Nuevas
             </p>
@@ -1528,7 +1951,7 @@ export default function StudioDeckDetailPage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Falladas
             </p>
@@ -1537,7 +1960,7 @@ export default function StudioDeckDetailPage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               En aprendizaje
             </p>
@@ -1546,7 +1969,7 @@ export default function StudioDeckDetailPage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Dominadas
             </p>
@@ -1582,64 +2005,67 @@ export default function StudioDeckDetailPage() {
         ) : null}
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">Preguntas</h2>
-            <span className="text-sm text-slate-500">{items.length} items</span>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+              {activeDeckTab === 'items' ? 'PREGUNTAS' : 'PAPELERA'}
+            </p>
+            <span className="text-sm text-slate-500">
+              {activeDeckTab === 'items'
+                ? `${items.length} items`
+                : `${trashCountLoading ? '--' : trashCount} en papelera`}
+            </span>
           </div>
-
-          {items.length === 0 ? (
-            <p className="text-sm text-slate-600">Este mazo no tiene items.</p>
+          {deckItemsActionError ? (
+            <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {deckItemsActionError}
+            </p>
+          ) : null}
+          {activeDeckTab === 'items' ? (
+            <DeckItemsList
+              entries={deckItemEntries}
+              onDelete={(entryId) => {
+                void handleDeleteDeckItem(entryId)
+              }}
+            />
           ) : (
-            <ul className="space-y-3">
-              {items.map((item, index) => {
-                const itemOptions = getSortedQuestionOptions(item)
-                const itemCorrectIndex = getQuestionCorrectIndex(item)
-
-                return (
-                  <li key={String(item.id)} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Pregunta {index + 1}
-                    </p>
-                    <p className="mt-2 text-sm text-slate-800">
-                      {item.questions?.statement?.trim() ||
-                        item.statement?.trim() ||
-                        `Item ${index + 1}`}
-                    </p>
-                    {itemOptions.length > 0 ? (
-                      <div className="mt-3 space-y-2">
-                        {itemOptions.map((option, optionIndex) => {
-                          const optionValue =
-                            typeof option.option_index === 'number'
-                              ? option.option_index
-                              : optionIndex + 1
-                          const isCorrect = itemCorrectIndex != null && optionValue === itemCorrectIndex
-
-                          return (
-                            <div
-                              key={String(option.id ?? `${String(item.id)}-${option.option_index ?? optionIndex}`)}
-                              className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
-                            >
-                              <span className="text-xs font-semibold text-slate-500">
-                                {getOptionLetter(option, optionIndex)}
-                              </span>
-                              <span className="text-sm text-slate-700">{option.option_text}</span>
-                              {isCorrect ? (
-                                <span className="ml-auto text-xs font-semibold text-emerald-700">
-                                  Correcta
-                                </span>
-                              ) : null}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    ) : null}
-                  </li>
-                )
-              })}
-            </ul>
+            <>
+              {trashItemsError ? (
+                <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {trashItemsError}
+                </p>
+              ) : null}
+              {trashItemsLoading ? (
+                <p className="text-sm text-slate-600">Cargando papelera...</p>
+              ) : (
+                <DeckTrashList
+                  items={trashItems}
+                  restoringItemIds={restoringTrashItemIds}
+                  onRestore={(itemId) => {
+                    void handleRestoreTrashItem(itemId)
+                  }}
+                  onExpire={handleExpireTrashItem}
+                />
+              )}
+            </>
           )}
         </section>
       </div>
+      {undoToast ? (
+        <UndoDeleteToast
+          message={undoToast.message}
+          isVisible={undoToast.isVisible}
+          tone={undoToast.tone}
+          actionLabel={undoToast.showAction && undoItem ? 'Deshacer' : undefined}
+          actionDisabled={undoBusy}
+          onAction={
+            undoToast.showAction && undoItem
+              ? () => {
+                  void handleUndoDelete()
+                }
+              : undefined
+          }
+        />
+      ) : null}
       {isStudyLimitModalOpen ? (
         <div
           className={`fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-[2px] transition-all duration-300 ease-out ${
