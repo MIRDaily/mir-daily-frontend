@@ -93,8 +93,8 @@ const studioCards: ReadonlyArray<StudioCard> = [
     description: 'Repaso espaciado activo para retener conceptos a largo plazo.',
     progress: 65,
     meta: 'META DIARIA (13/20)',
-    linkOne: 'Continuar repaso',
-    linkTwo: 'Ir a mis mazos',
+    linkOne: 'Ir a mis mazos',
+    linkTwo: 'Continuar repaso',
     type: 'progress',
   },
   {

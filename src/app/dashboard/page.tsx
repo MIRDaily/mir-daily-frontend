@@ -2217,10 +2217,11 @@ export default function DashboardPage() {
       return
     }
     openStartRef.current = performance.now()
+    const progressDurationMs = Math.max(240, openDurationMs * 0.72)
     const tick = (now: number) => {
       const start = openStartRef.current ?? now
       const elapsed = now - start
-      const next = Math.min(1, elapsed / openDurationMs)
+      const next = Math.min(1, elapsed / progressDurationMs)
       setOpenProgress(next)
       if (next < 1) {
         openRafRef.current = requestAnimationFrame(tick)
@@ -2309,7 +2310,7 @@ export default function DashboardPage() {
 
   return (
     <div className="text-[#2D3748] antialiased bg-[#FAF7F4] min-h-screen flex flex-col hub-enter">
-      <main className="relative z-0 flex-grow flex flex-col items-center justify-start pt-8 pb-20 px-4 overflow-x-hidden">
+      <main className="relative flex-grow flex flex-col items-center justify-start pt-8 pb-20 px-4 overflow-x-hidden">
         <div
           className={`fixed inset-0 z-20 bg-[#FAF7F4]/80 backdrop-blur-xl transition-opacity duration-700 ${
             isEnvelopeOpening ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -2327,7 +2328,9 @@ export default function DashboardPage() {
 
         <div
           ref={deckSectionRef}
-          className="relative z-30 w-full max-w-5xl flex flex-col items-center justify-center mb-10 hub-anim hub-anim-delay-3"
+          className={`relative w-full max-w-5xl flex flex-col items-center justify-center mb-10 hub-anim hub-anim-delay-3 ${
+            isEnvelopeOpening || showSubjectBurst ? 'z-[70]' : 'z-30'
+          }`}
         >
           <div className="absolute -top-36 -left-80 md:-left-[30rem] w-[520px] md:w-[700px] h-[520px] md:h-[700px] rounded-[88px] bg-gradient-to-br from-[#E8A598]/70 via-[#F08D75]/40 to-[#F8C7A6]/20 hub-blob pointer-events-none -z-10"></div>
           <div className="absolute -bottom-44 -right-80 md:-right-[32rem] w-[560px] md:w-[740px] h-[560px] md:h-[740px] rounded-[96px] bg-gradient-to-tr from-[#F6D87A]/60 via-[#F9E3A2]/40 to-[#FFF1C9]/20 hub-blob-alt pointer-events-none -z-10"></div>
@@ -2384,7 +2387,9 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={deck.id}
-                    className={`${baseClasses} ${positionClasses} ${roleClasses} w-72 md:w-80 aspect-[3/4] flex flex-col mx-auto cursor-pointer deck-idle`}
+                    className={`${baseClasses} ${positionClasses} ${roleClasses} w-72 md:w-80 aspect-[3/4] flex flex-col mx-auto cursor-pointer deck-idle transition-[filter,opacity,transform] duration-500 ${
+                      isEnvelopeOpening || showSubjectBurst ? 'blur-[4px] opacity-70 scale-[0.985]' : ''
+                    }`}
                     style={
                       {
                         '--deck-delay': `${(deckIndex * 0.25).toFixed(2)}s`,
@@ -2476,7 +2481,7 @@ export default function DashboardPage() {
             })}
 
             {showSubjectBurst && (
-              <div className="pointer-events-none absolute inset-0 z-50">
+              <div className="pointer-events-none absolute inset-0 z-[80]">
                 {burstSubjects.map((subject, index) => {
                   const total = burstSubjects.length || 1
                   const topRowCount = Math.ceil(total / 2)
@@ -2587,12 +2592,144 @@ export default function DashboardPage() {
               </button>
             </div>
             {isEnvelopeOpening && (
-              <div className="w-full max-w-md h-1 rounded-full bg-[#F0EBE8] overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-[#E8A598] via-[#F08D75] to-[#F6D87A] transition-[width] duration-150"
-                  style={{ width: `${Math.round(openProgress * 100)}%` }}
-                ></div>
-              </div>
+              <>
+                <div className="daily-open-progress w-full max-w-md">
+                  <div className="daily-open-progress__track">
+                    <div
+                      className="daily-open-progress__fill"
+                      style={{ width: `${Math.round(openProgress * 100)}%` }}
+                    >
+                      <div className="daily-open-progress__motion">
+                        <div className="daily-open-progress__aurora" />
+                        <div className="daily-open-progress__texture" />
+                        <div className="daily-open-progress__spark" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <style jsx>{`
+                  .daily-open-progress {
+                    filter: drop-shadow(0 18px 24px rgba(232, 165, 152, 0.22));
+                  }
+
+                  .daily-open-progress__track {
+                    position: relative;
+                    height: 18px;
+                    overflow: hidden;
+                    border-radius: 999px;
+                    background:
+                      linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.22)),
+                      #e9e1dc;
+                    box-shadow:
+                      inset 0 1px 0 rgba(255, 255, 255, 0.8),
+                      inset 0 -2px 6px rgba(136, 110, 101, 0.12);
+                  }
+
+                  .daily-open-progress__fill {
+                    position: relative;
+                    height: 100%;
+                    overflow: hidden;
+                    border-radius: inherit;
+                    background: linear-gradient(90deg, #e8a598 0%, #f08d75 42%, #f6d87a 100%);
+                    box-shadow:
+                      inset 0 1px 0 rgba(255, 255, 255, 0.38),
+                      0 0 24px rgba(240, 141, 117, 0.28);
+                  }
+
+                  .daily-open-progress__motion {
+                    position: absolute;
+                    inset: 0;
+                    transform-origin: left center;
+                    animation: dailyProgressBounce 960ms cubic-bezier(0.28, 1.25, 0.58, 1) infinite;
+                  }
+
+                  .daily-open-progress__aurora {
+                    position: absolute;
+                    inset: -35% -10%;
+                    background:
+                      radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.46), transparent 24%),
+                      radial-gradient(circle at 55% 35%, rgba(255, 227, 168, 0.55), transparent 26%),
+                      radial-gradient(circle at 82% 52%, rgba(255, 209, 197, 0.48), transparent 22%);
+                    mix-blend-mode: screen;
+                    opacity: 0.95;
+                    animation: dailyProgressAurora 1.9s ease-in-out infinite alternate;
+                  }
+
+                  .daily-open-progress__texture {
+                    position: absolute;
+                    inset: 0;
+                    background:
+                      repeating-linear-gradient(
+                        115deg,
+                        rgba(255, 255, 255, 0.22) 0 10px,
+                        rgba(255, 255, 255, 0.04) 10px 20px,
+                        rgba(196, 91, 75, 0.08) 20px 30px
+                      );
+                    background-size: 180px 100%;
+                    opacity: 0.7;
+                    animation: dailyProgressTexture 1.15s linear infinite;
+                  }
+
+                  .daily-open-progress__spark {
+                    position: absolute;
+                    top: 50%;
+                    right: 10px;
+                    width: 34px;
+                    height: 34px;
+                    border-radius: 999px;
+                    background: radial-gradient(circle, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0));
+                    transform: translateY(-50%);
+                    filter: blur(3px);
+                    opacity: 0.9;
+                    animation: dailyProgressSpark 700ms ease-in-out infinite alternate;
+                  }
+
+                  @keyframes dailyProgressBounce {
+                    0%,
+                    100% {
+                      transform: scaleY(1) translateY(0);
+                    }
+                    30% {
+                      transform: scaleY(1.14) translateY(-0.5px);
+                    }
+                    58% {
+                      transform: scaleY(0.96) translateY(0.5px);
+                    }
+                    78% {
+                      transform: scaleY(1.04) translateY(0);
+                    }
+                  }
+
+                  @keyframes dailyProgressTexture {
+                    from {
+                      background-position: 0 0;
+                    }
+                    to {
+                      background-position: 180px 0;
+                    }
+                  }
+
+                  @keyframes dailyProgressAurora {
+                    0% {
+                      transform: translateX(-4%) scale(1);
+                    }
+                    100% {
+                      transform: translateX(5%) scale(1.08);
+                    }
+                  }
+
+                  @keyframes dailyProgressSpark {
+                    0% {
+                      transform: translateY(-50%) scale(0.82);
+                      opacity: 0.62;
+                    }
+                    100% {
+                      transform: translateY(-50%) scale(1.15);
+                      opacity: 0.98;
+                    }
+                  }
+                `}</style>
+              </>
             )}
           </div>
 

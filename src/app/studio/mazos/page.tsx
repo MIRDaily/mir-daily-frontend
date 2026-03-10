@@ -216,7 +216,7 @@ function DeckCard({
         window.cancelAnimationFrame(shimmerFrameRef.current)
         shimmerFrameRef.current = null
       }
-    }
+      }
   }, [])
 
   const triggerDirectionalShimmer = (direction: ShimmerDirection) => {
@@ -561,11 +561,13 @@ export default function StudioDecksPage() {
   }, [loadDecks])
 
   useEffect(() => {
+    const pendingDeleteRequests = pendingDeleteRequestsRef.current
+
     return () => {
       clearUndoExpireTimeout()
       clearUndoToastTimeout()
       clearUndoToastAnimationFrame()
-      pendingDeleteRequestsRef.current.clear()
+      pendingDeleteRequests.clear()
     }
   }, [])
 
