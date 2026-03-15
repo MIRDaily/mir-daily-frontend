@@ -354,7 +354,7 @@ function DeckCard({
           onOpen()
         }
       }}
-      className={`deck-card group relative aspect-[900/336] overflow-visible p-0 hover:z-40 focus-within:z-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598] [transform-style:preserve-3d] ${theme.cardClass}`}
+      className={`deck-card group relative aspect-[900/336] min-h-[210px] overflow-visible p-0 hover:z-40 focus-within:z-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598] sm:min-h-[230px] [transform-style:preserve-3d] ${theme.cardClass}`}
     >
       <span
         aria-hidden
@@ -384,9 +384,9 @@ function DeckCard({
         aria-hidden
         className={`pointer-events-none absolute inset-0 z-[2] ${glowBandShapeClass} ${glowAnimationClass}`}
       />
-      <div className="absolute left-[3.1%] right-[3.1%] top-[11%] bottom-[8.3%] z-10 flex flex-col px-5 py-3">
+      <div className="absolute left-[3.1%] right-[3.1%] top-[11%] bottom-[8.3%] z-10 flex flex-col px-4 py-3 sm:px-5">
         <div className="flex items-center justify-between gap-2">
-          <p className={`text-sm font-semibold uppercase tracking-wide ${theme.subjectClass}`}>{subject}</p>
+          <p className={`text-xs font-semibold uppercase tracking-wide sm:text-sm ${theme.subjectClass}`}>{subject}</p>
           <div className="flex items-center gap-2">
             <span className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${theme.badgeClass}`}>
               {totalItems} cards
@@ -423,13 +423,13 @@ function DeckCard({
         </div>
 
         <div className="mt-2 flex items-start justify-between gap-3">
-          <h3 className="min-w-0 flex-1 truncate pt-1 text-[clamp(1.45rem,1.85vw,2.1rem)] font-semibold leading-[1.25] text-slate-800">
+          <h3 className="min-w-0 flex-1 truncate pt-1 text-[clamp(1.25rem,1.5vw,1.9rem)] font-semibold leading-[1.2] text-slate-800">
             {deck.name || `Mazo ${deck.id}`}
           </h3>
         </div>
 
-        <div className="mt-7">
-          <div className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-500">
+        <div className="mt-5">
+          <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 sm:text-sm">
             <span>Dominio</span>
             {hasUnknownMastery ? (
               <div className="group/mastery relative">
