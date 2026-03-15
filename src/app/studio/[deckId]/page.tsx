@@ -1881,7 +1881,29 @@ export default function StudioDeckDetailPage() {
       }`}
     >
       <div className="mx-auto max-w-5xl space-y-6">
-        <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => router.push('/studio/mazos')}
+            aria-label="Volver a mazos"
+            title="Volver a mazos"
+            className="absolute -left-32 top-2 inline-flex h-9 min-w-[52px] items-center justify-center rounded-lg bg-[#E8A598] text-white transition hover:bg-[#D98C7D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598]/60"
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-3.5 w-3.5"
+            >
+              <path d="M19 12H5" />
+              <path d="M11 18l-6-6 6-6" />
+            </svg>
+          </button>
+          <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Workspace de aprendizaje
@@ -1939,7 +1961,8 @@ export default function StudioDeckDetailPage() {
               Estudiar
             </button>
           </div>
-        </header>
+          </header>
+        </div>
 
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">

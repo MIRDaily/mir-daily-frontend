@@ -518,6 +518,18 @@ export default function DashboardPage() {
     score: number
     totalTime: number
   } | null>(null)
+
+  useEffect(() => {
+    // Prevent occasional restored scroll offsets from hiding the hero title under the sticky header.
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    const settleId = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    })
+
+    return () => {
+      window.cancelAnimationFrame(settleId)
+    }
+  }, [])
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0)
   const [animatedPercentile, setAnimatedPercentile] = useState(0)
   const [percentileOpenKey, setPercentileOpenKey] = useState(0)

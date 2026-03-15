@@ -13,6 +13,9 @@ type Deck = {
   subject?: string | null
   totalItems?: number | null
   masteryPercentage?: number | null
+  accuracy?: number | null
+  visual_state?: string | null
+  samples?: number | null
   dueToday?: number | null
   deleted_at?: string | null
 }
@@ -44,12 +47,19 @@ function clampPercent(value: unknown): number {
   return Math.round(num)
 }
 
+function getDomainColor(percent: number): string {
+  if (percent < 40) return 'bg-red-400'
+  if (percent < 70) return 'bg-orange-400'
+  if (percent < 85) return 'bg-yellow-400'
+  return 'bg-emerald-500'
+}
+
 function getDeckTheme(subject?: string | null): DeckTheme {
   const value = String(subject || '').toLowerCase()
 
   if (value.includes('cardio')) {
     return {
-      cardClass: 'bg-gradient-to-br from-[#EEF5EE] to-white border border-[#E6EFE6]',
+      cardClass: '',
       badgeClass: 'bg-white/80 text-slate-500',
       progressClass: 'bg-emerald-500',
       dueValueClass: 'text-[#8BA888]',
@@ -59,7 +69,7 @@ function getDeckTheme(subject?: string | null): DeckTheme {
 
   if (value.includes('neuro')) {
     return {
-      cardClass: 'bg-gradient-to-br from-[#EEF2F7] to-white border border-[#E5EAF1]',
+      cardClass: '',
       badgeClass: 'bg-white/80 text-slate-500',
       progressClass: 'bg-slate-500',
       dueValueClass: 'text-[#7D8A96]',
@@ -69,7 +79,7 @@ function getDeckTheme(subject?: string | null): DeckTheme {
 
   if (value.includes('infecc')) {
     return {
-      cardClass: 'bg-gradient-to-br from-[#FFF4EC] to-white border border-[#F6E7DB]',
+      cardClass: '',
       badgeClass: 'bg-white/80 text-slate-500',
       progressClass: 'bg-emerald-500',
       dueValueClass: 'text-[#E8A598]',
@@ -78,12 +88,48 @@ function getDeckTheme(subject?: string | null): DeckTheme {
   }
 
   return {
-    cardClass: 'bg-gradient-to-br from-[#FCEEE9] to-white border border-[#F2E3DE]',
+    cardClass: '',
     badgeClass: 'bg-white/80 text-slate-500',
     progressClass: 'bg-emerald-500',
     dueValueClass: 'text-[#E8A598]',
     subjectClass: 'text-[#D49A8D]',
   }
+}
+
+function getStableHash(value: string): number {
+  let hash = 0
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+function getDeckTexture(deck: Deck): string {
+  const samples = Math.max(0, Math.round(toSafeNumber(deck.samples)))
+  const accuracy =
+    typeof deck.accuracy === 'number' && Number.isFinite(deck.accuracy) ? deck.accuracy : null
+
+  let textureType: 'perfect' | 'clean' | 'torn' = 'clean'
+  if (samples < 25) {
+    textureType = 'clean'
+  } else if (accuracy != null && accuracy <= 0.5) {
+    textureType = 'torn'
+  } else if (accuracy != null && accuracy <= 0.8) {
+    textureType = 'clean'
+  } else if (accuracy != null && accuracy > 0.8) {
+    textureType = 'perfect'
+  }
+
+  const numericId = Number(deck.id)
+  const stableBase = Number.isFinite(numericId)
+    ? Math.abs(Math.trunc(numericId))
+    : getStableHash(String(deck.id))
+  const variant = (stableBase % 8) + 1
+
+  if (textureType === 'perfect') return '/textures/decks/perfect_1.svg'
+  if (textureType === 'clean') return `/textures/decks/clean_${variant}.svg`
+  return `/textures/decks/torn_${variant}.svg`
 }
 
 function isFailedQuestionsDeck(deck: Deck): boolean {
@@ -176,29 +222,41 @@ async function fetchDeckItemsCount(deckId: string): Promise<number> {
 
 function DeckCard({
   deck,
+  deckTexture,
+  textureTransition,
+  onTextureTransitionEnd,
   isFailedQuestions,
   onOpen,
   onDelete,
   deleting,
 }: {
   deck: Deck
+  deckTexture: string
+  textureTransition: boolean
+  onTextureTransitionEnd?: () => void
   isFailedQuestions: boolean
   onOpen: () => void
   onDelete: () => void
   deleting: boolean
 }) {
-  const mastery = clampPercent(deck.masteryPercentage)
+  const samplesCount = Math.max(0, Math.round(toSafeNumber(deck.samples)))
+  const hasUnknownMastery = deck.accuracy === null || samplesCount < 25
+  const accuracyPercent = hasUnknownMastery
+    ? 0
+    : clampPercent(Math.round(toSafeNumber(deck.accuracy) * 100))
+  const domainColorClass = getDomainColor(accuracyPercent)
   const totalItems = Math.max(0, Math.round(toSafeNumber(deck.totalItems)))
-  const dueToday = Math.max(0, Math.round(toSafeNumber(deck.dueToday)))
   const subject = (deck.subject || 'PERSONAL').toUpperCase()
   const [shimmerDirection, setShimmerDirection] = useState<ShimmerDirection>('left')
   const [shimmerActive, setShimmerActive] = useState(false)
+  const [isPointerInside, setIsPointerInside] = useState(false)
+  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 })
   const shimmerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const shimmerFrameRef = useRef<number | null>(null)
   const defaultTheme = getDeckTheme(deck.subject)
   const theme: DeckTheme = isFailedQuestions
     ? {
-        cardClass: 'bg-gradient-to-br from-[#FDF1F1] to-white border border-[#F3D9D9]',
+        cardClass: '',
         badgeClass: 'bg-white/80 text-rose-600',
         progressClass: 'bg-rose-400',
         dueValueClass: 'text-rose-500',
@@ -242,42 +300,53 @@ function DeckCard({
     }, 1100)
   }
 
-  const isVerticalTravel = shimmerDirection === 'top' || shimmerDirection === 'bottom'
-  const coreBandShapeClass = isVerticalTravel
-    ? 'left-[-8%] w-[116%] h-[12%]'
-    : 'top-[-8%] h-[116%] w-[12%]'
-  const glowBandShapeClass = isVerticalTravel
-    ? 'left-[-10%] w-[120%] h-[18%]'
-    : 'top-[-10%] h-[120%] w-[18%]'
-  const coreAnimationClass =
-    shimmerActive && shimmerDirection === 'top'
-      ? 'animate-shimmer-top-core'
-      : shimmerActive && shimmerDirection === 'bottom'
-        ? 'animate-shimmer-bottom-core'
-        : shimmerActive && shimmerDirection === 'left'
-          ? 'animate-shimmer-left-core'
-          : shimmerActive && shimmerDirection === 'right'
-            ? 'animate-shimmer-right-core'
-            : ''
-  const glowAnimationClass =
-    shimmerActive && shimmerDirection === 'top'
-      ? 'animate-shimmer-top-glow'
-      : shimmerActive && shimmerDirection === 'bottom'
-        ? 'animate-shimmer-bottom-glow'
-        : shimmerActive && shimmerDirection === 'left'
-          ? 'animate-shimmer-left-glow'
-          : shimmerActive && shimmerDirection === 'right'
-            ? 'animate-shimmer-right-glow'
-            : ''
+  const shimmerFromTopLeft = shimmerDirection === 'bottom' || shimmerDirection === 'right'
+  const coreBandShapeClass = 'shimmer-core'
+  const glowBandShapeClass = 'shimmer-glow'
+  const coreAnimationClass = shimmerActive
+    ? shimmerFromTopLeft
+      ? 'animate-shimmer-diag-down-core'
+      : 'animate-shimmer-diag-up-core'
+    : ''
+  const glowAnimationClass = shimmerActive
+    ? shimmerFromTopLeft
+      ? 'animate-shimmer-diag-down-glow'
+      : 'animate-shimmer-diag-up-glow'
+    : ''
+  const tiltTransform = `translateY(${isPointerInside ? -3 : 0}px) rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`
+  const hoverShadowOpacity = isPointerInside ? 1 : 0
 
   return (
     <article
       role="button"
       tabIndex={0}
+      style={{
+        transformStyle: 'preserve-3d',
+        willChange: 'transform',
+        transition: 'transform 180ms ease, box-shadow 180ms ease',
+        transform: tiltTransform,
+        ['--light-x' as string]: '50%',
+        ['--light-y' as string]: '50%',
+      }}
       onClick={onOpen}
       onMouseEnter={(event) => {
         const direction = getMouseEntryDirection(event.currentTarget, event.clientX, event.clientY)
+        setIsPointerInside(true)
         triggerDirectionalShimmer(direction)
+      }}
+      onMouseMove={(event) => {
+        const rect = event.currentTarget.getBoundingClientRect()
+        const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
+        const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height))
+        const rotateY = Math.max(-3, Math.min(3, (x - 0.5) * 6))
+        const rotateX = Math.max(-3, Math.min(3, (0.5 - y) * 6))
+        event.currentTarget.style.setProperty('--light-x', `${x * 100}%`)
+        event.currentTarget.style.setProperty('--light-y', `${y * 100}%`)
+        setTilt({ rotateX, rotateY })
+      }}
+      onMouseLeave={() => {
+        setIsPointerInside(false)
+        setTilt({ rotateX: 0, rotateY: 0 })
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -285,21 +354,39 @@ function DeckCard({
           onOpen()
         }
       }}
-      className={`group relative overflow-hidden rounded-2xl p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598] ${theme.cardClass}`}
+      className={`deck-card group relative aspect-[900/336] overflow-visible p-0 hover:z-40 focus-within:z-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598] [transform-style:preserve-3d] ${theme.cardClass}`}
     >
       <span
         aria-hidden
-        className={`pointer-events-none absolute z-0 ${coreBandShapeClass} ${coreAnimationClass} bg-gradient-to-r from-transparent via-white to-transparent opacity-0 mix-blend-screen`}
+        className="pointer-events-none absolute inset-0 z-0 bg-center bg-no-repeat [background-size:100%_100%] transition-opacity duration-200"
+        style={{
+          backgroundImage: `url(${deckTexture})`,
+          filter:
+            'drop-shadow(0 10px 22px rgba(0, 0, 0, 0.08)) drop-shadow(0 20px 48px rgba(0, 0, 0, 0.10))',
+          opacity: hoverShadowOpacity,
+        }}
       />
       <span
         aria-hidden
-        className={`pointer-events-none absolute z-0 ${glowBandShapeClass} ${glowAnimationClass} bg-gradient-to-r from-transparent via-[#FFD7CC] to-transparent opacity-0 blur-[10px] mix-blend-screen`}
+        onAnimationEnd={() => {
+          if (textureTransition) onTextureTransitionEnd?.()
+        }}
+        className={`pointer-events-none absolute inset-0 z-[1] bg-center bg-no-repeat [background-size:100%_100%] ${
+          textureTransition ? 'deck-texture-transition' : ''
+        }`}
+        style={{ backgroundImage: `url(${deckTexture})` }}
       />
-      <div className="relative z-10">
-        <p className={`text-xs uppercase tracking-wide ${theme.subjectClass}`}>{subject}</p>
-
-        <div className="mt-3 flex items-start justify-between gap-3">
-          <h3 className="text-lg font-semibold text-slate-800">{deck.name || `Mazo ${deck.id}`}</h3>
+      <span
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 z-[2] ${coreBandShapeClass} ${coreAnimationClass}`}
+      />
+      <span
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 z-[2] ${glowBandShapeClass} ${glowAnimationClass}`}
+      />
+      <div className="absolute left-[3.1%] right-[3.1%] top-[11%] bottom-[8.3%] z-10 flex flex-col px-5 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className={`text-sm font-semibold uppercase tracking-wide ${theme.subjectClass}`}>{subject}</p>
           <div className="flex items-center gap-2">
             <span className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${theme.badgeClass}`}>
               {totalItems} cards
@@ -313,7 +400,7 @@ function DeckCard({
                 event.preventDefault()
                 onDelete()
               }}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-500 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-500 transition hover:bg-red-50/70 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <svg
                 aria-hidden
@@ -335,89 +422,158 @@ function DeckCard({
           </div>
         </div>
 
-        <div className="mt-5">
-          <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
-            <span>Dominio</span>
-            <span>{mastery}%</span>
-          </div>
-          <div className="h-2 rounded-full bg-slate-100">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${theme.progressClass}`}
-              style={{ width: `${mastery}%` }}
-            />
-          </div>
+        <div className="mt-2 flex items-start justify-between gap-3">
+          <h3 className="min-w-0 flex-1 truncate pt-1 text-[clamp(1.45rem,1.85vw,2.1rem)] font-semibold leading-[1.25] text-slate-800">
+            {deck.name || `Mazo ${deck.id}`}
+          </h3>
         </div>
 
-        <div className="mt-5 flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-          <span className="text-sm font-medium text-slate-500">Para hoy</span>
-          <span className={`text-lg font-bold ${theme.dueValueClass}`}>{dueToday}</span>
+        <div className="mt-7">
+          <div className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-500">
+            <span>Dominio</span>
+            {hasUnknownMastery ? (
+              <div className="group/mastery relative">
+                <button
+                  type="button"
+                  aria-label="Dominio no disponible aún"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                  }}
+                  onKeyDown={(event) => {
+                    event.stopPropagation()
+                  }}
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white/80 text-xs font-bold text-slate-600"
+                >
+                  ?
+                </button>
+                <div
+                  role="tooltip"
+                  className="pointer-events-none invisible absolute right-0 top-full z-[100] mt-2 w-72 rounded-xl border border-slate-200 bg-white/95 p-3 text-left opacity-0 shadow-lg transition-opacity duration-200 group-hover/mastery:visible group-hover/mastery:opacity-100 group-focus-within/mastery:visible group-focus-within/mastery:opacity-100"
+                >
+                  <p className="text-xs font-semibold text-slate-800">Dominio del mazo</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                    El dominio se estima usando tus ultimas 25 respuestas en este mazo. Aun no hay
+                    suficientes datos para calcularlo. Responde al menos 25 preguntas para estimar
+                    tu dominio.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <span className="text-slate-600">{accuracyPercent}%</span>
+            )}
+          </div>
+          <div className="h-2.5 rounded-full bg-slate-100">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${domainColorClass}`}
+              style={{ width: `${accuracyPercent}%` }}
+            />
+          </div>
         </div>
       </div>
 
       <style jsx>{`
-        .animate-shimmer-top-core {
-          animation: shimmerTopCore 920ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        .deck-card::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          border-radius: inherit;
+          overflow: hidden;
+          opacity: 0;
+          z-index: 3;
+          transition: opacity 180ms ease;
+          background: radial-gradient(
+            circle at var(--light-x) var(--light-y),
+            rgba(255, 255, 255, 0.3),
+            transparent 40%
+          );
         }
-        .animate-shimmer-bottom-core {
-          animation: shimmerBottomCore 920ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        .deck-card:hover::before {
+          opacity: 1;
         }
-        .animate-shimmer-left-core {
-          animation: shimmerLeftCore 920ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        .deck-texture-transition {
+          animation: deckTextureShift 400ms ease-out;
+          transform-origin: center center;
         }
-        .animate-shimmer-right-core {
-          animation: shimmerRightCore 920ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        @keyframes deckTextureShift {
+          0% {
+            transform: scale(0.98);
+            filter: brightness(0.9);
+            opacity: 0.85;
+          }
+          50% {
+            transform: scale(1.02);
+            filter: brightness(1.1);
+            opacity: 1;
+          }
+          100% {
+            transform: scale(1);
+            filter: brightness(1);
+            opacity: 1;
+          }
         }
-        .animate-shimmer-top-glow {
-          animation: shimmerTopGlow 1060ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        .shimmer-core {
+          opacity: 0;
+          background-image: linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0) 42%,
+            rgba(255, 255, 255, 0.75) 50%,
+            rgba(255, 255, 255, 0) 58%
+          );
+          background-size: 220% 220%;
+          background-repeat: no-repeat;
+          background-position: -160% -160%;
+          mix-blend-mode: screen;
+          -webkit-mask-image: radial-gradient(120% 100% at 50% 50%, #000 58%, transparent 100%);
+          mask-image: radial-gradient(120% 100% at 50% 50%, #000 58%, transparent 100%);
         }
-        .animate-shimmer-bottom-glow {
-          animation: shimmerBottomGlow 1060ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        .shimmer-glow {
+          opacity: 0;
+          background-image: linear-gradient(
+            135deg,
+            rgba(255, 215, 204, 0) 38%,
+            rgba(255, 215, 204, 0.9) 50%,
+            rgba(255, 215, 204, 0) 62%
+          );
+          background-size: 260% 260%;
+          background-repeat: no-repeat;
+          background-position: -170% -170%;
+          filter: blur(14px);
+          mix-blend-mode: screen;
+          -webkit-mask-image: radial-gradient(125% 105% at 50% 50%, #000 52%, transparent 100%);
+          mask-image: radial-gradient(125% 105% at 50% 50%, #000 52%, transparent 100%);
         }
-        .animate-shimmer-left-glow {
-          animation: shimmerLeftGlow 1060ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        .animate-shimmer-diag-down-core {
+          animation: shimmerDiagDownCore 1850ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
         }
-        .animate-shimmer-right-glow {
-          animation: shimmerRightGlow 1060ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        .animate-shimmer-diag-up-core {
+          animation: shimmerDiagUpCore 1850ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
         }
-        @keyframes shimmerTopCore {
-          0% { transform: translateY(-140%); opacity: 0; }
+        .animate-shimmer-diag-down-glow {
+          animation: shimmerDiagDownGlow 2150ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        }
+        .animate-shimmer-diag-up-glow {
+          animation: shimmerDiagUpGlow 2150ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        }
+        @keyframes shimmerDiagDownCore {
+          0% { background-position: -140% -140%; opacity: 0; }
           12% { opacity: 1; }
-          100% { transform: translateY(820%); opacity: 0; }
+          100% { background-position: 140% 140%; opacity: 0; }
         }
-        @keyframes shimmerBottomCore {
-          0% { transform: translateY(820%); opacity: 0; }
+        @keyframes shimmerDiagUpCore {
+          0% { background-position: 140% 140%; opacity: 0; }
           12% { opacity: 1; }
-          100% { transform: translateY(-140%); opacity: 0; }
+          100% { background-position: -140% -140%; opacity: 0; }
         }
-        @keyframes shimmerLeftCore {
-          0% { transform: translateX(-140%); opacity: 0; }
-          12% { opacity: 1; }
-          100% { transform: translateX(820%); opacity: 0; }
-        }
-        @keyframes shimmerRightCore {
-          0% { transform: translateX(820%); opacity: 0; }
-          12% { opacity: 1; }
-          100% { transform: translateX(-140%); opacity: 0; }
-        }
-        @keyframes shimmerTopGlow {
-          0% { transform: translateY(-170%); opacity: 0; }
+        @keyframes shimmerDiagDownGlow {
+          0% { background-position: -160% -160%; opacity: 0; }
           18% { opacity: 0.95; }
-          100% { transform: translateY(640%); opacity: 0; }
+          100% { background-position: 130% 130%; opacity: 0; }
         }
-        @keyframes shimmerBottomGlow {
-          0% { transform: translateY(640%); opacity: 0; }
+        @keyframes shimmerDiagUpGlow {
+          0% { background-position: 130% 130%; opacity: 0; }
           18% { opacity: 0.95; }
-          100% { transform: translateY(-170%); opacity: 0; }
-        }
-        @keyframes shimmerLeftGlow {
-          0% { transform: translateX(-170%); opacity: 0; }
-          18% { opacity: 0.95; }
-          100% { transform: translateX(640%); opacity: 0; }
-        }
-        @keyframes shimmerRightGlow {
-          0% { transform: translateX(640%); opacity: 0; }
-          18% { opacity: 0.95; }
-          100% { transform: translateX(-170%); opacity: 0; }
+          100% { background-position: -160% -160%; opacity: 0; }
         }
       `}</style>
     </article>
@@ -429,11 +585,13 @@ export default function StudioDecksPage() {
   const [token, setToken] = useState<string>('')
   const [decks, setDecks] = useState<Deck[]>([])
   const [decksLoading, setDecksLoading] = useState(true)
+  const [isContentVisible, setIsContentVisible] = useState(false)
   const [decksError, setDecksError] = useState<string | null>(null)
 
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newDeckName, setNewDeckName] = useState('')
   const [isCreatingDeck, setIsCreatingDeck] = useState(false)
+  const [textureTransitionDeckIds, setTextureTransitionDeckIds] = useState<Set<string>>(new Set())
   const [deletingDeckIds, setDeletingDeckIds] = useState<Set<string>>(new Set())
   const [undoDeck, setUndoDeck] = useState<{ deck: Deck; index: number } | null>(null)
   const [undoBusy, setUndoBusy] = useState(false)
@@ -517,8 +675,28 @@ export default function StudioDecksPage() {
       )
 
       const countMap = Object.fromEntries(counts)
+      const normalizedDecks = activeDecks.map((deck) => ({
+        ...deck,
+        totalItems: countMap[String(deck.id)] ?? toSafeNumber(deck.totalItems),
+      }))
+
+      const changedDeckIds = new Set<string>()
+      if (typeof window !== 'undefined') {
+        normalizedDecks.forEach((deck) => {
+          const deckId = String(deck.id)
+          const storageKey = `deck_visual_state_${deckId}`
+          const prevState = window.localStorage.getItem(storageKey)
+          const newState = String(deck.visual_state ?? '')
+          if (prevState && prevState !== newState) {
+            changedDeckIds.add(deckId)
+          }
+          window.localStorage.setItem(storageKey, newState)
+        })
+      }
+
+      setTextureTransitionDeckIds(changedDeckIds)
       setDecks(
-        activeDecks.map((deck) => ({
+        normalizedDecks.map((deck) => ({
           ...deck,
           totalItems: countMap[String(deck.id)] ?? toSafeNumber(deck.totalItems),
         })),
@@ -570,6 +748,21 @@ export default function StudioDecksPage() {
       pendingDeleteRequests.clear()
     }
   }, [])
+
+  useEffect(() => {
+    if (decksLoading) {
+      setIsContentVisible(false)
+      return
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      setIsContentVisible(true)
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+    }
+  }, [decksLoading])
 
   const sortedDecks = useMemo(
     () => {
@@ -699,9 +892,111 @@ export default function StudioDecksPage() {
     }
   }
 
+  if (decksLoading) {
+    return (
+      <div className="relative flex min-h-[70vh] items-center justify-center overflow-hidden">
+        <div
+          className="absolute h-56 w-56 rounded-full blur-3xl"
+          style={{
+            backgroundColor: '#E8A598',
+            opacity: 0.28,
+            animation: 'studioDecksBlobA 4.4s ease-in-out infinite',
+          }}
+        />
+        <div
+          className="absolute h-40 w-40 rounded-full blur-2xl"
+          style={{
+            backgroundColor: '#E8A598',
+            opacity: 0.2,
+            animation: 'studioDecksBlobB 3.6s ease-in-out infinite',
+          }}
+        />
+
+        <div className="relative flex h-24 w-24 items-center justify-center">
+          <div
+            className="absolute inset-0 rounded-[42%]"
+            style={{
+              border: '3px solid rgba(232,165,152,0.45)',
+              animation: 'studioDecksMorph 2.8s ease-in-out infinite',
+            }}
+          />
+          <div
+            className="absolute inset-[10px] rounded-[46%]"
+            style={{
+              border: '3px solid #E8A598',
+              animation: 'studioDecksMorph 2.8s ease-in-out infinite reverse',
+            }}
+          />
+          <div
+            className="h-3 w-3 rounded-full"
+            style={{
+              backgroundColor: '#E8A598',
+              animation: 'studioDecksPulse 1.7s ease-in-out infinite',
+            }}
+          />
+        </div>
+
+        <p className="sr-only">Cargando mazos</p>
+
+        <style jsx>{`
+          @keyframes studioDecksMorph {
+            0% {
+              transform: rotate(0deg) scale(1);
+              border-radius: 42% 58% 46% 54% / 53% 45% 55% 47%;
+            }
+            50% {
+              transform: rotate(180deg) scale(1.08);
+              border-radius: 57% 43% 62% 38% / 41% 63% 37% 59%;
+            }
+            100% {
+              transform: rotate(360deg) scale(1);
+              border-radius: 42% 58% 46% 54% / 53% 45% 55% 47%;
+            }
+          }
+
+          @keyframes studioDecksBlobA {
+            0%,
+            100% {
+              transform: translate(-14px, -10px) scale(1);
+            }
+            50% {
+              transform: translate(12px, 10px) scale(1.08);
+            }
+          }
+
+          @keyframes studioDecksBlobB {
+            0%,
+            100% {
+              transform: translate(10px, 14px) scale(1);
+            }
+            50% {
+              transform: translate(-10px, -12px) scale(0.92);
+            }
+          }
+
+          @keyframes studioDecksPulse {
+            0%,
+            100% {
+              transform: scale(0.8);
+              opacity: 0.65;
+            }
+            50% {
+              transform: scale(1.25);
+              opacity: 1;
+            }
+          }
+        `}</style>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF7F4] text-slate-800">
-      <main className="mx-auto w-full max-w-7xl px-6 py-8">
+      <main
+        className={`mx-auto w-full max-w-7xl px-6 py-8 transition-opacity duration-500 ease-out ${
+          isContentVisible ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
         <section className="mb-6 flex items-center justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -791,11 +1086,7 @@ export default function StudioDecksPage() {
           </p>
         ) : null}
 
-        {decksLoading ? (
-          <div className="rounded-2xl border border-dashed border-[#EAE4E2] bg-white p-8 text-center text-sm text-slate-500">
-            Cargando mazos...
-          </div>
-        ) : sortedDecks.length === 0 ? (
+        {sortedDecks.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-[#EAE4E2] bg-white p-8 text-center">
             <p className="text-sm font-medium text-slate-700">Aun no tienes mazos</p>
             <p className="mt-1 text-sm text-slate-500">
@@ -808,6 +1099,17 @@ export default function StudioDecksPage() {
               <DeckCard
                 key={String(deck.id)}
                 deck={deck}
+                deckTexture={getDeckTexture(deck)}
+                textureTransition={textureTransitionDeckIds.has(String(deck.id))}
+                onTextureTransitionEnd={() => {
+                  const deckId = String(deck.id)
+                  setTextureTransitionDeckIds((prev) => {
+                    if (!prev.has(deckId)) return prev
+                    const next = new Set(prev)
+                    next.delete(deckId)
+                    return next
+                  })
+                }}
                 isFailedQuestions={String(deck.id) === failedDeckId}
                 onOpen={() => router.push(`/studio/${deck.id}`)}
                 deleting={deletingDeckIds.has(String(deck.id))}

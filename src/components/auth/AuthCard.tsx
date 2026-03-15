@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import LoginCard from './LoginCard'
 import RegisterCard from './RegisterCard'
 import RecoverCard from './RecoverCard'
@@ -118,11 +119,18 @@ export default function AuthCard({
       <FallingBackground />
       <div className="relative z-10 w-full max-w-md">
         {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-black tracking-tight text-[#171312]">
-            MIRDaily
-          </h1>
-          <p className="mt-2 text-sm text-[#7D8A96]">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <div className="relative h-[15rem] w-[46rem] max-w-full overflow-visible sm:h-[17rem]">
+            <Image
+              src="/brand/logo_mirdaily.png"
+              alt="MIRDaily"
+              width={1920}
+              height={640}
+              className="h-full w-full object-contain object-center scale-[1.58] -translate-y-[3.25rem] sm:-translate-y-[3.75rem] drop-shadow-[0_0_1px_rgba(240,234,230,0.98)] drop-shadow-[0_6px_22px_rgba(0,0,0,0.08)]"
+              priority
+            />
+          </div>
+          <p className="-mt-28 text-sm text-[#7D8A96] sm:-mt-32">
             {mode === 'recover'
               ? 'Recupera tu acceso'
               : mode === 'login'
