@@ -1,8 +1,19 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import type { DragEndEvent } from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import UndoDeleteToast from '@/components/studio/UndoDeleteToast'
 import { restoreDeck, softDeleteDeck } from '@/lib/studio/trash'
 import { supabase } from '@/lib/supabaseBrowser'
@@ -15,9 +26,13 @@ type Deck = {
   masteryPercentage?: number | null
   accuracy?: number | null
   visual_state?: string | null
+  texture?: string | null
   samples?: number | null
   dueToday?: number | null
   deleted_at?: string | null
+  system_generated?: boolean
+  auto_type?: string | null
+  position?: number | null
 }
 
 type DeckTheme = {
@@ -105,31 +120,25 @@ function getStableHash(value: string): number {
   return Math.abs(hash)
 }
 
-function getDeckTexture(deck: Deck): string {
-  const samples = Math.max(0, Math.round(toSafeNumber(deck.samples)))
-  const accuracy =
-    typeof deck.accuracy === 'number' && Number.isFinite(deck.accuracy) ? deck.accuracy : null
-
-  let textureType: 'perfect' | 'clean' | 'torn' = 'clean'
-  if (samples < 25) {
-    textureType = 'clean'
-  } else if (accuracy != null && accuracy <= 0.5) {
-    textureType = 'torn'
-  } else if (accuracy != null && accuracy <= 0.8) {
-    textureType = 'clean'
-  } else if (accuracy != null && accuracy > 0.8) {
-    textureType = 'perfect'
-  }
-
+function getDeckTextureFromVisualState(deck: Deck): string {
+  const visualState = String(deck.visual_state ?? '').trim().toLowerCase()
   const numericId = Number(deck.id)
   const stableBase = Number.isFinite(numericId)
     ? Math.abs(Math.trunc(numericId))
     : getStableHash(String(deck.id))
   const variant = (stableBase % 8) + 1
 
-  if (textureType === 'perfect') return '/textures/decks/perfect_1.svg'
-  if (textureType === 'clean') return `/textures/decks/clean_${variant}.svg`
-  return `/textures/decks/torn_${variant}.svg`
+  if (visualState === 'perfect') return '/textures/decks/perfect_1.svg'
+  if (visualState === 'clean') return `/textures/decks/clean_${variant}.svg`
+  if (visualState === 'torn' || visualState === 'destroyed') return `/textures/decks/torn_${variant}.svg`
+  return `/textures/decks/clean_${variant}.svg`
+}
+
+function getDeckTexture(deck: Deck): string {
+  const explicitTexture = String(deck.texture ?? '').trim()
+  if (explicitTexture) return explicitTexture
+
+  return getDeckTextureFromVisualState(deck)
 }
 
 function isFailedQuestionsDeck(deck: Deck): boolean {
@@ -170,24 +179,51 @@ async function readError(res: Response, fallback: string): Promise<string> {
 }
 
 async function fetchDecks(token: string): Promise<Deck[]> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15000)
   const res = await fetch(`${API_URL}/api/studio/decks`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    signal: controller.signal,
+  }).finally(() => {
+    clearTimeout(timeout)
   })
 
   if (!res.ok) {
     throw new Error(await readError(res, `No se pudieron cargar los mazos (${res.status})`))
   }
 
-  const payload = (await res.json().catch(() => null)) as
-    | Deck[]
-    | { decks?: Deck[] }
-    | null
+  const payload = (await res.json().catch(() => null)) as unknown
 
-  if (Array.isArray(payload)) return payload
-  if (payload && Array.isArray(payload.decks)) return payload.decks
+  const normalizeDecks = (entries: unknown[]): Deck[] =>
+    entries.map((entry) => {
+      if (!entry || typeof entry !== 'object') return {} as Deck
+      const row = entry as Record<string, unknown>
+      return {
+        ...(row as unknown as Deck),
+        texture:
+          typeof row.texture === 'string'
+            ? row.texture
+            : typeof row.deck_texture === 'string'
+              ? row.deck_texture
+              : typeof row.texture_path === 'string'
+                ? row.texture_path
+                : null,
+      }
+    })
+
+  if (Array.isArray(payload)) return normalizeDecks(payload)
+  if (payload && typeof payload === 'object') {
+    const asRecord = payload as Record<string, unknown>
+    if (Array.isArray(asRecord.decks)) return normalizeDecks(asRecord.decks)
+    const data = asRecord.data
+    if (data && typeof data === 'object') {
+      const dataRecord = data as Record<string, unknown>
+      if (Array.isArray(dataRecord.decks)) return normalizeDecks(dataRecord.decks)
+    }
+  }
   return []
 }
 
@@ -206,18 +242,19 @@ async function createDeck(token: string, name: string): Promise<void> {
   }
 }
 
-async function fetchDeckItemsCount(deckId: string): Promise<number> {
-  const { count, error } = await supabase
-    .from('deck_items')
-    .select('id', { count: 'exact', head: true })
-    .eq('deck_id', deckId)
-    .is('deleted_at', null)
+async function reorderDecks(token: string, orderedDeckIds: string[]): Promise<void> {
+  const res = await fetch(`${API_URL}/api/studio/decks/reorder`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ orderedDeckIds }),
+  })
 
-  if (error) {
-    throw new Error(error.message || 'No se pudo contar los items del mazo.')
+  if (!res.ok) {
+    throw new Error(await readError(res, `No se pudo guardar el orden de mazos (${res.status})`))
   }
-
-  return typeof count === 'number' ? count : 0
 }
 
 function DeckCard({
@@ -229,6 +266,8 @@ function DeckCard({
   onOpen,
   onDelete,
   deleting,
+  interactive = true,
+  showDeleteButton = true,
 }: {
   deck: Deck
   deckTexture: string
@@ -236,8 +275,10 @@ function DeckCard({
   onTextureTransitionEnd?: () => void
   isFailedQuestions: boolean
   onOpen: () => void
-  onDelete: () => void
+  onDelete?: () => void
   deleting: boolean
+  interactive?: boolean
+  showDeleteButton?: boolean
 }) {
   const samplesCount = Math.max(0, Math.round(toSafeNumber(deck.samples)))
   const hasUnknownMastery = deck.accuracy === null || samplesCount < 25
@@ -318,23 +359,23 @@ function DeckCard({
 
   return (
     <article
-      role="button"
-      tabIndex={0}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : -1}
       style={{
         transformStyle: 'preserve-3d',
         willChange: 'transform',
         transition: 'transform 180ms ease, box-shadow 180ms ease',
-        transform: tiltTransform,
+        transform: interactive ? tiltTransform : undefined,
         ['--light-x' as string]: '50%',
         ['--light-y' as string]: '50%',
       }}
-      onClick={onOpen}
-      onMouseEnter={(event) => {
+      onClick={interactive ? onOpen : undefined}
+      onMouseEnter={interactive ? (event) => {
         const direction = getMouseEntryDirection(event.currentTarget, event.clientX, event.clientY)
         setIsPointerInside(true)
         triggerDirectionalShimmer(direction)
-      }}
-      onMouseMove={(event) => {
+      } : undefined}
+      onMouseMove={interactive ? (event) => {
         const rect = event.currentTarget.getBoundingClientRect()
         const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
         const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height))
@@ -343,17 +384,17 @@ function DeckCard({
         event.currentTarget.style.setProperty('--light-x', `${x * 100}%`)
         event.currentTarget.style.setProperty('--light-y', `${y * 100}%`)
         setTilt({ rotateX, rotateY })
-      }}
-      onMouseLeave={() => {
+      } : undefined}
+      onMouseLeave={interactive ? () => {
         setIsPointerInside(false)
         setTilt({ rotateX: 0, rotateY: 0 })
-      }}
-      onKeyDown={(event) => {
+      } : undefined}
+      onKeyDown={interactive ? (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
           onOpen()
         }
-      }}
+      } : undefined}
       className={`deck-card group relative aspect-[900/336] min-h-[210px] overflow-visible p-0 hover:z-40 focus-within:z-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598] sm:min-h-[230px] [transform-style:preserve-3d] ${theme.cardClass}`}
     >
       <span
@@ -391,34 +432,36 @@ function DeckCard({
             <span className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${theme.badgeClass}`}>
               {totalItems} cards
             </span>
-            <button
-              type="button"
-              aria-label="Enviar mazo a papelera"
-              disabled={deleting}
-              onClick={(event) => {
-                event.stopPropagation()
-                event.preventDefault()
-                onDelete()
-              }}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-500 transition hover:bg-red-50/70 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <svg
-                aria-hidden
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
+            {showDeleteButton ? (
+              <button
+                type="button"
+                aria-label="Enviar mazo a papelera"
+                disabled={deleting}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  event.preventDefault()
+                  onDelete?.()
+                }}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-500 transition hover:bg-red-50/70 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <path d="M3 6h18" />
-                <path d="M8 6V4h8v2" />
-                <path d="M19 6l-1 14H6L5 6" />
-                <path d="M10 11v6" />
-                <path d="M14 11v6" />
-              </svg>
-            </button>
+                <svg
+                  aria-hidden
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-4 w-4"
+                >
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4h8v2" />
+                  <path d="M19 6l-1 14H6L5 6" />
+                  <path d="M10 11v6" />
+                  <path d="M14 11v6" />
+                </svg>
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -580,8 +623,248 @@ function DeckCard({
   )
 }
 
+function SortableDeckCard({
+  deck,
+  children,
+}: {
+  deck: Deck
+  children: ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: String(deck.id),
+  })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      className={`touch-none ${isDragging ? 'z-50 cursor-grabbing' : 'cursor-grab'}`}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  )
+}
+
+function ConstructionDeckPlaceholder() {
+  const [shimmerDirection, setShimmerDirection] = useState<ShimmerDirection>('left')
+  const [shimmerActive, setShimmerActive] = useState(false)
+  const [isPointerInside, setIsPointerInside] = useState(false)
+  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 })
+  const shimmerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const shimmerFrameRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (shimmerTimeoutRef.current) {
+        clearTimeout(shimmerTimeoutRef.current)
+        shimmerTimeoutRef.current = null
+      }
+      if (shimmerFrameRef.current != null) {
+        window.cancelAnimationFrame(shimmerFrameRef.current)
+        shimmerFrameRef.current = null
+      }
+    }
+  }, [])
+
+  const triggerDirectionalShimmer = (direction: ShimmerDirection) => {
+    if (shimmerTimeoutRef.current) {
+      clearTimeout(shimmerTimeoutRef.current)
+      shimmerTimeoutRef.current = null
+    }
+    if (shimmerFrameRef.current != null) {
+      window.cancelAnimationFrame(shimmerFrameRef.current)
+      shimmerFrameRef.current = null
+    }
+
+    setShimmerDirection(direction)
+    setShimmerActive(false)
+    shimmerFrameRef.current = window.requestAnimationFrame(() => {
+      shimmerFrameRef.current = null
+      setShimmerActive(true)
+    })
+
+    shimmerTimeoutRef.current = setTimeout(() => {
+      shimmerTimeoutRef.current = null
+      setShimmerActive(false)
+    }, 1100)
+  }
+
+  const shimmerFromTopLeft = shimmerDirection === 'bottom' || shimmerDirection === 'right'
+  const coreAnimationClass = shimmerActive
+    ? shimmerFromTopLeft
+      ? 'animate-shimmer-diag-down-core'
+      : 'animate-shimmer-diag-up-core'
+    : ''
+  const glowAnimationClass = shimmerActive
+    ? shimmerFromTopLeft
+      ? 'animate-shimmer-diag-down-glow'
+      : 'animate-shimmer-diag-up-glow'
+    : ''
+  const tiltTransform = `translateY(${isPointerInside ? -3 : 0}px) rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`
+
+  return (
+    <article
+      style={{
+        transformStyle: 'preserve-3d',
+        willChange: 'transform',
+        transition: 'transform 180ms ease, box-shadow 180ms ease',
+        transform: tiltTransform,
+        ['--light-x' as string]: '50%',
+        ['--light-y' as string]: '50%',
+      }}
+      onMouseEnter={(event) => {
+        const direction = getMouseEntryDirection(event.currentTarget, event.clientX, event.clientY)
+        setIsPointerInside(true)
+        triggerDirectionalShimmer(direction)
+      }}
+      onMouseMove={(event) => {
+        const rect = event.currentTarget.getBoundingClientRect()
+        const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
+        const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height))
+        const rotateY = Math.max(-3, Math.min(3, (x - 0.5) * 6))
+        const rotateX = Math.max(-3, Math.min(3, (0.5 - y) * 6))
+        event.currentTarget.style.setProperty('--light-x', `${x * 100}%`)
+        event.currentTarget.style.setProperty('--light-y', `${y * 100}%`)
+        setTilt({ rotateX, rotateY })
+      }}
+      onMouseLeave={() => {
+        setIsPointerInside(false)
+        setTilt({ rotateX: 0, rotateY: 0 })
+      }}
+      className="deck-card-placeholder group relative aspect-[900/336] min-h-[210px] overflow-hidden rounded-2xl p-6 sm:min-h-[230px]"
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 bg-center bg-no-repeat [background-size:100%_100%] transition-opacity duration-200"
+        style={{
+          backgroundImage: 'url(/textures/decks/clean_blue.svg)',
+          filter:
+            'drop-shadow(0 10px 22px rgba(0, 0, 0, 0.08)) drop-shadow(0 20px 48px rgba(0, 0, 0, 0.10))',
+          opacity: 1,
+        }}
+      />
+      <span aria-hidden className={`pointer-events-none absolute inset-0 z-[2] shimmer-core ${coreAnimationClass}`} />
+      <span aria-hidden className={`pointer-events-none absolute inset-0 z-[2] shimmer-glow ${glowAnimationClass}`} />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute left-[-18%] top-1/2 z-20 block w-[140%] -translate-y-1/2 -rotate-[17deg] border-y-2 border-black/25 bg-[repeating-linear-gradient(45deg,#facc15_0_16px,#111827_16px_32px)] py-3 shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-[25] bg-white/15 backdrop-blur-[2.5px]"
+      />
+      <div className="relative z-30 flex h-full items-center justify-center">
+        <span aria-hidden className="pointer-events-none absolute h-20 w-56 rounded-full bg-white/45 blur-2xl" />
+        <h3 className="rounded-lg bg-white/85 px-5 py-3 text-2xl font-extrabold text-slate-800 shadow-sm">
+          ¡En construcción!
+        </h3>
+      </div>
+
+      <style jsx>{`
+        .deck-card-placeholder::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          border-radius: inherit;
+          overflow: hidden;
+          opacity: 0;
+          z-index: 3;
+          transition: opacity 180ms ease;
+          background: radial-gradient(
+            circle at var(--light-x) var(--light-y),
+            rgba(255, 255, 255, 0.3),
+            transparent 40%
+          );
+        }
+        .deck-card-placeholder:hover::before {
+          opacity: 1;
+        }
+        .shimmer-core {
+          opacity: 0;
+          background-image: linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0) 42%,
+            rgba(255, 255, 255, 0.75) 50%,
+            rgba(255, 255, 255, 0) 58%
+          );
+          background-size: 220% 220%;
+          background-repeat: no-repeat;
+          background-position: -160% -160%;
+          mix-blend-mode: screen;
+          -webkit-mask-image: radial-gradient(120% 100% at 50% 50%, #000 58%, transparent 100%);
+          mask-image: radial-gradient(120% 100% at 50% 50%, #000 58%, transparent 100%);
+        }
+        .shimmer-glow {
+          opacity: 0;
+          background-image: linear-gradient(
+            135deg,
+            rgba(255, 215, 204, 0) 38%,
+            rgba(255, 215, 204, 0.9) 50%,
+            rgba(255, 215, 204, 0) 62%
+          );
+          background-size: 260% 260%;
+          background-repeat: no-repeat;
+          background-position: -170% -170%;
+          filter: blur(14px);
+          mix-blend-mode: screen;
+          -webkit-mask-image: radial-gradient(125% 105% at 50% 50%, #000 52%, transparent 100%);
+          mask-image: radial-gradient(125% 105% at 50% 50%, #000 52%, transparent 100%);
+        }
+        .animate-shimmer-diag-down-core {
+          animation: shimmerDiagDownCore 1850ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        }
+        .animate-shimmer-diag-up-core {
+          animation: shimmerDiagUpCore 1850ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        }
+        .animate-shimmer-diag-down-glow {
+          animation: shimmerDiagDownGlow 2150ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        }
+        .animate-shimmer-diag-up-glow {
+          animation: shimmerDiagUpGlow 2150ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        }
+        @keyframes shimmerDiagDownCore {
+          0% { background-position: -140% -140%; opacity: 0; }
+          12% { opacity: 1; }
+          100% { background-position: 140% 140%; opacity: 0; }
+        }
+        @keyframes shimmerDiagUpCore {
+          0% { background-position: 140% 140%; opacity: 0; }
+          12% { opacity: 1; }
+          100% { background-position: -140% -140%; opacity: 0; }
+        }
+        @keyframes shimmerDiagDownGlow {
+          0% { background-position: -160% -160%; opacity: 0; }
+          18% { opacity: 0.95; }
+          100% { background-position: 130% 130%; opacity: 0; }
+        }
+        @keyframes shimmerDiagUpGlow {
+          0% { background-position: 130% 130%; opacity: 0; }
+          18% { opacity: 0.95; }
+          100% { background-position: -160% -160%; opacity: 0; }
+        }
+      `}</style>
+    </article>
+  )
+}
+
 export default function StudioDecksPage() {
   const router = useRouter()
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  )
   const [token, setToken] = useState<string>('')
   const [decks, setDecks] = useState<Deck[]>([])
   const [decksLoading, setDecksLoading] = useState(true)
@@ -605,6 +888,7 @@ export default function StudioDecksPage() {
   const undoToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const undoToastAnimationFrameRef = useRef<number | null>(null)
   const pendingDeleteRequestsRef = useRef<Map<string, Promise<void>>>(new Map())
+  const reorderMutationIdRef = useRef(0)
 
   const clearUndoExpireTimeout = () => {
     if (!undoExpireTimeoutRef.current) return
@@ -662,22 +946,9 @@ export default function StudioDecksPage() {
     try {
       const result = await fetchDecks(authToken)
       const activeDecks = result.filter((deck) => deck.deleted_at == null)
-      const counts = await Promise.all(
-        activeDecks.map(async (deck) => {
-          try {
-            const count = await fetchDeckItemsCount(String(deck.id))
-            return [String(deck.id), count] as const
-          } catch (err) {
-            console.error(err)
-            return [String(deck.id), toSafeNumber(deck.totalItems)] as const
-          }
-        }),
-      )
-
-      const countMap = Object.fromEntries(counts)
       const normalizedDecks = activeDecks.map((deck) => ({
         ...deck,
-        totalItems: countMap[String(deck.id)] ?? toSafeNumber(deck.totalItems),
+        totalItems: toSafeNumber(deck.totalItems),
       }))
 
       const changedDeckIds = new Set<string>()
@@ -695,12 +966,7 @@ export default function StudioDecksPage() {
       }
 
       setTextureTransitionDeckIds(changedDeckIds)
-      setDecks(
-        normalizedDecks.map((deck) => ({
-          ...deck,
-          totalItems: countMap[String(deck.id)] ?? toSafeNumber(deck.totalItems),
-        })),
-      )
+      setDecks(normalizedDecks)
     } catch (err) {
       setDecksError(
         err instanceof Error ? err.message : 'No se pudieron cargar los mazos.',
@@ -714,21 +980,33 @@ export default function StudioDecksPage() {
     let mounted = true
 
     const loadSessionAndDecks = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const accessToken = session?.access_token ?? ''
+      try {
+        const sessionResult = (await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Timeout al obtener sesion.')), 10000)
+          }),
+        ])) as Awaited<ReturnType<typeof supabase.auth.getSession>>
+        const {
+          data: { session },
+        } = sessionResult
+        const accessToken = session?.access_token ?? ''
 
-      if (!mounted) return
+        if (!mounted) return
 
-      if (!accessToken) {
-        setDecksError('No hay sesion activa.')
+        if (!accessToken) {
+          setDecksError('No hay sesion activa.')
+          setDecksLoading(false)
+          return
+        }
+
+        setToken(accessToken)
+        await loadDecks(accessToken)
+      } catch (err) {
+        if (!mounted) return
+        setDecksError(err instanceof Error ? err.message : 'No se pudo iniciar Studio Mazos.')
         setDecksLoading(false)
-        return
       }
-
-      setToken(accessToken)
-      await loadDecks(accessToken)
     }
 
     void loadSessionAndDecks()
@@ -764,28 +1042,12 @@ export default function StudioDecksPage() {
     }
   }, [decksLoading])
 
-  const sortedDecks = useMemo(
-    () => {
-      const alphaSorted = [...decks].sort((a, b) =>
-        String(a.name || '').localeCompare(String(b.name || ''), 'es', {
-          sensitivity: 'base',
-        }),
-      )
-
-      if (alphaSorted.length <= 1) return alphaSorted
-
-      const failedDeck = alphaSorted.find((deck) => isFailedQuestionsDeck(deck))
-      if (!failedDeck) return alphaSorted
-
-      return [
-        failedDeck,
-        ...alphaSorted.filter((deck) => String(deck.id) !== String(failedDeck.id)),
-      ]
-    },
-    [decks],
+  const systemDecks = useMemo(() => decks.filter((deck) => deck.system_generated === true), [decks])
+  const userDecks = useMemo(() => decks.filter((deck) => deck.system_generated !== true), [decks])
+  const shouldShowSystemPlaceholder = useMemo(
+    () => systemDecks.some((deck) => isFailedQuestionsDeck(deck)) && systemDecks.length < 2,
+    [systemDecks],
   )
-
-  const failedDeckId = sortedDecks.length > 0 ? String(sortedDecks[0].id) : null
 
   const handleCreateDeck = async () => {
     if (!token) return
@@ -891,6 +1153,42 @@ export default function StudioDecksPage() {
       setUndoBusy(false)
     }
   }
+
+  const persistUserDeckOrder = useCallback(
+    async (orderedDeckIds: string[], previousDecks: Deck[], mutationId: number) => {
+      if (!token || orderedDeckIds.length === 0) return
+      try {
+        await reorderDecks(token, orderedDeckIds)
+      } catch (err) {
+        if (reorderMutationIdRef.current !== mutationId) return
+        setDecks(previousDecks)
+        setDecksError(err instanceof Error ? err.message : 'No se pudo guardar el orden de mazos.')
+      }
+    },
+    [token],
+  )
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event
+      if (!over || active.id === over.id) return
+
+      const oldIndex = userDecks.findIndex((deck) => String(deck.id) === String(active.id))
+      const newIndex = userDecks.findIndex((deck) => String(deck.id) === String(over.id))
+
+      if (oldIndex < 0 || newIndex < 0) return
+
+      const previousDecks = [...decks]
+      const reorderedUserDecks = arrayMove(userDecks, oldIndex, newIndex)
+      const orderedDeckIds = reorderedUserDecks.map((deck) => String(deck.id))
+      setDecksError(null)
+      setDecks([...systemDecks, ...reorderedUserDecks])
+      const mutationId = reorderMutationIdRef.current + 1
+      reorderMutationIdRef.current = mutationId
+      void persistUserDeckOrder(orderedDeckIds, previousDecks, mutationId)
+    },
+    [decks, persistUserDeckOrder, systemDecks, userDecks],
+  )
 
   if (decksLoading) {
     return (
@@ -1086,7 +1384,7 @@ export default function StudioDecksPage() {
           </p>
         ) : null}
 
-        {sortedDecks.length === 0 ? (
+        {decks.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-[#EAE4E2] bg-white p-8 text-center">
             <p className="text-sm font-medium text-slate-700">Aun no tienes mazos</p>
             <p className="mt-1 text-sm text-slate-500">
@@ -1094,30 +1392,79 @@ export default function StudioDecksPage() {
             </p>
           </div>
         ) : (
-          <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {sortedDecks.map((deck) => (
-              <DeckCard
-                key={String(deck.id)}
-                deck={deck}
-                deckTexture={getDeckTexture(deck)}
-                textureTransition={textureTransitionDeckIds.has(String(deck.id))}
-                onTextureTransitionEnd={() => {
-                  const deckId = String(deck.id)
-                  setTextureTransitionDeckIds((prev) => {
-                    if (!prev.has(deckId)) return prev
-                    const next = new Set(prev)
-                    next.delete(deckId)
-                    return next
-                  })
-                }}
-                isFailedQuestions={String(deck.id) === failedDeckId}
-                onOpen={() => router.push(`/studio/${deck.id}`)}
-                deleting={deletingDeckIds.has(String(deck.id))}
-                onDelete={() => {
-                  void handleDeleteDeck(deck)
-                }}
-              />
-            ))}
+          <section className="space-y-6">
+            {systemDecks.length > 0 ? (
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                {systemDecks.map((deck) => (
+                  <div key={String(deck.id)} className="cursor-default">
+                    <DeckCard
+                      deck={deck}
+                      deckTexture={getDeckTexture(deck)}
+                      textureTransition={textureTransitionDeckIds.has(String(deck.id))}
+                      onTextureTransitionEnd={() => {
+                        const deckId = String(deck.id)
+                        setTextureTransitionDeckIds((prev) => {
+                          if (!prev.has(deckId)) return prev
+                          const next = new Set(prev)
+                          next.delete(deckId)
+                          return next
+                        })
+                      }}
+                      isFailedQuestions={isFailedQuestionsDeck(deck)}
+                      onOpen={() => router.push(`/studio/${deck.id}`)}
+                      deleting={false}
+                      showDeleteButton={false}
+                    />
+                  </div>
+                ))}
+                {shouldShowSystemPlaceholder ? (
+                  <ConstructionDeckPlaceholder />
+                ) : null}
+              </div>
+            ) : null}
+
+            {systemDecks.length > 0 && userDecks.length > 0 ? (
+              <div className="flex items-center gap-4 py-1">
+                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                  Mazos personales
+                </span>
+                <div className="h-px flex-1 bg-[#E6DEDA]" />
+              </div>
+            ) : null}
+
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext
+                items={userDecks.map((deck) => String(deck.id))}
+                strategy={rectSortingStrategy}
+              >
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                  {userDecks.map((deck) => (
+                    <SortableDeckCard key={String(deck.id)} deck={deck}>
+                      <DeckCard
+                        deck={deck}
+                        deckTexture={getDeckTexture(deck)}
+                        textureTransition={textureTransitionDeckIds.has(String(deck.id))}
+                        onTextureTransitionEnd={() => {
+                          const deckId = String(deck.id)
+                          setTextureTransitionDeckIds((prev) => {
+                            if (!prev.has(deckId)) return prev
+                            const next = new Set(prev)
+                            next.delete(deckId)
+                            return next
+                          })
+                        }}
+                        isFailedQuestions={isFailedQuestionsDeck(deck)}
+                        onOpen={() => router.push(`/studio/${deck.id}`)}
+                        deleting={deletingDeckIds.has(String(deck.id))}
+                        onDelete={() => {
+                          void handleDeleteDeck(deck)
+                        }}
+                      />
+                    </SortableDeckCard>
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           </section>
         )}
       </main>
