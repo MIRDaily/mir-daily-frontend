@@ -1295,7 +1295,27 @@ export default function StudioDecksPage() {
           isContentVisible ? 'opacity-100' : 'opacity-0'
         }`}
       >
-        <section className="mb-6 flex items-center justify-between gap-4">
+        <section className="relative mb-6 flex items-center justify-between gap-4">
+          <Link
+            href="/studio"
+            aria-label="Volver a studio"
+            title="Volver a studio"
+            className="mb-2 inline-flex h-9 min-w-[52px] items-center justify-center rounded-lg bg-[#E8A598] text-white transition hover:bg-[#D98C7D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598]/60 xl:absolute xl:-left-32 xl:top-2 xl:mb-0"
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-3.5 w-3.5"
+            >
+              <path d="M19 12H5" />
+              <path d="M11 18l-6-6 6-6" />
+            </svg>
+          </Link>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Studio
@@ -1306,7 +1326,7 @@ export default function StudioDecksPage() {
           </div>
           <div className="flex items-center gap-2">
             <Link
-              href="/studio/trash"
+              href="/decks/trash"
               aria-label="Papelera de mazos"
               title="Papelera"
               className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50"
@@ -1411,7 +1431,7 @@ export default function StudioDecksPage() {
                         })
                       }}
                       isFailedQuestions={isFailedQuestionsDeck(deck)}
-                      onOpen={() => router.push(`/studio/${deck.id}`)}
+                      onOpen={() => router.push(`/decks/${deck.id}`)}
                       deleting={false}
                       showDeleteButton={false}
                     />
@@ -1454,7 +1474,7 @@ export default function StudioDecksPage() {
                           })
                         }}
                         isFailedQuestions={isFailedQuestionsDeck(deck)}
-                        onOpen={() => router.push(`/studio/${deck.id}`)}
+                        onOpen={() => router.push(`/decks/${deck.id}`)}
                         deleting={deletingDeckIds.has(String(deck.id))}
                         onDelete={() => {
                           void handleDeleteDeck(deck)

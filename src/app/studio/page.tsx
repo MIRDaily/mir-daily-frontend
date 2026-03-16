@@ -276,13 +276,13 @@ export default function StudioPage() {
                       <div className="flex flex-col gap-3 sm:flex-row">
                         <Link
                           className="flex flex-1 items-center justify-center rounded-xl bg-[#E8A598] px-4 py-3 text-base font-medium text-white shadow-md shadow-[#E8A598]/20 transition-colors hover:bg-[#d18d80]"
-                          href="/studio/mazos"
+                          href="/decks"
                         >
                           {card.linkOne}
                         </Link>
                         <Link
                           className="flex flex-1 items-center justify-center rounded-xl border border-[#7D8A96]/30 bg-white px-4 py-3 text-base font-medium transition-colors hover:border-[#7D8A96]/50 hover:bg-[#F2EFED]"
-                          href="/studio/mazos"
+                          href="/decks"
                         >
                           {card.linkTwo}
                         </Link>

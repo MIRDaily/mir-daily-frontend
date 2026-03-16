@@ -12,13 +12,15 @@ function shouldShowHeader(pathname: string): boolean {
     pathname.startsWith('/dashboard') ||
     pathname.startsWith('/panel') ||
     pathname.startsWith('/studio') ||
+    pathname.startsWith('/decks') ||
+    pathname.startsWith('/session') ||
     pathname.startsWith('/profile') ||
     pathname.startsWith('/notifications')
   )
 }
 
 function resolveActiveTab(pathname: string): HeaderTab {
-  if (pathname.startsWith('/studio')) return 'studio'
+  if (pathname.startsWith('/studio') || pathname.startsWith('/decks') || pathname.startsWith('/session')) return 'studio'
   if (pathname.startsWith('/panel')) return 'dashboard'
   if (pathname.startsWith('/dashboard')) return 'daily'
   return null

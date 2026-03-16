@@ -63,7 +63,7 @@ function toSafeNumber(value: number | null | undefined): number {
 function BackToDeckButton({ deckId, className }: { deckId: string; className?: string }) {
   return (
     <Link
-      href={`/studio/${deckId}`}
+      href={`/decks/${deckId}`}
       aria-label="Volver al mazo"
       title="Volver al mazo"
       className={`inline-flex h-9 min-w-[52px] items-center justify-center rounded-lg bg-[#E8A598] text-white transition hover:bg-[#D98C7D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598]/60 ${className ?? ''}`}

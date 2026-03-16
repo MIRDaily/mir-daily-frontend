@@ -98,7 +98,7 @@ export default function StudioDeckTrashPage() {
 
           <div className="mt-4">
             <Link
-              href="/studio/mazos"
+              href="/decks"
               className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
               Volver a mazos

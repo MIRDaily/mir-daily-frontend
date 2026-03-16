@@ -1160,7 +1160,7 @@ export default function StudioDeckDetailPage() {
       }
 
       clearStudySession()
-      router.push(`/studio/${deckId}/session/${sessionId}/summary`)
+      router.push(`/session/${sessionId}/summary?deckId=${deckId}`)
     } catch (err) {
       sessionClosedRef.current = false
       setStudyClosing(false)
@@ -1884,10 +1884,10 @@ export default function StudioDeckDetailPage() {
         <div className="relative">
           <button
             type="button"
-            onClick={() => router.push('/studio/mazos')}
+            onClick={() => router.push('/decks')}
             aria-label="Volver a mazos"
             title="Volver a mazos"
-            className="absolute -left-32 top-2 inline-flex h-9 min-w-[52px] items-center justify-center rounded-lg bg-[#E8A598] text-white transition hover:bg-[#D98C7D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598]/60"
+            className="mb-2 inline-flex h-9 min-w-[52px] items-center justify-center rounded-lg bg-[#E8A598] text-white transition hover:bg-[#D98C7D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598]/60 xl:absolute xl:-left-32 xl:top-2 xl:mb-0"
           >
             <svg
               aria-hidden

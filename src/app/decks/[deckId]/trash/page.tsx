@@ -103,7 +103,7 @@ export default function DeckTrashPage() {
 
           <div className="mt-4">
             <Link
-              href={`/studio/${deckId}`}
+              href={`/decks/${deckId}`}
               className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
               Volver al mazo
