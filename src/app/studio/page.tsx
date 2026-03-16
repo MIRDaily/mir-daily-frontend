@@ -1,5 +1,9 @@
+﻿'use client'
+
+import { useMemo } from 'react'
 import Link from 'next/link'
 import { debugRender } from '@/lib/debugRSC'
+import { useAuth } from '@/hooks/useAuth'
 
 type QuickStat = {
   label: string
@@ -109,8 +113,46 @@ const studioCards: ReadonlyArray<StudioCard> = [
   },
 ] as const
 
+const studioGreetingTemplates: ReadonlyArray<string> = [
+  'Vamos a por tu plaza, {name}.',
+  '{name}, hoy toca construir una ventaja más en tu preparación.',
+  'Cada bloque suma, {name}. Vamos a mantener el ritmo.',
+  'Buen momento para afinar tus puntos débiles, {name}.',
+  '{name}, una sesión enfocada hoy puede marcar la diferencia.',
+] as const
+
+function resolveStudioName(
+  user: { display_name?: string; username?: string; email?: string } | null,
+): string | null {
+  const displayName = String(user?.display_name ?? '').trim()
+  if (displayName) return displayName
+
+  const username = String(user?.username ?? '').trim()
+  if (username) return username
+
+  const email = String(user?.email ?? '').trim()
+  if (email.includes('@')) return email.split('@')[0]
+
+  return null
+}
+
 export default function StudioPage() {
   debugRender('StudioPage')
+  const { user, loading } = useAuth()
+  const studioName = useMemo(() => resolveStudioName(user), [user])
+  const selectedGreetingTemplate = useMemo(() => {
+    const today = new Date()
+    const daySeed = Number(
+      `${today.getUTCFullYear()}${String(today.getUTCMonth() + 1).padStart(2, '0')}${String(today.getUTCDate()).padStart(2, '0')}`,
+    )
+    const userSeed = String(user?.id ?? studioName ?? '').length
+    const index = Math.abs(daySeed + userSeed) % studioGreetingTemplates.length
+    return studioGreetingTemplates[index]
+  }, [studioName, user?.id])
+  const greetingParts = useMemo(
+    () => selectedGreetingTemplate.split('{name}'),
+    [selectedGreetingTemplate],
+  )
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[#FAF7F4] text-[#7D8A96]">
@@ -126,8 +168,17 @@ export default function StudioPage() {
             <div className="flex flex-col gap-2">
               <h1 className="text-4xl font-black tracking-tight text-[#2c3e50]">Studio</h1>
               <p className="text-lg font-light">
-                Vamos a por tu plaza, <span className="font-medium text-[#d18d80]">Alejandro</span>.
-                Hoy es un buen día para avanzar.
+                {greetingParts[0]}
+                <span
+                  className={`inline-block font-medium text-[#d18d80] ${
+                    !studioName ? 'min-w-[6ch]' : ''
+                  } ${
+                    !studioName && loading ? 'rounded bg-[#E8A598]/18' : ''
+                  }`}
+                >
+                  {studioName ?? '\u00A0'}
+                </span>
+                {greetingParts[1]}
               </p>
             </div>
 
@@ -327,3 +378,4 @@ export default function StudioPage() {
     </div>
   )
 }
+

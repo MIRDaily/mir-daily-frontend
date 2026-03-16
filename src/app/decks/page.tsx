@@ -853,6 +853,211 @@ function ConstructionDeckPlaceholder() {
   )
 }
 
+function CreateDeckPlaceholder({ onCreate }: { onCreate: () => void }) {
+  const [shimmerDirection, setShimmerDirection] = useState<ShimmerDirection>('left')
+  const [shimmerActive, setShimmerActive] = useState(false)
+  const [isPointerInside, setIsPointerInside] = useState(false)
+  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 })
+  const shimmerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const shimmerFrameRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (shimmerTimeoutRef.current) {
+        clearTimeout(shimmerTimeoutRef.current)
+        shimmerTimeoutRef.current = null
+      }
+      if (shimmerFrameRef.current != null) {
+        window.cancelAnimationFrame(shimmerFrameRef.current)
+        shimmerFrameRef.current = null
+      }
+    }
+  }, [])
+
+  const triggerDirectionalShimmer = (direction: ShimmerDirection) => {
+    if (shimmerTimeoutRef.current) {
+      clearTimeout(shimmerTimeoutRef.current)
+      shimmerTimeoutRef.current = null
+    }
+    if (shimmerFrameRef.current != null) {
+      window.cancelAnimationFrame(shimmerFrameRef.current)
+      shimmerFrameRef.current = null
+    }
+
+    setShimmerDirection(direction)
+    setShimmerActive(false)
+    shimmerFrameRef.current = window.requestAnimationFrame(() => {
+      shimmerFrameRef.current = null
+      setShimmerActive(true)
+    })
+
+    shimmerTimeoutRef.current = setTimeout(() => {
+      shimmerTimeoutRef.current = null
+      setShimmerActive(false)
+    }, 1100)
+  }
+
+  const shimmerFromTopLeft = shimmerDirection === 'bottom' || shimmerDirection === 'right'
+  const coreAnimationClass = shimmerActive
+    ? shimmerFromTopLeft
+      ? 'animate-shimmer-diag-down-core'
+      : 'animate-shimmer-diag-up-core'
+    : ''
+  const glowAnimationClass = shimmerActive
+    ? shimmerFromTopLeft
+      ? 'animate-shimmer-diag-down-glow'
+      : 'animate-shimmer-diag-up-glow'
+    : ''
+  const tiltTransform = `translateY(${isPointerInside ? -3 : 0}px) rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`
+  const hoverShadowOpacity = isPointerInside ? 1 : 0
+
+  return (
+    <article
+      role="button"
+      tabIndex={0}
+      style={{
+        transformStyle: 'preserve-3d',
+        willChange: 'transform',
+        transition: 'transform 180ms ease, box-shadow 180ms ease',
+        transform: tiltTransform,
+        ['--light-x' as string]: '50%',
+        ['--light-y' as string]: '50%',
+      }}
+      onClick={onCreate}
+      onMouseEnter={(event) => {
+        const direction = getMouseEntryDirection(event.currentTarget, event.clientX, event.clientY)
+        setIsPointerInside(true)
+        triggerDirectionalShimmer(direction)
+      }}
+      onMouseMove={(event) => {
+        const rect = event.currentTarget.getBoundingClientRect()
+        const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
+        const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height))
+        const rotateY = Math.max(-3, Math.min(3, (x - 0.5) * 6))
+        const rotateX = Math.max(-3, Math.min(3, (0.5 - y) * 6))
+        event.currentTarget.style.setProperty('--light-x', `${x * 100}%`)
+        event.currentTarget.style.setProperty('--light-y', `${y * 100}%`)
+        setTilt({ rotateX, rotateY })
+      }}
+      onMouseLeave={() => {
+        setIsPointerInside(false)
+        setTilt({ rotateX: 0, rotateY: 0 })
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onCreate()
+        }
+      }}
+      className="deck-card-create group relative aspect-[900/336] min-h-[210px] cursor-pointer overflow-hidden rounded-2xl p-6 sm:min-h-[230px]"
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 bg-center bg-no-repeat [background-size:100%_100%] transition-opacity duration-200"
+        style={{
+          backgroundImage: 'url(/textures/decks/clean_1.svg)',
+          filter:
+            'drop-shadow(0 10px 22px rgba(0, 0, 0, 0.08)) drop-shadow(0 20px 48px rgba(0, 0, 0, 0.10))',
+          opacity: hoverShadowOpacity,
+        }}
+      />
+      <span aria-hidden className={`pointer-events-none absolute inset-0 z-[2] shimmer-core ${coreAnimationClass}`} />
+      <span aria-hidden className={`pointer-events-none absolute inset-0 z-[2] shimmer-glow ${glowAnimationClass}`} />
+      <div className="relative z-10 flex h-full flex-col items-center justify-center gap-4">
+        <span className="inline-flex h-16 w-16 items-center justify-center rounded-full border-2 border-[#E8A598] bg-white/80 text-4xl font-semibold leading-none text-[#C4655A] shadow-sm">
+          +
+        </span>
+        <p className="text-center text-lg font-semibold text-slate-700">Crea tu primer mazo</p>
+      </div>
+
+      <style jsx>{`
+        .deck-card-create::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          border-radius: inherit;
+          overflow: hidden;
+          opacity: 0;
+          z-index: 3;
+          transition: opacity 180ms ease;
+          background: radial-gradient(
+            circle at var(--light-x) var(--light-y),
+            rgba(255, 255, 255, 0.3),
+            transparent 40%
+          );
+        }
+        .deck-card-create:hover::before {
+          opacity: 1;
+        }
+        .shimmer-core {
+          opacity: 0;
+          background-image: linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0) 42%,
+            rgba(255, 255, 255, 0.75) 50%,
+            rgba(255, 255, 255, 0) 58%
+          );
+          background-size: 220% 220%;
+          background-repeat: no-repeat;
+          background-position: -160% -160%;
+          mix-blend-mode: screen;
+          -webkit-mask-image: radial-gradient(120% 100% at 50% 50%, #000 58%, transparent 100%);
+          mask-image: radial-gradient(120% 100% at 50% 50%, #000 58%, transparent 100%);
+        }
+        .shimmer-glow {
+          opacity: 0;
+          background-image: linear-gradient(
+            135deg,
+            rgba(255, 215, 204, 0) 38%,
+            rgba(255, 215, 204, 0.9) 50%,
+            rgba(255, 215, 204, 0) 62%
+          );
+          background-size: 260% 260%;
+          background-repeat: no-repeat;
+          background-position: -170% -170%;
+          filter: blur(14px);
+          mix-blend-mode: screen;
+          -webkit-mask-image: radial-gradient(125% 105% at 50% 50%, #000 52%, transparent 100%);
+          mask-image: radial-gradient(125% 105% at 50% 50%, #000 52%, transparent 100%);
+        }
+        .animate-shimmer-diag-down-core {
+          animation: shimmerDiagDownCore 1850ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        }
+        .animate-shimmer-diag-up-core {
+          animation: shimmerDiagUpCore 1850ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        }
+        .animate-shimmer-diag-down-glow {
+          animation: shimmerDiagDownGlow 2150ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        }
+        .animate-shimmer-diag-up-glow {
+          animation: shimmerDiagUpGlow 2150ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+        }
+        @keyframes shimmerDiagDownCore {
+          0% { background-position: -140% -140%; opacity: 0; }
+          12% { opacity: 1; }
+          100% { background-position: 140% 140%; opacity: 0; }
+        }
+        @keyframes shimmerDiagUpCore {
+          0% { background-position: 140% 140%; opacity: 0; }
+          12% { opacity: 1; }
+          100% { background-position: -140% -140%; opacity: 0; }
+        }
+        @keyframes shimmerDiagDownGlow {
+          0% { background-position: -160% -160%; opacity: 0; }
+          18% { opacity: 0.95; }
+          100% { background-position: 130% 130%; opacity: 0; }
+        }
+        @keyframes shimmerDiagUpGlow {
+          0% { background-position: 130% 130%; opacity: 0; }
+          18% { opacity: 0.95; }
+          100% { background-position: -160% -160%; opacity: 0; }
+        }
+      `}</style>
+    </article>
+  )
+}
+
 export default function StudioDecksPage() {
   const router = useRouter()
   const sensors = useSensors(
@@ -1404,15 +1609,7 @@ export default function StudioDecksPage() {
           </p>
         ) : null}
 
-        {decks.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#EAE4E2] bg-white p-8 text-center">
-            <p className="text-sm font-medium text-slate-700">Aun no tienes mazos</p>
-            <p className="mt-1 text-sm text-slate-500">
-              Crea tu primer mazo para empezar a organizar tu estudio.
-            </p>
-          </div>
-        ) : (
-          <section className="space-y-6">
+        <section className="space-y-6">
             {systemDecks.length > 0 ? (
               <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                 {systemDecks.map((deck) => (
@@ -1443,7 +1640,7 @@ export default function StudioDecksPage() {
               </div>
             ) : null}
 
-            {systemDecks.length > 0 && userDecks.length > 0 ? (
+            {systemDecks.length > 0 ? (
               <div className="flex items-center gap-4 py-1">
                 <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
                   Mazos personales
@@ -1452,41 +1649,50 @@ export default function StudioDecksPage() {
               </div>
             ) : null}
 
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext
-                items={userDecks.map((deck) => String(deck.id))}
-                strategy={rectSortingStrategy}
-              >
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                  {userDecks.map((deck) => (
-                    <SortableDeckCard key={String(deck.id)} deck={deck}>
-                      <DeckCard
-                        deck={deck}
-                        deckTexture={getDeckTexture(deck)}
-                        textureTransition={textureTransitionDeckIds.has(String(deck.id))}
-                        onTextureTransitionEnd={() => {
-                          const deckId = String(deck.id)
-                          setTextureTransitionDeckIds((prev) => {
-                            if (!prev.has(deckId)) return prev
-                            const next = new Set(prev)
-                            next.delete(deckId)
-                            return next
-                          })
-                        }}
-                        isFailedQuestions={isFailedQuestionsDeck(deck)}
-                        onOpen={() => router.push(`/decks/${deck.id}`)}
-                        deleting={deletingDeckIds.has(String(deck.id))}
-                        onDelete={() => {
-                          void handleDeleteDeck(deck)
-                        }}
-                      />
-                    </SortableDeckCard>
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+            {userDecks.length === 0 ? (
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <CreateDeckPlaceholder
+                  onCreate={() => {
+                    setShowCreateForm(true)
+                  }}
+                />
+              </div>
+            ) : (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext
+                  items={userDecks.map((deck) => String(deck.id))}
+                  strategy={rectSortingStrategy}
+                >
+                  <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                    {userDecks.map((deck) => (
+                      <SortableDeckCard key={String(deck.id)} deck={deck}>
+                        <DeckCard
+                          deck={deck}
+                          deckTexture={getDeckTexture(deck)}
+                          textureTransition={textureTransitionDeckIds.has(String(deck.id))}
+                          onTextureTransitionEnd={() => {
+                            const deckId = String(deck.id)
+                            setTextureTransitionDeckIds((prev) => {
+                              if (!prev.has(deckId)) return prev
+                              const next = new Set(prev)
+                              next.delete(deckId)
+                              return next
+                            })
+                          }}
+                          isFailedQuestions={isFailedQuestionsDeck(deck)}
+                          onOpen={() => router.push(`/decks/${deck.id}`)}
+                          deleting={deletingDeckIds.has(String(deck.id))}
+                          onDelete={() => {
+                            void handleDeleteDeck(deck)
+                          }}
+                        />
+                      </SortableDeckCard>
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            )}
           </section>
-        )}
       </main>
       {undoToast ? (
         <UndoDeleteToast
