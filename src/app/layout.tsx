@@ -1,6 +1,7 @@
 import './globals.css'
 import type { Metadata } from 'next'
 import localFont from 'next/font/local'
+import Script from 'next/script'
 import GlobalHeader from '@/components/GlobalHeader'
 import { AppProviders } from '@/providers/AppProviders'
 import { debugRender } from '@/lib/debugRSC'
@@ -27,7 +28,7 @@ export default function RootLayout({
   debugRender('RootLayout')
 
   return (
-    <html lang="es" className={lexend.variable}>
+    <html lang="es" className={lexend.variable} data-cozy-cursor="on">
       <head>
         <link
           rel="stylesheet"
@@ -72,7 +73,7 @@ export default function RootLayout({
           <GlobalHeader />
           {children}
         </AppProviders>
-        <script src="/js/cozy-cursor.js"></script>
+        <Script src="/js/cozy-cursor.js" strategy="afterInteractive" />
       </body>
     </html>
   )

@@ -543,14 +543,12 @@ export default function DashboardPage() {
   } | null>(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [summaryError, setSummaryError] = useState<string | null>(null)
-  const [distributionHover, setDistributionHover] = useState<{
-    x: number
-    y: number
-    score: number
-  } | null>(null)
   const [summaryChartCycle, setSummaryChartCycle] = useState(0)
   const [distributionChartCycle, setDistributionChartCycle] = useState(0)
   const [percentileChartCycle, setPercentileChartCycle] = useState(0)
+  const distributionHoverLineRef = useRef<SVGLineElement | null>(null)
+  const distributionHoverTooltipRef = useRef<HTMLDivElement | null>(null)
+  const distributionHoverTooltipTextRef = useRef<HTMLDivElement | null>(null)
   const prevSummaryCardInViewRef = useRef(false)
   const prevDistributionCardInViewRef = useRef(false)
   const prevPercentileCardInViewRef = useRef(false)
@@ -1584,6 +1582,37 @@ export default function DashboardPage() {
     const ratio = (clampedX - chartLeft) / chartSpan
     return domainMin + ratio * (domainMax - domainMin)
   }, [chartLeft, chartRight, chartSpan, domainMax, domainMin])
+  const showDistributionHover = useCallback((x: number, y: number, score: number) => {
+    const lineEl = distributionHoverLineRef.current
+    if (lineEl) {
+      lineEl.setAttribute('x1', String(x))
+      lineEl.setAttribute('x2', String(x))
+      lineEl.style.opacity = '0.9'
+    }
+
+    const tooltipEl = distributionHoverTooltipRef.current
+    if (tooltipEl) {
+      tooltipEl.style.left = `${x + 12}px`
+      tooltipEl.style.top = `${y}px`
+      tooltipEl.style.opacity = '1'
+    }
+
+    const tooltipTextEl = distributionHoverTooltipTextRef.current
+    if (tooltipTextEl) {
+      tooltipTextEl.textContent = `score: ${score.toFixed(1)} pts`
+    }
+  }, [])
+  const clearDistributionHover = useCallback(() => {
+    const lineEl = distributionHoverLineRef.current
+    if (lineEl) {
+      lineEl.style.opacity = '0'
+    }
+
+    const tooltipEl = distributionHoverTooltipRef.current
+    if (tooltipEl) {
+      tooltipEl.style.opacity = '0'
+    }
+  }, [])
   const buildKdePath = useCallback((scores: number[]) => {
     if (scores.length < 2 || domainMin === null || domainMax === null) {
       return { line: '', area: '', maxDensity: 0, bandwidth: 1 }
@@ -1633,19 +1662,18 @@ export default function DashboardPage() {
     typeof userScore === 'number' && Number.isFinite(userScore)
       ? userScore
       : null
-  const computeKdeDensity = useCallback((value: number) => {
+  const userDensity = useMemo(() => {
+    if (userScoreForChart === null) return null
     if (!distributionScores.length) return 0
     const n = distributionScores.length
     const bandwidth = distributionPaths.bandwidth || 1
     return (
       distributionScores.reduce((acc, score) => {
-        const z = (value - score) / bandwidth
+        const z = (userScoreForChart - score) / bandwidth
         return acc + Math.exp(-0.5 * z * z)
       }, 0) / n
     )
-  }, [distributionPaths.bandwidth, distributionScores])
-  const userDensity =
-    userScoreForChart !== null ? computeKdeDensity(userScoreForChart) : null
+  }, [distributionPaths.bandwidth, distributionScores, userScoreForChart])
   const userScoreY =
     userDensity !== null && distributionPaths.maxDensity > 0
       ? chartBottom -
@@ -3589,7 +3617,7 @@ export default function DashboardPage() {
                                 className="relative z-10 w-full h-auto aspect-[5/2]"
                                 viewBox="0 0 400 160"
                                 preserveAspectRatio="none"
-                                onMouseLeave={() => setDistributionHover(null)}
+                                onMouseLeave={clearDistributionHover}
                                 onMouseMove={(e) => {
                                   if (domainMin === null || domainMax === null) return
                                   const rect = (
@@ -3601,7 +3629,7 @@ export default function DashboardPage() {
                                   if (score === null) return
                                   const clampedX = Math.max(chartLeft, Math.min(chartRight, x))
                                   const clampedY = Math.max(chartTop, Math.min(chartBottom, y))
-                                  setDistributionHover({ x: clampedX, y: clampedY, score })
+                                  showDistributionHover(clampedX, clampedY, score)
                                 }}
                               >
                                 <defs>
@@ -3667,33 +3695,32 @@ export default function DashboardPage() {
                                     </line>
                                   </>
                                 )}
-                                {distributionHover && (
-                                  <line
-                                    x1={distributionHover.x}
-                                    y1="12"
-                                    x2={distributionHover.x}
-                                    y2="160"
-                                    stroke="#64748B"
-                                    strokeWidth="1"
-                                    strokeDasharray="3 3"
-                                    opacity="0.9"
-                                  />
-                                )}
+                                <line
+                                  ref={distributionHoverLineRef}
+                                  x1="0"
+                                  y1="12"
+                                  x2="0"
+                                  y2="160"
+                                  stroke="#64748B"
+                                  strokeWidth="1"
+                                  strokeDasharray="3 3"
+                                  opacity="0"
+                                />
                               </svg>
                             </div>
                           )}
-                          {distributionHover && (
-                            <div
-                              className="absolute rounded-lg border border-[#E9E4E1] bg-white/95 px-3 py-2 text-xs text-[#4B5563] shadow-sm pointer-events-none"
-                              style={{
-                                left: `${distributionHover.x + 12}px`,
-                                top: `${distributionHover.y}px`,
-                                transform: 'translate(0, -50%)',
-                              }}
-                            >
-                              <div>{`score: ${distributionHover.score.toFixed(1)} pts`}</div>
-                            </div>
-                          )}
+                          <div
+                            ref={distributionHoverTooltipRef}
+                            className="absolute rounded-lg border border-[#E9E4E1] bg-white/95 px-3 py-2 text-xs text-[#4B5563] shadow-sm pointer-events-none"
+                            style={{
+                              left: '0px',
+                              top: '0px',
+                              transform: 'translate(0, -50%)',
+                              opacity: 0,
+                            }}
+                          >
+                            <div ref={distributionHoverTooltipTextRef}>score: -- pts</div>
+                          </div>
                           <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-[#7D8A96]">
                             <div className="flex items-center gap-2 text-[#4F7BC0] rounded-full border border-[#DDE5F3] bg-[#F7FAFF] px-2.5 py-1">
                               <span className="inline-block w-3 h-0.5 bg-[#4F7BC0]"></span>

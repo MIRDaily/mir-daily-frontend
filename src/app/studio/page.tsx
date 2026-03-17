@@ -1,7 +1,8 @@
 ﻿'use client'
 
-import { useMemo } from 'react'
+import { useLayoutEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { motion, useReducedMotion } from 'framer-motion'
 import { debugRender } from '@/lib/debugRSC'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -121,6 +122,28 @@ const studioGreetingTemplates: ReadonlyArray<string> = [
   '{name}, una sesión enfocada hoy puede marcar la diferencia.',
 ] as const
 
+const studioDailyDuration = 0.5
+const studioDailyEase = 'easeOut' as const
+const studioGreetingRevealDelay = 0.96
+
+function entranceProps(
+  reduceMotion: boolean,
+  delay: number,
+  distance = 18,
+  scale = 0.985,
+  blurPx = 6,
+) {
+  if (reduceMotion) {
+    return { initial: false as const }
+  }
+
+  return {
+    initial: { opacity: 0, y: distance, scale, filter: `blur(${blurPx}px)` },
+    animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
+    transition: { duration: studioDailyDuration, delay, ease: studioDailyEase },
+  }
+}
+
 function resolveStudioName(
   user: { display_name?: string; username?: string; email?: string } | null,
 ): string | null {
@@ -139,16 +162,42 @@ function resolveStudioName(
 export default function StudioPage() {
   debugRender('StudioPage')
   const { user, loading } = useAuth()
+  const reduceMotion = useReducedMotion()
+
+  useLayoutEffect(() => {
+    const prevScrollRestoration = window.history.scrollRestoration
+    window.history.scrollRestoration = 'manual'
+
+    const forceTop = () => {
+      window.scrollTo(0, 0)
+      document.documentElement.scrollTop = 0
+      document.body.scrollTop = 0
+    }
+
+    forceTop()
+    const raf1 = window.requestAnimationFrame(forceTop)
+    const raf2 = window.requestAnimationFrame(() => window.requestAnimationFrame(forceTop))
+    const t1 = window.setTimeout(forceTop, 50)
+    const t2 = window.setTimeout(forceTop, 180)
+
+    return () => {
+      window.cancelAnimationFrame(raf1)
+      window.cancelAnimationFrame(raf2)
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
+      window.history.scrollRestoration = prevScrollRestoration
+    }
+  }, [])
+
   const studioName = useMemo(() => resolveStudioName(user), [user])
   const selectedGreetingTemplate = useMemo(() => {
     const today = new Date()
     const daySeed = Number(
       `${today.getUTCFullYear()}${String(today.getUTCMonth() + 1).padStart(2, '0')}${String(today.getUTCDate()).padStart(2, '0')}`,
     )
-    const userSeed = String(user?.id ?? studioName ?? '').length
-    const index = Math.abs(daySeed + userSeed) % studioGreetingTemplates.length
+    const index = Math.abs(daySeed) % studioGreetingTemplates.length
     return studioGreetingTemplates[index]
-  }, [studioName, user?.id])
+  }, [])
   const greetingParts = useMemo(
     () => selectedGreetingTemplate.split('{name}'),
     [selectedGreetingTemplate],
@@ -158,17 +207,34 @@ export default function StudioPage() {
     <div className="relative min-h-screen overflow-x-hidden bg-[#FAF7F4] text-[#7D8A96]">
       {/* Fondo decorativo */}
       <div className="pointer-events-none fixed inset-0 z-0 opacity-40 [background-image:radial-gradient(circle_at_20%_20%,rgba(125,138,150,0.08)_0,transparent_30%),radial-gradient(circle_at_80%_75%,rgba(232,165,152,0.08)_0,transparent_30%)]" />
-      <div className="pointer-events-none fixed -right-[5%] -top-[10%] z-0 h-96 w-96 rounded-full bg-[#E8A598]/15 blur-3xl" />
       <div className="pointer-events-none fixed -bottom-[10%] -left-[5%] z-0 h-96 w-96 rounded-full bg-[#8BA888]/15 blur-3xl" />
 
 
-      <main className="relative z-10 mx-auto w-full max-w-7xl px-6 py-8">
+      <motion.main
+        className="relative z-10 mx-auto w-full max-w-7xl px-6 py-8"
+        {...entranceProps(reduceMotion, 0.04, 14, 0.995, 4)}
+      >
         <div className="flex flex-col gap-10">
-          <section className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
+          <motion.section
+            className="flex flex-col justify-between gap-6 md:flex-row md:items-end"
+            {...entranceProps(reduceMotion, 0.1, 16, 0.99, 4)}
+          >
             <div className="flex flex-col gap-2">
-              <h1 className="text-4xl font-black tracking-tight text-[#2c3e50]">Studio</h1>
-              <p className="text-lg font-light">
-                {greetingParts[0]}
+              <motion.h1
+                className="text-4xl font-black tracking-tight text-[#2c3e50]"
+                {...entranceProps(reduceMotion, 0.12, 12, 0.99, 3)}
+              >
+                Studio
+              </motion.h1>
+              <motion.p
+                className="relative overflow-hidden text-lg font-light"
+                initial={reduceMotion ? false : { clipPath: 'inset(0 100% 0 0)', opacity: 0.98 }}
+                animate={reduceMotion ? undefined : { clipPath: 'inset(0 0 0 0)', opacity: 1 }}
+                transition={{ duration: 0.58, delay: studioGreetingRevealDelay, ease: [0.2, 0.9, 0.2, 1] }}
+              >
+                <span className="relative z-10">
+                  {greetingParts[0]}
+                </span>
                 <span
                   className={`inline-block font-medium text-[#d18d80] ${
                     !studioName ? 'min-w-[6ch]' : ''
@@ -178,15 +244,32 @@ export default function StudioPage() {
                 >
                   {studioName ?? '\u00A0'}
                 </span>
-                {greetingParts[1]}
-              </p>
+                <span className="relative z-10">
+                  {greetingParts[1]}
+                </span>
+                {!reduceMotion ? (
+                  <motion.span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-y-0 left-[-14px] z-20 w-8 bg-gradient-to-r from-transparent via-white/70 to-transparent blur-[2px]"
+                    initial={{ left: '-14px', opacity: 0 }}
+                    animate={{ left: 'calc(100% + 14px)', opacity: [0, 1, 1, 0] }}
+                    transition={{
+                      duration: 0.58,
+                      delay: studioGreetingRevealDelay + 0.02,
+                      ease: 'linear',
+                      times: [0, 0.08, 0.9, 1],
+                    }}
+                  />
+                ) : null}
+              </motion.p>
             </div>
 
             <div className="flex gap-4">
-              {quickStats.map((stat) => (
-                <div
+              {quickStats.map((stat, index) => (
+                <motion.div
                   key={stat.label}
                   className="rounded-xl border border-[#EAE4E2] bg-white px-5 py-3 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md"
+                  {...entranceProps(reduceMotion, 0.18 + index * 0.06, 16, 0.98)}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`rounded-full p-1.5 ${stat.iconClass}`}>
@@ -197,21 +280,22 @@ export default function StudioPage() {
                       <p className="text-base font-bold text-[#2c3e50]">{stat.value}</p>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
-          </section>
+          </motion.section>
 
-          <section>
+          <motion.section {...entranceProps(reduceMotion, 0.18, 16, 0.99, 4)}>
             <div className="mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined">dashboard</span>
               <h2 className="text-xl font-bold text-[#2c3e50]">Visión General del Estudio</h2>
             </div>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {overviewCards.map((card) => (
-                <article
+              {overviewCards.map((card, index) => (
+                <motion.article
                   key={card.title}
                   className="relative flex items-center justify-between overflow-hidden rounded-2xl border border-[#EAE4E2] bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md"
+                  {...entranceProps(reduceMotion, 0.24 + index * 0.08, 18, 0.985)}
                 >
                   <div
                     className={`absolute right-0 top-0 h-full w-24 bg-gradient-to-l to-transparent ${
@@ -245,14 +329,17 @@ export default function StudioPage() {
                   >
                     <span className="material-symbols-outlined text-3xl">{card.icon}</span>
                   </div>
-                </article>
+                </motion.article>
               ))}
             </div>
-          </section>
+          </motion.section>
 
-          <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {studioCards.map((card) => (
-              <article
+          <motion.section
+            className="grid grid-cols-1 gap-6 md:grid-cols-2"
+            {...entranceProps(reduceMotion, 0.26, 18, 0.99, 4)}
+          >
+            {studioCards.map((card, index) => (
+              <motion.article
                 key={card.id}
                 id={card.id}
                 className={`group relative overflow-hidden rounded-2xl border p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md ${
@@ -262,6 +349,7 @@ export default function StudioPage() {
                       ? 'border-[#EAE4E2] bg-[#f4f7f4]'
                       : 'border-[#EAE4E2] bg-white'
                 }`}
+                {...entranceProps(reduceMotion, 0.32 + index * 0.08, 20, 0.98)}
               >
                 <div className="relative z-10 flex h-full flex-col justify-between">
                   <div>
@@ -352,16 +440,20 @@ export default function StudioPage() {
                     </div>
                   ) : null}
                 </div>
-              </article>
+              </motion.article>
             ))}
-          </section>
+          </motion.section>
 
-          <section className="border-t border-[#EAE4E2] pt-8">
+          <motion.section
+            className="border-t border-[#EAE4E2] pt-8"
+            {...entranceProps(reduceMotion, 0.36, 14, 0.995, 3)}
+          >
             <h3 className="mb-4 text-xs font-bold uppercase tracking-wider">Acceso Rápido</h3>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <a
+              <motion.a
                 href="#"
                 className="group flex cursor-pointer items-center gap-4 rounded-xl border border-[#EAE4E2] bg-white p-4 transition-colors hover:border-[#E8A598]/50"
+                {...entranceProps(reduceMotion, 0.44, 16, 0.98)}
               >
                 <div className="rounded-lg bg-[#F2EFED] p-2 text-[#7D8A96] transition-colors group-hover:bg-[#E8A598] group-hover:text-white">
                   <span className="material-symbols-outlined">menu_book</span>
@@ -370,11 +462,11 @@ export default function StudioPage() {
                   <h4 className="font-bold text-[#2c3e50]">Conceptos Básicos</h4>
                   <p className="text-xs">Biblioteca de manuales</p>
                 </div>
-              </a>
+              </motion.a>
             </div>
-          </section>
+          </motion.section>
         </div>
-      </main>
+      </motion.main>
     </div>
   )
 }

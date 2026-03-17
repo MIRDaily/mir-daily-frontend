@@ -16,6 +16,7 @@ const MAIN_GOAL_LABEL: Record<'prepare_mir' | 'reinforce_degree' | 'explore', st
   reinforce_degree: 'Reforzar carrera',
   explore: 'Explorar',
 }
+const COZY_CURSOR_STORAGE_KEY = 'mirdaily.cozyCursorEnabled'
 
 function formatMedicalYear(value: number | null | undefined) {
   if (value === null || value === undefined) return 'No definido'
@@ -44,6 +45,7 @@ export default function ProfileCard() {
   const [nameValidationError, setNameValidationError] = useState<string | null>(null)
   const [usernameValidationError, setUsernameValidationError] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState>(null)
+  const [cozyCursorEnabled, setCozyCursorEnabled] = useState(true)
 
   useEffect(() => {
     if (!toast) return
@@ -59,6 +61,26 @@ export default function ProfileCard() {
     }, 60000)
     return () => clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(COZY_CURSOR_STORAGE_KEY)
+      const enabled = stored !== 'false'
+      setCozyCursorEnabled(enabled)
+      document.documentElement.setAttribute('data-cozy-cursor', enabled ? 'on' : 'off')
+    } catch (error) {}
+  }, [])
+
+  const toggleCozyCursor = () => {
+    setCozyCursorEnabled((current) => {
+      const next = !current
+      try {
+        localStorage.setItem(COZY_CURSOR_STORAGE_KEY, String(next))
+      } catch (error) {}
+      document.documentElement.setAttribute('data-cozy-cursor', next ? 'on' : 'off')
+      return next
+    })
+  }
 
   const trimmedDraft = displayNameDraft.trim()
   const isNameUnchanged = trimmedDraft === (profile?.display_name ?? '').trim()
@@ -406,6 +428,32 @@ export default function ProfileCard() {
               <p>
                 <span className="font-semibold">Facultad:</span> {universityLabel}
               </p>
+            </div>
+            <div className="mt-4 border-t border-[#EFE9E6] pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#7D8A96]">
+                Cursor especial Cozy Pebble
+              </p>
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-[#E9E4E1] bg-[#FAF7F4] px-3 py-2.5">
+                <span className="text-sm font-medium text-[#4B5563]">
+                  {cozyCursorEnabled ? 'Activado' : 'Desactivado'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={cozyCursorEnabled}
+                  aria-label="Activar o desactivar cursor especial"
+                  onClick={toggleCozyCursor}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                    cozyCursorEnabled ? 'bg-[#E8A598]' : 'bg-[#CFC9C6]'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                      cozyCursorEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           </div>
           {error ? (

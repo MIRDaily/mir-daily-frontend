@@ -16,11 +16,15 @@
 
 /* Hide native cursor globally on desktop/fine pointer devices */
 @media (hover: hover) and (pointer: fine) {
-  html,
-  body,
-  * {
+  html[data-cozy-cursor='on'],
+  html[data-cozy-cursor='on'] body,
+  html[data-cozy-cursor='on'] * {
     cursor: none !important;
   }
+}
+
+html[data-cozy-cursor='off'] .cozy-cursor {
+  display: none !important;
 }
 
 /* ── Cursor container ── */
@@ -47,9 +51,11 @@
 }
 
 .cozy-cursor .pebble-border {
-  fill: var(--stroke);
-  stroke: none;
-  transition: fill 280ms ease;
+  fill: #7d746d;
+  stroke: rgba(63, 56, 51, 0.48);
+  stroke-width: 2;
+  paint-order: stroke fill;
+  transition: fill 280ms ease, stroke 280ms ease;
 }
 
 .cozy-cursor .pebble-scale {
@@ -63,7 +69,8 @@
 }
 
 .cozy-cursor.is-hover .pebble-border {
-  fill: var(--accent);
+  fill: #be7f74;
+  stroke: rgba(78, 51, 46, 0.52);
 }
 
 .cozy-cursor.is-hover .pebble-scale {
