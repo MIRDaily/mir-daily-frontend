@@ -1,0 +1,159 @@
+/* ═══════════════════════════════════════════════════════
+   mirdaily — Cozy Pebble Cursor
+   Drop-in custom cursor module.
+   
+   Requires:
+     - CSS variables: --bg, --accent, --accent-fill, 
+       --accent-dark, --stroke defined in your :root
+     - #cozy-cursor element in your HTML
+     - cozy-cursor.js loaded before </body>
+   
+   Usage:
+     - Links/buttons get hover state automatically
+     - Add data-cursor="hover" to any extra interactive element
+     - That's it
+═══════════════════════════════════════════════════════ */
+
+/* Hide native cursor globally */
+html,
+body,
+a, button, [role="button"],
+input, select, textarea,
+[data-cursor] {
+  cursor: none !important;
+}
+
+/* ── Cursor container ── */
+.cozy-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 10000;
+  opacity: 0;
+  will-change: transform;
+}
+
+.cozy-cursor svg {
+  display: block;
+  overflow: visible;
+}
+
+/* ── Shape base ── */
+.cozy-cursor .pebble-inner {
+  fill: var(--bg);
+  stroke: none;
+  transition: fill 280ms ease;
+}
+
+.cozy-cursor .pebble-border {
+  fill: var(--stroke);
+  stroke: none;
+  transition: fill 280ms ease;
+}
+
+.cozy-cursor .pebble-scale {
+  transform-origin: 407px 335px;
+  transition: transform 280ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* ── Hover state ── */
+.cozy-cursor.is-hover .pebble-inner {
+  fill: var(--accent-fill);
+}
+
+.cozy-cursor.is-hover .pebble-border {
+  fill: var(--accent);
+}
+
+.cozy-cursor.is-hover .pebble-scale {
+  transform: scale(1.2);
+}
+
+/* ── Active state (click) ── */
+.cozy-cursor.is-active .pebble-inner {
+  fill: var(--accent-dark);
+}
+
+.cozy-cursor.is-active .pebble-border {
+  fill: var(--accent-dark);
+}
+
+.cozy-cursor.is-active .pebble-scale {
+  transform: scale(0.88);
+}
+
+/* ── Drag wiggle (sustained hold) ── */
+.cozy-cursor.is-dragging .pebble-scale {
+  transform-origin: 248px 101px;
+  animation: tail-wiggle 800ms cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+@keyframes tail-wiggle {
+  0%   { transform: scale(0.88) rotate(0deg); }
+  20%  { transform: scale(0.88) rotate(3.5deg); }
+  40%  { transform: scale(0.88) rotate(-2.8deg); }
+  60%  { transform: scale(0.88) rotate(2deg); }
+  80%  { transform: scale(0.88) rotate(-1.2deg); }
+  100% { transform: scale(0.88) rotate(0deg); }
+}
+
+/* ── Pulse rings (click feedback) ── */
+.cozy-cursor .pulse-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 12;
+  opacity: 0;
+  transform-origin: 407px 335px;
+  transform: scale(0.5);
+}
+
+.cozy-cursor.is-pulsing .pulse-ring {
+  animation: ring-expand 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.cozy-cursor.is-pulsing .pulse-ring:nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.cozy-cursor.is-pulsing .pulse-ring:nth-child(3) {
+  animation-delay: 130ms;
+}
+
+@keyframes ring-expand {
+  0% {
+    opacity: 0.6;
+    transform: scale(0.6);
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.8);
+  }
+}
+
+/* ── Touch / mobile: disable entirely ── */
+@media (hover: none), (pointer: coarse) {
+  html, body, a, button, [role="button"],
+  input, select, textarea, [data-cursor] {
+    cursor: auto !important;
+  }
+  .cozy-cursor { display: none !important; }
+}
+
+/* ── Reduced motion: disable animations ── */
+@media (prefers-reduced-motion: reduce) {
+  .cozy-cursor .pebble-scale,
+  .cozy-cursor .pebble-inner,
+  .cozy-cursor .pebble-border {
+    transition: none !important;
+  }
+  .cozy-cursor.is-dragging .pebble-scale {
+    animation: none !important;
+  }
+  .cozy-cursor.is-pulsing .pulse-ring {
+    animation: none !important;
+  }
+}
