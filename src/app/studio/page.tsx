@@ -127,7 +127,7 @@ const studioDailyEase = 'easeOut' as const
 const studioGreetingRevealDelay = 0.96
 
 function entranceProps(
-  reduceMotion: boolean,
+  reduceMotion: boolean | null,
   delay: number,
   distance = 18,
   scale = 0.985,
