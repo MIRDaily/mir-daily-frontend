@@ -14,13 +14,13 @@
      - That's it
 ═══════════════════════════════════════════════════════ */
 
-/* Hide native cursor globally */
-html,
-body,
-a, button, [role="button"],
-input, select, textarea,
-[data-cursor] {
-  cursor: none !important;
+/* Hide native cursor globally on desktop/fine pointer devices */
+@media (hover: hover) and (pointer: fine) {
+  html,
+  body,
+  * {
+    cursor: none !important;
+  }
 }
 
 /* ── Cursor container ── */
