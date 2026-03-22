@@ -98,8 +98,7 @@ export default function ZenTimer() {
         {/* Centre content — time + label (fades out on hover) */}
         <div
           className="absolute inset-0 flex flex-col items-center justify-center gap-0.5"
-          style={{ transition: 'opacity 0.35s ease' }}
-          style={{ opacity: showOverlay ? 0 : 1 }}
+          style={{ transition: 'opacity 0.35s ease', opacity: showOverlay ? 0 : 1 }}
         >
           <span
             className="text-4xl font-black tracking-tight leading-none"
