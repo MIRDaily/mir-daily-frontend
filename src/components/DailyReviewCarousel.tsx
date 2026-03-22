@@ -191,7 +191,7 @@ function DailyReviewCarousel({ questions }: Props) {
                       }`}
                     >
                       <span
-                        className={`size-7 rounded-full border flex items-center justify-center text-xs font-bold ${
+                        className={`size-7 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold leading-none ${
                           isExpanded && idx === correctOptionIndex
                             ? 'bg-[#8BA888] border-[#8BA888] text-white'
                             : 'bg-[#FAF7F4] border-[#E8A598]/30 text-[#C45B4B]'

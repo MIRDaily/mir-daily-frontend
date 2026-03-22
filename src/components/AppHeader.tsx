@@ -12,7 +12,7 @@ import { supabase } from '@/lib/supabaseBrowser'
 import NotificationsPopup from '@/components/NotificationsPopup'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
 
-type HeaderTab = 'studio' | 'daily' | 'dashboard' | null
+type HeaderTab = 'studio' | 'daily' | 'dashboard' | 'zen' | null
 
 type AppHeaderProps = {
   activeTab?: HeaderTab
@@ -136,6 +136,17 @@ export default function AppHeader({
                 />
               )}
               Panel
+            </Link>
+            <Link className={getNavClass(activeTab, 'zen')} href="/zen">
+              {activeTab === 'zen' && (
+                <motion.span
+                  initial={false}
+                  layoutId="header-active-tab-indicator"
+                  className="absolute left-0 right-0 -bottom-0.5 h-0.5 rounded-full bg-[#E8A598]"
+                  transition={{ type: 'spring', stiffness: 450, damping: 36 }}
+                />
+              )}
+              Zen
             </Link>
           </div>
         </LayoutGroup>

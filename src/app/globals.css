@@ -88,6 +88,7 @@ textarea:disabled {
   display: none;
 }
 
+
 @keyframes pill-right {
   0% {
     transform: translateX(0) scaleX(1);
@@ -975,6 +976,89 @@ textarea:disabled {
   }
 }
 
+/* ─── Sala Zen: animaciones de avatares ─────────────────────────────────── */
+
+@keyframes zen-idle-bob {
+  0%, 100% { transform: translateY(0px); }
+  50%      { transform: translateY(-2.5px); }
+}
+
+@keyframes zen-walk-bob {
+  0%, 100% { transform: translateY(0px) scaleX(1); }
+  25%      { transform: translateY(-3.5px) scaleX(0.97); }
+  75%      { transform: translateY(-1px) scaleX(1.02); }
+}
+
+@keyframes zen-study-sway {
+  0%, 100% { transform: rotate(0deg) translateY(0px); }
+  30%      { transform: rotate(-1.2deg) translateY(-0.5px); }
+  70%      { transform: rotate(1.2deg) translateY(-0.5px); }
+}
+
+.zen-avatar-idle     { animation: zen-idle-bob 2.4s ease-in-out infinite; }
+.zen-avatar-walking  { animation: zen-walk-bob 0.44s ease-in-out infinite; }
+.zen-avatar-studying {
+  animation: zen-study-sway 4.2s ease-in-out infinite;
+  animation-delay: var(--zen-avatar-delay, 0ms);
+}
+.zen-avatar-break {
+  animation: zen-walk-bob 0.52s ease-in-out infinite;
+  animation-delay: var(--zen-avatar-delay, 0ms);
+}
+
+/* Desk paper shuffle — CSS animations (more reliable than SMIL in React) */
+@keyframes zen-paper-shuffle-left {
+  0%        { transform: translateX(0px)  rotate(-3deg); }
+  35%, 65%  { transform: translateX(15px) rotate(-1deg); }
+  100%      { transform: translateX(0px)  rotate(-3deg); }
+}
+@keyframes zen-paper-shuffle-right {
+  0%        { transform: translateX(0px) rotate(4deg); }
+  35%, 65%  { transform: translateX(9px) rotate(2deg); }
+  100%      { transform: translateX(0px) rotate(4deg); }
+}
+
+/* Timer ring pulse — últimos 10 s de advertencia */
+@keyframes zen-ring-pulse {
+  0%, 100% { transform: scale(1);    opacity: 1;   }
+  50%      { transform: scale(1.04); opacity: 0.72; }
+}
+.zen-ring-pulse {
+  animation: zen-ring-pulse 0.75s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* Toast flotante de sesión completada */
+@keyframes zen-toast-up {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0);    }
+}
+.zen-toast {
+  animation: zen-toast-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* ─── Sala Zen: animación Zzz del gato durmiendo ───────────────────────── */
+@keyframes zen-zzz-float {
+  0%   { opacity: 0;   transform: translate(0px, 0px)   scale(0.5);  }
+  12%  { opacity: 1;   transform: translate(3px, -5px)  scale(0.75); }
+  65%  { opacity: 0.8; transform: translate(9px, -18px) scale(1.05); }
+  100% { opacity: 0;   transform: translate(12px, -26px) scale(1.2); }
+}
+
+.zen-zzz {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  font-weight: 800;
+  color: rgba(90, 130, 180, 0.9);
+  opacity: 0;
+  animation: zen-zzz-float 2.4s ease-in-out infinite;
+}
+
+.zen-zzz-1 { font-size: 0.55em; animation-delay: 0s;   }
+.zen-zzz-2 { font-size: 0.78em; animation-delay: 0.8s; }
+.zen-zzz-3 { font-size: 1.05em; animation-delay: 1.6s; }
+
 @media (prefers-reduced-motion: reduce) {
   .hub-enter .hub-anim,
   .hub-enter .hub-anim-soft,
@@ -1058,5 +1142,18 @@ textarea:disabled {
     transition: none;
     transform: none;
   }
+
+  /* Sala Zen */
+  .zen-zzz,
+  .zen-avatar-idle,
+  .zen-avatar-walking,
+  .zen-avatar-studying,
+  .zen-avatar-break,
+  .zen-ring-pulse {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .zen-zzz { opacity: 0; }
 
 }

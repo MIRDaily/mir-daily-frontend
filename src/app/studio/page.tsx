@@ -431,12 +431,12 @@ export default function StudioPage() {
 
                   {card.type === 'zen' ? (
                     <div className="flex flex-row gap-3">
-                      <button className="flex-1 rounded-lg bg-[#E8A598] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#d18d80]">
+                      <Link href="/zen" className="flex-1 rounded-lg bg-[#E8A598] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#d18d80] text-center">
                         {card.primaryAction}
-                      </button>
-                      <button className="flex-1 rounded-lg bg-[#7D8A96] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#6c7985]">
+                      </Link>
+                      <Link href="/zen" className="flex-1 rounded-lg bg-[#7D8A96] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#6c7985] text-center">
                         {card.secondaryAction}
-                      </button>
+                      </Link>
                     </div>
                   ) : null}
                 </div>

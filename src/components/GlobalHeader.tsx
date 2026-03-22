@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
 
-type HeaderTab = 'studio' | 'daily' | 'dashboard' | null
+type HeaderTab = 'studio' | 'daily' | 'dashboard' | 'zen' | null
 
 function shouldShowHeader(pathname: string): boolean {
   return (
@@ -15,7 +15,8 @@ function shouldShowHeader(pathname: string): boolean {
     pathname.startsWith('/decks') ||
     pathname.startsWith('/session') ||
     pathname.startsWith('/profile') ||
-    pathname.startsWith('/notifications')
+    pathname.startsWith('/notifications') ||
+    pathname.startsWith('/zen')
   )
 }
 
@@ -23,6 +24,7 @@ function resolveActiveTab(pathname: string): HeaderTab {
   if (pathname.startsWith('/studio') || pathname.startsWith('/decks') || pathname.startsWith('/session')) return 'studio'
   if (pathname.startsWith('/panel')) return 'dashboard'
   if (pathname.startsWith('/dashboard')) return 'daily'
+  if (pathname.startsWith('/zen')) return 'zen'
   return null
 }
 
