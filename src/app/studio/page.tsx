@@ -450,19 +450,20 @@ export default function StudioPage() {
           >
             <h3 className="mb-4 text-xs font-bold uppercase tracking-wider">Acceso Rápido</h3>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <motion.a
-                href="#"
-                className="group flex cursor-pointer items-center gap-4 rounded-xl border border-[#EAE4E2] bg-white p-4 transition-colors hover:border-[#E8A598]/50"
-                {...entranceProps(reduceMotion, 0.44, 16, 0.98)}
-              >
-                <div className="rounded-lg bg-[#F2EFED] p-2 text-[#7D8A96] transition-colors group-hover:bg-[#E8A598] group-hover:text-white">
-                  <span className="material-symbols-outlined">menu_book</span>
-                </div>
-                <div>
-                  <h4 className="font-bold text-[#2c3e50]">Conceptos Básicos</h4>
-                  <p className="text-xs">Biblioteca de manuales</p>
-                </div>
-              </motion.a>
+              <motion.div {...entranceProps(reduceMotion, 0.44, 16, 0.98)}>
+                <Link
+                  href="/library"
+                  className="group flex cursor-pointer items-center gap-4 rounded-xl border border-[#EAE4E2] bg-white p-4 transition-colors hover:border-[#E8A598]/50"
+                >
+                  <div className="rounded-lg bg-[#F2EFED] p-2 text-[#7D8A96] transition-colors group-hover:bg-[#E8A598] group-hover:text-white">
+                    <span className="material-symbols-outlined">menu_book</span>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-[#2c3e50]">Conceptos Básicos</h4>
+                    <p className="text-xs">Biblioteca de manuales</p>
+                  </div>
+                </Link>
+              </motion.div>
             </div>
           </motion.section>
         </div>
