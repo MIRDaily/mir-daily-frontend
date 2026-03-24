@@ -983,9 +983,10 @@ function ZenRoomView() {
     // The avatar's offsetParent is the ZenRoom container (position:relative)
     const zenRoom = el.offsetParent as HTMLElement | null
     if (!zenRoom) return
-    throwZenRoomRef.current = zenRoom
+    const zenRoomEl = zenRoom
+    throwZenRoomRef.current = zenRoomEl
 
-    const zenRect = zenRoom.getBoundingClientRect()
+    const zenRect = zenRoomEl.getBoundingClientRect()
     const elRect  = el.getBoundingClientRect()
 
     // Avatar center in ZenRoom-local coordinates
@@ -1013,14 +1014,14 @@ function ZenRoomView() {
     function onMove(ev: PointerEvent) {
       if (throwPhaseRef.current !== 'drag') return
 
-      const zr = zenRoom.getBoundingClientRect()
+      const zr = zenRoomEl.getBoundingClientRect()
       const nx = ev.clientX - zr.left - throwGrabOff.current.x
       const ny = ev.clientY - zr.top  - throwGrabOff.current.y
       phys.current.x = nx
       phys.current.y = ny
 
-      const anchorXpx = (throwAnchor.current.xPct / 100) * zenRoom.offsetWidth
-      const anchorYpx = (throwAnchor.current.yPct / 100) * zenRoom.offsetHeight
+      const anchorXpx = (throwAnchor.current.xPct / 100) * zenRoomEl.offsetWidth
+      const anchorYpx = (throwAnchor.current.yPct / 100) * zenRoomEl.offsetHeight
       setPhysVars(el, nx - anchorXpx, ny - anchorYpx)
 
       // Actualizar el cozy cursor directamente en el mismo tick sincrónico que
@@ -1060,7 +1061,7 @@ function ZenRoomView() {
       phys.current.vx = Math.max(-MAX_V, Math.min(MAX_V, phys.current.vx))
       phys.current.vy = Math.max(-MAX_V, Math.min(MAX_V, phys.current.vy))
 
-      startThrowRaf(el, zenRoom)
+      startThrowRaf(el, zenRoomEl)
     }
 
     window.addEventListener('pointermove', onMove)
