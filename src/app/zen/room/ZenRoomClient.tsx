@@ -1,12 +1,13 @@
 'use client'
 
 import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ZenTimerProvider, useZenTimer, type ZenPreset } from '@/state/zenTimerStore'
 import ZenTimer from '@/components/zen/ZenTimer'
 import ZenControls from '@/components/zen/ZenControls'
 import ZenRoom, { DESK_SLOTS, SOFA_SLOTS } from '@/components/zen/ZenRoom'
-import ZenAvatar, { type ZenAvatarData, type AvatarState } from '@/components/zen/ZenAvatar'
+import ZenAvatar, { type ZenAvatarData, type AvatarState, type UserMood } from '@/components/zen/ZenAvatar'
 import { useAuthContext } from '@/providers/AuthProvider'
 import { playBell } from '@/lib/zenAudio'
 
@@ -89,6 +90,30 @@ const ROOM_NAMES = [
   'Sala Quieta',
 ]
 
+// ─── Character editor constants ───────────────────────────────────────────────
+
+const ZEN_USER_COLOR_KEY = 'zen_user_color'
+const ZEN_USER_MOOD_KEY  = 'zen_user_mood'
+
+/** Ordered left→right on the mood slider: sad … neutral … happy */
+const MOOD_STEPS: UserMood[] = ['sad', 'neutral', 'happy']
+
+/** Palette offered in the colour slider (12 swatches) */
+const USER_COLORS = [
+  '#E8A598', // salmon  (default)
+  '#F4B382', // peach
+  '#F2D06B', // yellow
+  '#8BD4A8', // mint
+  '#7AADCA', // sky-blue
+  '#A888C4', // lavender
+  '#E87878', // coral-red
+  '#E898C8', // pink
+  '#6ABFAD', // teal
+  '#7D9A96', // slate
+  '#C49A5A', // gold
+  '#A8C4E8', // powder-blue
+]
+
 // ─── Avatar constants ─────────────────────────────────────────────────────────
 
 const VALID_PRESETS: ZenPreset[] = ['classic', 'deep', 'custom']
@@ -122,13 +147,13 @@ const FLOOR_SPOTS = [
 ]
 
 const AVATAR_Y_OFFSET          = 6
-const WALK_DURATION_MS         = 2600   // matches 2.4s CSS transition + 200ms settle buffer
+const WALK_DURATION_MS         = 4000   // matches 3.8s CSS transition + 200ms settle buffer
 const BREAK_WANDER_INTERVAL_MS = 32000  // 32 s of chatting before regrouping
 
 const BREAK_X = { min: 8,  max: 70 }   // wanderers stay in the desk area
 const BREAK_Y = { min: 34, max: 86 }
 
-const USER_ENTRY_Y        = 102
+const USER_ENTRY_Y        = 125
 const USER_ENTRY_DELAY_MS = 800
 
 // ─── Extended local avatar type ───────────────────────────────────────────────
@@ -145,36 +170,37 @@ function resolvePreset(raw: string | null): ZenPreset {
   return 'classic'
 }
 
-function buildInitialAvatars(userUsername: string, botCount: number, botSuffixes: string[] = []): ExtAvatarData[] {
+function buildInitialAvatars(userUsername: string, botCount: number, botSuffixes: string[] = [], userSlotIdx = 0, userInitialColor = USER_COLORS[0]): ExtAvatarData[] {
   const result: ExtAvatarData[] = []
 
-  // User — always desk slot 0, starts off-screen at the bottom
+  // User — random desk slot each session, starts off-screen at the bottom
   result.push({
     id:        'user',
     username:  userUsername,
-    color:     AVATAR_COLORS[0],
-    xPct:      DESK_SLOTS[0].xPct,
+    color:     userInitialColor,
+    xPct:      DESK_SLOTS[userSlotIdx].xPct,
     yPct:      USER_ENTRY_Y,
-    deskIndex: 0,
+    deskIndex: userSlotIdx,
     state:     'idle',
     isUser:    true,
   })
 
-  // Bots — first 7 get real desk slots; extras become floor wanderers
+  // Bots — fill all desk slots except the one taken by the user
+  const botDeskSlots = DESK_SLOTS.map((_, i) => i).filter(i => i !== userSlotIdx)
   for (let i = 0; i < botCount; i++) {
-    const hasDeskSlot = i < DESK_SLOTS.length - 1       // slots 1–7 available
-    const slotIdx     = hasDeskSlot ? i + 1 : -1
+    const hasDeskSlot = i < botDeskSlots.length
+    const slotIdx     = hasDeskSlot ? botDeskSlots[i] : -1
     const floorSpot   = hasDeskSlot
       ? undefined
-      : { ...FLOOR_SPOTS[(i - (DESK_SLOTS.length - 1)) % FLOOR_SPOTS.length] }
+      : { ...FLOOR_SPOTS[(i - botDeskSlots.length) % FLOOR_SPOTS.length] }
     const deskSlot    = hasDeskSlot ? DESK_SLOTS[slotIdx] : undefined
 
     result.push({
       id:        `bot-${i + 1}`,
       username:  BOT_NAMES[i % BOT_NAMES.length] + (botSuffixes[i] ?? ''),
       color:     AVATAR_COLORS[(i + 1) % AVATAR_COLORS.length],
-      xPct:      deskSlot ? deskSlot.xPct          : floorSpot!.xPct,
-      yPct:      deskSlot ? deskSlot.yPct + AVATAR_Y_OFFSET : floorSpot!.yPct,
+      xPct:      deskSlot ? deskSlot.xPct : floorSpot!.xPct,
+      yPct:      deskSlot ? USER_ENTRY_Y   : floorSpot!.yPct,
       deskIndex: slotIdx,
       state:     'idle',
       isUser:    false,
@@ -361,6 +387,10 @@ function ZenRoomView() {
 
   const effectiveUsername = displayName || authUsername
 
+  // ── Character editor state ─────────────────────────────────────────────────
+  const [userMood,  setUserMood]  = useState<UserMood>('neutral')
+  const [userColor, setUserColor] = useState(USER_COLORS[0])
+
   // ── Core UI state ─────────────────────────────────────────────────────────
   const [avatars, setAvatars] = useState<ExtAvatarData[]>(() =>
     buildInitialAvatars(authUsername, 7),
@@ -391,20 +421,37 @@ function ZenRoomView() {
   const chatWaypointRef  = useRef<ReturnType<typeof setTimeout>  | null>(null)
   const breakFinalRef    = useRef<ExtAvatarData[] | null>(null)
 
+  // ── Physics / throw refs ───────────────────────────────────────────────────
+  // Phase: 'idle' | 'drag' | 'fly' | 'fallen' | 'returning'
+  const throwPhaseRef = useRef<'idle' | 'drag' | 'fly' | 'fallen' | 'returning'>('idle')
+  // Physics body (absolute px from room top-left, velocity in px/frame)
+  const phys          = useRef({ x: 0, y: 0, vx: 0, vy: 0 })
+  // Anchor: React-managed desk position (xPct, yPct) captured at grab start
+  const throwAnchor   = useRef({ xPct: 0, yPct: 0, deskIndex: 0 })
+  const throwRafRef   = useRef<number | null>(null)
+  const throwGrabOff  = useRef({ x: 0, y: 0 })
+  const throwMhist    = useRef<Array<{ x: number; y: number; t: number }>>([])
+
   // ── Fullscreen state ──────────────────────────────────────────────────────
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   // ── Client-only init: random values + localStorage (runs once after mount) ─
   useEffect(() => {
-    const count    = Math.floor(Math.random() * 7) + 5
-    const name     = ROOM_NAMES[Math.floor(Math.random() * ROOM_NAMES.length)]
-    const saved    = localStorage.getItem(ZEN_USERNAME_KEY) ?? ''
-    const effName  = saved || authUsername
-    const suffixes = makeBotSuffixes()
+    const count      = Math.floor(Math.random() * 7) + 5
+    const name       = ROOM_NAMES[Math.floor(Math.random() * ROOM_NAMES.length)]
+    const saved      = localStorage.getItem(ZEN_USERNAME_KEY) ?? ''
+    const effName    = saved || authUsername
+    const suffixes   = makeBotSuffixes()
+    const userSlot   = Math.floor(Math.random() * DESK_SLOTS.length)
+    // Character editor persistence
+    const savedColor = localStorage.getItem(ZEN_USER_COLOR_KEY) ?? USER_COLORS[0]
+    const savedMood  = (localStorage.getItem(ZEN_USER_MOOD_KEY) as UserMood | null) ?? 'neutral'
     setBotCount(count)
     setRoomName(name)
     setDisplayName(saved)
-    setAvatars(buildInitialAvatars(effName, count, suffixes))
+    setUserColor(savedColor)
+    setUserMood(MOOD_STEPS.includes(savedMood) ? savedMood : 'neutral')
+    setAvatars(buildInitialAvatars(effName, count, suffixes, userSlot, savedColor))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load session counts from localStorage ─────────────────────────────────
@@ -413,6 +460,17 @@ function ZenRoomView() {
     setSessionCount(data.count)
     setStreakCount(data.streak)
   }, [])
+
+  // ── Sync user colour → avatars array + localStorage ───────────────────────
+  useEffect(() => {
+    localStorage.setItem(ZEN_USER_COLOR_KEY, userColor)
+    setAvatars(prev => prev.map(a => a.isUser ? { ...a, color: userColor } : a))
+  }, [userColor])
+
+  // ── Persist user mood → localStorage ─────────────────────────────────────
+  useEffect(() => {
+    localStorage.setItem(ZEN_USER_MOOD_KEY, userMood)
+  }, [userMood])
 
   // ── Return feeling + session memory toast (once per page load) ────────────
   useEffect(() => {
@@ -440,29 +498,38 @@ function ZenRoomView() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── User entry animation (once on mount) ──────────────────────────────────
+  // ── Entry animation: all desk avatars walk in staggered on mount ──────────
   useEffect(() => {
-    let settleTimer: ReturnType<typeof setTimeout> | null = null
-
-    const entryTimer = setTimeout(() => {
-      setAvatars((prev) =>
-        prev.map((a) =>
-          a.isUser
-            ? { ...a, ...restPos(a), state: 'walking' as AvatarState }
-            : a,
-        ),
+    const timers: ReturnType<typeof setTimeout>[] = []
+    // Each slot gets a fully independent random delay: 300–2800 ms
+    // Minimum 300 ms so client-init has already fired before first avatar moves
+    DESK_SLOTS.forEach((_, slotIdx) => {
+      const entryDelay = 300 + Math.random() * 2500
+      timers.push(
+        setTimeout(() => {
+          setAvatars((prev) =>
+            prev.map((a) =>
+              a.deskIndex === slotIdx
+                ? { ...a, ...restPos(a), state: 'walking' as AvatarState }
+                : a,
+            ),
+          )
+          timers.push(
+            setTimeout(() => {
+              setAvatars((prev) =>
+                prev.map((a) =>
+                  a.deskIndex === slotIdx
+                    ? { ...a, state: 'idle' as AvatarState }
+                    : a,
+                ),
+              )
+            }, WALK_DURATION_MS + 200),
+          )
+        }, entryDelay),
       )
-      settleTimer = setTimeout(() => {
-        setAvatars((prev) =>
-          prev.map((a) => (a.isUser ? { ...a, state: 'idle' as AvatarState } : a)),
-        )
-      }, WALK_DURATION_MS + 200)
-    }, USER_ENTRY_DELAY_MS)
+    })
 
-    return () => {
-      clearTimeout(entryTimer)
-      if (settleTimer) clearTimeout(settleTimer)
-    }
+    return () => timers.forEach(clearTimeout)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Bell + background + session increment on phase transitions ────────────
@@ -721,6 +788,11 @@ function ZenRoomView() {
     }
   }, [])
 
+  // ── Cancel physics RAF on unmount ─────────────────────────────────────────
+  useEffect(() => () => {
+    if (throwRafRef.current) cancelAnimationFrame(throwRafRef.current)
+  }, [])
+
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleBackClick() {
     if (timerState.running && timerState.phase === 'study') {
@@ -745,6 +817,254 @@ function ZenRoomView() {
       localStorage.removeItem(ZEN_USERNAME_KEY)
     }
     setEditingName(false)
+  }
+
+  // ── Physics helpers ───────────────────────────────────────────────────────
+  //
+  // Coordinate system: all physics x/y are in ZenRoom-local pixels.
+  // The ZenRoom container is el.offsetParent (position:relative div that
+  // contains the avatars). Using pageRef would give the wrong dimensions.
+
+  const throwZenRoomRef = useRef<HTMLElement | null>(null)
+
+  function setPhysVars(el: HTMLElement, ox: number, oy: number) {
+    el.style.setProperty('--phys-ox', `${ox}px`)
+    el.style.setProperty('--phys-oy', `${oy}px`)
+  }
+
+  function clearPhysVars(el: HTMLElement) {
+    el.style.removeProperty('--phys-ox')
+    el.style.removeProperty('--phys-oy')
+    el.style.transition = ''
+    // Do NOT clear el.style.transform here — the remaining transform still has
+    // translate(calc(-50% + var(--phys-ox,0px)), ...) which defaults to
+    // translate(-50%,-50%) once the CSS vars are removed, keeping the avatar
+    // centered while React re-renders. Clearing it causes a 1-frame snap where
+    // left/top position the top-left corner instead of the avatar center.
+    el.style.zIndex     = ''
+  }
+
+  function startThrowRaf(el: HTMLElement, zenRoom: HTMLElement) {
+    if (throwRafRef.current) cancelAnimationFrame(throwRafRef.current)
+
+    const GRAVITY   = 0.48
+    const BOUNCE    = 0.54
+    const AIR_DRAG  = 0.994
+    const FLOOR_PCT = 0.88
+
+    function tick() {
+      const p     = phys.current
+      const rW    = zenRoom.offsetWidth
+      const rH    = zenRoom.offsetHeight
+      const floor = rH * FLOOR_PCT
+      const halfW = el.offsetWidth  * 0.5
+      const halfH = el.offsetHeight * 0.5
+
+      p.vy += GRAVITY
+      p.vx *= AIR_DRAG
+      p.x  += p.vx
+      p.y  += p.vy
+
+      // Wall collisions
+      if (p.x - halfW < 0)    { p.x = halfW;        p.vx =  Math.abs(p.vx) * BOUNCE }
+      if (p.x + halfW > rW)   { p.x = rW - halfW;   p.vx = -Math.abs(p.vx) * BOUNCE }
+
+      // Floor collision
+      if (p.y + halfH >= floor) {
+        p.y   = floor - halfH
+        p.vy *= -BOUNCE
+        p.vx *= 0.88
+
+        if (Math.abs(p.vy) < 1.5 && Math.abs(p.vx) < 0.8) {
+          // ── Settled ─────────────────────────────────────────────────────
+          throwPhaseRef.current = 'fallen'
+          const anchorXpx = (throwAnchor.current.xPct / 100) * rW
+          const anchorYpx = (throwAnchor.current.yPct / 100) * rH
+          setPhysVars(el, p.x - anchorXpx, p.y - anchorYpx)
+
+          // Fall over
+          el.style.transition = 'transform 0.35s ease'
+          el.style.transform  = `translate(calc(-50% + var(--phys-ox,0px)), calc(-50% + var(--phys-oy,0px))) rotate(88deg) scale(1.1)`
+
+          // Get up
+          setTimeout(() => {
+            el.style.transition = 'transform 0.45s ease'
+            el.style.transform  = `translate(calc(-50% + var(--phys-ox,0px)), calc(-50% + var(--phys-oy,0px))) rotate(0deg) scale(1.1)`
+
+            setTimeout(() => {
+              // Limpiar la transition del get-up para que no ralentice el animateReturn.
+              // NO borramos el.style.transform: aún contiene var(--phys-ox/oy)
+              // y animateReturn lo sigue usando correctamente para centrar el avatar.
+              el.style.transition = ''
+              throwPhaseRef.current = 'returning'
+
+              const duration = WALK_DURATION_MS
+
+              // throwAnchor.xPct/yPct may be the break position if the avatar was
+              // thrown during a break. Always return to the actual desk slot.
+              const deskSlot = DESK_SLOTS[throwAnchor.current.deskIndex]
+              const deskXPct = deskSlot.xPct
+              const deskYPct = deskSlot.yPct + AVATAR_Y_OFFSET
+
+              const deskXpx = (deskXPct / 100) * zenRoom.offsetWidth
+              const deskYpx = (deskYPct / 100) * zenRoom.offsetHeight
+
+              // Offset from desk to where avatar currently rests (fallen pixel pos)
+              const startOx = phys.current.x - deskXpx
+              const startOy = phys.current.y - deskYpx
+
+              // Snap React's left/top to the desk immediately (no CSS transition).
+              // flushSync renders synchronously — after it returns the DOM has
+              // left=deskXPct%, top=deskYPct%. Then we suppress the inline
+              // transition React just wrote and lock the CSS vars so the element
+              // stays visually at the fallen position. Animating vars → 0 then
+              // slides the avatar to the desk without any left/top animation.
+              flushSync(() => {
+                setAvatars(prev => prev.map(a =>
+                  a.isUser
+                    ? { ...a, xPct: deskXPct, yPct: deskYPct, state: 'walking' as AvatarState }
+                    : a,
+                ))
+              })
+              // Override the left/top transition React just painted in
+              el.style.transition = 'none'
+              el.style.setProperty('--phys-ox', `${startOx}px`)
+              el.style.setProperty('--phys-oy', `${startOy}px`)
+              void el.offsetWidth // force reflow: "desk left/top + no transition" committed
+
+              // Restore full transition so other CSS properties animate normally,
+              // but left/top won't move (React just set them to their final value).
+              el.style.transition = ''
+
+              const t0 = performance.now()
+
+              function animateReturn(now: number) {
+                const t    = Math.min((now - t0) / duration, 1)
+                const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+                el.style.setProperty('--phys-ox', `${startOx * (1 - ease)}px`)
+                el.style.setProperty('--phys-oy', `${startOy * (1 - ease)}px`)
+
+                if (t < 1) {
+                  throwRafRef.current = requestAnimationFrame(animateReturn)
+                } else {
+                  clearPhysVars(el)
+                  throwPhaseRef.current = 'idle'
+                  setAvatars(prev => prev.map(a =>
+                    a.isUser ? { ...a, state: 'idle' as AvatarState } : a,
+                  ))
+                }
+              }
+
+              throwRafRef.current = requestAnimationFrame(animateReturn)
+            }, 450)
+          }, 1100)
+
+          return // stop RAF
+        }
+      }
+
+      // Update CSS vars: offset = physics pos − React anchor pos
+      const anchorXpx = (throwAnchor.current.xPct / 100) * rW
+      const anchorYpx = (throwAnchor.current.yPct / 100) * rH
+      setPhysVars(el, p.x - anchorXpx, p.y - anchorYpx)
+      throwRafRef.current = requestAnimationFrame(tick)
+    }
+
+    throwRafRef.current = requestAnimationFrame(tick)
+  }
+
+  function handleAvatarPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (throwPhaseRef.current !== 'idle') return
+
+    e.preventDefault()
+    e.stopPropagation()
+
+    const el = e.currentTarget as HTMLElement
+    // The avatar's offsetParent is the ZenRoom container (position:relative)
+    const zenRoom = el.offsetParent as HTMLElement | null
+    if (!zenRoom) return
+    throwZenRoomRef.current = zenRoom
+
+    const zenRect = zenRoom.getBoundingClientRect()
+    const elRect  = el.getBoundingClientRect()
+
+    // Avatar center in ZenRoom-local coordinates
+    const centerX = elRect.left + elRect.width  / 2 - zenRect.left
+    const centerY = elRect.top  + elRect.height / 2 - zenRect.top
+
+    const userAvatar = avatars.find(a => a.isUser)
+    if (!userAvatar) return
+
+    throwAnchor.current   = { xPct: userAvatar.xPct, yPct: userAvatar.yPct, deskIndex: userAvatar.deskIndex }
+    throwPhaseRef.current = 'drag'
+    phys.current          = { x: centerX, y: centerY, vx: 0, vy: 0 }
+    throwGrabOff.current  = {
+      x: e.clientX - zenRect.left - centerX,
+      y: e.clientY - zenRect.top  - centerY,
+    }
+    throwMhist.current = [{ x: e.clientX, y: e.clientY, t: Date.now() }]
+    el.style.zIndex = '50'
+
+    // Notifica al cozy cursor que hay un click sostenido (activa su wiggle/grab state)
+    document.dispatchEvent(new MouseEvent('mousedown', {
+      bubbles: true, clientX: e.clientX, clientY: e.clientY,
+    }))
+
+    function onMove(ev: PointerEvent) {
+      if (throwPhaseRef.current !== 'drag') return
+
+      const zr = zenRoom.getBoundingClientRect()
+      const nx = ev.clientX - zr.left - throwGrabOff.current.x
+      const ny = ev.clientY - zr.top  - throwGrabOff.current.y
+      phys.current.x = nx
+      phys.current.y = ny
+
+      const anchorXpx = (throwAnchor.current.xPct / 100) * zenRoom.offsetWidth
+      const anchorYpx = (throwAnchor.current.yPct / 100) * zenRoom.offsetHeight
+      setPhysVars(el, nx - anchorXpx, ny - anchorYpx)
+
+      // Actualizar el cozy cursor directamente en el mismo tick sincrónico que
+      // los CSS vars del avatar. Usar dispatchEvent(new MouseEvent) envía un
+      // evento sintético que el browser trata como JS normal (no como input de
+      // hardware), lo que añade latencia de compositing visible en fullscreen.
+      // La actualización directa del transform garantiza que cursor y avatar
+      // se compositen en el mismo frame, sin desfase.
+      const cozyCursorEl = document.getElementById('cozy-cursor')
+      if (cozyCursorEl) {
+        cozyCursorEl.style.transform =
+          `translate3d(${(ev.clientX - 3).toFixed(1)}px, ${(ev.clientY - 1).toFixed(1)}px, 0)`
+      }
+
+      throwMhist.current.push({ x: ev.clientX, y: ev.clientY, t: Date.now() })
+      if (throwMhist.current.length > 6) throwMhist.current.shift()
+    }
+
+    function onUp() {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup',   onUp)
+      // Libera el estado wiggle/grab del cozy cursor
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+      if (throwPhaseRef.current !== 'drag') return
+      throwPhaseRef.current = 'fly'
+
+      // Velocity from mouse history
+      const hist = throwMhist.current
+      if (hist.length >= 2) {
+        const last = hist[hist.length - 1]
+        const prev = hist[hist.length - 2]
+        const dt   = Math.max(last.t - prev.t, 8)
+        phys.current.vx = ((last.x - prev.x) / dt) * 16
+        phys.current.vy = ((last.y - prev.y) / dt) * 16
+      }
+      const MAX_V = 30
+      phys.current.vx = Math.max(-MAX_V, Math.min(MAX_V, phys.current.vx))
+      phys.current.vy = Math.max(-MAX_V, Math.min(MAX_V, phys.current.vy))
+
+      startThrowRaf(el, zenRoom)
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup',   onUp)
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -895,6 +1215,8 @@ function ZenRoomView() {
                 isUser={avatar.isUser}
                 state={avatar.state}
                 animDelay={i * 120}
+                onPointerDown={avatar.isUser ? handleAvatarPointerDown : undefined}
+                forceMood={avatar.isUser ? userMood : undefined}
               />
             ))}
 
@@ -1008,11 +1330,17 @@ function ZenRoomView() {
           )}
         </div>}
 
-        {/* ── Timer + Controls row — hidden in fullscreen ── */}
+        {/* ── Timer + Controls + Character editor row — hidden in fullscreen ── */}
         {!isFullscreen && (
-          <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-start sm:justify-center sm:gap-16">
+          <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-start sm:justify-center sm:gap-12">
             <ZenTimer />
             <ZenControls />
+            <CharacterEditorPanel
+              mood={userMood}
+              color={userColor}
+              onMoodChange={setUserMood}
+              onColorChange={setUserColor}
+            />
           </div>
         )}
 
@@ -1038,6 +1366,79 @@ function ZenRoomView() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Character editor panel ───────────────────────────────────────────────────
+
+const MOOD_LABELS: Record<UserMood, string> = {
+  sad:     '😞',
+  neutral: '😐',
+  happy:   '😊',
+}
+
+function CharacterEditorPanel({
+  mood,
+  color,
+  onMoodChange,
+  onColorChange,
+}: {
+  mood:          UserMood
+  color:         string
+  onMoodChange:  (m: UserMood) => void
+  onColorChange: (c: string)   => void
+}) {
+  const moodIdx  = MOOD_STEPS.indexOf(mood)
+  const colorIdx = Math.max(0, USER_COLORS.indexOf(color))
+
+  function prevMood()  { onMoodChange(MOOD_STEPS[(moodIdx  + MOOD_STEPS.length  - 1) % MOOD_STEPS.length])  }
+  function nextMood()  { onMoodChange(MOOD_STEPS[(moodIdx  + 1) % MOOD_STEPS.length])  }
+  function prevColor() { onColorChange(USER_COLORS[(colorIdx + USER_COLORS.length - 1) % USER_COLORS.length]) }
+  function nextColor() { onColorChange(USER_COLORS[(colorIdx + 1) % USER_COLORS.length]) }
+
+  const arrowBtn = (onClick: () => void, dir: 'left' | 'right') => (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-6 w-6 items-center justify-center rounded-lg border border-[#EAE4E2] bg-white text-[#7D8A96] transition-colors hover:border-[#7D8A96]/40 hover:text-[#2c3e50] active:scale-90"
+      style={{ fontSize: 12, lineHeight: 1 }}
+    >
+      {dir === 'left' ? '‹' : '›'}
+    </button>
+  )
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <p className="text-xs font-semibold text-[#7D8A96]">Tu personaje</p>
+
+      <div className="flex flex-col gap-2.5 rounded-2xl border border-[#EAE4E2] bg-white/80 px-4 py-3 shadow-sm">
+
+        {/* ── Mood row ── */}
+        <div className="flex items-center gap-2">
+          <span className="w-10 text-[9px] font-bold uppercase tracking-widest text-[#7D8A96]">Ánimo</span>
+          {arrowBtn(prevMood, 'left')}
+          <span
+            className="w-7 text-center text-base leading-none select-none"
+            style={{ transition: 'transform 0.15s ease', display: 'inline-block' }}
+          >
+            {MOOD_LABELS[mood]}
+          </span>
+          {arrowBtn(nextMood, 'right')}
+        </div>
+
+        {/* ── Colour row ── */}
+        <div className="flex items-center gap-2">
+          <span className="w-10 text-[9px] font-bold uppercase tracking-widest text-[#7D8A96]">Color</span>
+          {arrowBtn(prevColor, 'left')}
+          <div
+            className="h-5 w-7 rounded-md border border-white shadow-sm"
+            style={{ backgroundColor: color, transition: 'background-color 0.25s ease' }}
+          />
+          {arrowBtn(nextColor, 'right')}
+        </div>
+
+      </div>
     </div>
   )
 }

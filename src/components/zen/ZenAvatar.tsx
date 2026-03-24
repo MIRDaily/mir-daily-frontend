@@ -26,9 +26,16 @@ export type ZenAvatarData = {
   isUser: boolean
 }
 
+/** User-controlled mood that overrides the internal random sad/happy cycle */
+export type UserMood = 'sad' | 'neutral' | 'happy'
+
 type ZenAvatarProps = Pick<ZenAvatarData, 'username' | 'color' | 'xPct' | 'yPct' | 'isUser' | 'state'> & {
   /** Stagger delay in ms — keeps avatars from animating in perfect sync */
   animDelay?: number
+  /** Pointer-down handler — enables pointer events + grab cursor on the avatar */
+  onPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void
+  /** When set, overrides the internal random mood for this avatar's face */
+  forceMood?: UserMood
 }
 
 /** Map avatar state → CSS animation class on the inner wrapper */
@@ -51,9 +58,11 @@ export default function ZenAvatar({
   color,
   xPct,
   yPct,
-  isUser    = false,
-  state     = 'sitting',
-  animDelay = 0,
+  isUser       = false,
+  state        = 'sitting',
+  animDelay    = 0,
+  onPointerDown,
+  forceMood,
 }: ZenAvatarProps) {
   // True when the avatar is in a conversation (sofa or standing chat)
   const isInConversation = state === 'chatting' || state === 'sitting'
@@ -172,15 +181,20 @@ export default function ZenAvatar({
      * DO NOT put animation classes here; they conflict with the translate.
      */
     <div
+      data-user-avatar={isUser ? 'true' : undefined}
+      onPointerDown={onPointerDown}
       style={{
         position:      'absolute',
         left:          `${xPct}%`,
         top:           `${yPct}%`,
-        transform:     `translate(-50%, -50%) scale(${isUser ? 1.1 : 1})`,
+        // --phys-ox / --phys-oy are set directly via DOM during throw physics.
+        // React never touches these custom props, so re-renders won't reset them.
+        transform:     `translate(calc(-50% + var(--phys-ox, 0px)), calc(-50% + var(--phys-oy, 0px))) scale(${isUser ? 1.1 : 1})`,
         width:         '5.5%',
         zIndex:        isUser ? 25 : 20,
-        pointerEvents: 'none',
-        transition:    'left 2.4s cubic-bezier(0.45, 0, 0.55, 1), top 2.4s cubic-bezier(0.45, 0, 0.55, 1)',
+        pointerEvents: onPointerDown ? 'auto' : 'none',
+        cursor:        onPointerDown ? 'grab' : undefined,
+        transition:    'left 3.8s cubic-bezier(0.45, 0, 0.55, 1), top 3.8s cubic-bezier(0.45, 0, 0.55, 1)',
       }}
       aria-label={isUser ? `Tu avatar: ${label}` : label}
     >
@@ -272,7 +286,7 @@ export default function ZenAvatar({
                     keyTimes="0;0.13;0.25;0.38;0.50;0.63;0.75;0.88;1"
                     dur="6s" repeatCount="indefinite"
                   />
-                  {isSad ? (
+                  {(forceMood === 'sad' || (!forceMood && isSad)) ? (
                     <path d="M11,15 Q14,12.5 17,15"
                       stroke="rgba(0,0,0,0.38)" strokeWidth={1.1} fill="none" strokeLinecap="round" />
                   ) : (
@@ -302,7 +316,7 @@ export default function ZenAvatar({
                   begin={`${(animDelay * 7 + 50) % 1800}ms`}
                 />
               </ellipse>
-            ) : isSad ? (
+            ) : (forceMood === 'sad' || (!forceMood && isSad)) ? (
               // Sad frown
               <path
                 d="M11,15 Q14,12.5 17,15"
@@ -311,7 +325,7 @@ export default function ZenAvatar({
                 fill="none"
                 strokeLinecap="round"
               />
-            ) : isInConversation || state === 'studying' ? (
+            ) : (forceMood === 'happy' || (!forceMood && (isInConversation || state === 'studying'))) ? (
               // Smile
               <path
                 d="M11,13 Q14,15.5 17,13"
@@ -321,7 +335,7 @@ export default function ZenAvatar({
                 strokeLinecap="round"
               />
             ) : (
-              // Neutral — idle / walking
+              // Neutral — idle / walking / forceMood === 'neutral'
               <line
                 x1={11} y1={13.5} x2={17} y2={13.5}
                 stroke="rgba(0,0,0,0.28)"
