@@ -12,7 +12,7 @@ import { supabase } from '@/lib/supabaseBrowser'
 import NotificationsPopup from '@/components/NotificationsPopup'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
 
-type HeaderTab = 'studio' | 'library' | 'daily' | 'dashboard' | 'zen' | null
+type HeaderTab = 'studio' | 'library' | 'daily' | 'dashboard' | 'zen' | 'medguess' | null
 
 type AppHeaderProps = {
   activeTab?: HeaderTab
@@ -37,9 +37,9 @@ export default function AppHeader({
   const { unreadCount, refreshUnreadCount } = useNotificationsContext()
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
-  const [profileHref, setProfileHref] = useState('/profile')
   const notificationRef = useRef<HTMLDivElement | null>(null)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
+  const profileHref = getOnboardingDeferredFlag() ? '/onboarding' : '/profile'
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -74,10 +74,6 @@ export default function AppHeader({
     if (!isNotificationOpen) return
     refreshUnreadCount({ debounced: true })
   }, [isNotificationOpen, refreshUnreadCount])
-
-  useEffect(() => {
-    setProfileHref(getOnboardingDeferredFlag() ? '/onboarding' : '/profile')
-  }, [isProfileMenuOpen])
 
   return (
     <nav
@@ -158,6 +154,17 @@ export default function AppHeader({
                 />
               )}
               Zen
+            </Link>
+            <Link className={getNavClass(activeTab, 'medguess')} href="/medguess">
+              {activeTab === 'medguess' && (
+                <motion.span
+                  initial={false}
+                  layoutId="header-active-tab-indicator"
+                  className="absolute left-0 right-0 -bottom-0.5 h-0.5 rounded-full bg-[#E8A598]"
+                  transition={{ type: 'spring', stiffness: 450, damping: 36 }}
+                />
+              )}
+              MedGuess
             </Link>
           </div>
         </LayoutGroup>

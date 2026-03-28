@@ -169,3 +169,45 @@ LIBRARY_SUBJECTS_BY_ID['repasos-mir'] = {
     },
   ],
 }
+
+export function findMockTopicById(topicId: string): {
+  topic: Topic
+  subject: Subject
+  overview: SubjectOverview | null
+} | null {
+  for (const subject of Object.values(LIBRARY_SUBJECTS_BY_ID)) {
+    const topic = subject.topics.find((item) => item.id === topicId)
+    if (topic) {
+      return {
+        topic,
+        subject,
+        overview: LIBRARY_SUBJECT_OVERVIEW_BY_ID[subject.id] ?? null,
+      }
+    }
+  }
+
+  return null
+}
+
+export function findMockResourceById(resourceId: string): {
+  resource: Topic['resources'][number]
+  topic: Topic
+  subject: Subject
+  overview: SubjectOverview | null
+} | null {
+  for (const subject of Object.values(LIBRARY_SUBJECTS_BY_ID)) {
+    for (const topic of subject.topics) {
+      const resource = topic.resources.find((item) => item.id === resourceId)
+      if (resource) {
+        return {
+          resource,
+          topic,
+          subject,
+          overview: LIBRARY_SUBJECT_OVERVIEW_BY_ID[subject.id] ?? null,
+        }
+      }
+    }
+  }
+
+  return null
+}

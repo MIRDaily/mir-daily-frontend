@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import { LIBRARY_SUBJECT_OVERVIEWS } from '@/components/library/libraryMockData'
+import { LIBRARY_SUBJECT_OVERVIEWS } from '@/mocks/library'
 import LibraryFilters, { type LibraryFilterType } from '@/components/library/LibraryFilters'
 import SubjectCard from '@/components/library/SubjectCard'
 
