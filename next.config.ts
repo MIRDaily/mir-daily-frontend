@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const nextConfig: NextConfig = {
   images: {
@@ -10,11 +9,6 @@ const nextConfig: NextConfig = {
         pathname: '/storage/v1/object/public/avatars/**',
       },
     ],
-  },
-  turbopack: {
-    resolveAlias: {
-      tailwindcss: path.resolve(__dirname, 'node_modules/tailwindcss'),
-    },
   },
 };
 
