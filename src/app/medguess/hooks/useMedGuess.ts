@@ -175,6 +175,7 @@ export function useMedGuess() {
   const [processingGuess, setProcessingGuess] = useState('')
   const [processingRowIndex, setProcessingRowIndex] = useState<number | null>(null)
   const [processingCycle, setProcessingCycle] = useState(0)
+  const [processingSettling, setProcessingSettling] = useState(false)
   const [processingIncorrectGlow, setProcessingIncorrectGlow] = useState(false)
   const [revealingRowIndex, setRevealingRowIndex] = useState<number | null>(null)
   const [revealCycle, setRevealCycle] = useState(0)
@@ -334,6 +335,9 @@ export function useMedGuess() {
       if (normalizedResult.length !== MEDGUESS_ATTEMPT_LENGTH) {
         throw new Error('Respuesta de intento invalida.')
       }
+      setProcessingSettling(true)
+      await new Promise((resolve) => window.setTimeout(resolve, 150))
+      setProcessingSettling(false)
 
       const nextAttempt: MedGuessAttemptRow = { guess, result: normalizedResult }
       setAttempts((prev) => [...prev, nextAttempt].slice(0, MEDGUESS_MAX_ATTEMPTS))
@@ -472,6 +476,9 @@ export function useMedGuess() {
         resolvedError === 'Palabra no válida' || resolvedError === 'Debe tener 5 letras'
 
       if (shouldGlowOnError && guess.length === MEDGUESS_ATTEMPT_LENGTH) {
+        setProcessingSettling(true)
+        await new Promise((resolve) => window.setTimeout(resolve, 150))
+        setProcessingSettling(false)
         setProcessingIncorrectGlow(true)
         await new Promise((resolve) => window.setTimeout(resolve, 460))
         setProcessingIncorrectGlow(false)
@@ -609,6 +616,7 @@ export function useMedGuess() {
     processingGuess,
     processingRowIndex,
     processingCycle,
+    processingSettling,
     processingIncorrectGlow,
     loading,
     submitting,

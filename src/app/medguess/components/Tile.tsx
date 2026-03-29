@@ -9,6 +9,7 @@ type TileProps = {
   shouldReveal: boolean
   processing?: boolean
   processingOrder?: number
+  processingSettling?: boolean
   processingIncorrectGlow?: boolean
   sealed?: boolean
   delayMs?: number
@@ -39,6 +40,7 @@ export function Tile({
   shouldReveal,
   processing = false,
   processingOrder = 0,
+  processingSettling = false,
   processingIncorrectGlow = false,
   sealed = false,
   delayMs = 0,
@@ -52,7 +54,13 @@ export function Tile({
       : ''
   const showSeal = sealed && !hasLetter
   const isProcessingLoop =
-    processing && hasLetter && !processingIncorrectGlow && !shouldReveal
+    processing &&
+    hasLetter &&
+    !processingSettling &&
+    !processingIncorrectGlow &&
+    !shouldReveal
+  const isProcessingSettle =
+    processing && hasLetter && processingSettling && !processingIncorrectGlow && !shouldReveal
   const processingLoopStyle = isProcessingLoop
     ? ({ animationDelay: `${processingOrder * 80}ms` } as const)
     : undefined
@@ -79,12 +87,9 @@ export function Tile({
   return (
     <motion.div
       className="relative aspect-square w-full"
-      whileTap={{ scale: 0.96 }}
-      whileHover={{ scale: 1.05 }}
-      transition={{ type: 'spring', stiffness: 440, damping: 28 }}
     >
       <motion.div
-        className={`relative flex h-full w-full items-center justify-center rounded-xl border text-lg font-bold uppercase tracking-[0.08em] ${toneClass} ${processingGlowToneClass} ${isProcessingLoop ? 'medguess-processing-tile' : ''}`}
+        className={`relative flex h-full w-full items-center justify-center rounded-xl border text-lg font-bold uppercase tracking-[0.08em] ${toneClass} ${processingGlowToneClass} ${isProcessingLoop ? 'medguess-processing-tile' : ''} ${isProcessingSettle ? 'medguess-processing-settle' : ''}`}
         style={processingLoopStyle}
         initial={shouldReveal ? { rotateX: 90, opacity: 0.7 } : false}
         animate={activeAnimation}

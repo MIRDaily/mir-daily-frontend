@@ -949,6 +949,20 @@ textarea:disabled {
   will-change: transform;
 }
 
+@keyframes medguess-processing-settle {
+  0% {
+    transform: translateY(-3px) scaleX(1.03) scaleY(0.97) rotate(-0.4deg);
+  }
+  100% {
+    transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg);
+  }
+}
+
+.medguess-processing-settle {
+  animation: medguess-processing-settle 170ms ease-out both;
+  transform-origin: center;
+}
+
 .panel-metric-flip-wrap {
   perspective: 1200px;
 }
@@ -1181,6 +1195,11 @@ textarea:disabled {
   .zen-zzz { opacity: 0; }
 
   .medguess-processing-tile {
+    animation: none;
+    transform: none;
+  }
+
+  .medguess-processing-settle {
     animation: none;
     transform: none;
   }

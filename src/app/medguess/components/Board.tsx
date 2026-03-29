@@ -14,6 +14,7 @@ type BoardProps = {
   processingGuess?: string
   processingRowIndex?: number | null
   processingCycle?: number
+  processingSettling?: boolean
   processingIncorrectGlow?: boolean
   revealingRowIndex: number | null
   revealCycle: number
@@ -34,6 +35,7 @@ export function Board({
   processingGuess = '',
   processingRowIndex = null,
   processingCycle = 0,
+  processingSettling = false,
   processingIncorrectGlow = false,
   revealingRowIndex,
   revealCycle,
@@ -75,7 +77,7 @@ export function Board({
       {rows.map((row) => {
         const isProcessingRow = row.isProcessingRow && !row.attempt
         const isRevealRow = revealingRowIndex === row.index && Boolean(row.attempt)
-        const rowKey = `${row.index}-${isRevealRow ? revealCycle : 'stable'}-${isProcessingRow ? processingCycle : 'idle'}`
+        const rowKey = `${row.index}-${isRevealRow ? revealCycle : 'stable'}`
         return (
         <motion.div
           key={rowKey}
@@ -86,14 +88,14 @@ export function Board({
               : { opacity: 0, y: 8, scale: 1 }
           }
           animate={
-            isProcessingRow
+            isProcessingRow && !processingSettling && !processingIncorrectGlow
               ? { opacity: [1, 0.9, 1], y: [0, -1, 0] }
               : isRevealRow
                 ? { opacity: 1, y: [0, -8, 0], scale: [1, 1.02, 1] }
                 : { opacity: 1, y: 0, scale: 1 }
           }
           transition={
-            isProcessingRow
+            isProcessingRow && !processingSettling && !processingIncorrectGlow
               ? {
                   type: 'tween',
                   ease: 'easeInOut',
@@ -118,12 +120,13 @@ export function Board({
             const sealed = gameEnded && !row.attempt
             return (
               <Tile
-                key={`${row.index}-${letterIndex}-${revealCycle}-${isProcessingRow ? processingCycle : 0}`}
+                key={`${row.index}-${letterIndex}-${revealCycle}`}
                 letter={letter.trim()}
                 status={status}
                 shouldReveal={shouldReveal}
                 processing={isProcessingRow}
                 processingOrder={letterIndex}
+                processingSettling={processingSettling && isProcessingRow}
                 processingIncorrectGlow={processingIncorrectGlow && isProcessingRow}
                 sealed={sealed}
                 delayMs={letterIndex * 120}
