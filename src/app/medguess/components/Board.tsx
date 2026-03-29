@@ -74,6 +74,7 @@ export function Board({
     >
       {rows.map((row) => {
         const isProcessingRow = row.isProcessingRow && !row.attempt
+        const isRevealRow = revealingRowIndex === row.index && Boolean(row.attempt)
         return (
         <motion.div
           key={row.index}
@@ -82,7 +83,9 @@ export function Board({
           animate={
             isProcessingRow
               ? { opacity: [1, 0.9, 1], y: [0, -1, 0] }
-              : { opacity: 1, y: 0 }
+              : isRevealRow
+                ? { opacity: 1, y: [0, -8, 0], scale: [1, 1.02, 1] }
+                : { opacity: 1, y: 0, scale: 1 }
           }
           transition={
             isProcessingRow
@@ -92,6 +95,12 @@ export function Board({
                   duration: 0.6,
                   repeat: Infinity,
                 }
+              : isRevealRow
+                ? {
+                    type: 'tween',
+                    ease: [0.22, 1, 0.36, 1],
+                    duration: 0.42,
+                  }
               : {
                   ...rowTransition,
                   delay: row.index * 0.04,
