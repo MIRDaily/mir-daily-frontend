@@ -51,6 +51,8 @@ export function Tile({
       ? 'text-[#D98C7E]'
       : ''
   const showSeal = sealed && !hasLetter
+  const isProcessingLoop =
+    processing && hasLetter && !processingIncorrectGlow && !shouldReveal
   const feedbackAnimation =
     shouldReveal && status === 'correct'
       ? { scale: [1, 1.08, 1] }
@@ -59,15 +61,6 @@ export function Tile({
         : shouldReveal && status === 'absent'
           ? { opacity: [0.55, 1], scale: [0.95, 1] }
           : {}
-  const processingAnimation =
-    processing && hasLetter
-      ? {
-          y: [0, -18, 0, 8, 0],
-          scaleX: [1, 1.18, 0.92, 1.08, 1],
-          scaleY: [1, 0.82, 1.12, 0.92, 1],
-          rotate: [0, -2, 2, -1, 0],
-        }
-      : {}
   const activeAnimation =
     shouldReveal
       ? { rotateX: 0, opacity: 1, ...feedbackAnimation }
@@ -78,8 +71,6 @@ export function Tile({
             borderColor: ['#C7B6B2', '#E8A598', '#C7B6B2'],
             backgroundColor: ['#F0EDEA', '#FBECE8', '#F0EDEA'],
           }
-      : processing && hasLetter
-        ? { opacity: 1, ...processingAnimation }
         : undefined
 
   return (
@@ -90,7 +81,7 @@ export function Tile({
       transition={{ type: 'spring', stiffness: 440, damping: 28 }}
     >
       <motion.div
-        className={`relative flex h-full w-full items-center justify-center rounded-xl border text-lg font-bold uppercase tracking-[0.08em] ${toneClass} ${processingGlowToneClass}`}
+        className={`relative flex h-full w-full items-center justify-center rounded-xl border text-lg font-bold uppercase tracking-[0.08em] ${toneClass} ${processingGlowToneClass} ${isProcessingLoop ? 'medguess-processing-tile' : ''}`}
         initial={shouldReveal ? { rotateX: 90, opacity: 0.7 } : false}
         animate={activeAnimation}
         transition={{
@@ -103,8 +94,7 @@ export function Tile({
               : processing && hasLetter
                 ? processingOrder * 0.08
                 : 0,
-          repeat:
-            !shouldReveal && processing && hasLetter && !processingIncorrectGlow ? Infinity : 0,
+          repeat: 0,
         }}
       >
         {showSeal ? '×' : letter || ''}
