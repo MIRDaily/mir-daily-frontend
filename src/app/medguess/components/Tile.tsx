@@ -53,6 +53,9 @@ export function Tile({
   const showSeal = sealed && !hasLetter
   const isProcessingLoop =
     processing && hasLetter && !processingIncorrectGlow && !shouldReveal
+  const processingLoopStyle = isProcessingLoop
+    ? ({ animationDelay: `${processingOrder * 80}ms` } as const)
+    : undefined
   const feedbackAnimation =
     shouldReveal && status === 'correct'
       ? { scale: [1, 1.08, 1] }
@@ -82,6 +85,7 @@ export function Tile({
     >
       <motion.div
         className={`relative flex h-full w-full items-center justify-center rounded-xl border text-lg font-bold uppercase tracking-[0.08em] ${toneClass} ${processingGlowToneClass} ${isProcessingLoop ? 'medguess-processing-tile' : ''}`}
+        style={processingLoopStyle}
         initial={shouldReveal ? { rotateX: 90, opacity: 0.7 } : false}
         animate={activeAnimation}
         transition={{

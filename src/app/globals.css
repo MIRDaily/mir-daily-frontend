@@ -944,7 +944,7 @@ textarea:disabled {
 }
 
 .medguess-processing-tile {
-  animation: medguess-processing-tile 640ms cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  animation: medguess-processing-tile 550ms ease-in-out infinite;
   transform-origin: center;
   will-change: transform;
 }
