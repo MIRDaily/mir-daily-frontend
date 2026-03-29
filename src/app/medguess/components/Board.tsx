@@ -75,11 +75,16 @@ export function Board({
       {rows.map((row) => {
         const isProcessingRow = row.isProcessingRow && !row.attempt
         const isRevealRow = revealingRowIndex === row.index && Boolean(row.attempt)
+        const rowKey = `${row.index}-${isRevealRow ? revealCycle : 'stable'}-${isProcessingRow ? processingCycle : 'idle'}`
         return (
         <motion.div
-          key={row.index}
+          key={rowKey}
           className="grid grid-cols-5 gap-2.5 sm:gap-3"
-          initial={{ opacity: 0, y: 8 }}
+          initial={
+            isRevealRow
+              ? { opacity: 1, y: 0, scale: 1 }
+              : { opacity: 0, y: 8, scale: 1 }
+          }
           animate={
             isProcessingRow
               ? { opacity: [1, 0.9, 1], y: [0, -1, 0] }
