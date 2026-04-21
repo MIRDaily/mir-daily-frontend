@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import DeckTrashList from '@/components/studio/DeckTrashList'
 import DeckItemsList from '@/components/studio/DeckItemsList'
+import GooFissionLoader from '@/components/studio/GooFissionLoader'
 import UndoDeleteToast from '@/components/studio/UndoDeleteToast'
 import {
   fetchDeckItemsTrash,
@@ -1023,97 +1024,7 @@ export default function StudioDeckDetailPage() {
   if (loading)
     return (
       <div className="relative flex min-h-[70vh] items-center justify-center overflow-hidden">
-        <div
-          className="absolute h-56 w-56 rounded-full blur-3xl"
-          style={{
-            backgroundColor: '#E8A598',
-            opacity: 0.28,
-            animation: 'studioBlobA 4.4s ease-in-out infinite',
-          }}
-        />
-        <div
-          className="absolute h-40 w-40 rounded-full blur-2xl"
-          style={{
-            backgroundColor: '#E8A598',
-            opacity: 0.2,
-            animation: 'studioBlobB 3.6s ease-in-out infinite',
-          }}
-        />
-
-        <div className="relative flex h-24 w-24 items-center justify-center">
-          <div
-            className="absolute inset-0 rounded-[42%]"
-            style={{
-              border: '3px solid rgba(232,165,152,0.45)',
-              animation: 'studioMorph 2.8s ease-in-out infinite',
-            }}
-          />
-          <div
-            className="absolute inset-[10px] rounded-[46%]"
-            style={{
-              border: '3px solid #E8A598',
-              animation: 'studioMorph 2.8s ease-in-out infinite reverse',
-            }}
-          />
-          <div
-            className="h-3 w-3 rounded-full"
-            style={{
-              backgroundColor: '#E8A598',
-              animation: 'studioPulse 1.7s ease-in-out infinite',
-            }}
-          />
-        </div>
-
-        <p className="sr-only">Cargando mazo</p>
-
-        <style jsx>{`
-          @keyframes studioMorph {
-            0% {
-              transform: rotate(0deg) scale(1);
-              border-radius: 42% 58% 46% 54% / 53% 45% 55% 47%;
-            }
-            50% {
-              transform: rotate(180deg) scale(1.08);
-              border-radius: 57% 43% 62% 38% / 41% 63% 37% 59%;
-            }
-            100% {
-              transform: rotate(360deg) scale(1);
-              border-radius: 42% 58% 46% 54% / 53% 45% 55% 47%;
-            }
-          }
-
-          @keyframes studioBlobA {
-            0%,
-            100% {
-              transform: translate(-14px, -10px) scale(1);
-            }
-            50% {
-              transform: translate(12px, 10px) scale(1.08);
-            }
-          }
-
-          @keyframes studioBlobB {
-            0%,
-            100% {
-              transform: translate(10px, 14px) scale(1);
-            }
-            50% {
-              transform: translate(-10px, -12px) scale(0.92);
-            }
-          }
-
-          @keyframes studioPulse {
-            0%,
-            100% {
-              transform: scale(0.8);
-              opacity: 0.65;
-            }
-            50% {
-              transform: scale(1.25);
-              opacity: 1;
-            }
-          }
-        `}</style>
+        <GooFissionLoader label="Cargando mazo" />
       </div>
     )
 
@@ -1753,97 +1664,7 @@ export default function StudioDeckDetailPage() {
         </div>
         {isInitialStudyLoading ? (
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-50/75 backdrop-blur-[2px]">
-            <div
-              className="absolute h-52 w-52 rounded-full blur-3xl"
-              style={{
-                backgroundColor: '#E8A598',
-                opacity: 0.26,
-                animation: 'studioBlobA 4.4s ease-in-out infinite',
-              }}
-            />
-            <div
-              className="absolute h-36 w-36 rounded-full blur-2xl"
-              style={{
-                backgroundColor: '#E8A598',
-                opacity: 0.2,
-                animation: 'studioBlobB 3.6s ease-in-out infinite',
-              }}
-            />
-
-            <div className="relative flex h-24 w-24 items-center justify-center">
-              <div
-                className="absolute inset-0 rounded-[42%]"
-                style={{
-                  border: '3px solid rgba(232,165,152,0.45)',
-                  animation: 'studioMorph 2.8s ease-in-out infinite',
-                }}
-              />
-              <div
-                className="absolute inset-[10px] rounded-[46%]"
-                style={{
-                  border: '3px solid #E8A598',
-                  animation: 'studioMorph 2.8s ease-in-out infinite reverse',
-                }}
-              />
-              <div
-                className="h-3 w-3 rounded-full"
-                style={{
-                  backgroundColor: '#E8A598',
-                  animation: 'studioPulse 1.7s ease-in-out infinite',
-                }}
-              />
-            </div>
-
-            <p className="sr-only">Cargando pregunta</p>
-
-            <style jsx>{`
-              @keyframes studioMorph {
-                0% {
-                  transform: rotate(0deg) scale(1);
-                  border-radius: 42% 58% 46% 54% / 53% 45% 55% 47%;
-                }
-                50% {
-                  transform: rotate(180deg) scale(1.08);
-                  border-radius: 57% 43% 62% 38% / 41% 63% 37% 59%;
-                }
-                100% {
-                  transform: rotate(360deg) scale(1);
-                  border-radius: 42% 58% 46% 54% / 53% 45% 55% 47%;
-                }
-              }
-
-              @keyframes studioBlobA {
-                0%,
-                100% {
-                  transform: translate(-14px, -10px) scale(1);
-                }
-                50% {
-                  transform: translate(12px, 10px) scale(1.08);
-                }
-              }
-
-              @keyframes studioBlobB {
-                0%,
-                100% {
-                  transform: translate(10px, 14px) scale(1);
-                }
-                50% {
-                  transform: translate(-10px, -12px) scale(0.92);
-                }
-              }
-
-              @keyframes studioPulse {
-                0%,
-                100% {
-                  transform: scale(0.8);
-                  opacity: 0.65;
-                }
-                50% {
-                  transform: scale(1.25);
-                  opacity: 1;
-                }
-              }
-            `}</style>
+            <GooFissionLoader label="Cargando pregunta" />
           </div>
         ) : null}
       </div>
@@ -2058,7 +1879,10 @@ export default function StudioDeckDetailPage() {
                 </p>
               ) : null}
               {trashItemsLoading ? (
-                <p className="text-sm text-slate-600">Cargando papelera...</p>
+                <div className="flex items-center gap-3 text-sm text-slate-600">
+                  <GooFissionLoader size={64} label="Cargando papelera" showGlow={false} />
+                  <span>Cargando papelera...</span>
+                </div>
               ) : (
                 <DeckTrashList
                   items={trashItems}

@@ -56,6 +56,7 @@ export function MedGuessPage() {
     processingGuess,
     processingRowIndex,
     processingCycle,
+    processingSettling,
     processingIncorrectGlow,
     loading,
     submitting,
@@ -164,6 +165,7 @@ export function MedGuessPage() {
                     processingGuess={processingGuess}
                     processingRowIndex={processingRowIndex}
                     processingCycle={processingCycle}
+                    processingSettling={processingSettling}
                     processingIncorrectGlow={processingIncorrectGlow}
                     revealingRowIndex={revealingRowIndex}
                     revealCycle={revealCycle}

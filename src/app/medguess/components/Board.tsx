@@ -14,6 +14,7 @@ type BoardProps = {
   processingGuess?: string
   processingRowIndex?: number | null
   processingCycle?: number
+  processingSettling?: boolean
   processingIncorrectGlow?: boolean
   revealingRowIndex: number | null
   revealCycle: number
@@ -34,6 +35,7 @@ export function Board({
   processingGuess = '',
   processingRowIndex = null,
   processingCycle = 0,
+  processingSettling = false,
   processingIncorrectGlow = false,
   revealingRowIndex,
   revealCycle,
@@ -74,24 +76,38 @@ export function Board({
     >
       {rows.map((row) => {
         const isProcessingRow = row.isProcessingRow && !row.attempt
+        const isRevealRow = revealingRowIndex === row.index && Boolean(row.attempt)
+        const rowKey = `${row.index}-${isRevealRow ? revealCycle : 'stable'}`
         return (
         <motion.div
-          key={row.index}
+          key={rowKey}
           className="grid grid-cols-5 gap-2.5 sm:gap-3"
-          initial={{ opacity: 0, y: 8 }}
+          initial={
+            isRevealRow
+              ? { opacity: 1, y: 0, scale: 1 }
+              : { opacity: 0, y: 8, scale: 1 }
+          }
           animate={
-            isProcessingRow
+            isProcessingRow && !processingSettling && !processingIncorrectGlow
               ? { opacity: [1, 0.9, 1], y: [0, -1, 0] }
-              : { opacity: 1, y: 0 }
+              : isRevealRow
+                ? { opacity: 1, y: [0, -8, 0], scale: [1, 1.02, 1] }
+                : { opacity: 1, y: 0, scale: 1 }
           }
           transition={
-            isProcessingRow
+            isProcessingRow && !processingSettling && !processingIncorrectGlow
               ? {
                   type: 'tween',
                   ease: 'easeInOut',
                   duration: 0.6,
                   repeat: Infinity,
                 }
+              : isRevealRow
+                ? {
+                    type: 'tween',
+                    ease: [0.22, 1, 0.36, 1],
+                    duration: 0.42,
+                  }
               : {
                   ...rowTransition,
                   delay: row.index * 0.04,
@@ -104,12 +120,13 @@ export function Board({
             const sealed = gameEnded && !row.attempt
             return (
               <Tile
-                key={`${row.index}-${letterIndex}-${revealCycle}-${isProcessingRow ? processingCycle : 0}`}
+                key={`${row.index}-${letterIndex}-${revealCycle}`}
                 letter={letter.trim()}
                 status={status}
                 shouldReveal={shouldReveal}
                 processing={isProcessingRow}
                 processingOrder={letterIndex}
+                processingSettling={processingSettling && isProcessingRow}
                 processingIncorrectGlow={processingIncorrectGlow && isProcessingRow}
                 sealed={sealed}
                 delayMs={letterIndex * 120}

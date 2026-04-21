@@ -4228,9 +4228,85 @@ export default function DashboardPage() {
                                 Inicia sesión para guardar preguntas.
                               </p>
                             ) : loadingDecks ? (
-                              <p className="px-2 py-2 text-sm text-[#7D8A96]">
-                                Cargando mazos...
-                              </p>
+                              <div className="flex items-center gap-3 px-2 py-2 text-sm text-[#7D8A96]">
+                                <svg
+                                  aria-hidden="true"
+                                  width="88"
+                                  height="88"
+                                  viewBox="0 0 200 200"
+                                  className="shrink-0"
+                                >
+                                  <defs>
+                                    <filter
+                                      id={`deck-loader-goo-${currentQuestionId}`}
+                                      x="-35%"
+                                      y="-35%"
+                                      width="170%"
+                                      height="170%"
+                                    >
+                                      <feTurbulence baseFrequency=".016" numOctaves="2" result="n">
+                                        <animate
+                                          attributeName="seed"
+                                          values="8;48;8"
+                                          dur="10s"
+                                          repeatCount="indefinite"
+                                        />
+                                      </feTurbulence>
+                                      <feDisplacementMap
+                                        in="SourceGraphic"
+                                        in2="n"
+                                        scale="12"
+                                        result="w"
+                                      />
+                                      <feGaussianBlur in="w" stdDeviation="11" result="b" />
+                                      <feColorMatrix
+                                        in="b"
+                                        type="matrix"
+                                        values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 26 -12"
+                                      />
+                                    </filter>
+                                  </defs>
+                                  <g filter={`url(#deck-loader-goo-${currentQuestionId})`}>
+                                    <circle cx="100" cy="100" r="28" fill="#E8A598">
+                                      <animate
+                                        attributeName="cx"
+                                        values="100;72;100;128;100"
+                                        dur="4s"
+                                        calcMode="spline"
+                                        keySplines=".6 0 .4 1;.6 0 .4 1;.6 0 .4 1;.6 0 .4 1"
+                                        repeatCount="indefinite"
+                                      />
+                                      <animate
+                                        attributeName="cy"
+                                        values="100;90;100;90;100"
+                                        dur="4s"
+                                        calcMode="spline"
+                                        keySplines=".6 0 .4 1;.6 0 .4 1;.6 0 .4 1;.6 0 .4 1"
+                                        repeatCount="indefinite"
+                                      />
+                                    </circle>
+                                    <circle cx="100" cy="100" r="28" fill="#E8A598">
+                                      <animate
+                                        attributeName="cx"
+                                        values="100;128;100;72;100"
+                                        dur="4s"
+                                        calcMode="spline"
+                                        keySplines=".6 0 .4 1;.6 0 .4 1;.6 0 .4 1;.6 0 .4 1"
+                                        repeatCount="indefinite"
+                                      />
+                                      <animate
+                                        attributeName="cy"
+                                        values="100;110;100;110;100"
+                                        dur="4s"
+                                        calcMode="spline"
+                                        keySplines=".6 0 .4 1;.6 0 .4 1;.6 0 .4 1;.6 0 .4 1"
+                                        repeatCount="indefinite"
+                                      />
+                                    </circle>
+                                  </g>
+                                </svg>
+                                <span>Cargando mazos...</span>
+                              </div>
                             ) : decks.length === 0 ? (
                               <p className="px-2 py-2 text-sm text-[#7D8A96]">
                                 No tienes mazos activos.

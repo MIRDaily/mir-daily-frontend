@@ -925,6 +925,44 @@ textarea:disabled {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
+@keyframes medguess-processing-tile {
+  0% {
+    transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg);
+  }
+  22% {
+    transform: translateY(-18px) scaleX(1.18) scaleY(0.82) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(0) scaleX(0.92) scaleY(1.12) rotate(2deg);
+  }
+  76% {
+    transform: translateY(8px) scaleX(1.08) scaleY(0.92) rotate(-1deg);
+  }
+  100% {
+    transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg);
+  }
+}
+
+.medguess-processing-tile {
+  animation: medguess-processing-tile 550ms ease-in-out infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+
+@keyframes medguess-processing-settle {
+  0% {
+    transform: translateY(-3px) scaleX(1.03) scaleY(0.97) rotate(-0.4deg);
+  }
+  100% {
+    transform: translateY(0) scaleX(1) scaleY(1) rotate(0deg);
+  }
+}
+
+.medguess-processing-settle {
+  animation: medguess-processing-settle 170ms ease-out both;
+  transform-origin: center;
+}
+
 .panel-metric-flip-wrap {
   perspective: 1200px;
 }
@@ -1155,5 +1193,15 @@ textarea:disabled {
     transform: none;
   }
   .zen-zzz { opacity: 0; }
+
+  .medguess-processing-tile {
+    animation: none;
+    transform: none;
+  }
+
+  .medguess-processing-settle {
+    animation: none;
+    transform: none;
+  }
 
 }
