@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { Subject, Topic } from '@/lib/simulacro/types'
 
@@ -31,6 +32,13 @@ export default function SimulacroTopicPicker({
 }: SimulacroTopicPickerProps) {
   const [activeSubjectId, setActiveSubjectId] = useState<number | null>(null)
   const [query, setQuery] = useState('')
+  // El modal se renderiza vía portal en document.body para escapar de cualquier
+  // ancestro con transform/filter (p. ej. el motion.div animado del builder), que
+  // si no rompería el position:fixed y confinaría el backdrop a una "caja".
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Mantener una asignatura activa válida.
   useEffect(() => {
@@ -101,22 +109,25 @@ export default function SimulacroTopicPicker({
     )
   }
 
-  return (
+  if (!mounted) return null
+
+  return createPortal(
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-[#2D3748]/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-[#2D3748]/55 p-0 backdrop-blur-md sm:items-center sm:p-4"
+          initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+          animate={{ opacity: 1, backdropFilter: 'blur(8px)' }}
+          exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
           onClick={onClose}
         >
           <motion.div
-            className="flex h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-[#F0EBE8] bg-white shadow-xl sm:h-[85vh] sm:rounded-2xl"
-            initial={{ opacity: 0, y: 40, scale: 0.99 }}
+            className="flex h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl ring-1 ring-black/5 sm:h-[85vh] sm:rounded-2xl"
+            initial={{ opacity: 0, y: 40, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 40, scale: 0.99 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, y: 40, scale: 0.97 }}
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Cabecera */}
@@ -288,6 +299,7 @@ export default function SimulacroTopicPicker({
           </motion.div>
         </motion.div>
       ) : null}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   )
 }
