@@ -1097,6 +1097,26 @@ textarea:disabled {
 .zen-zzz-2 { font-size: 0.78em; animation-delay: 0.8s; }
 .zen-zzz-3 { font-size: 1.05em; animation-delay: 1.6s; }
 
+/* ─── Landing page ─────────────────────────────────────────────────────── */
+
+@keyframes landing-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+.landing-marquee {
+  animation: landing-marquee 36s linear infinite;
+  will-change: transform;
+}
+
+.landing-marquee:hover {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hub-enter .hub-anim,
   .hub-enter .hub-anim-soft,

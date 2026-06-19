@@ -390,9 +390,12 @@ export default function StudioPage() {
 
                   {card.type === 'split-actions' ? (
                     <div className="flex flex-col gap-3 sm:flex-row">
-                      <button className="flex-1 rounded-xl bg-[#E8A598] px-4 py-3 text-base font-medium text-white shadow-md shadow-[#E8A598]/20 transition-colors hover:bg-[#d18d80]">
+                      <Link
+                        href="/studio/simulacro"
+                        className="flex flex-1 items-center justify-center rounded-xl bg-[#E8A598] px-4 py-3 text-base font-medium text-white shadow-md shadow-[#E8A598]/20 transition-colors hover:bg-[#d18d80]"
+                      >
                         {card.primaryAction}
-                      </button>
+                      </Link>
                       <button className="flex-1 rounded-xl border border-[#7D8A96]/30 bg-white px-4 py-3 text-base font-medium transition-colors hover:border-[#7D8A96]/50 hover:bg-[#F2EFED]">
                         {card.secondaryAction}
                       </button>

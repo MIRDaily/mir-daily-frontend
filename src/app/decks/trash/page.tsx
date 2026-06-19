@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
+import GooFissionLoader from '@/components/studio/GooFissionLoader'
 import TrashTimer from '@/components/studio/TrashTimer'
 import { fetchDeletedDecks, restoreDeck, type TrashedDeck } from '@/lib/studio/trash'
 
@@ -108,7 +109,10 @@ export default function StudioDeckTrashPage() {
 
         {loading ? (
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-600">Cargando papelera...</p>
+            <div className="flex items-center gap-3 text-sm text-slate-600">
+              <GooFissionLoader size={64} label="Cargando papelera" showGlow={false} />
+              <span>Cargando papelera...</span>
+            </div>
           </section>
         ) : null}
 
@@ -177,3 +181,4 @@ export default function StudioDeckTrashPage() {
     </main>
   )
 }
+

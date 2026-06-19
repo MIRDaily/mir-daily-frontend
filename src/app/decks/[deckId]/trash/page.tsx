@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
+import GooFissionLoader from '@/components/studio/GooFissionLoader'
 import DeckTrashList from '@/components/studio/DeckTrashList'
 import { fetchDeckTrash, restoreDeckItem, type DeckTrashItem } from '@/lib/studio/trash'
 
@@ -113,7 +114,10 @@ export default function DeckTrashPage() {
 
         {loading ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-600">Cargando papelera...</p>
+            <div className="flex items-center gap-3 text-sm text-slate-600">
+              <GooFissionLoader size={64} label="Cargando papelera" showGlow={false} />
+              <span>Cargando papelera...</span>
+            </div>
           </div>
         ) : null}
 
@@ -149,3 +153,4 @@ export default function DeckTrashPage() {
     </main>
   )
 }
+
