@@ -31,6 +31,7 @@ export default function SimulacroRunner({
   onExit,
 }: SimulacroRunnerProps) {
   const [index, setIndex] = useState(0)
+  const [zoom, setZoom] = useState<string | null>(null)
 
   const total = questions.length
   const current = questions[index]
@@ -103,6 +104,24 @@ export default function SimulacroRunner({
           <h1 className="text-[28px] font-bold leading-tight tracking-tight text-[#2D3748] sm:text-[32px]">
             {current?.statement}
           </h1>
+          {current?.has_image && current?.image_url ? (
+            <button
+              type="button"
+              onClick={() => setZoom(current.image_url!)}
+              className="group mt-5 block overflow-hidden rounded-2xl border border-[#E9E4E1] bg-white"
+              aria-label="Ampliar imagen"
+            >
+              <img
+                src={current.image_url}
+                alt="Imagen de la pregunta"
+                className="mx-auto max-h-[340px] w-auto object-contain transition-transform duration-200 group-hover:scale-[1.01]"
+              />
+              <span className="flex items-center justify-center gap-1 border-t border-[#F0EAE6] bg-[#FAF7F4] py-1.5 text-[11px] font-semibold text-[#7D8A96]">
+                <span className="material-symbols-outlined text-sm">zoom_in</span>
+                Ampliar
+              </span>
+            </button>
+          ) : null}
         </div>
 
         <div className="grid gap-4">
@@ -245,6 +264,32 @@ export default function SimulacroRunner({
           </button>
         </div>
       </div>
+
+      <AnimatePresence>
+        {zoom ? (
+          <motion.div
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-[#1F2937]/80 p-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setZoom(null)}
+          >
+            <img
+              src={zoom}
+              alt="Imagen ampliada"
+              className="max-h-[90vh] max-w-[92vw] rounded-lg object-contain shadow-2xl"
+            />
+            <button
+              type="button"
+              onClick={() => setZoom(null)}
+              aria-label="Cerrar"
+              className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-[#2D3748] shadow-lg transition-colors hover:bg-white"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   )
 }

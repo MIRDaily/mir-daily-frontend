@@ -31,6 +31,8 @@ export interface SimulacroQuestion {
   subject: string | null
   topic: string | null
   options: string[]
+  has_image?: boolean
+  image_url?: string | null
 }
 
 /** Corrección de una pregunta, devuelta por el backend tras responder. */
