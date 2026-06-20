@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import QuestionImage from '@/components/simulacro/QuestionImage'
 import type {
@@ -46,6 +46,37 @@ export default function SimulacroRunner({
   const locked = mode === 'immediate' && selected != null
   const revealed = locked && result != null
   const checking = locked && result == null
+
+  // Imagen de la pregunta: revelar/ocultar con barra espaciadora (o tocando).
+  const [imageRevealed, setImageRevealed] = useState(false)
+  const [playHint, setPlayHint] = useState(false)
+  const hintPlayed = useRef(false)
+
+  // Al cambiar de pregunta, la imagen vuelve a ocultarse.
+  useEffect(() => {
+    setImageRevealed(false)
+    setPlayHint(false)
+  }, [index])
+
+  // Pista de barra espaciadora: solo la primera vez que aparece una pregunta con imagen.
+  useEffect(() => {
+    if (current?.has_image && current?.image_url && !hintPlayed.current) {
+      hintPlayed.current = true
+      setPlayHint(true)
+    }
+  }, [current])
+
+  // Barra espaciadora: muestra/oculta la imagen de la pregunta.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === ' ' || e.key === 'Spacebar') && current?.has_image && current?.image_url) {
+        e.preventDefault()
+        setImageRevealed((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [current])
 
   const goPrev = () => setIndex((i) => Math.max(0, i - 1))
   const goNext = () => {
@@ -105,7 +136,33 @@ export default function SimulacroRunner({
             {current?.statement}
           </h1>
           {current?.has_image && current?.image_url ? (
-            <QuestionImage key={current.id} url={current.image_url} height={340} />
+            <div>
+              <QuestionImage
+                key={current.id}
+                url={current.image_url}
+                height={340}
+                revealed={imageRevealed}
+                onRevealedChange={setImageRevealed}
+              />
+              {playHint ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: [0, 1, 0, 1, 0, 1, 0] }}
+                  transition={{
+                    duration: 3,
+                    times: [0, 0.12, 0.33, 0.5, 0.66, 0.83, 1],
+                    ease: 'easeInOut',
+                  }}
+                  onAnimationComplete={() => setPlayHint(false)}
+                  className="mt-2 flex items-center justify-center gap-1.5 text-xs font-semibold text-[#7D8A96]"
+                >
+                  <span className="rounded border border-[#E9E4E1] bg-[#FAF7F4] px-1.5 py-0.5 font-mono text-[10px] text-[#2D3748]">
+                    Espacio
+                  </span>
+                  Presiona barra espaciadora para mostrar u ocultar la imagen
+                </motion.div>
+              ) : null}
+            </div>
           ) : null}
         </div>
 

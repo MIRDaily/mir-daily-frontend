@@ -15,6 +15,9 @@ type QuestionImageProps = {
   alt?: string
   /** Altura del marco (px) de la imagen revelada / placeholder. */
   height?: number
+  /** Si se pasa, el "revelado" pasa a ser controlado desde fuera (p.ej. barra espaciadora). */
+  revealed?: boolean
+  onRevealedChange?: (revealed: boolean) => void
 }
 
 const ZOOM_MIN = 1
@@ -177,13 +180,23 @@ export function ZoomableImage({
 }
 
 // ----- Imagen "revelable" (voltea para mostrar) + abrir lightbox -----
-export default function QuestionImage({ url, alt = 'Imagen de la pregunta', height = 320 }: QuestionImageProps) {
-  const [revealed, setRevealed] = useState(false)
+export default function QuestionImage({
+  url,
+  alt = 'Imagen de la pregunta',
+  height = 320,
+  revealed: revealedProp,
+  onRevealedChange,
+}: QuestionImageProps) {
+  const [internalRevealed, setInternalRevealed] = useState(false)
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  const isControlled = revealedProp !== undefined
+  const revealed = isControlled ? revealedProp : internalRevealed
+  const reveal = () => (isControlled ? onRevealedChange?.(true) : setInternalRevealed(true))
 
   const hidden = { backfaceVisibility: 'hidden' as const, WebkitBackfaceVisibility: 'hidden' as const }
 
@@ -198,7 +211,7 @@ export default function QuestionImage({ url, alt = 'Imagen de la pregunta', heig
         {/* Cara frontal: placeholder (la imagen está oculta hasta que el usuario la revela) */}
         <button
           type="button"
-          onClick={() => setRevealed(true)}
+          onClick={reveal}
           aria-label="Revelar imagen de la pregunta"
           className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#E8A598]/50 bg-[#FAF7F4] text-[#7D8A96] transition-colors hover:bg-[#fff0ec]"
           style={hidden}
