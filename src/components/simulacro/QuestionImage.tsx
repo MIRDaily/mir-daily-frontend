@@ -46,6 +46,19 @@ function Lightbox({ url, onClose }: { url: string; onClose: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scale])
 
+  // Bloquea el scroll del fondo mientras el lightbox está abierto, para que la
+  // rueda (zoom) no desplace la pregunta/página de detrás.
+  useEffect(() => {
+    const prevBody = document.body.style.overflow
+    const prevHtml = document.documentElement.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevBody
+      document.documentElement.style.overflow = prevHtml
+    }
+  }, [])
+
   const onWheel = (e: RWheelEvent) => {
     zoomTo(scale + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP))
   }
