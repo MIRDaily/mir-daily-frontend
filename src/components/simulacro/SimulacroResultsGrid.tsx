@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
@@ -94,6 +94,9 @@ export default function SimulacroResultsGrid({
   const [direction, setDirection] = useState(0)
   // Panel lateral de imagen visible (se reinicia al cambiar de pregunta).
   const [showImage, setShowImage] = useState(false)
+  // Pista de "barra espaciadora": solo la primera vez que aparece una pregunta con imagen.
+  const [playHint, setPlayHint] = useState(false)
+  const hintPlayed = useRef(false)
 
   const openAt = useCallback((index: number) => {
     setDirection(0)
@@ -109,11 +112,22 @@ export default function SimulacroResultsGrid({
         if (next < 0 || next >= questions.length) return prev
         setDirection(delta)
         setShowImage(false)
+        setPlayHint(false)
         return next
       })
     },
     [questions.length],
   )
+
+  // Dispara la pista de barra espaciadora la primera vez que se ve una pregunta con imagen.
+  useEffect(() => {
+    if (activeIndex == null) return
+    const q = questions[activeIndex]
+    if (q?.has_image && q?.image_url && !hintPlayed.current) {
+      hintPlayed.current = true
+      setPlayHint(true)
+    }
+  }, [activeIndex, questions])
 
   // Flechas del teclado y Escape mientras el detalle está abierto.
   useEffect(() => {
@@ -122,10 +136,17 @@ export default function SimulacroResultsGrid({
       if (e.key === 'ArrowRight') navigate(1)
       else if (e.key === 'ArrowLeft') navigate(-1)
       else if (e.key === 'Escape') setActiveIndex(null)
+      else if (e.key === ' ' || e.key === 'Spacebar') {
+        const q = questions[activeIndex]
+        if (q?.has_image && q?.image_url) {
+          e.preventDefault()
+          setShowImage((v) => !v)
+        }
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [activeIndex, navigate])
+  }, [activeIndex, navigate, questions])
 
   const stats = useMemo(() => {
     let correct = 0
@@ -347,16 +368,39 @@ export default function SimulacroResultsGrid({
                     </h2>
 
                     {activeQuestion.has_image && activeQuestion.image_url ? (
-                      <button
-                        type="button"
-                        onClick={() => setShowImage((v) => !v)}
-                        className="mb-4 inline-flex items-center gap-2 rounded-xl border border-[#E8A598]/40 bg-white px-4 py-2.5 text-sm font-bold text-[#d18d80] transition-colors hover:bg-[#fff0ec]"
-                      >
-                        <span className="material-symbols-outlined text-lg">
-                          {showImage ? 'visibility_off' : 'image'}
-                        </span>
-                        {showImage ? 'Ocultar imagen' : 'Ver imagen'}
-                      </button>
+                      <div className="mb-4 flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowImage((v) => !v)}
+                          onKeyDown={(e) => {
+                            if (e.key === ' ' || e.key === 'Spacebar') e.preventDefault()
+                          }}
+                          className="inline-flex items-center gap-2 rounded-xl border border-[#E8A598]/40 bg-white px-4 py-2.5 text-sm font-bold text-[#d18d80] transition-colors hover:bg-[#fff0ec]"
+                        >
+                          <span className="material-symbols-outlined text-lg">
+                            {showImage ? 'visibility_off' : 'image'}
+                          </span>
+                          {showImage ? 'Ocultar imagen' : 'Ver imagen'}
+                        </button>
+                        {playHint ? (
+                          <motion.span
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: [0, 1, 0, 1, 0, 1, 0] }}
+                            transition={{
+                              duration: 3,
+                              times: [0, 0.12, 0.33, 0.5, 0.66, 0.83, 1],
+                              ease: 'easeInOut',
+                            }}
+                            onAnimationComplete={() => setPlayHint(false)}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#7D8A96]"
+                          >
+                            <span className="rounded border border-[#E9E4E1] bg-[#FAF7F4] px-1.5 py-0.5 font-mono text-[10px] text-[#2D3748]">
+                              Espacio
+                            </span>
+                            Presiona barra espaciadora
+                          </motion.span>
+                        ) : null}
+                      </div>
                     ) : null}
 
                     <div className="space-y-2">
@@ -443,15 +487,15 @@ export default function SimulacroResultsGrid({
             </motion.div>
 
             {/* Ventana lateral de imagen: emerge desde detrás de la tarjeta */}
-            <AnimatePresence>
+            <AnimatePresence mode="popLayout">
               {showImage && activeQuestion.has_image && activeQuestion.image_url ? (
                 <motion.div
                   key="image-panel"
                   className="relative z-0 flex max-h-[85vh] min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5"
                   initial={{ opacity: 0, x: -140, scale: 0.9 }}
                   animate={{ opacity: 1, x: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: -140, scale: 0.9 }}
-                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                  exit={{ opacity: 0, x: -120, scale: 0.92 }}
+                  transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-center justify-between gap-3 border-b border-[#F0EBE8] px-5 py-3">
