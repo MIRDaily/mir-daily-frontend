@@ -123,6 +123,46 @@ function Lightbox({ url, onClose }: { url: string; onClose: () => void }) {
   )
 }
 
+// ----- Imagen ampliable (sin placeholder): muestra la imagen y abre el lightbox -----
+export function ZoomableImage({
+  url,
+  alt = 'Imagen de la pregunta',
+  className = '',
+}: {
+  url: string
+  alt?: string
+  className?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Ampliar imagen"
+        className="group relative block"
+      >
+        <img src={url} alt={alt} className={className} />
+        <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100">
+          <span className="material-symbols-outlined text-sm">zoom_in</span>
+          Ampliar
+        </span>
+      </button>
+      {mounted
+        ? createPortal(
+            <AnimatePresence>{open ? <Lightbox url={url} onClose={() => setOpen(false)} /> : null}</AnimatePresence>,
+            document.body,
+          )
+        : null}
+    </>
+  )
+}
+
 // ----- Imagen "revelable" (voltea para mostrar) + abrir lightbox -----
 export default function QuestionImage({ url, alt = 'Imagen de la pregunta', height = 320 }: QuestionImageProps) {
   const [revealed, setRevealed] = useState(false)

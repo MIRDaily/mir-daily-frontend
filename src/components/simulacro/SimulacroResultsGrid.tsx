@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
-import QuestionImage from '@/components/simulacro/QuestionImage'
+import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 import type {
   SimulacroAnswer,
   SimulacroQuestion,
@@ -92,9 +92,12 @@ export default function SimulacroResultsGrid({
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   // Dirección del último desplazamiento, para animar la entrada/salida.
   const [direction, setDirection] = useState(0)
+  // Panel lateral de imagen visible (se reinicia al cambiar de pregunta).
+  const [showImage, setShowImage] = useState(false)
 
   const openAt = useCallback((index: number) => {
     setDirection(0)
+    setShowImage(false)
     setActiveIndex(index)
   }, [])
 
@@ -105,6 +108,7 @@ export default function SimulacroResultsGrid({
         const next = prev + delta
         if (next < 0 || next >= questions.length) return prev
         setDirection(delta)
+        setShowImage(false)
         return next
       })
     },
@@ -283,9 +287,10 @@ export default function SimulacroResultsGrid({
               <span className="material-symbols-outlined">chevron_right</span>
             </button>
 
+            <div className="flex items-center justify-center gap-4">
             <motion.div
               layout
-              className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#F0EBE8] bg-white shadow-xl"
+              className="relative z-10 flex max-h-[85vh] w-[42rem] max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-[#F0EBE8] bg-white shadow-xl"
               initial={{ opacity: 0, y: 24, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 24, scale: 0.98 }}
@@ -342,9 +347,16 @@ export default function SimulacroResultsGrid({
                     </h2>
 
                     {activeQuestion.has_image && activeQuestion.image_url ? (
-                      <div className="mb-4">
-                        <QuestionImage url={activeQuestion.image_url} height={240} />
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowImage((v) => !v)}
+                        className="mb-4 inline-flex items-center gap-2 rounded-xl border border-[#E8A598]/40 bg-white px-4 py-2.5 text-sm font-bold text-[#d18d80] transition-colors hover:bg-[#fff0ec]"
+                      >
+                        <span className="material-symbols-outlined text-lg">
+                          {showImage ? 'visibility_off' : 'image'}
+                        </span>
+                        {showImage ? 'Ocultar imagen' : 'Ver imagen'}
+                      </button>
                     ) : null}
 
                     <div className="space-y-2">
@@ -429,6 +441,46 @@ export default function SimulacroResultsGrid({
                 </button>
               </div>
             </motion.div>
+
+            {/* Ventana lateral de imagen: emerge desde detrás de la tarjeta */}
+            <AnimatePresence>
+              {showImage && activeQuestion.has_image && activeQuestion.image_url ? (
+                <motion.div
+                  key="image-panel"
+                  className="relative z-0 flex max-h-[85vh] min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5"
+                  initial={{ opacity: 0, x: -140, scale: 0.9 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: -140, scale: 0.9 }}
+                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between gap-3 border-b border-[#F0EBE8] px-5 py-3">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[#7D8A96]">
+                      <span className="material-symbols-outlined text-base text-[#E8A598]">
+                        image
+                      </span>
+                      Imagen
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowImage(false)}
+                      aria-label="Ocultar imagen"
+                      className="rounded-lg p-1.5 text-[#7D8A96] transition-colors hover:bg-[#F2EFED] hover:text-[#C4655A]"
+                    >
+                      <span className="material-symbols-outlined">close</span>
+                    </button>
+                  </div>
+                  <div className="h-1 w-full bg-[#E8A598]" />
+                  <div className="overflow-auto p-3">
+                    <ZoomableImage
+                      url={activeQuestion.image_url}
+                      className="max-h-[68vh] w-auto max-w-[42vw] rounded-lg object-contain"
+                    />
+                  </div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+            </div>
           </motion.div>
         ) : null}
       </AnimatePresence>
