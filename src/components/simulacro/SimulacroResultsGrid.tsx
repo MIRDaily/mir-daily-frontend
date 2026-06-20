@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
+import QuestionImage from '@/components/simulacro/QuestionImage'
 import type {
   SimulacroAnswer,
   SimulacroQuestion,
@@ -91,7 +92,6 @@ export default function SimulacroResultsGrid({
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   // Dirección del último desplazamiento, para animar la entrada/salida.
   const [direction, setDirection] = useState(0)
-  const [zoom, setZoom] = useState<string | null>(null)
 
   const openAt = useCallback((index: number) => {
     setDirection(0)
@@ -342,22 +342,9 @@ export default function SimulacroResultsGrid({
                     </h2>
 
                     {activeQuestion.has_image && activeQuestion.image_url ? (
-                      <button
-                        type="button"
-                        onClick={() => setZoom(activeQuestion.image_url!)}
-                        className="group mb-4 block overflow-hidden rounded-xl border border-[#E9E4E1] bg-white"
-                        aria-label="Ampliar imagen"
-                      >
-                        <img
-                          src={activeQuestion.image_url}
-                          alt="Imagen de la pregunta"
-                          className="mx-auto max-h-[260px] w-auto object-contain"
-                        />
-                        <span className="flex items-center justify-center gap-1 border-t border-[#F0EAE6] bg-[#FAF7F4] py-1 text-[11px] font-semibold text-[#7D8A96]">
-                          <span className="material-symbols-outlined text-sm">zoom_in</span>
-                          Ampliar
-                        </span>
-                      </button>
+                      <div className="mb-4">
+                        <QuestionImage url={activeQuestion.image_url} height={240} />
+                      </div>
                     ) : null}
 
                     <div className="space-y-2">
@@ -442,33 +429,6 @@ export default function SimulacroResultsGrid({
                 </button>
               </div>
             </motion.div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-
-      {/* Lightbox de imagen (por encima del modal de detalle) */}
-      <AnimatePresence>
-        {zoom ? (
-          <motion.div
-            className="fixed inset-0 z-[110] flex items-center justify-center bg-[#1F2937]/85 p-4 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setZoom(null)}
-          >
-            <img
-              src={zoom}
-              alt="Imagen ampliada"
-              className="max-h-[90vh] max-w-[92vw] rounded-lg object-contain shadow-2xl"
-            />
-            <button
-              type="button"
-              onClick={() => setZoom(null)}
-              aria-label="Cerrar"
-              className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-[#2D3748] shadow-lg transition-colors hover:bg-white"
-            >
-              <span className="material-symbols-outlined">close</span>
-            </button>
           </motion.div>
         ) : null}
       </AnimatePresence>
