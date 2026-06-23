@@ -11,8 +11,16 @@ import type { RankingEntry } from '@/hooks/useDailyResults'
 import { useScoreDistribution } from '@/hooks/useScoreDistribution'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { getAvatarUrl } from '@/lib/avatar'
-import { debugFetch, debugRender } from '@/lib/debugRSC'
+import { debugRender } from '@/lib/debugRSC'
 import { supabase } from '@/lib/supabaseBrowser'
+import {
+  type StudioDeck,
+  addQuestionToDeck,
+  createStudioDeck,
+  fetchStudioDeckItems,
+  fetchStudioDecks,
+  removeQuestionFromDeck,
+} from '@/lib/studioDecks'
 import { parseApiError } from '@/lib/profile'
 import { getUserSummary } from '@/services/resultsService'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
@@ -106,146 +114,8 @@ type RankingVirtualListData = {
   userRank: number | string | null
 }
 
-type StudioDeck = {
-  id: string | number
-  name: string
-  deleted_at?: string | null
-}
-
-type StudioDeckItem = {
-  id: string | number
-  question_id?: string | number | null
-  questionId?: string | number | null
-}
-
 type QuestionDeckMembershipMap = Record<string, Record<string, boolean>>
 type QuestionDeckItemIdMap = Record<string, Record<string, string>>
-
-type StudioDecksPayload = StudioDeck[] | { decks?: StudioDeck[] } | null
-
-async function fetchStudioDecks(token: string): Promise<StudioDeck[]> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL
-  if (!apiUrl) {
-    throw new Error('NEXT_PUBLIC_API_URL no definida.')
-  }
-
-  const res = await debugFetch('Dashboard.fetchStudioDecks', () =>
-    fetch(`${apiUrl}/api/studio/decks`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }),
-  )
-
-  if (!res.ok) {
-    throw new Error('Error loading decks')
-  }
-
-  const payload = (await res.json().catch(() => null)) as StudioDecksPayload
-  if (Array.isArray(payload)) return payload
-  if (payload && Array.isArray(payload.decks)) return payload.decks
-  return []
-}
-
-async function addQuestionToDeck(token: string, deckId: string, questionId: string) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL
-  if (!apiUrl) {
-    throw new Error('NEXT_PUBLIC_API_URL no definida.')
-  }
-
-  const res = await debugFetch('Dashboard.addQuestionToDeck', () =>
-    fetch(`${apiUrl}/api/studio/decks/${deckId}/items`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        questionIds: [questionId],
-      }),
-    }),
-  )
-
-  if (!res.ok) {
-    throw new Error('Error saving question')
-  }
-
-  return res.json()
-}
-
-async function createStudioDeck(token: string, name: string) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL
-  if (!apiUrl) {
-    throw new Error('NEXT_PUBLIC_API_URL no definida.')
-  }
-
-  const res = await debugFetch('Dashboard.createStudioDeck', () =>
-    fetch(`${apiUrl}/api/studio/decks`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ name }),
-    }),
-  )
-
-  if (!res.ok) {
-    throw new Error('Error creating deck')
-  }
-
-  return res.json().catch(() => null)
-}
-
-async function fetchStudioDeckItems(token: string, deckId: string): Promise<StudioDeckItem[]> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL
-  if (!apiUrl) {
-    throw new Error('NEXT_PUBLIC_API_URL no definida.')
-  }
-
-  const res = await debugFetch('Dashboard.fetchStudioDeckItems', () =>
-    fetch(`${apiUrl}/api/studio/decks/${deckId}/items`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }),
-  )
-
-  if (!res.ok) {
-    throw new Error('Error loading deck items')
-  }
-
-  const payload = (await res.json().catch(() => null)) as
-    | StudioDeckItem[]
-    | { items?: StudioDeckItem[] }
-    | null
-
-  if (Array.isArray(payload)) return payload
-  if (payload && Array.isArray(payload.items)) return payload.items
-  return []
-}
-
-async function removeQuestionFromDeck(token: string, deckId: string, itemId: string) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL
-  if (!apiUrl) {
-    throw new Error('NEXT_PUBLIC_API_URL no definida.')
-  }
-
-  const res = await debugFetch('Dashboard.removeQuestionFromDeck', () =>
-    fetch(`${apiUrl}/api/studio/decks/${deckId}/items/${itemId}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }),
-  )
-
-  if (!res.ok) {
-    throw new Error('Error removing question')
-  }
-
-  return res.json().catch(() => null)
-}
 
 const CONTENT_ANIMATION_DELAY_MS = 320
 const REVIEW_FLOATING_CTA_DELAY_MS = 2000
