@@ -8,6 +8,7 @@ import {
   createStudioDeck,
   fetchStudioDeckItems,
   fetchStudioDecks,
+  isAutoFailedDeck,
   removeQuestionFromDeck,
 } from '@/lib/studioDecks'
 
@@ -123,7 +124,9 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
       setLoadingDecks(true)
       let deckList = decks
       if (!deckList) {
-        deckList = (await fetchStudioDecks(token)).filter((deck) => deck.deleted_at == null)
+        deckList = (await fetchStudioDecks(token)).filter(
+          (deck) => deck.deleted_at == null && !isAutoFailedDeck(deck),
+        )
         setDecks(deckList)
       }
       if (membershipQuestion !== qid) {
@@ -195,7 +198,9 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
     try {
       setCreating(true)
       await createStudioDeck(token, trimmed)
-      const deckList = (await fetchStudioDecks(token)).filter((deck) => deck.deleted_at == null)
+      const deckList = (await fetchStudioDecks(token)).filter(
+        (deck) => deck.deleted_at == null && !isAutoFailedDeck(deck),
+      )
       setDecks(deckList)
       setNewDeckName('')
       setShowCreateForm(false)

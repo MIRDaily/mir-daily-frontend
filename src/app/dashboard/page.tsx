@@ -19,6 +19,7 @@ import {
   createStudioDeck,
   fetchStudioDeckItems,
   fetchStudioDecks,
+  isAutoFailedDeck,
   removeQuestionFromDeck,
 } from '@/lib/studioDecks'
 import { parseApiError } from '@/lib/profile'
@@ -593,7 +594,9 @@ export default function DashboardPage() {
         if (!session) return
 
         const results = await Promise.all(
-          decks.map(async (deck) => {
+          decks
+            .filter((deck) => !isAutoFailedDeck(deck))
+            .map(async (deck) => {
             const deckId = String(deck.id)
             const items = await fetchStudioDeckItems(session.access_token, deckId)
             const matched = items.find((item) => {
@@ -4183,7 +4186,7 @@ export default function DashboardPage() {
                                 </svg>
                                 <span>Cargando mazos...</span>
                               </div>
-                            ) : decks.length === 0 ? (
+                            ) : decks.filter((deck) => !isAutoFailedDeck(deck)).length === 0 ? (
                               <p className="px-2 py-2 text-sm text-[#7D8A96]">
                                 No tienes mazos activos.
                               </p>
@@ -4195,7 +4198,7 @@ export default function DashboardPage() {
                                     Comprobando si ya está guardada...
                                   </p>
                                 ) : null}
-                                {decks.map((deck) => {
+                                {decks.filter((deck) => !isAutoFailedDeck(deck)).map((deck) => {
                                   const deckId = String(deck.id)
                                   const alreadyInDeck = Boolean(currentQuestionDeckMap[deckId])
                                   const isPending = Boolean(

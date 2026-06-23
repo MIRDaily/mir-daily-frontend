@@ -6,6 +6,16 @@ export type StudioDeck = {
   id: string | number
   name: string
   deleted_at?: string | null
+  auto_type?: string | null
+}
+
+// auto_type del mazo automático de fallos. Es de solo lectura para el usuario:
+// se rellena solo con sus últimos fallos, así que NO debe aceptar inserciones
+// manuales (bandera) ni ofrecerse como destino para guardar preguntas.
+export const FAILED_GLOBAL_AUTO_TYPE = 'failed_global'
+
+export function isAutoFailedDeck(deck: { auto_type?: string | null }): boolean {
+  return deck.auto_type === FAILED_GLOBAL_AUTO_TYPE
 }
 
 export type StudioDeckItem = {
