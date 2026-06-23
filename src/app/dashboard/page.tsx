@@ -318,7 +318,9 @@ export default function DashboardPage() {
   const [authMessage, setAuthMessage] = useState<string | null>(null)
   const [decks, setDecks] = useState<StudioDeck[]>([])
   const [showSelectorFor, setShowSelectorFor] = useState<string | null>(null)
-  const [savingQuestionId, setSavingQuestionId] = useState<string | null>(null)
+  // Guardado por mazo (clave `questionId::deckId`): permite guardar en varios
+  // mazos a la vez, cada uno con su propio spinner, sin bloquear el popup.
+  const [pendingDeckKeys, setPendingDeckKeys] = useState<Record<string, boolean>>({})
   const [loadingDecks, setLoadingDecks] = useState(false)
   const [creatingDeckFromPopup, setCreatingDeckFromPopup] = useState(false)
   const [newDeckNameFromPopup, setNewDeckNameFromPopup] = useState('')
@@ -479,8 +481,9 @@ export default function DashboardPage() {
 
   const handleToggleQuestionInDeck = useCallback(
     async (deckId: string, questionId: string, deckName: string) => {
+      const deckKey = `${questionId}::${deckId}`
       try {
-        setSavingQuestionId(questionId)
+        setPendingDeckKeys((prev) => ({ ...prev, [deckKey]: true }))
         const {
           data: { session },
         } = await supabase.auth.getSession()
@@ -566,7 +569,11 @@ export default function DashboardPage() {
         console.error(err)
         showSaveQuestionFeedback('error', 'Error al actualizar el mazo')
       } finally {
-        setSavingQuestionId(null)
+        setPendingDeckKeys((prev) => {
+          const next = { ...prev }
+          delete next[deckKey]
+          return next
+        })
       }
     },
     [questionDeckItemIds, questionDeckMembership, showSaveQuestionFeedback],
@@ -4007,7 +4014,6 @@ export default function DashboardPage() {
                       <button
                         type="button"
                         onClick={() => void handleToggleQuestionDeckSelector(currentQuestionId)}
-                        disabled={savingQuestionId === currentQuestionId}
                         className={`relative flex h-11 w-11 items-center justify-center rounded-2xl border bg-white shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                           isCurrentQuestionSaved
                             ? 'border-[#8BA888]/40 text-[#6E8D6B]'
@@ -4192,8 +4198,9 @@ export default function DashboardPage() {
                                 {decks.map((deck) => {
                                   const deckId = String(deck.id)
                                   const alreadyInDeck = Boolean(currentQuestionDeckMap[deckId])
-                                  const isSavingThisQuestion =
-                                    savingQuestionId === currentQuestionId
+                                  const isPending = Boolean(
+                                    pendingDeckKeys[`${currentQuestionId}::${deckId}`],
+                                  )
                                   return (
                                     <button
                                       key={deckId}
@@ -4205,7 +4212,7 @@ export default function DashboardPage() {
                                           deck.name || `Mazo ${deck.id}`,
                                         )
                                       }
-                                      disabled={isSavingThisQuestion}
+                                      disabled={isPending}
                                       className={`group flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition-colors disabled:opacity-60 ${
                                         alreadyInDeck
                                           ? 'bg-[#EEF7EE] text-[#6E8D6B] hover:bg-[#FFF0EE] hover:text-[#C4655A]'
@@ -4216,33 +4223,41 @@ export default function DashboardPage() {
                                         {deck.name || `Mazo ${deck.id}`}
                                       </span>
                                       <div className="flex items-center gap-2">
-                                        {alreadyInDeck ? (
+                                        {isPending ? (
+                                          <span className="material-symbols-outlined animate-spin text-base text-[#E8A598]">
+                                            progress_activity
+                                          </span>
+                                        ) : (
                                           <>
-                                            <span className="text-[11px] font-bold uppercase tracking-wide group-hover:hidden">
-                                              Guardada
-                                            </span>
-                                            <span className="hidden text-[11px] font-bold uppercase tracking-wide group-hover:inline">
-                                              Quitar
-                                            </span>
+                                            {alreadyInDeck ? (
+                                              <>
+                                                <span className="text-[11px] font-bold uppercase tracking-wide group-hover:hidden">
+                                                  Guardada
+                                                </span>
+                                                <span className="hidden text-[11px] font-bold uppercase tracking-wide group-hover:inline">
+                                                  Quitar
+                                                </span>
+                                              </>
+                                            ) : (
+                                              <span className="text-[11px] font-bold uppercase tracking-wide text-[#7D8A96]">
+                                                Guardar
+                                              </span>
+                                            )}
+                                            {alreadyInDeck ? (
+                                              <span className="relative inline-flex h-4 w-4 items-center justify-center">
+                                                <span className="material-symbols-outlined absolute text-base text-[#6E8D6B] transition-all duration-150 group-hover:scale-75 group-hover:opacity-0">
+                                                  check_circle
+                                                </span>
+                                                <span className="material-symbols-outlined absolute text-base text-[#C4655A] opacity-0 scale-75 transition-all duration-150 group-hover:scale-100 group-hover:opacity-100">
+                                                  remove_circle
+                                                </span>
+                                              </span>
+                                            ) : (
+                                              <span className="material-symbols-outlined text-base text-[#7D8A96]">
+                                                add
+                                              </span>
+                                            )}
                                           </>
-                                        ) : (
-                                          <span className="text-[11px] font-bold uppercase tracking-wide text-[#7D8A96]">
-                                            Guardar
-                                          </span>
-                                        )}
-                                        {alreadyInDeck ? (
-                                          <span className="relative inline-flex h-4 w-4 items-center justify-center">
-                                            <span className="material-symbols-outlined absolute text-base text-[#6E8D6B] transition-all duration-150 group-hover:scale-75 group-hover:opacity-0">
-                                              check_circle
-                                            </span>
-                                            <span className="material-symbols-outlined absolute text-base text-[#C4655A] opacity-0 scale-75 transition-all duration-150 group-hover:scale-100 group-hover:opacity-100">
-                                              remove_circle
-                                            </span>
-                                          </span>
-                                        ) : (
-                                          <span className="material-symbols-outlined text-base text-[#7D8A96]">
-                                            add
-                                          </span>
                                         )}
                                       </div>
                                     </button>

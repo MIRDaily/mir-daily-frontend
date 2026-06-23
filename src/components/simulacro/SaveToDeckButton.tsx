@@ -28,7 +28,9 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
   const [membership, setMembership] = useState<Record<string, boolean>>({})
   const [itemIds, setItemIds] = useState<Record<string, string>>({})
   const [membershipQuestion, setMembershipQuestion] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+  // Guardado por mazo (clave = deckId): permite guardar en varios a la vez,
+  // cada uno con su spinner, sin bloquear el popup.
+  const [pendingDecks, setPendingDecks] = useState<Record<string, boolean>>({})
   const [authed, setAuthed] = useState<boolean | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newDeckName, setNewDeckName] = useState('')
@@ -53,6 +55,7 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
     setItemIds({})
     setMembershipQuestion(null)
     setShowCreateForm(false)
+    setPendingDecks({})
     setOpen(false)
   }, [qid])
 
@@ -142,7 +145,7 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
         return
       }
       try {
-        setSaving(true)
+        setPendingDecks((prev) => ({ ...prev, [deckId]: true }))
         const alreadyInDeck = Boolean(membership[deckId])
 
         if (alreadyInDeck) {
@@ -171,7 +174,11 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
         console.error(err)
         showFeedback('error', 'Error al actualizar el mazo')
       } finally {
-        setSaving(false)
+        setPendingDecks((prev) => {
+          const next = { ...prev }
+          delete next[deckId]
+          return next
+        })
       }
     },
     [getToken, itemIds, membership, qid, showFeedback],
@@ -206,7 +213,6 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
       <button
         type="button"
         onClick={() => void handleToggleSelector()}
-        disabled={saving}
         className={`relative flex h-11 w-11 items-center justify-center rounded-2xl border bg-white shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
           isSaved
             ? 'border-[#8BA888]/40 text-[#6E8D6B]'
@@ -301,12 +307,13 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
               decks.map((deck) => {
                 const deckId = String(deck.id)
                 const alreadyInDeck = Boolean(membership[deckId])
+                const isPending = Boolean(pendingDecks[deckId])
                 return (
                   <button
                     key={deckId}
                     type="button"
                     onClick={() => void handleToggleInDeck(deckId, deck.name || `Mazo ${deck.id}`)}
-                    disabled={saving}
+                    disabled={isPending}
                     className={`group flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition-colors disabled:opacity-60 ${
                       alreadyInDeck
                         ? 'bg-[#EEF7EE] text-[#6E8D6B] hover:bg-[#FFF0EE] hover:text-[#C4655A]'
@@ -315,31 +322,39 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
                   >
                     <span className="truncate pr-2 font-medium">{deck.name || `Mazo ${deck.id}`}</span>
                     <div className="flex items-center gap-2">
-                      {alreadyInDeck ? (
+                      {isPending ? (
+                        <span className="material-symbols-outlined animate-spin text-base text-[#E8A598]">
+                          progress_activity
+                        </span>
+                      ) : (
                         <>
-                          <span className="text-[11px] font-bold uppercase tracking-wide group-hover:hidden">
-                            Guardada
-                          </span>
-                          <span className="hidden text-[11px] font-bold uppercase tracking-wide group-hover:inline">
-                            Quitar
-                          </span>
+                          {alreadyInDeck ? (
+                            <>
+                              <span className="text-[11px] font-bold uppercase tracking-wide group-hover:hidden">
+                                Guardada
+                              </span>
+                              <span className="hidden text-[11px] font-bold uppercase tracking-wide group-hover:inline">
+                                Quitar
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-[11px] font-bold uppercase tracking-wide text-[#7D8A96]">
+                              Guardar
+                            </span>
+                          )}
+                          {alreadyInDeck ? (
+                            <span className="relative inline-flex h-4 w-4 items-center justify-center">
+                              <span className="material-symbols-outlined absolute text-base text-[#6E8D6B] transition-all duration-150 group-hover:scale-75 group-hover:opacity-0">
+                                check_circle
+                              </span>
+                              <span className="material-symbols-outlined absolute scale-75 text-base text-[#C4655A] opacity-0 transition-all duration-150 group-hover:scale-100 group-hover:opacity-100">
+                                remove_circle
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="material-symbols-outlined text-base text-[#7D8A96]">add_circle</span>
+                          )}
                         </>
-                      ) : (
-                        <span className="text-[11px] font-bold uppercase tracking-wide text-[#7D8A96]">
-                          Guardar
-                        </span>
-                      )}
-                      {alreadyInDeck ? (
-                        <span className="relative inline-flex h-4 w-4 items-center justify-center">
-                          <span className="material-symbols-outlined absolute text-base text-[#6E8D6B] transition-all duration-150 group-hover:scale-75 group-hover:opacity-0">
-                            check_circle
-                          </span>
-                          <span className="material-symbols-outlined absolute scale-75 text-base text-[#C4655A] opacity-0 transition-all duration-150 group-hover:scale-100 group-hover:opacity-100">
-                            remove_circle
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="material-symbols-outlined text-base text-[#7D8A96]">add_circle</span>
                       )}
                     </div>
                   </button>
