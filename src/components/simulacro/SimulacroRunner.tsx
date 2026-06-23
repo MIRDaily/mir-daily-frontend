@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import QuestionImage from '@/components/simulacro/QuestionImage'
+import SaveToDeckButton from '@/components/simulacro/SaveToDeckButton'
 import type {
   SimulacroAnswer,
   SimulacroMode,
@@ -126,7 +127,12 @@ export default function SimulacroRunner({
       </div>
 
       <div className="w-full space-y-8">
-        <div>
+        <div className="relative pr-14">
+          {current ? (
+            <div className="absolute right-0 top-0">
+              <SaveToDeckButton questionId={current.id} />
+            </div>
+          ) : null}
           {current?.subject ? (
             <span className="mb-6 inline-block rounded-full border border-[#E9E4E1] bg-white px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-[#7D8A96]">
               {current.subject}
