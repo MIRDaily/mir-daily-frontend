@@ -14,6 +14,7 @@ import {
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabaseBrowser'
 import { parseApiError } from '@/lib/profile'
+import { setOnboardingDeferredFlag } from '@/lib/onboarding'
 
 export type AuthUser = {
   id: string
@@ -267,6 +268,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sessionRef.current = session
 
       if (!session) {
+        // Al cerrar sesion, olvidamos el "aplazar onboarding" para que el
+        // wizard vuelva a aparecer en el siguiente login si aun no se completo.
+        if (_event === 'SIGNED_OUT') {
+          setOnboardingDeferredFlag(false)
+        }
         setUser(null)
         setLoading(false)
         return

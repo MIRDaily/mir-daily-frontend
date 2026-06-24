@@ -23,6 +23,7 @@ import {
   removeQuestionFromDeck,
 } from '@/lib/studioDecks'
 import { parseApiError } from '@/lib/profile'
+import { getOnboardingDeferredFlag } from '@/lib/onboarding'
 import { getUserSummary } from '@/services/resultsService'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
@@ -2076,8 +2077,11 @@ export default function DashboardPage() {
 
     setUserId(user.id)
 
-    if (!user.username) {
-      router.replace('/complete-profile')
+    // El onboarding (wizard en /onboarding) es la puerta de entrada: si no esta
+    // completo y el usuario no lo ha aplazado en esta sesion, lo enviamos alli.
+    // Mismo criterio que OnboardingGuard, para que no compitan dos redirects.
+    if (!user.onboarding_completed && !getOnboardingDeferredFlag()) {
+      router.replace('/onboarding')
       setIsCheckingProfile(false)
       return
     }
