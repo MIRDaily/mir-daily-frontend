@@ -2230,7 +2230,7 @@ export default function DashboardPage() {
 
   return (
     <div className="text-[#2D3748] antialiased bg-[#FAF7F4] min-h-screen flex flex-col hub-enter">
-      <main className="relative flex-grow flex flex-col items-center justify-start pt-8 pb-20 px-4 overflow-x-hidden">
+      <main className={`relative flex-grow flex flex-col items-center justify-start pt-8 pb-20 px-4 overflow-x-hidden${showQuiz && !isExitingDaily ? ' hidden' : ''}`}>
         <div
           className={`fixed inset-0 z-20 bg-[#FAF7F4]/80 backdrop-blur-xl transition-opacity duration-700 ${
             isEnvelopeOpening ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -3166,9 +3166,9 @@ export default function DashboardPage() {
               : 'opacity-0 translate-y-3'
           }`}
         >
-          <div className="absolute inset-0 bg-[#FAF7F4]/95 backdrop-blur-sm"></div>
+          <div className="absolute inset-0 bg-[#FAF7F4]"></div>
           <div className="min-h-screen flex flex-col relative bg-[#FAF7F4]">
-            <header className="w-full px-6 py-4 flex items-center justify-end sticky top-0 z-50 bg-[#FAF7F4]/95 backdrop-blur-sm border-b border-[#7D8A96]/10">
+            <header className="w-full px-6 py-4 flex items-center justify-end sticky top-0 z-50 bg-[#FAF7F4] border-b border-[#7D8A96]/10">
               <button
                 onClick={handleExitDaily}
                 className={`group flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
