@@ -1,12 +1,18 @@
 'use client'
 
 import { useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseBrowser'
 
-export function useAuthenticatedFetch() {
-  const router = useRouter()
+// Navegacion dura tras signOut: garantiza que el middleware vea las cookies ya
+// borradas y no rebote /auth -> /dashboard (condicion de carrera de la
+// navegacion de cliente que dejaba al usuario atascado en el dashboard).
+function redirectToAuth() {
+  if (typeof window !== 'undefined') {
+    window.location.replace('/auth')
+  }
+}
 
+export function useAuthenticatedFetch() {
   return useCallback(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const { data, error } = await supabase.auth.getSession()
@@ -14,7 +20,7 @@ export function useAuthenticatedFetch() {
 
       if (error || !token) {
         await supabase.auth.signOut()
-        router.replace('/auth')
+        redirectToAuth()
         throw new Error('No hay sesion activa.')
       }
 
@@ -28,11 +34,11 @@ export function useAuthenticatedFetch() {
 
       if (response.status === 401) {
         await supabase.auth.signOut()
-        router.replace('/auth')
+        redirectToAuth()
       }
 
       return response
     },
-    [router],
+    [],
   )
 }

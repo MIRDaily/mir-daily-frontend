@@ -4,7 +4,6 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { LayoutGroup, motion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useProfile } from '@/hooks/useProfile'
 import { getAvatarUrl } from '@/lib/avatar'
 import { getOnboardingDeferredFlag } from '@/lib/onboarding'
@@ -32,7 +31,6 @@ export default function AppHeader({
   blurred = false,
   className = '',
 }: AppHeaderProps) {
-  const router = useRouter()
   const { profile, loading: profileLoading } = useProfile()
   const { unreadCount, refreshUnreadCount } = useNotificationsContext()
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
@@ -242,7 +240,10 @@ export default function AppHeader({
                   onClick={async () => {
                     setIsProfileMenuOpen(false)
                     await supabase.auth.signOut()
-                    router.replace('/auth')
+                    // Navegacion dura: fuerza una peticion nueva con las cookies ya
+                    // borradas, evitando que el middleware rebote /auth -> /dashboard
+                    // (condicion de carrera de la navegacion de cliente).
+                    window.location.replace('/auth')
                   }}
                   className="block w-full text-left px-4 py-2 text-sm text-[#C4655A] hover:bg-red-50 hover:text-[#B6544A] cursor-pointer transition-colors"
                 >
