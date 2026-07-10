@@ -69,22 +69,25 @@ const LAYOUTS: Record<GooLayoutName, LayoutSpec> = {
       { fromNode: 0, toPoint: [-8, -4.5, -4], segments: 8, radius: 0.14, reveal: [0.78, 0.95], breakable: false, peripheral: true },
     ],
   },
+  // Móvil: núcleos en la franja superior; las tres cuerdas de tarjeta bajan a
+  // la ranura inferior-centro (puertos 'top'), relevándose una a una. Rangos
+  // alineados con las ventanas crossfade de GooNeuralSection.
   mobile: {
     cameraZ: 30,
     fov: 42,
     nuclei: [
-      { pos: [0, 8, 0], radius: 1.1, reveal: [0, 0.12] },
-      { pos: [-2.6, 3.4, -0.8], radius: 0.65, reveal: [0.22, 0.32] },
-      { pos: [3.7, -0.6, 0.6], radius: 0.6, reveal: [0.42, 0.52] },
+      { pos: [0, 4.5, 0], radius: 1.05, reveal: [0, 0.1] },
+      { pos: [-3.3, 6.8, -0.8], radius: 0.58, reveal: [0.12, 0.22] },
+      { pos: [3.4, 5.6, 0.5], radius: 0.56, reveal: [0.3, 0.4] },
     ],
     ropes: [
-      { fromNode: 0, toNode: 1, segments: 8, radius: 0.26, reveal: [0.08, 0.26], breakable: true },
-      { fromNode: 1, toPort: 0, segments: 8, radius: 0.23, reveal: [0.26, 0.44], breakable: true },
-      { fromNode: 0, toNode: 2, segments: 8, radius: 0.24, reveal: [0.3, 0.48], breakable: true },
-      { fromNode: 2, toPort: 1, segments: 8, radius: 0.22, reveal: [0.46, 0.62], breakable: true },
-      { fromNode: 2, toPort: 2, segments: 9, radius: 0.22, reveal: [0.58, 0.74], breakable: true },
-      { fromNode: 0, toPoint: [-5, 11, -3], segments: 6, radius: 0.12, reveal: [0.7, 0.88], breakable: false, peripheral: true },
-      { fromNode: 2, toPoint: [5.5, -11, -3.5], segments: 6, radius: 0.12, reveal: [0.76, 0.94], breakable: false, peripheral: true },
+      { fromNode: 0, toNode: 1, segments: 8, radius: 0.24, reveal: [0.05, 0.18], breakable: true },
+      { fromNode: 1, toPort: 0, segments: 9, radius: 0.22, reveal: [0.16, 0.3], breakable: true },
+      { fromNode: 0, toNode: 2, segments: 8, radius: 0.24, reveal: [0.24, 0.38], breakable: true },
+      { fromNode: 2, toPort: 1, segments: 9, radius: 0.22, reveal: [0.4, 0.52], breakable: true },
+      { fromNode: 0, toPort: 2, segments: 10, radius: 0.24, reveal: [0.6, 0.73], breakable: true },
+      { fromNode: 1, toPoint: [-5.5, 11, -3], segments: 6, radius: 0.12, reveal: [0.8, 0.92], breakable: false, peripheral: true },
+      { fromNode: 2, toPoint: [6, 10.5, -3.5], segments: 6, radius: 0.12, reveal: [0.84, 0.96], breakable: false, peripheral: true },
     ],
   },
 }
@@ -400,7 +403,7 @@ export class GooScene {
   private progress = 0
   private lastEmittedProgress = -1
 
-  private portsRel: { x: number; y: number; inx: number }[] = []
+  private portsRel: { x: number; y: number; inx: number; iny: number }[] = []
   /** punto de contacto visible (borde de la tarjeta) */
   private portWorld: THREE.Vector3[] = []
   /** punto final real: tras el borde y en profundidad, oculto por la tarjeta HTML */
@@ -534,7 +537,7 @@ export class GooScene {
     }
   }
 
-  setPortsRel(rels: { x: number; y: number; inx: number }[]) {
+  setPortsRel(rels: { x: number; y: number; inx: number; iny: number }[]) {
     this.portsRel = rels
     this.updatePortWorld()
   }
@@ -592,6 +595,7 @@ export class GooScene {
     this.portInner = this.portWorld.map((p, i) => {
       const inner = p.clone()
       inner.x += this.portsRel[i].inx * 0.7
+      inner.y += this.portsRel[i].iny * 0.7
       inner.z = -0.4
       return inner
     })

@@ -37,8 +37,11 @@ type CardDef = {
   /** posición del centro en % del escenario */
   pos: { left: string; top: string }
   /** lado de la tarjeta donde vive el puerto */
-  portSide: 'left' | 'right'
+  portSide: 'left' | 'right' | 'top'
+  /** [in0,in1]: aparece al contacto del tentáculo */
   range: [number, number]
+  /** [out0,out1] opcional: se desvanece para ceder el hueco a la siguiente (móvil) */
+  out?: [number, number]
 }
 
 const CARD_COPY = [
@@ -66,10 +69,14 @@ const DESKTOP_CARDS: CardDef[] = [
   { ...CARD_COPY[2], pos: { left: '18%', top: '78%' }, portSide: 'right', range: [0.67, 0.75] },
 ]
 
+// Móvil: las tres tarjetas comparten una única ranura inferior-centro y se
+// relevan con crossfade (solo una visible a la vez) para no solaparse; el
+// tentáculo baja desde la red y entra por el puerto superior.
+const MOBILE_SLOT = { left: '50%', top: '64%' }
 const MOBILE_CARDS: CardDef[] = [
-  { ...CARD_COPY[0], pos: { left: '58%', top: '38%' }, portSide: 'left', range: [0.43, 0.51] },
-  { ...CARD_COPY[1], pos: { left: '46%', top: '60%' }, portSide: 'right', range: [0.61, 0.69] },
-  { ...CARD_COPY[2], pos: { left: '54%', top: '82%' }, portSide: 'right', range: [0.73, 0.81] },
+  { ...CARD_COPY[0], pos: MOBILE_SLOT, portSide: 'top', range: [0.26, 0.34], out: [0.46, 0.54] },
+  { ...CARD_COPY[1], pos: MOBILE_SLOT, portSide: 'top', range: [0.5, 0.58], out: [0.7, 0.78] },
+  { ...CARD_COPY[2], pos: MOBILE_SLOT, portSide: 'top', range: [0.74, 0.82] },
 ]
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
@@ -112,21 +119,26 @@ export default function GooNeuralSection() {
   // Estilos scroll-linked escritos directamente en el DOM (sin estado React)
   const applyProgressStyles = (p: number, defs: CardDef[]) => {
     defs.forEach((card, i) => {
-      const a = ramp(p, card.range[0], card.range[1])
+      const inA = ramp(p, card.range[0], card.range[1])
+      // crossfade: se desvanece cuando la siguiente tarjeta toma la ranura
+      const outA = card.out ? ramp(p, card.out[0], card.out[1]) : 0
+      const a = inA * (1 - outA)
       const outer = cardOuterEls.current[i]
       const body = cardBodyEls.current[i]
       const port = portEls.current[i]
       if (outer) {
-        // invisible hasta que el tentáculo hace contacto
+        // opacidad y eventos en el outer: NO se toca su transform para no pisar
+        // el centrado (-translate-x/y de Tailwind). La escala va en el cuerpo.
         outer.style.opacity = String(a)
-        outer.style.transform = `scale(${0.92 + 0.08 * a})`
+        outer.style.pointerEvents = a < 0.05 ? 'none' : 'auto'
       }
       if (body) {
+        body.style.transform = `scale(${0.92 + 0.08 * inA})`
         body.style.borderColor = a > 0.55 ? INK : '#E5DED6'
         body.style.boxShadow =
           a > 0.55 ? '0 20px 44px -20px rgba(184, 122, 111, 0.45)' : '0 0 0 0 rgba(184, 122, 111, 0)'
       }
-      if (port) port.style.opacity = String(ramp(p, card.range[0], card.range[0] + 0.04))
+      if (port) port.style.opacity = String(a)
     })
     if (hintRef.current) {
       hintRef.current.style.opacity = String(
@@ -177,14 +189,17 @@ export default function GooNeuralSection() {
       const stageRect = stage.getBoundingClientRect()
       if (stageRect.width === 0) return
       const rels = portEls.current.map((el, i) => {
-        // inx: hacia el interior de la tarjeta (mundo +x = derecha de pantalla)
-        const inx = defs[i]?.portSide === 'left' ? 1 : -1
-        if (!el) return { x: 0.5, y: 0.5, inx }
+        // dirección hacia el interior de la tarjeta (mundo +x derecha, +y arriba)
+        const side = defs[i]?.portSide
+        const inx = side === 'left' ? 1 : side === 'right' ? -1 : 0
+        const iny = side === 'top' ? -1 : 0
+        if (!el) return { x: 0.5, y: 0.5, inx, iny }
         const r = el.getBoundingClientRect()
         return {
           x: (r.left + r.width / 2 - stageRect.left) / stageRect.width,
           y: (r.top + r.height / 2 - stageRect.top) / stageRect.height,
           inx,
+          iny,
         }
       })
       scene.setPortsRel(rels)
@@ -224,16 +239,16 @@ export default function GooNeuralSection() {
       aria-label="Organismo neuronal interactivo: la red de tu conocimiento crece con la rutina diaria"
     >
       <div className="sticky top-0 flex h-screen flex-col overflow-hidden">
-        {/* Cabecera */}
-        <div className="pointer-events-none relative z-30 shrink-0 px-6 pb-2 pt-24 text-center">
-          <span className="mb-3 inline-block rounded-full bg-[#F3D9CF] px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-[#8C5F56]">
+        {/* Cabecera (compacta en móvil para dejar sitio a la escena) */}
+        <div className="pointer-events-none relative z-30 shrink-0 px-6 pb-1 pt-20 text-center md:pb-2 md:pt-24">
+          <span className="mb-2 inline-block rounded-full bg-[#F3D9CF] px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[#8C5F56] md:mb-3 md:px-4 md:py-1.5 md:text-xs">
             Así aprende tu cerebro
           </span>
-          <h2 className="text-3xl font-black tracking-tight md:text-5xl">
+          <h2 className="text-2xl font-black leading-tight tracking-tight md:text-5xl">
             Materia gris, <span className="text-[#B87A6F]">literalmente viva</span>
           </h2>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-[#5C554F] md:text-base">
-            Baja para verla crecer. Tócala: agárrala, estírala, rómpela… siempre vuelve a conectarse.
+          <p className="mx-auto mt-2 max-w-xl text-xs leading-relaxed text-[#5C554F] md:mt-3 md:text-base">
+            Baja para verla crecer. Tócala, estírala, rómpela: siempre se reconecta.
           </p>
         </div>
 
@@ -262,72 +277,81 @@ export default function GooNeuralSection() {
             />
           )}
 
-          {cards.map((card, i) => (
-            <div
-              key={card.title}
-              ref={(el) => {
-                cardOuterEls.current[i] = el
-              }}
-              className="absolute z-20 w-[68%] max-w-[280px] -translate-x-1/2 -translate-y-1/2 md:w-[280px]"
-              style={{
-                left: card.pos.left,
-                top: card.pos.top,
-                opacity: 0,
-                transition: 'box-shadow 0.4s ease, border-color 0.4s ease',
-              }}
-            >
-              {/* wrapper interno: la escena escribe aquí los tirones de la red */}
+          {cards.map((card, i) => {
+            const portPos: React.CSSProperties =
+              card.portSide === 'top'
+                ? { top: '-8px', left: '50%', transform: 'translateX(-50%)' }
+                : card.portSide === 'left'
+                  ? { left: '-8px', top: '50%', transform: 'translateY(-50%)' }
+                  : { right: '-8px', top: '50%', transform: 'translateY(-50%)' }
+            return (
               <div
+                key={card.title}
                 ref={(el) => {
-                  cardTugEls.current[i] = el
+                  cardOuterEls.current[i] = el
                 }}
-                style={{ willChange: 'transform' }}
+                className="absolute z-20 w-[86%] max-w-[300px] -translate-x-1/2 -translate-y-1/2 md:w-[280px]"
+                style={{
+                  left: card.pos.left,
+                  top: card.pos.top,
+                  opacity: 0,
+                  pointerEvents: 'none',
+                  transition: 'box-shadow 0.4s ease, border-color 0.4s ease',
+                }}
               >
+                {/* wrapper interno: la escena escribe aquí los tirones de la red */}
                 <div
                   ref={(el) => {
-                    cardBodyEls.current[i] = el
+                    cardTugEls.current[i] = el
                   }}
-                  className="relative rounded-3xl border-2 bg-white/95 p-4 backdrop-blur-sm md:p-5"
-                  style={{
-                    borderColor: '#E5DED6',
-                    transition: 'box-shadow 0.4s ease, border-color 0.4s ease',
-                  }}
+                  style={{ willChange: 'transform' }}
                 >
-                  <span
+                  <div
                     ref={(el) => {
-                      portEls.current[i] = el
+                      cardBodyEls.current[i] = el
                     }}
-                    aria-hidden="true"
-                    className="absolute top-1/2 block h-3.5 w-3.5 -translate-y-1/2 rounded-full border-2"
+                    className="relative rounded-3xl border-2 bg-white/95 p-4 backdrop-blur-sm md:p-5"
                     style={{
-                      [card.portSide]: '-8px',
-                      borderColor: INK,
-                      background: PALETTE.primary,
-                      boxShadow: '0 0 12px 3px rgba(212, 151, 140, 0.5)',
-                      opacity: 0,
+                      borderColor: '#E5DED6',
+                      transition: 'box-shadow 0.4s ease, border-color 0.4s ease',
                     }}
-                  />
-                  <div className="flex items-center gap-2.5">
+                  >
                     <span
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[#8C5F56]"
-                      style={{ background: PALETTE.blush }}
-                    >
-                      <span className="material-symbols-outlined text-[18px]">{card.icon}</span>
-                    </span>
-                    <h3 className="text-sm font-bold text-[#171312] md:text-base">{card.title}</h3>
+                      ref={(el) => {
+                        portEls.current[i] = el
+                      }}
+                      aria-hidden="true"
+                      className="absolute block h-3.5 w-3.5 rounded-full border-2"
+                      style={{
+                        ...portPos,
+                        borderColor: INK,
+                        background: PALETTE.primary,
+                        boxShadow: '0 0 12px 3px rgba(212, 151, 140, 0.5)',
+                        opacity: 0,
+                      }}
+                    />
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[#8C5F56]"
+                        style={{ background: PALETTE.blush }}
+                      >
+                        <span className="material-symbols-outlined text-[18px]">{card.icon}</span>
+                      </span>
+                      <h3 className="text-sm font-bold text-[#171312] md:text-base">{card.title}</h3>
+                    </div>
+                    <p className="mt-2 text-xs leading-relaxed text-[#5C554F] md:text-[13px]">
+                      {card.description}
+                    </p>
                   </div>
-                  <p className="mt-2 text-xs leading-relaxed text-[#5C554F] md:text-[13px]">
-                    {card.description}
-                  </p>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
 
-          {/* Pista de interacción */}
+          {/* Pista de interacción (oculta en móvil: chocaría con el selector flotante) */}
           <p
             ref={hintRef}
-            className="pointer-events-none absolute bottom-5 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/80 px-4 py-1.5 text-xs font-medium text-[#8C5F56] backdrop-blur-sm"
+            className="pointer-events-none absolute bottom-5 left-1/2 z-30 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-white/80 px-4 py-1.5 text-xs font-medium text-[#8C5F56] backdrop-blur-sm md:block"
             style={{ opacity: 0 }}
           >
             <span className="material-symbols-outlined mr-1.5 align-[-4px] text-[16px]">touch_app</span>
