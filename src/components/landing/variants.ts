@@ -89,4 +89,56 @@ export const LANDING_VARIANTS: LandingVariant[] = [
       text: '#171312',
     },
   },
+  {
+    slug: 'editorial',
+    path: '/editorial',
+    name: 'Editorial (IA)',
+    emoji: '🎨',
+    description:
+      'Construida con los recursos ilustrados generados por IA: hero fotográfico con parallax, pregunta interactiva, features con ilustraciones editoriales y mockup del ranking. Verde petróleo + coral.',
+    preview: {
+      bg: '#FAF7F4',
+      accent: '#2F5D5A',
+      text: '#171312',
+    },
+  },
+  {
+    slug: 'cozy',
+    path: '/cozy',
+    name: 'Cozy (IA)',
+    emoji: '🧸',
+    description:
+      'Recursos cartoony cozy fieles a la app (sobre, mascota pebble, ranking, Sala Zen) con vídeo hero cozy, más una sección de microscopía real (sangre, Gram, histología). Coral primario.',
+    preview: {
+      bg: '#FAF7F4',
+      accent: '#D4978C',
+      text: '#171312',
+    },
+  },
+  {
+    slug: 'sinapsis',
+    path: '/sinapsis',
+    name: 'Sinapsis',
+    emoji: '🧠',
+    description:
+      'La clásica con un scrollytelling bajo las features: una neurona crece con tu scroll, ramifica dendritas y conecta tarjetas sobre cómo la rutina diaria consolida el conocimiento.',
+    preview: {
+      bg: '#FAF7F4',
+      accent: '#B87A6F',
+      text: '#171312',
+    },
+  },
+  {
+    slug: 'goo',
+    path: '/goo',
+    name: 'Goo neuronal 3D',
+    emoji: '🫧',
+    description:
+      'La clásica con un organismo neuronal 3D (WebGL) bajo las features: materia blanda que crece con el scroll y que puedes deformar, agarrar, estirar y romper — las conexiones vuelven a fusionarse solas.',
+    preview: {
+      bg: '#FAF7F4',
+      accent: '#D4978C',
+      text: '#171312',
+    },
+  },
 ]

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { memo, useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 
 interface Question {
   reviewId?: string | number | null
@@ -23,18 +24,40 @@ interface Props {
 function DailyReviewCarousel({ questions }: Props) {
   const [index, setIndex] = useState(0)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  // Imagen de la pregunta activa: oculta por defecto (evita tarjetas enormes y
+  // scrollbars). Se muestra/oculta con el botón o la barra espaciadora y se
+  // reinicia al cambiar de pregunta.
+  const [imageShown, setImageShown] = useState(false)
   const total = questions.length
   const safeTotal = Math.max(total, 1)
 
-  const prev = useCallback(() =>
+  const activeQuestion = questions[index]
+  useEffect(() => {
+    if (!activeQuestion?.hasImage || !activeQuestion?.imageUrl) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== ' ' && e.key !== 'Spacebar') return
+      const tag = document.activeElement?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      e.preventDefault()
+      setImageShown((v) => !v)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [activeQuestion?.hasImage, activeQuestion?.imageUrl])
+
+  const prev = useCallback(() => {
+    setImageShown(false)
     setIndex((prevIndex) =>
       prevIndex === 0 ? questions.length - 1 : prevIndex - 1,
-    ), [questions.length])
+    )
+  }, [questions.length])
 
-  const next = useCallback(() =>
+  const next = useCallback(() => {
+    setImageShown(false)
     setIndex((prevIndex) =>
       prevIndex === questions.length - 1 ? 0 : prevIndex + 1,
-    ), [questions.length])
+    )
+  }, [questions.length])
 
   const resolveLetterOptionIndex = (value: string, optionsLength: number) => {
     const normalized = value.trim().toUpperCase()
@@ -140,7 +163,10 @@ function DailyReviewCarousel({ questions }: Props) {
               <motion.div
                 key={questionKey}
                 onClick={() => {
-                  if (isSide) setIndex(i)
+                  if (isSide) {
+                    setImageShown(false)
+                    setIndex(i)
+                  }
                 }}
                 animate={{
                   x: xOffset,
@@ -222,16 +248,41 @@ function DailyReviewCarousel({ questions }: Props) {
                   ))}
                 </div>
 
-                {q.hasImage && q.imageUrl && (
+                {q.hasImage && q.imageUrl && isActive ? (
                   <div className="mt-5">
-                    <img
-                      src={q.imageUrl}
-                      alt="Imagen de la pregunta"
-                      className="w-full rounded-2xl border border-[#E9E4E1] object-cover max-h-64"
-                      loading="lazy"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => setImageShown((v) => !v)}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-[#E8A598]/40 bg-white px-4 py-2.5 text-sm font-bold text-[#d18d80] transition-colors hover:bg-[#fff0ec]"
+                    >
+                      <span className="material-symbols-outlined text-lg">
+                        {imageShown ? 'visibility_off' : 'image'}
+                      </span>
+                      {imageShown ? 'Ocultar imagen' : 'Ver imagen'}
+                      <span className="ml-1 hidden rounded border border-[#E9E4E1] bg-[#FAF7F4] px-1.5 py-0.5 font-mono text-[10px] text-[#7D8A96] sm:inline">
+                        Espacio
+                      </span>
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {imageShown ? (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.3, ease: 'easeOut' }}
+                          className="overflow-hidden"
+                        >
+                          <div className="mt-3">
+                            <ZoomableImage
+                              url={q.imageUrl}
+                              className="mx-auto max-h-80 w-auto max-w-full rounded-2xl border border-[#E9E4E1] bg-white object-contain"
+                            />
+                          </div>
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
                   </div>
-                )}
+                ) : null}
 
                 <button
                   type="button"

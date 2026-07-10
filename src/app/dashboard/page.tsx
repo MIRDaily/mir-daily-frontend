@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type UIEvent } from 'react'
-import { motion, useInView } from 'framer-motion'
+import { AnimatePresence, motion, useInView } from 'framer-motion'
 import Image from 'next/image'
 import { List, type RowComponentProps } from 'react-window'
 import { useRouter } from 'next/navigation'
@@ -29,6 +29,7 @@ import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
 import DailyReviewCarousel from '@/components/DailyReviewCarousel'
 import ZScoreComparisonCard from '@/components/ZScoreComparisonCard'
+import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 
 type DailyQuestion = {
   id: string | number
@@ -37,6 +38,8 @@ type DailyQuestion = {
   options: string[]
   correctAnswer?: string | number | null
   explanation?: string | null
+  hasImage?: boolean
+  imageUrl?: string | null
 }
 
 type DailyReviewQuestion = {
@@ -359,6 +362,12 @@ export default function DashboardPage() {
   const [hasOpenedEnvelope, setHasOpenedEnvelope] = useState(false)
   const [deckSwitchCounter, setDeckSwitchCounter] = useState(0)
   const [isExitingDaily, setIsExitingDaily] = useState(false)
+  // Imagen de la pregunta en vivo: se muestra/oculta con la barra espaciadora,
+  // desplazando la pregunta a la izquierda (panel lateral, como en la revisión
+  // de simulacros). Se reinicia al cambiar de pregunta.
+  const [dailyImageRevealed, setDailyImageRevealed] = useState(false)
+  const [dailyImageHint, setDailyImageHint] = useState(false)
+  const dailyImageHintPlayed = useRef(false)
   const idleStartRef = useRef(performance.now())
   const deckSectionRef = useRef<HTMLDivElement | null>(null)
 
@@ -457,8 +466,8 @@ export default function DashboardPage() {
         selectedAnswer: null,
         isCorrect: null,
         explanation: item.explanation ?? '',
-        hasImage: false,
-        imageUrl: null,
+        hasImage: item.hasImage ?? false,
+        imageUrl: item.imageUrl ?? null,
         options: item.options,
       })),
     [dailyQuestions],
@@ -1719,6 +1728,13 @@ export default function DashboardPage() {
             typeof question.explanation === 'string'
               ? question.explanation
               : '',
+          hasImage: Boolean(question.has_image ?? question.hasImage),
+          imageUrl:
+            typeof question.image_url === 'string' && question.image_url.trim()
+              ? question.image_url
+              : typeof question.imageUrl === 'string' && question.imageUrl.trim()
+                ? question.imageUrl
+                : null,
         }
       })
       .filter((question: DailyQuestion) => String(question.id).trim().length > 0 && question.statement && question.options.length >= 2)
@@ -2053,6 +2069,43 @@ export default function DashboardPage() {
       questionStartRef.current = now
     }
   }, [currentQuestionIndex, showQuiz, showResults])
+
+  // Al cambiar de pregunta, oculta la imagen; y la primera vez que aparece una
+  // pregunta con imagen, lanza la pista de "barra espaciadora".
+  useEffect(() => {
+    if (!showQuiz || showResults) return
+    setDailyImageRevealed(false)
+    if (
+      currentQuestion?.hasImage &&
+      currentQuestion?.imageUrl &&
+      !dailyImageHintPlayed.current
+    ) {
+      dailyImageHintPlayed.current = true
+      setDailyImageHint(true)
+    }
+  }, [
+    currentQuestionIndex,
+    showQuiz,
+    showResults,
+    currentQuestion?.hasImage,
+    currentQuestion?.imageUrl,
+  ])
+
+  // Barra espaciadora: muestra/oculta la imagen de la pregunta actual (se ignora
+  // si el foco está en un campo de texto, p. ej. el nombre de un mazo nuevo).
+  useEffect(() => {
+    if (!showQuiz || showResults) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== ' ' && e.key !== 'Spacebar') return
+      if (!currentQuestion?.hasImage || !currentQuestion?.imageUrl) return
+      const tag = document.activeElement?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      e.preventDefault()
+      setDailyImageRevealed((v) => !v)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [showQuiz, showResults, currentQuestion?.hasImage, currentQuestion?.imageUrl])
 
   useEffect(() => {
     if (!authMessage) return
@@ -3982,7 +4035,12 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <>
-              <div className="w-full max-w-4xl mx-auto relative z-10 animate-fade-in-up">
+              <div className="flex w-full flex-col items-center justify-center gap-5 lg:flex-row lg:items-start lg:gap-6">
+              <motion.div
+                layout="position"
+                transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+                className="w-full min-w-0 max-w-4xl relative z-10 animate-fade-in-up"
+              >
                 <div className="w-full mb-10">
                 <div className="flex justify-between items-end mb-3">
                   <span className="text-[11px] font-bold tracking-[0.15em] text-[#7D8A96] uppercase">
@@ -4282,6 +4340,42 @@ export default function DashboardPage() {
                   </h1>
                 </div>
 
+                {currentQuestion?.hasImage && currentQuestion?.imageUrl ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setDailyImageRevealed((v) => !v)}
+                      onKeyDown={(e) => {
+                        if (e.key === ' ' || e.key === 'Spacebar') e.preventDefault()
+                      }}
+                      className="inline-flex items-center gap-2 rounded-xl border border-[#E8A598]/40 bg-white px-4 py-2.5 text-sm font-bold text-[#d18d80] transition-colors hover:bg-[#fff0ec]"
+                    >
+                      <span className="material-symbols-outlined text-lg">
+                        {dailyImageRevealed ? 'visibility_off' : 'image'}
+                      </span>
+                      {dailyImageRevealed ? 'Ocultar imagen' : 'Ver imagen'}
+                    </button>
+                    {dailyImageHint ? (
+                      <motion.span
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: [0, 1, 0, 1, 0, 1, 0] }}
+                        transition={{
+                          duration: 3,
+                          times: [0, 0.12, 0.33, 0.5, 0.66, 0.83, 1],
+                          ease: 'easeInOut',
+                        }}
+                        onAnimationComplete={() => setDailyImageHint(false)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#7D8A96]"
+                      >
+                        <span className="rounded border border-[#E9E4E1] bg-[#FAF7F4] px-1.5 py-0.5 font-mono text-[10px] text-[#2D3748]">
+                          Espacio
+                        </span>
+                        Presiona barra espaciadora
+                      </motion.span>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <div className="grid gap-4">
                   {currentQuestion?.options.map((option, optionIndex) => {
                     const isSelected = currentSelection === optionIndex
@@ -4406,6 +4500,47 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
+              </motion.div>
+
+              <AnimatePresence mode="popLayout">
+                {dailyImageRevealed &&
+                currentQuestion?.hasImage &&
+                currentQuestion?.imageUrl ? (
+                  <motion.aside
+                    key="daily-image-panel"
+                    layout
+                    initial={{ opacity: 0, x: -120, scale: 0.92 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: -100, scale: 0.92 }}
+                    transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+                    className="flex w-full shrink-0 flex-col self-start overflow-hidden rounded-2xl border border-[#F0EBE8] bg-white shadow-xl lg:sticky lg:top-24 lg:w-[22rem] lg:max-w-[34vw]"
+                  >
+                    <div className="flex items-center justify-between gap-3 border-b border-[#F0EBE8] px-5 py-3">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[#7D8A96]">
+                        <span className="material-symbols-outlined text-base text-[#E8A598]">
+                          image
+                        </span>
+                        Imagen
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setDailyImageRevealed(false)}
+                        aria-label="Ocultar imagen"
+                        className="rounded-lg p-1.5 text-[#7D8A96] transition-colors hover:bg-[#F2EFED] hover:text-[#C4655A]"
+                      >
+                        <span className="material-symbols-outlined">close</span>
+                      </button>
+                    </div>
+                    <div className="h-1 w-full bg-[#E8A598]" />
+                    <div className="overflow-auto p-3">
+                      <ZoomableImage
+                        url={currentQuestion.imageUrl}
+                        className="mx-auto max-h-[70vh] w-auto max-w-full rounded-lg object-contain"
+                      />
+                    </div>
+                  </motion.aside>
+                ) : null}
+              </AnimatePresence>
             </div>
           </>
         )}
