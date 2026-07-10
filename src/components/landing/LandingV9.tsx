@@ -448,6 +448,19 @@ export default function LandingV9() {
   const heroParallax = useTransform(scrollY, [0, 600], [0, 120])
   const heroFade = useTransform(scrollY, [0, 500], [1, 0.25])
 
+  // El fade/parallax del hero solo tiene sentido en la vista de dos columnas
+  // (lg+), donde texto y tarjeta caben sin hacer scroll. En móvil/tablet la
+  // tarjeta va debajo y solo se ve tras bajar: aplicarlo la dejaba
+  // semitransparente y desplazada. Se desactiva por debajo de lg.
+  const [heroTwoCol, setHeroTwoCol] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const update = () => setHeroTwoCol(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+
   return (
     // overflow-x-clip (no -hidden): hidden crearía un scroll container y rompería el sticky de la sección Goo
     <div className="min-h-screen overflow-x-clip bg-[#FAF7F4] text-[#171312]">
@@ -514,7 +527,7 @@ export default function LandingV9() {
         ))}
 
         <motion.div
-          style={{ y: heroParallax, opacity: heroFade }}
+          style={{ y: heroTwoCol ? heroParallax : 0, opacity: heroTwoCol ? heroFade : 1 }}
           className="relative z-10 mx-auto grid w-full max-w-6xl items-center gap-14 lg:grid-cols-2"
         >
           <div>
