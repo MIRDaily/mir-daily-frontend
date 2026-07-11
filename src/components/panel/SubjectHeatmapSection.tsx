@@ -59,7 +59,6 @@ function SubjectCard({
   const bg = heatColor(acc)
   const bgDark = heatColorDark(acc)
   const gf = galacticFactor(acc)
-  const accPct = acc == null ? 0 : Math.max(0, Math.min(100, acc))
   return (
     <motion.button
       type="button"
@@ -69,53 +68,28 @@ function SubjectCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: Math.min(index * 0.03, 0.4), ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -3 }}
-      className={`group relative flex flex-col gap-2 overflow-hidden rounded-xl border border-white/10 p-3.5 text-left text-white shadow-sm transition-shadow hover:shadow-lg ${
+      className={`group relative flex flex-col items-start gap-1 overflow-hidden rounded-lg p-3 text-left text-white shadow-sm transition-shadow hover:shadow-lg ${
         active ? 'ring-2 ring-white/80 ring-offset-2 ring-offset-[#FAF7F4]' : ''
       }`}
       style={{ background: `linear-gradient(140deg, ${bg}, ${bgDark})` }}
     >
-      {/* Textura estelar galáctica (rendimiento excelente), intensidad gradual */}
+      {/* Textura estelar galáctica plena a partir del 65% */}
       {gf > 0 ? (
         <>
-          <div className="galactic-nebula pointer-events-none absolute inset-0" style={{ opacity: gf }} />
-          <div className="galactic-stars pointer-events-none absolute inset-0" style={{ opacity: gf }} />
+          <div className="galactic-nebula pointer-events-none absolute inset-0" />
+          <div className="galactic-stars pointer-events-none absolute inset-0" />
         </>
       ) : null}
 
-      <div className="relative z-10 flex items-start justify-between gap-2">
-        <p
-          className="line-clamp-2 text-xs font-bold leading-tight [text-shadow:0_1px_2px_rgba(0,0,0,0.25)]"
-          title={subject.name}
-        >
-          {subject.name}
-        </p>
-        <span className="material-symbols-outlined shrink-0 text-[18px] text-white/70 transition-transform group-hover:translate-x-0.5">
-          chevron_right
-        </span>
-      </div>
-
-      <div className="relative z-10 flex items-baseline gap-1.5">
-        <span className="text-2xl font-black [text-shadow:0_1px_3px_rgba(0,0,0,0.3)]">
-          {acc == null ? '--' : `${Math.round(acc)}%`}
-        </span>
-        <span className="text-[10px] font-bold uppercase tracking-wide text-white/80">
-          aciertos
-        </span>
-      </div>
-
-      {/* Barra fina de precisión (translúcida sobre el color) */}
-      <div className="relative z-10 h-1.5 w-full overflow-hidden rounded-full bg-white/25">
-        <motion.div
-          className="h-full rounded-full bg-white/90"
-          initial={{ width: 0 }}
-          animate={{ width: `${accPct}%` }}
-          transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-        />
-      </div>
-
-      <p className="relative z-10 text-[10px] font-semibold text-white/80">
-        {subject.total} preg. · {subject.blank} en blanco
-      </p>
+      <span
+        className="relative z-10 line-clamp-2 text-[10px] font-bold uppercase leading-tight tracking-wider text-white/90 [text-shadow:0_1px_2px_rgba(0,0,0,0.25)]"
+        title={subject.name}
+      >
+        {subject.name}
+      </span>
+      <span className="relative z-10 text-xl font-bold [text-shadow:0_1px_3px_rgba(0,0,0,0.3)]">
+        {acc == null ? '--' : `${Math.round(acc)}%`}
+      </span>
     </motion.button>
   )
 }
@@ -191,7 +165,7 @@ export default function SubjectHeatmapSection() {
         {loading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="h-28 animate-pulse rounded-xl bg-[#F0EAE6]" />
+              <div key={i} className="h-[76px] animate-pulse rounded-lg bg-[#F0EAE6]" />
             ))}
           </div>
         ) : error ? (

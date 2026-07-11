@@ -14,18 +14,20 @@ export const C = {
   border: '#EAE0D5',
 } as const
 
-// --- Escala de calor CONTINUA por % de aciertos (gradiente, sin cortes duros)
-//   rojo (<30) -> azul grisáceo (~38) -> verde a verde intenso (46-70)
-//   -> morado galáctico (>=~70). El factor galáctico añade textura estelar.
+// --- Escala de calor por % de aciertos.
+//   < 65: gradiente CONTINUO rojo -> azul grisáceo -> verde a verde intenso.
+//   >= 65: morado galáctico PLENO (color fijo + textura estelar), uniforme
+//          hasta el 100% (salto neto en 65, sin gradiente en ese tramo).
 type RGB = [number, number, number]
+export const GALACTIC_MIN = 65
+const GALACTIC_PURPLE: RGB = [126, 72, 184] // morado galáctico
+
 const HEAT_STOPS: [number, RGB][] = [
   [0, [150, 44, 38]], // rojo intenso
   [22, [196, 101, 90]], // #C4655A rojo coral
   [38, [125, 138, 150]], // #7D8A96 azul grisáceo
-  [55, [139, 168, 136]], // #8BA888 verde salvia
-  [66, [72, 122, 72]], // verde intenso
-  [78, [126, 72, 184]], // morado galáctico
-  [100, [150, 52, 235]], // morado vivo
+  [52, [139, 168, 136]], // #8BA888 verde salvia
+  [64, [70, 120, 70]], // verde intenso
 ]
 
 function lerp(a: number, b: number, t: number): number {
@@ -34,6 +36,7 @@ function lerp(a: number, b: number, t: number): number {
 
 function heatRgb(acc: number): RGB {
   const a = Math.max(0, Math.min(100, acc))
+  if (a >= GALACTIC_MIN) return GALACTIC_PURPLE
   for (let i = 0; i < HEAT_STOPS.length - 1; i++) {
     const [x0, c0] = HEAT_STOPS[i]
     const [x1, c1] = HEAT_STOPS[i + 1]
@@ -51,16 +54,16 @@ export function heatColor(accuracy: number | null): string {
   return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`
 }
 
-export function heatColorDark(accuracy: number | null, amount = 0.78): string {
+export function heatColorDark(accuracy: number | null, amount = 0.82): string {
   if (accuracy == null) return 'rgb(178,168,158)'
   const [r, g, b] = heatRgb(accuracy)
   return `rgb(${Math.round(r * amount)},${Math.round(g * amount)},${Math.round(b * amount)})`
 }
 
-// 0..1: intensidad de la textura galáctica (gradiente suave 64 -> 80).
+// Galáctica: salto neto (0/1) a partir del 65%, sin transición gradual.
 export function galacticFactor(accuracy: number | null): number {
   if (accuracy == null) return 0
-  return Math.max(0, Math.min(1, (accuracy - 64) / (80 - 64)))
+  return accuracy >= GALACTIC_MIN ? 1 : 0
 }
 
 // Alias continuo usado por anillos, líneas y acentos del detalle.
@@ -240,7 +243,9 @@ export function TrendChart({
     valid.map((p, i) => `L${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ') +
     ` L${x(n - 1).toFixed(1)},${(H - padY).toFixed(1)} Z`
 
-  const gradId = `trendgrad-${color.replace('#', '')}`
+  // El color puede ser rgb(...) o hex; saneamos a un id válido (solo alfanumérico)
+  // para que url(#id) resuelva y el área no caiga al relleno negro por defecto.
+  const gradId = `trendgrad-${color.replace(/[^a-zA-Z0-9]/g, '')}`
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height }} preserveAspectRatio="none">
