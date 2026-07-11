@@ -51,6 +51,7 @@ type DailyReviewQuestion = {
   correctAnswer?: string | number | null
   selectedAnswer?: string | number | null
   isCorrect?: boolean | null
+  result?: 'correct' | 'wrong' | 'blank' | null
   explanation?: string | null
   hasImage?: boolean
   imageUrl?: string | null
@@ -67,6 +68,7 @@ type Question = {
   correctAnswer: string | number | null
   selectedAnswer?: string | number | null
   isCorrect?: boolean | null
+  result?: 'correct' | 'wrong' | 'blank' | null
   explanation: string
   hasImage?: boolean
   imageUrl?: string | null
@@ -316,7 +318,10 @@ export default function DashboardPage() {
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [selectedAnswers, setSelectedAnswers] = useState<(number | null)[]>([])
+  // Respuesta por pregunta: índice 0-based de la opción, 'blank' si el usuario
+  // la deja en blanco a propósito (no puntúa ni penaliza), o null si aún no ha
+  // decidido. Avanzar sin marcar también la deja en blanco.
+  const [selectedAnswers, setSelectedAnswers] = useState<(number | 'blank' | null)[]>([])
   const [timeSpentSeconds, setTimeSpentSeconds] = useState<number[]>([])
   const [userId, setUserId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -396,6 +401,8 @@ export default function DashboardPage() {
 
   const [quizResult, setQuizResult] = useState<{
     correctCount: number
+    wrongCount?: number
+    blankCount?: number
     totalQuestions: number
     percentage: number
     score: number
@@ -1156,6 +1163,10 @@ export default function DashboardPage() {
           : typeof item?.is_correct === 'boolean'
             ? item.is_correct
             : null,
+      result:
+        item?.result === 'correct' || item?.result === 'wrong' || item?.result === 'blank'
+          ? item.result
+          : null,
       explanation: String(item?.explanation ?? ''),
       hasImage: Boolean(item?.hasImage ?? item?.has_image),
       imageUrl:
@@ -1751,19 +1762,25 @@ export default function DashboardPage() {
       .map((question) => question.subject)
       .filter(Boolean)
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (answersOverride?: (number | 'blank' | null)[]) => {
     if (!userId) return
     if (isSubmitting) return
-    if (selectedAnswers.some((answer) => answer === null)) return
+    const answersToSend = answersOverride ?? selectedAnswers
+    // Todas las preguntas deben estar decididas: opción marcada o en blanco.
+    if (answersToSend.some((answer) => answer === null)) return
     const effectiveTimeSpent = getEffectiveTimeSpent()
     setTimeSpentSeconds(effectiveTimeSpent)
     setIsSubmitting(true)
     try {
-      const answers = questions.map((question, index) => ({
-        questionId: question.id,
-        selectedOption: (selectedAnswers[index] ?? 0) + 1,
-        timeSpent: effectiveTimeSpent[index] ?? 0,
-      }))
+      const answers = questions.map((question, index) => {
+        const answer = answersToSend[index]
+        return {
+          questionId: question.id,
+          // null = en blanco; el backend lo registra sin opción marcada.
+          selectedOption: answer === 'blank' || answer == null ? null : answer + 1,
+          timeSpent: effectiveTimeSpent[index] ?? 0,
+        }
+      })
       if (answers.length !== questions.length) {
         return
       }
@@ -1815,6 +1832,8 @@ export default function DashboardPage() {
         typeof payloadData === 'object' && payloadData !== null ? payloadData : {}
       setQuizResult({
         correctCount: (data as { correctCount?: number }).correctCount ?? 0,
+        wrongCount: (data as { wrongCount?: number }).wrongCount ?? 0,
+        blankCount: (data as { blankCount?: number }).blankCount ?? 0,
         totalQuestions:
           (data as { totalQuestions?: number }).totalQuestions ?? questions.length,
         percentage: (data as { percentage?: number }).percentage ?? 0,
@@ -1837,11 +1856,28 @@ export default function DashboardPage() {
   }
 
   const handleNext = () => {
+    // Avanzar sin marcar opción = dejar la pregunta en blanco (como en el MIR).
+    let effectiveAnswers = selectedAnswers
+    if (selectedAnswers[currentQuestionIndex] == null) {
+      effectiveAnswers = [...selectedAnswers]
+      effectiveAnswers[currentQuestionIndex] = 'blank'
+      setSelectedAnswers(effectiveAnswers)
+    }
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1)
       return
     }
-    void handleSubmit()
+    // Pasamos las respuestas efectivas: el setState de justo arriba aún no se
+    // ha aplicado cuando se envía la última pregunta.
+    void handleSubmit(effectiveAnswers)
+  }
+
+  const handleBlankCurrent = () => {
+    setSelectedAnswers((prev) => {
+      const next = [...prev]
+      next[currentQuestionIndex] = prev[currentQuestionIndex] === 'blank' ? null : 'blank'
+      return next
+    })
   }
 
   const handlePrevious = () => {
@@ -4420,6 +4456,34 @@ export default function DashboardPage() {
                   })}
                 </div>
 
+                {/* Dejar en blanco: en el MIR los blancos no puntúan ni penalizan */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleBlankCurrent}
+                    className={`flex items-center gap-2 rounded-2xl border-2 px-5 py-3 text-sm font-semibold transition-all ${
+                      currentSelection === 'blank'
+                        ? 'border-[#7D8A96]/50 bg-[#7D8A96]/10 text-[#4B5563]'
+                        : 'border-[#E9E4E1] bg-white text-[#7D8A96] hover:border-[#7D8A96]/40 hover:text-[#2D3748]'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-lg">
+                      {currentSelection === 'blank' ? 'check_circle' : 'block'}
+                    </span>
+                    {currentSelection === 'blank' ? 'Pregunta en blanco' : 'Dejar en blanco'}
+                  </button>
+                  {currentSelection === 'blank' ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#7D8A96]/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-[#7D8A96]">
+                      <span className="material-symbols-outlined text-sm">info</span>
+                      No puntúa ni penaliza
+                    </span>
+                  ) : currentSelection == null ? (
+                    <span className="text-xs font-medium text-[#9CA3AF]">
+                      Si avanzas sin marcar, la pregunta quedará en blanco.
+                    </span>
+                  ) : null}
+                </div>
+
                 <div className="pt-8 flex flex-wrap justify-between items-center gap-4">
                   <button className="flex items-center gap-2 text-[#9CA3AF] hover:text-[#7D8A96] text-sm font-semibold transition-colors">
                     <span className="material-symbols-outlined text-lg">
@@ -4443,7 +4507,6 @@ export default function DashboardPage() {
                       type="button"
                       onClick={handleNext}
                       disabled={
-                        currentSelection == null ||
                         isSubmitting ||
                         (!userId && currentQuestionIndex === questions.length - 1)
                       }

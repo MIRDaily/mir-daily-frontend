@@ -5,7 +5,7 @@
 // se obtienen del BACKEND (autenticado); el cliente nunca recibe la respuesta
 // correcta hasta que el usuario responde y el servidor la valida (/check).
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import SimulacroBuilder from '@/components/simulacro/SimulacroBuilder'
 import SimulacroRunner from '@/components/simulacro/SimulacroRunner'
 import SimulacroResultsGrid from '@/components/simulacro/SimulacroResultsGrid'
@@ -31,6 +31,22 @@ export default function SimulacroPage() {
   const [generating, setGenerating] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
   const [finishing, setFinishing] = useState(false)
+  // Identificador de la sesión de simulacro: el backend lo usa para persistir
+  // cada respuesta (analítica) de forma idempotente.
+  const sessionIdRef = useRef<string | null>(null)
+  // Copia siempre actualizada de answers para leerla de forma síncrona
+  // (p. ej. finalizar justo después de marcar la última en blanco).
+  const answersRef = useRef<SimulacroAnswer[]>([])
+
+  const updateAnswers = (
+    updater: (prev: SimulacroAnswer[]) => SimulacroAnswer[],
+  ) => {
+    setAnswers((prev) => {
+      const next = updater(prev)
+      answersRef.current = next
+      return next
+    })
+  }
 
   const handleSubmit = async (config: SimulacroConfig) => {
     setGenerating(true)
@@ -44,9 +60,10 @@ export default function SimulacroPage() {
         return
       }
       setQuestions(fetched)
-      setAnswers(fetched.map(() => ({ selectedIndex: null })))
+      updateAnswers(() => fetched.map(() => ({ selectedIndex: null })))
       setResults(fetched.map(() => null))
       setMode(config.mode)
+      sessionIdRef.current = crypto.randomUUID()
       setPhase('running')
     } catch (err: unknown) {
       setGenerationError(
@@ -59,33 +76,59 @@ export default function SimulacroPage() {
     }
   }
 
-  const handleSelect = (questionIndex: number, optionIndex: number) => {
-    setAnswers((prev) => {
+  // Corrección inmediata de una pregunta en el servidor (respuesta o blanco).
+  const checkImmediate = (
+    questionIndex: number,
+    selectedIndex: number | null,
+    timeSpent?: number,
+  ) => {
+    const question = questions[questionIndex]
+    if (!question) return
+    checkSimulacroAnswers(
+      [{ questionId: question.id, selectedIndex, timeSpent }],
+      sessionIdRef.current ?? undefined,
+    )
+      .then((res) => {
+        const result = res[0]
+        if (!result) return
+        setResults((prev) => {
+          const next = [...prev]
+          next[questionIndex] = result
+          return next
+        })
+      })
+      .catch(() => {
+        /* Si falla la corrección, la pregunta queda sin revelar pero el
+           usuario puede continuar. */
+      })
+  }
+
+  const handleSelect = (
+    questionIndex: number,
+    optionIndex: number,
+    timeSpent?: number,
+  ) => {
+    updateAnswers((prev) => {
       const next = [...prev]
-      next[questionIndex] = { selectedIndex: optionIndex }
+      next[questionIndex] = { selectedIndex: optionIndex, timeSpent }
       return next
     })
 
-    // En modo inmediato corregimos esa pregunta al instante en el servidor.
     if (mode === 'immediate') {
-      const question = questions[questionIndex]
-      if (!question) return
-      checkSimulacroAnswers([
-        { questionId: question.id, selectedIndex: optionIndex },
-      ])
-        .then((res) => {
-          const result = res[0]
-          if (!result) return
-          setResults((prev) => {
-            const next = [...prev]
-            next[questionIndex] = result
-            return next
-          })
-        })
-        .catch(() => {
-          /* Si falla la corrección, la pregunta queda sin revelar pero el
-             usuario puede continuar. */
-        })
+      checkImmediate(questionIndex, optionIndex, timeSpent)
+    }
+  }
+
+  // Dejar la pregunta en blanco (no puntúa ni penaliza, pero se registra).
+  const handleBlank = (questionIndex: number, timeSpent?: number) => {
+    updateAnswers((prev) => {
+      const next = [...prev]
+      next[questionIndex] = { selectedIndex: null, blank: true, timeSpent }
+      return next
+    })
+
+    if (mode === 'immediate') {
+      checkImmediate(questionIndex, null, timeSpent)
     }
   }
 
@@ -96,9 +139,13 @@ export default function SimulacroPage() {
       try {
         const payload = questions.map((q, i) => ({
           questionId: q.id,
-          selectedIndex: answers[i]?.selectedIndex ?? null,
+          selectedIndex: answersRef.current[i]?.selectedIndex ?? null,
+          timeSpent: answersRef.current[i]?.timeSpent,
         }))
-        const res = await checkSimulacroAnswers(payload)
+        const res = await checkSimulacroAnswers(
+          payload,
+          sessionIdRef.current ?? undefined,
+        )
         const byId = new Map(res.map((r) => [r.questionId, r]))
         setResults(questions.map((q) => byId.get(q.id) ?? null))
       } catch {
@@ -112,9 +159,10 @@ export default function SimulacroPage() {
 
   const handleRestart = () => {
     setQuestions([])
-    setAnswers([])
+    updateAnswers(() => [])
     setResults([])
     setGenerationError(null)
+    sessionIdRef.current = null
     setPhase('builder')
   }
 
@@ -139,6 +187,7 @@ export default function SimulacroPage() {
             results={results}
             finishing={finishing}
             onSelect={handleSelect}
+            onBlank={handleBlank}
             onFinish={handleFinish}
             onExit={handleRestart}
           />

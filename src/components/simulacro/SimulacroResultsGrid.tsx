@@ -52,7 +52,7 @@ const STATUS_META: Record<
     bar: 'bg-[#C4655A]',
   },
   empty: {
-    label: 'Sin responder',
+    label: 'En blanco',
     icon: 'radio_button_unchecked',
     chip: 'bg-[#EDE8E5] text-[#7D8A96]',
     bar: 'bg-[#C9C2BC]',
@@ -202,7 +202,7 @@ export default function SimulacroResultsGrid({
         <div className="rounded-xl border border-[#EAE4E2] bg-white p-4 text-center shadow-sm">
           <p className="text-2xl font-black text-[#7D8A96]">{stats.empty}</p>
           <p className="text-xs font-semibold uppercase tracking-wide text-[#7D8A96]">
-            Sin responder
+            En blanco
           </p>
         </div>
       </div>
@@ -231,7 +231,7 @@ export default function SimulacroResultsGrid({
                     ? 'Acierto'
                     : status === 'incorrect'
                       ? 'Fallo'
-                      : 'Sin responder'}
+                      : 'En blanco'}
                 </span>
               </button>
             )
@@ -247,7 +247,7 @@ export default function SimulacroResultsGrid({
             <span className="h-3 w-3 rounded bg-[#C4655A]" /> Fallo
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded bg-[#EDE8E5]" /> Sin responder
+            <span className="h-3 w-3 rounded bg-[#EDE8E5]" /> En blanco
           </span>
         </div>
       </div>

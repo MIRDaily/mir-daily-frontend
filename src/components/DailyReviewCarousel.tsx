@@ -11,6 +11,8 @@ interface Question {
   correctAnswer: string | number | null
   selectedAnswer?: string | number | null
   isCorrect?: boolean | null
+  /** 'blank' = el usuario dejó la pregunta en blanco (no puntúa ni penaliza). */
+  result?: 'correct' | 'wrong' | 'blank' | null
   explanation: string
   hasImage?: boolean
   imageUrl?: string | null
@@ -196,10 +198,19 @@ function DailyReviewCarousel({ questions }: Props) {
                       {q.question}
                     </h3>
                   </div>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[#F3E7E3] px-3 py-1 text-xs font-semibold text-[#C45B4B] shrink-0">
-                    <span className="material-symbols-outlined text-sm">history</span>
-                    Daily
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#F3E7E3] px-3 py-1 text-xs font-semibold text-[#C45B4B]">
+                      <span className="material-symbols-outlined text-sm">history</span>
+                      Daily
+                    </span>
+                    {(q.result === 'blank' ||
+                      (q.result == null && q.selectedAnswer == null && q.isCorrect == null)) && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#7D8A96]/10 px-3 py-1 text-xs font-semibold text-[#7D8A96]">
+                        <span className="material-symbols-outlined text-sm">block</span>
+                        En blanco
+                      </span>
+                    )}
+                  </div>
                 </header>
 
                 <div className="mt-6 space-y-2">

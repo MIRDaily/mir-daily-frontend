@@ -35,6 +35,9 @@ export interface SimulacroQuestion {
   image_url?: string | null
 }
 
+/** Resultado ternario de una pregunta: en el MIR el blanco no penaliza. */
+export type SimulacroOutcome = 'correct' | 'wrong' | 'blank'
+
 /** Corrección de una pregunta, devuelta por el backend tras responder. */
 export interface SimulacroResult {
   questionId: number
@@ -42,9 +45,14 @@ export interface SimulacroResult {
   correctIndex: number
   explanation: string | null
   isCorrect: boolean
+  result: SimulacroOutcome
 }
 
 /** Respuesta del usuario por posición de pregunta. */
 export interface SimulacroAnswer {
   selectedIndex: number | null
+  /** true = el usuario dejó la pregunta en blanco a propósito. */
+  blank?: boolean
+  /** Segundos dedicados a la pregunta (para analítica). */
+  timeSpent?: number
 }

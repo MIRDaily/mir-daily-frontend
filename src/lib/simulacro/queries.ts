@@ -79,14 +79,17 @@ export async function fetchSimulacroQuestions(
 }
 
 // Corrige en el servidor las respuestas indicadas y devuelve, solo para esas
-// preguntas, la opción correcta y la explicación.
+// preguntas, la opción correcta y la explicación. `selectedIndex: null` =
+// pregunta dejada en blanco. Si se pasa `sessionId`, el backend persiste cada
+// respuesta para la analítica de rendimiento (idempotente por sesión+pregunta).
 export async function checkSimulacroAnswers(
-  answers: { questionId: number; selectedIndex: number | null }[],
+  answers: { questionId: number; selectedIndex: number | null; timeSpent?: number }[],
+  sessionId?: string,
 ): Promise<SimulacroResult[]> {
   if (answers.length === 0) return []
   const { results } = await apiFetch<{ results: SimulacroResult[] }>('/check', {
     method: 'POST',
-    body: JSON.stringify({ answers }),
+    body: JSON.stringify({ answers, sessionId }),
   })
   return results ?? []
 }

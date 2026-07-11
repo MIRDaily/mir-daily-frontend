@@ -17,7 +17,8 @@ type SimulacroRunnerProps = {
   answers: SimulacroAnswer[]
   results: (SimulacroResult | null)[]
   finishing: boolean
-  onSelect: (questionIndex: number, optionIndex: number) => void
+  onSelect: (questionIndex: number, optionIndex: number, timeSpent?: number) => void
+  onBlank: (questionIndex: number, timeSpent?: number) => void
   onFinish: () => void
   onExit: () => void
 }
@@ -29,6 +30,7 @@ export default function SimulacroRunner({
   results,
   finishing,
   onSelect,
+  onBlank,
   onFinish,
   onExit,
 }: SimulacroRunnerProps) {
@@ -37,14 +39,23 @@ export default function SimulacroRunner({
   const total = questions.length
   const current = questions[index]
   const selected = answers[index]?.selectedIndex ?? null
+  const blanked = answers[index]?.blank === true
   const result = results[index] ?? null
   const correctIndex = result?.correctIndex ?? -1
   const isLast = index === total - 1
 
-  // En modo inmediato, al responder se bloquea la pregunta. La corrección llega
-  // del servidor: mientras no está, mostramos "comprobando"; cuando llega, se
-  // revela el resultado.
-  const locked = mode === 'immediate' && selected != null
+  // Tiempo dedicado a la pregunta visible (para la analítica de rendimiento).
+  const shownAtRef = useRef(Date.now())
+  useEffect(() => {
+    shownAtRef.current = Date.now()
+  }, [index])
+  const secondsOnQuestion = () =>
+    Math.max(0, Math.round((Date.now() - shownAtRef.current) / 1000))
+
+  // En modo inmediato, al responder (o dejar en blanco) se bloquea la pregunta.
+  // La corrección llega del servidor: mientras no está, mostramos "comprobando";
+  // cuando llega, se revela el resultado.
+  const locked = mode === 'immediate' && (selected != null || blanked)
   const revealed = locked && result != null
   const checking = locked && result == null
 
@@ -81,11 +92,22 @@ export default function SimulacroRunner({
 
   const goPrev = () => setIndex((i) => Math.max(0, i - 1))
   const goNext = () => {
+    // Avanzar sin responder = dejar la pregunta en blanco (como en el MIR).
+    if (selected == null && !blanked) {
+      onBlank(index, secondsOnQuestion())
+      // En modo inmediato nos quedamos para mostrar la corrección revelada.
+      if (mode === 'immediate') return
+    }
     if (isLast) {
       onFinish()
       return
     }
     setIndex((i) => Math.min(total - 1, i + 1))
+  }
+
+  const handleBlankClick = () => {
+    if (locked) return
+    onBlank(index, secondsOnQuestion())
   }
 
   return (
@@ -197,7 +219,7 @@ export default function SimulacroRunner({
                 key={`${current.id}-${optionIndex}`}
                 type="button"
                 disabled={locked}
-                onClick={() => onSelect(index, optionIndex)}
+                onClick={() => onSelect(index, optionIndex, secondsOnQuestion())}
                 className={`group flex items-center rounded-2xl border-2 p-5 text-left shadow-sm transition-all duration-200 hover:shadow-md disabled:cursor-default ${containerClass}`}
               >
                 <div
@@ -241,6 +263,31 @@ export default function SimulacroRunner({
               </button>
             )
           })}
+        </div>
+
+        {/* Dejar en blanco: en el MIR los blancos no puntúan ni penalizan */}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleBlankClick}
+            disabled={locked}
+            className={`flex items-center gap-2 rounded-2xl border-2 px-5 py-3 text-sm font-semibold transition-all disabled:cursor-default ${
+              blanked
+                ? 'border-[#7D8A96]/50 bg-[#7D8A96]/10 text-[#4B5563]'
+                : 'border-[#E9E4E1] bg-white text-[#7D8A96] hover:border-[#7D8A96]/40 hover:text-[#2D3748]'
+            }`}
+          >
+            <span className="material-symbols-outlined text-lg">
+              {blanked ? 'check_circle' : 'block'}
+            </span>
+            {blanked ? 'Pregunta en blanco' : 'Dejar en blanco'}
+          </button>
+          {blanked ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#7D8A96]/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-[#7D8A96]">
+              <span className="material-symbols-outlined text-sm">info</span>
+              No puntúa ni penaliza
+            </span>
+          ) : null}
         </div>
 
         {/* Comprobando (modo inmediato, esperando corrección del servidor) */}
@@ -291,7 +338,7 @@ export default function SimulacroRunner({
           <button
             type="button"
             onClick={goNext}
-            disabled={selected == null || finishing}
+            disabled={checking || finishing}
             className="flex items-center gap-3 rounded-2xl bg-[#E8A598] px-8 py-4 font-bold text-white shadow-lg shadow-[#E8A598]/20 transition-all hover:bg-[#d18d80] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isLast && finishing ? (
