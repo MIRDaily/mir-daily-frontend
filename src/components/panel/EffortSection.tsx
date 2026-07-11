@@ -20,7 +20,7 @@ const MODE_LABELS: Record<string, string> = {
 }
 
 export default function EffortSection() {
-  const [window, setWindow] = useState<AnalyticsWindow>('30d')
+  const [window, setWindow] = useState<AnalyticsWindow>('all')
   const { data: effort, loading } = useEffort(window)
 
   const totals = effort?.totals ?? {

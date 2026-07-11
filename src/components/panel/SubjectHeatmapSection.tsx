@@ -9,7 +9,7 @@ import type {
   SubjectHeatmapCell,
 } from '@/services/analyticsService'
 import { Segmented } from './Segmented'
-import { StackedBar, toneColor } from './charts'
+import { galacticFactor, heatColor, heatColorDark } from './charts'
 import SubjectDetail from './SubjectDetail'
 
 const WINDOW_OPTIONS: { value: AnalyticsWindow; label: string }[] = [
@@ -25,6 +25,25 @@ const MODE_OPTIONS: { value: AnalyticsMode; label: string }[] = [
   { value: 'studio', label: 'Mazos' },
 ]
 
+// Leyenda del gradiente de calor (para que se lea como heatmap).
+function HeatLegend() {
+  const stops = [0, 20, 30, 38, 46, 55, 66, 78, 90, 100]
+  const gradient = `linear-gradient(90deg, ${stops.map((s) => heatColor(s)).join(', ')})`
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] font-bold uppercase tracking-wide text-[#7D8A96]">
+        Menos
+      </span>
+      <div className="relative h-3 w-28 overflow-hidden rounded-full ring-1 ring-black/5" style={{ background: gradient }}>
+        <div className="galactic-stars absolute inset-y-0 right-0 w-1/4" style={{ opacity: 0.85 }} />
+      </div>
+      <span className="text-[10px] font-bold uppercase tracking-wide text-[#7D8A96]">
+        Más
+      </span>
+    </div>
+  )
+}
+
 function SubjectCard({
   subject,
   active,
@@ -36,7 +55,11 @@ function SubjectCard({
   onClick: () => void
   index: number
 }) {
-  const tone = toneColor(subject.accuracy)
+  const acc = subject.accuracy
+  const bg = heatColor(acc)
+  const bgDark = heatColorDark(acc)
+  const gf = galacticFactor(acc)
+  const accPct = acc == null ? 0 : Math.max(0, Math.min(100, acc))
   return (
     <motion.button
       type="button"
@@ -46,38 +69,51 @@ function SubjectCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: Math.min(index * 0.03, 0.4), ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -3 }}
-      className={`group relative flex flex-col gap-2 overflow-hidden rounded-xl border bg-white p-3.5 text-left shadow-sm transition-shadow hover:shadow-md ${
-        active ? 'border-[#E8A598] ring-2 ring-[#E8A598]/40' : 'border-[#EAE0D5]'
+      className={`group relative flex flex-col gap-2 overflow-hidden rounded-xl border border-white/10 p-3.5 text-left text-white shadow-sm transition-shadow hover:shadow-lg ${
+        active ? 'ring-2 ring-white/80 ring-offset-2 ring-offset-[#FAF7F4]' : ''
       }`}
+      style={{ background: `linear-gradient(140deg, ${bg}, ${bgDark})` }}
     >
-      {/* Franja de color por rendimiento */}
-      <span className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: tone }} />
-      <div className="flex items-start justify-between gap-2 pl-1.5">
-        <p className="line-clamp-2 text-xs font-bold leading-tight text-[#141514]" title={subject.name}>
+      {/* Textura estelar galáctica (rendimiento excelente), intensidad gradual */}
+      {gf > 0 ? (
+        <>
+          <div className="galactic-nebula pointer-events-none absolute inset-0" style={{ opacity: gf }} />
+          <div className="galactic-stars pointer-events-none absolute inset-0" style={{ opacity: gf }} />
+        </>
+      ) : null}
+
+      <div className="relative z-10 flex items-start justify-between gap-2">
+        <p
+          className="line-clamp-2 text-xs font-bold leading-tight [text-shadow:0_1px_2px_rgba(0,0,0,0.25)]"
+          title={subject.name}
+        >
           {subject.name}
         </p>
-        <span className="material-symbols-outlined shrink-0 text-[18px] text-[#CFC5BB] transition-colors group-hover:text-[#E8A598]">
+        <span className="material-symbols-outlined shrink-0 text-[18px] text-white/70 transition-transform group-hover:translate-x-0.5">
           chevron_right
         </span>
       </div>
-      <div className="flex items-baseline gap-1.5 pl-1.5">
-        <span className="text-2xl font-black" style={{ color: tone }}>
-          {subject.accuracy == null ? '--' : `${Math.round(subject.accuracy)}%`}
+
+      <div className="relative z-10 flex items-baseline gap-1.5">
+        <span className="text-2xl font-black [text-shadow:0_1px_3px_rgba(0,0,0,0.3)]">
+          {acc == null ? '--' : `${Math.round(acc)}%`}
         </span>
-        <span className="text-[10px] font-bold uppercase tracking-wide text-[#7D8A96]">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-white/80">
           aciertos
         </span>
       </div>
-      <div className="pl-1.5">
-        <StackedBar
-          correct={subject.correct}
-          wrong={subject.wrong}
-          blank={subject.blank}
-          height={7}
-          delay={0.15}
+
+      {/* Barra fina de precisión (translúcida sobre el color) */}
+      <div className="relative z-10 h-1.5 w-full overflow-hidden rounded-full bg-white/25">
+        <motion.div
+          className="h-full rounded-full bg-white/90"
+          initial={{ width: 0 }}
+          animate={{ width: `${accPct}%` }}
+          transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
         />
       </div>
-      <p className="pl-1.5 text-[10px] font-semibold text-[#7D8A96]">
+
+      <p className="relative z-10 text-[10px] font-semibold text-white/80">
         {subject.total} preg. · {subject.blank} en blanco
       </p>
     </motion.button>
@@ -85,7 +121,7 @@ function SubjectCard({
 }
 
 export default function SubjectHeatmapSection() {
-  const [window, setWindow] = useState<AnalyticsWindow>('30d')
+  const [window, setWindow] = useState<AnalyticsWindow>('all')
   const [mode, setMode] = useState<AnalyticsMode>('all')
   const [search, setSearch] = useState('')
   const [openId, setOpenId] = useState<number | null>(null)
@@ -148,6 +184,7 @@ export default function SubjectHeatmapSection() {
             resetOnFilter()
           }}
         />
+        <HeatLegend />
       </div>
 
       <div className="rounded-2xl border border-[#EAE0D5] bg-white/60 p-5 shadow-sm backdrop-blur-sm">

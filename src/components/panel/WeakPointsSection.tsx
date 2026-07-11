@@ -55,7 +55,7 @@ function WeakRow({ topic, rank }: { topic: WeakTopic; rank: number }) {
 
 export default function WeakPointsSection() {
   const { data, loading } = useWeakPoints()
-  const [tab, setTab] = useState<WinKey>('week')
+  const [tab, setTab] = useState<WinKey>('global')
 
   const topics = data?.[tab]?.topics ?? []
 

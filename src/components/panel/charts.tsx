@@ -14,11 +14,58 @@ export const C = {
   border: '#EAE0D5',
 } as const
 
+// --- Escala de calor CONTINUA por % de aciertos (gradiente, sin cortes duros)
+//   rojo (<30) -> azul grisáceo (~38) -> verde a verde intenso (46-70)
+//   -> morado galáctico (>=~70). El factor galáctico añade textura estelar.
+type RGB = [number, number, number]
+const HEAT_STOPS: [number, RGB][] = [
+  [0, [150, 44, 38]], // rojo intenso
+  [22, [196, 101, 90]], // #C4655A rojo coral
+  [38, [125, 138, 150]], // #7D8A96 azul grisáceo
+  [55, [139, 168, 136]], // #8BA888 verde salvia
+  [66, [72, 122, 72]], // verde intenso
+  [78, [126, 72, 184]], // morado galáctico
+  [100, [150, 52, 235]], // morado vivo
+]
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t
+}
+
+function heatRgb(acc: number): RGB {
+  const a = Math.max(0, Math.min(100, acc))
+  for (let i = 0; i < HEAT_STOPS.length - 1; i++) {
+    const [x0, c0] = HEAT_STOPS[i]
+    const [x1, c1] = HEAT_STOPS[i + 1]
+    if (a <= x1) {
+      const t = (a - x0) / (x1 - x0 || 1)
+      return [lerp(c0[0], c1[0], t), lerp(c0[1], c1[1], t), lerp(c0[2], c1[2], t)]
+    }
+  }
+  return HEAT_STOPS[HEAT_STOPS.length - 1][1]
+}
+
+export function heatColor(accuracy: number | null): string {
+  if (accuracy == null) return 'rgb(207,197,187)'
+  const [r, g, b] = heatRgb(accuracy)
+  return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`
+}
+
+export function heatColorDark(accuracy: number | null, amount = 0.78): string {
+  if (accuracy == null) return 'rgb(178,168,158)'
+  const [r, g, b] = heatRgb(accuracy)
+  return `rgb(${Math.round(r * amount)},${Math.round(g * amount)},${Math.round(b * amount)})`
+}
+
+// 0..1: intensidad de la textura galáctica (gradiente suave 64 -> 80).
+export function galacticFactor(accuracy: number | null): number {
+  if (accuracy == null) return 0
+  return Math.max(0, Math.min(1, (accuracy - 64) / (80 - 64)))
+}
+
+// Alias continuo usado por anillos, líneas y acentos del detalle.
 export function toneColor(accuracy: number | null): string {
-  if (accuracy == null) return '#CFC5BB'
-  if (accuracy >= 75) return C.correct
-  if (accuracy >= 60) return C.blank
-  return C.wrong
+  return heatColor(accuracy)
 }
 
 // ---------------------------------------------------------------------------
