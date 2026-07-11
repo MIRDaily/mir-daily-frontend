@@ -109,6 +109,21 @@ export type EffortResponse = {
   bySubject: EffortBySubject[];
 };
 
+export type TrendPoint = {
+  day: string;
+  correct: number;
+  wrong: number;
+  blank: number;
+  total: number;
+  accuracy: number | null;
+};
+
+export type SubjectTrendResponse = {
+  window: WindowInfo;
+  subjectId: number;
+  points: TrendPoint[];
+};
+
 async function fetchWithAuth(path: string, signal?: AbortSignal) {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -190,6 +205,19 @@ export async function fetchEffort(
   const res = await fetchWithAuth(`/api/analytics/effort?${params}`, signal);
   if (!res.ok) {
     throw new Error(await readError(res, `Esfuerzo (${res.status})`));
+  }
+  return res.json();
+}
+
+export async function fetchSubjectTrend(
+  subjectId: number,
+  window: AnalyticsWindow,
+  signal?: AbortSignal,
+): Promise<SubjectTrendResponse> {
+  const params = new URLSearchParams({ subjectId: String(subjectId), window });
+  const res = await fetchWithAuth(`/api/analytics/trend?${params}`, signal);
+  if (!res.ok) {
+    throw new Error(await readError(res, `Evolución (${res.status})`));
   }
   return res.json();
 }

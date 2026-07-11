@@ -4,12 +4,14 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   fetchEffort,
   fetchSubjectHeatmap,
+  fetchSubjectTrend,
   fetchTopicHeatmap,
   fetchWeakPoints,
   type AnalyticsMode,
   type AnalyticsWindow,
   type EffortResponse,
   type SubjectHeatmapResponse,
+  type SubjectTrendResponse,
   type TopicHeatmapResponse,
   type WeakPointsResponse,
 } from '@/services/analyticsService'
@@ -112,6 +114,44 @@ export function useWeakPoints(): AsyncState<WeakPointsResponse> {
       setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void load(controller.signal)
+    return () => controller.abort()
+  }, [load])
+
+  return { data, loading, error, refetch: () => load() }
+}
+
+// Evolución diaria de una asignatura (línea de precisión). subjectId null = inactivo.
+export function useSubjectTrend(
+  subjectId: number | null,
+  window: AnalyticsWindow,
+): AsyncState<SubjectTrendResponse> {
+  const [data, setData] = useState<SubjectTrendResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      if (subjectId == null) {
+        setData(null)
+        return
+      }
+      setLoading(true)
+      setError(null)
+      try {
+        setData(await fetchSubjectTrend(subjectId, window, signal))
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        setError(err instanceof Error ? err.message : 'No se pudo cargar la evolución.')
+      } finally {
+        setLoading(false)
+      }
+    },
+    [subjectId, window],
+  )
 
   useEffect(() => {
     const controller = new AbortController()
