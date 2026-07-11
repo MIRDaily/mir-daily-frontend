@@ -49,8 +49,12 @@ export function CountUp({
       if (t < 1) rafRef.current = requestAnimationFrame(animate)
     }
     rafRef.current = requestAnimationFrame(animate)
+    // Red de seguridad: si rAF está pausado (pestaña en segundo plano), garantiza
+    // que el valor final se muestre igualmente pasada la duración.
+    const fallback = window.setTimeout(() => setDisplay(value), durationMs + 120)
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      window.clearTimeout(fallback)
     }
   }, [value, durationMs])
 
