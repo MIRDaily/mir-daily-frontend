@@ -132,6 +132,8 @@ export default function PanelPage() {
   } = useTopicHeatmap(openSubjectId, heatmapWindow, heatmapMode)
   const { data: weakPoints, loading: weakPointsLoading } = useWeakPoints()
   const { data: effort, loading: effortLoading } = useEffort(effortWindow)
+  // Total histórico de preguntas realizadas (todos los modos) para la tarjeta superior.
+  const { data: effortAll } = useEffort('all')
   const introStartedRef = useRef(false)
   const introTimersRef = useRef<number[]>([])
   const {
@@ -172,7 +174,12 @@ export default function PanelPage() {
     hasPoints && typeof timeSeriesData?.avgTime30 === 'number'
       ? formatSeconds(timeSeriesData.avgTime30)
       : '--'
-  const totalPointsValue = hasPoints ? formatQuestions(totalPoints) : '--'
+  // "Preguntas realizadas": cuenta preguntas reales de TODOS los modos
+  // (daily + simulacro + mazos), incluidas las dejadas en blanco. No confundir
+  // con el nº de dailys completados (timeSeriesData.totalPoints).
+  const totalQuestionsDone = effortAll?.totals.questions ?? 0
+  const totalPointsValue =
+    totalQuestionsDone > 0 ? formatQuestions(totalQuestionsDone) : '--'
   const shouldRevealCards = introPhase === 'reveal' || introPhase === 'done'
   const shouldDrawChart = introPhase === 'reveal' || introPhase === 'done'
 
@@ -229,8 +236,9 @@ export default function PanelPage() {
                     delayMs={0}
                   />
                   <PanelMetricCard
-                    title="Preguntas contestadas"
-                    value={timeSeriesLoading ? '...' : totalPointsValue}
+                    title="Preguntas realizadas"
+                    value={totalPointsValue}
+                    subtitle="Todas las modalidades"
                     reveal={shouldRevealCards}
                     delayMs={90}
                   />
