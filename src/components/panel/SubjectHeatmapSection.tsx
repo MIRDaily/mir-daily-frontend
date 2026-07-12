@@ -7,6 +7,8 @@ import {
   motion,
   useMotionTemplate,
   useMotionValue,
+  useTransform,
+  type MotionValue,
 } from 'framer-motion'
 import { useSubjectHeatmap } from '@/hooks/useAnalytics'
 import type {
@@ -18,9 +20,58 @@ import { Segmented } from './Segmented'
 import { galacticFactor, heatColor, heatColorDark } from './charts'
 import SubjectDetail from './SubjectDetail'
 
-// Textura de grano (ruido SVG) para el "degradado granular" del relleno.
-const GRAIN_URL =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E\")"
+// Burbujas de "espuma" en la cabeza de la ola de color. Posiciones fijas
+// (deterministas) repartidas por la tarjeta; x/y en %, s en px.
+const BUBBLES = [
+  { x: 10, y: 34, s: 11 },
+  { x: 16, y: 66, s: 7 },
+  { x: 24, y: 22, s: 13 },
+  { x: 31, y: 54, s: 8 },
+  { x: 39, y: 78, s: 10 },
+  { x: 46, y: 30, s: 12 },
+  { x: 53, y: 62, s: 7 },
+  { x: 61, y: 42, s: 11 },
+  { x: 68, y: 72, s: 8 },
+  { x: 75, y: 26, s: 12 },
+  { x: 83, y: 58, s: 9 },
+  { x: 91, y: 38, s: 10 },
+]
+
+// Una burbuja que "estalla" cuando el frente de color (p) pasa por su posición,
+// un pelín por delante del relleno sólido -> efecto de espuma en la cabeza.
+function FoamBubble({
+  p,
+  x,
+  y,
+  s,
+  color,
+}: {
+  p: MotionValue<number>
+  x: number
+  y: number
+  s: number
+  color: string
+}) {
+  const opacity = useTransform(p, [x - 34, x - 10, x + 8], [0, 1, 0])
+  const scale = useTransform(p, [x - 34, x - 10, x + 8], [0.15, 1.2, 0.4])
+  return (
+    <motion.span
+      className="pointer-events-none absolute rounded-full"
+      style={{
+        left: `${x}%`,
+        top: `${y}%`,
+        width: s,
+        height: s,
+        marginLeft: -s / 2,
+        marginTop: -s / 2,
+        background: color,
+        boxShadow: `0 0 4px 1px ${color}`,
+        opacity,
+        scale,
+      }}
+    />
+  )
+}
 
 const WINDOW_OPTIONS: { value: AnalyticsWindow; label: string }[] = [
   { value: '7d', label: 'Semana' },
@@ -78,15 +129,14 @@ function SubjectCard({
   // El color entra un pelín después de que la tarjeta aparezca, escalonado en orden.
   const fillDelay = startDelay + 0.12 + Math.min(index * 0.08, 1.4)
 
-  // Barrido de IZQUIERDA a derecha con borde MUY ancho y suave (máscara horizontal
-  // animada). El grano se añade con una textura de ruido encima del color.
-  const p = useMotionValue(-70)
+  // Barrido de IZQUIERDA a derecha del color; `p` es la posición del frente (%).
+  const p = useMotionValue(-45)
   useEffect(() => {
     const reduce =
       typeof window !== 'undefined' &&
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     if (!entered) {
-      p.set(-70)
+      p.set(-45)
       return
     }
     if (reduce) {
@@ -94,14 +144,14 @@ function SubjectCard({
       return
     }
     const controls = fmAnimate(p, 150, {
-      duration: 1.5,
+      duration: 1.6,
       delay: fillDelay,
       ease: [0.33, 1, 0.68, 1],
     })
     return () => controls.stop()
   }, [entered, fillDelay, p])
-  // Borde de la máscara de ~70% de ancho => degradado extremo (nada sólido).
-  const maskImg = useMotionTemplate`linear-gradient(90deg, #000 ${p}%, rgba(0,0,0,0) calc(${p}% + 70%))`
+  // Borde de la máscara suave (~40% de ancho); la "espuma" la dan las burbujas.
+  const maskImg = useMotionTemplate`linear-gradient(90deg, #000 ${p}%, rgba(0,0,0,0) calc(${p}% + 40%))`
 
   return (
     <motion.button
@@ -119,8 +169,8 @@ function SubjectCard({
       {/* Base gris */}
       <span className="pointer-events-none absolute inset-0" style={{ background: GREY }} />
 
-      {/* Capa de color que RELLENA la tarjeta de izquierda a derecha con un borde
-          de degradado muy amplio y granular; el gris se ve por debajo. */}
+      {/* Capa de color que RELLENA la tarjeta de izquierda a derecha (máscara
+          horizontal); el gris se ve por debajo. */}
       <motion.span
         className="pointer-events-none absolute inset-0"
         style={{ WebkitMaskImage: maskImg, maskImage: maskImg }}
@@ -136,19 +186,19 @@ function SubjectCard({
             <span className="galactic-stars pointer-events-none absolute inset-[2.5px] rounded-[6px]" />
           </>
         ) : (
-          <>
-            <span
-              className="absolute inset-0"
-              style={{ background: `linear-gradient(140deg, ${bg}, ${bgDark})` }}
-            />
-            {/* Grano */}
-            <span
-              className="absolute inset-0 opacity-[0.35] mix-blend-overlay"
-              style={{ backgroundImage: GRAIN_URL, backgroundSize: '150px 150px' }}
-            />
-          </>
+          <span
+            className="absolute inset-0"
+            style={{ background: `linear-gradient(140deg, ${bg}, ${bgDark})` }}
+          />
         )}
       </motion.span>
+
+      {/* Espuma: burbujas del color que estallan en la cabeza de la ola */}
+      <span className="pointer-events-none absolute inset-0">
+        {BUBBLES.map((b, bi) => (
+          <FoamBubble key={bi} p={p} x={b.x} y={b.y} s={b.s} color={bg} />
+        ))}
+      </span>
 
       <span className="relative z-10 flex w-full flex-col items-start gap-1 p-3">
         <span
