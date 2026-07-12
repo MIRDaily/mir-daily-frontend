@@ -19,7 +19,15 @@ const MODE_LABELS: Record<string, string> = {
   studio: 'Mazos',
 }
 
-export default function EffortSection() {
+const EASE = [0.22, 1, 0.36, 1] as const
+
+export default function EffortSection({
+  active = true,
+  startDelay = 0,
+}: {
+  active?: boolean
+  startDelay?: number
+}) {
   const [window, setWindow] = useState<AnalyticsWindow>('all')
   const { data: effort, loading } = useEffort(window)
 
@@ -31,9 +39,16 @@ export default function EffortSection() {
     timeSpentSeconds: 0,
   }
 
+  // Entrada escalonada: se dispara solo cuando `active` (intro superior acabada).
+  const reveal = (i: number) => ({
+    initial: { opacity: 0, y: 22 } as const,
+    animate: active ? { opacity: 1, y: 0 } : { opacity: 0, y: 22 },
+    transition: { duration: 0.5, delay: startDelay + i * 0.12, ease: EASE },
+  })
+
   return (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <motion.div className="flex flex-wrap items-center justify-between gap-3" {...reveal(0)}>
         <div>
           <h3 className="text-2xl font-bold text-[#141514]">Tu esfuerzo</h3>
           <p className="mt-1 text-sm text-[#7D8A96]">
@@ -41,33 +56,33 @@ export default function EffortSection() {
           </p>
         </div>
         <Segmented groupId="effort-window" options={WINDOW_OPTIONS} value={window} onChange={setWindow} />
-      </div>
+      </motion.div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1.4fr]">
         {/* Totales */}
-        <div className="rounded-2xl border border-[#EAE0D5] bg-white p-6 shadow-sm">
+        <motion.div className="rounded-2xl border border-[#EAE0D5] bg-white p-6 shadow-sm" {...reveal(1)}>
           <p className="text-xs font-bold uppercase tracking-wider text-[#7D8A96]">
             Preguntas realizadas
           </p>
           <p className="mt-1 text-4xl font-black text-[#141514]">
-            {loading ? '...' : <CountUp value={totals.questions} />}
+            {loading ? '...' : <CountUp key={`q-${active}`} value={totals.questions} />}
           </p>
           <div className="mt-4 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-lg bg-[#8BA888]/10 p-2">
               <p className="text-lg font-black text-[#5f7d5c]">
-                <CountUp value={totals.correct} />
+                <CountUp key={`c-${active}`} value={totals.correct} />
               </p>
               <p className="text-[10px] font-bold uppercase text-[#7D8A96]">Aciertos</p>
             </div>
             <div className="rounded-lg bg-[#C4655A]/10 p-2">
               <p className="text-lg font-black text-[#C4655A]">
-                <CountUp value={totals.wrong} />
+                <CountUp key={`w-${active}`} value={totals.wrong} />
               </p>
               <p className="text-[10px] font-bold uppercase text-[#7D8A96]">Fallos</p>
             </div>
             <div className="rounded-lg bg-[#7D8A96]/10 p-2">
               <p className="text-lg font-black text-[#7D8A96]">
-                <CountUp value={totals.blank} />
+                <CountUp key={`b-${active}`} value={totals.blank} />
               </p>
               <p className="text-[10px] font-bold uppercase text-[#7D8A96]">En blanco</p>
             </div>
@@ -80,10 +95,10 @@ export default function EffortSection() {
               height={10}
             />
           </div>
-        </div>
+        </motion.div>
 
         {/* Distribución por modo */}
-        <div className="rounded-2xl border border-[#EAE0D5] bg-white p-6 shadow-sm">
+        <motion.div className="rounded-2xl border border-[#EAE0D5] bg-white p-6 shadow-sm" {...reveal(2)}>
           <p className="mb-4 text-xs font-bold uppercase tracking-wider text-[#7D8A96]">
             Distribución por modo
           </p>
@@ -122,7 +137,7 @@ export default function EffortSection() {
               </div>
             </div>
           )}
-        </div>
+        </motion.div>
       </div>
     </section>
   )

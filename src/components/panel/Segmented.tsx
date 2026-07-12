@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 
 // Control segmentado con "pill" deslizante animada (layoutId).
@@ -16,6 +17,15 @@ export function Segmented<T extends string>({
   groupId: string
   size?: 'sm' | 'md'
 }) {
+  // La animación de layout solo se activa tras el primer frame: así el "pill"
+  // se pinta ya en su sitio en la carga (no entra volando desde fuera de la caja)
+  // y sí se desliza al cambiar de pestaña.
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setReady(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+
   return (
     <div className="inline-flex rounded-xl border border-[#EAE0D5] bg-white p-1 shadow-sm">
       {options.map((option) => {
@@ -32,6 +42,8 @@ export function Segmented<T extends string>({
             {active && (
               <motion.span
                 layoutId={`seg-${groupId}`}
+                layout={ready ? 'position' : false}
+                initial={false}
                 className="absolute inset-0 rounded-lg bg-[#E8A598]"
                 transition={{ type: 'spring', stiffness: 400, damping: 32 }}
               />

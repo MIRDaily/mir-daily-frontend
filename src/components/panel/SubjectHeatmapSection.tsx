@@ -49,11 +49,15 @@ function SubjectCard({
   active,
   onClick,
   index,
+  entered,
+  startDelay,
 }: {
   subject: SubjectHeatmapCell
   active: boolean
   onClick: () => void
   index: number
+  entered: boolean
+  startDelay: number
 }) {
   const acc = subject.accuracy
   const bg = heatColor(acc)
@@ -64,9 +68,9 @@ function SubjectCard({
       type="button"
       onClick={onClick}
       layout
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: Math.min(index * 0.03, 0.4), ease: [0.22, 1, 0.36, 1] }}
+      initial={{ opacity: 0, y: 16, scale: 0.96 }}
+      animate={entered ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 16, scale: 0.96 }}
+      transition={{ duration: 0.42, delay: startDelay + Math.min(index * 0.045, 0.7), ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -3 }}
       className={`group relative flex min-h-[76px] flex-col justify-center overflow-hidden rounded-lg text-left text-white shadow-sm transition-shadow hover:shadow-lg ${
         active ? 'ring-2 ring-white/80 ring-offset-2 ring-offset-[#FAF7F4]' : ''
@@ -101,7 +105,13 @@ function SubjectCard({
   )
 }
 
-export default function SubjectHeatmapSection() {
+export default function SubjectHeatmapSection({
+  active = true,
+  startDelay = 0,
+}: {
+  active?: boolean
+  startDelay?: number
+}) {
   const [window, setWindow] = useState<AnalyticsWindow>('all')
   const [mode, setMode] = useState<AnalyticsMode>('all')
   const [search, setSearch] = useState('')
@@ -123,9 +133,15 @@ export default function SubjectHeatmapSection() {
 
   const resetOnFilter = () => setOpenId(null)
 
+  const reveal = (i: number) => ({
+    initial: { opacity: 0, y: 22 } as const,
+    animate: active ? { opacity: 1, y: 0 } : { opacity: 0, y: 22 },
+    transition: { duration: 0.5, delay: startDelay + i * 0.1, ease: [0.22, 1, 0.36, 1] as const },
+  })
+
   return (
     <section className="space-y-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <motion.div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between" {...reveal(0)}>
         <div>
           <h3 className="text-2xl font-bold text-[#141514]">Mapa de Calor por Asignaturas</h3>
           <p className="mt-1 text-sm text-[#7D8A96]">
@@ -144,9 +160,9 @@ export default function SubjectHeatmapSection() {
             className="w-full rounded-xl border border-[#EAE0D5] bg-white py-2 pl-10 pr-4 text-sm text-[#141514] shadow-sm outline-none focus:ring-2 focus:ring-[#E8A598]/50"
           />
         </div>
-      </div>
+      </motion.div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <motion.div className="flex flex-wrap items-center gap-3" {...reveal(1)}>
         <Segmented
           groupId="heatmap-window"
           options={WINDOW_OPTIONS}
@@ -166,9 +182,9 @@ export default function SubjectHeatmapSection() {
           }}
         />
         <HeatLegend />
-      </div>
+      </motion.div>
 
-      <div className="rounded-2xl border border-[#EAE0D5] bg-white/60 p-5 shadow-sm backdrop-blur-sm">
+      <motion.div className="rounded-2xl border border-[#EAE0D5] bg-white/60 p-5 shadow-sm backdrop-blur-sm" {...reveal(2)}>
         {loading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -192,6 +208,8 @@ export default function SubjectHeatmapSection() {
                 subject={s}
                 index={i}
                 active={openId === s.subjectId}
+                entered={active}
+                startDelay={startDelay + 0.22}
                 onClick={() => setOpenId(openId === s.subjectId ? null : s.subjectId)}
               />
             ))}
@@ -209,7 +227,7 @@ export default function SubjectHeatmapSection() {
             />
           ) : null}
         </AnimatePresence>
-      </div>
+      </motion.div>
     </section>
   )
 }

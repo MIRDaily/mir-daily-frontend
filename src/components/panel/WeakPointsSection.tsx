@@ -53,15 +53,27 @@ function WeakRow({ topic, rank }: { topic: WeakTopic; rank: number }) {
   )
 }
 
-export default function WeakPointsSection() {
+export default function WeakPointsSection({
+  active = true,
+  startDelay = 0,
+}: {
+  active?: boolean
+  startDelay?: number
+}) {
   const { data, loading } = useWeakPoints()
   const [tab, setTab] = useState<WinKey>('global')
 
   const topics = data?.[tab]?.topics ?? []
 
+  const reveal = (i: number) => ({
+    initial: { opacity: 0, y: 22 } as const,
+    animate: active ? { opacity: 1, y: 0 } : { opacity: 0, y: 22 },
+    transition: { duration: 0.5, delay: startDelay + i * 0.12, ease: [0.22, 1, 0.36, 1] as const },
+  })
+
   return (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <motion.div className="flex flex-wrap items-center justify-between gap-3" {...reveal(0)}>
         <div>
           <h3 className="text-2xl font-bold text-[#141514]">Puntos débiles</h3>
           <p className="mt-1 text-sm text-[#7D8A96]">
@@ -69,9 +81,9 @@ export default function WeakPointsSection() {
           </p>
         </div>
         <Segmented groupId="weak-window" options={TABS} value={tab} onChange={setTab} />
-      </div>
+      </motion.div>
 
-      <div className="rounded-2xl border border-[#EAE0D5] bg-white/60 p-5 shadow-sm backdrop-blur-sm">
+      <motion.div className="rounded-2xl border border-[#EAE0D5] bg-white/60 p-5 shadow-sm backdrop-blur-sm" {...reveal(1)}>
         {loading ? (
           <div className="space-y-3">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -101,7 +113,7 @@ export default function WeakPointsSection() {
             </motion.div>
           </AnimatePresence>
         )}
-      </div>
+      </motion.div>
     </section>
   )
 }

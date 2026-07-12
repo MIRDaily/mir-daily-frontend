@@ -136,6 +136,19 @@ export default function PanelPage() {
     }
   }, [activityHeatmapData, activityHeatmapLoading, timeSeriesData, timeSeriesLoading])
 
+  // Las secciones inferiores (esfuerzo, heatmap, puntos débiles) hacen su
+  // entrada SOLO cuando la intro de "Tu Progreso Global" ha terminado.
+  const [lowerActive, setLowerActive] = useState(false)
+  useEffect(() => {
+    if (introPhase === 'done') setLowerActive(true)
+  }, [introPhase])
+  // Red de seguridad: si la intro no llegara a completarse (p. ej. sin datos),
+  // se revelan igualmente pasado un tiempo prudencial.
+  useEffect(() => {
+    const t = window.setTimeout(() => setLowerActive(true), 5200)
+    return () => window.clearTimeout(t)
+  }, [])
+
   return (
     <div className="min-h-screen bg-[#FAF7F4] text-[#141514]">
       <main className="mx-auto w-full max-w-[1280px] space-y-10 px-4 py-8 md:px-6">
@@ -208,14 +221,14 @@ export default function PanelPage() {
         </section>
 
         {/* ===== TU ESFUERZO (encima del heatmap) ===== */}
-        <EffortSection />
+        <EffortSection active={lowerActive} startDelay={0} />
 
         {/* ===== MAPA DE CALOR + DETALLE POR ASIGNATURA ===== */}
-        <SubjectHeatmapSection />
+        <SubjectHeatmapSection active={lowerActive} startDelay={0.28} />
 
         {/* ===== PUNTOS DÉBILES ===== */}
         <div className="pb-8">
-          <WeakPointsSection />
+          <WeakPointsSection active={lowerActive} startDelay={0.56} />
         </div>
       </main>
     </div>
