@@ -63,32 +63,55 @@ function SubjectCard({
   const bg = heatColor(acc)
   const bgDark = heatColorDark(acc)
   const gf = galacticFactor(acc)
+  // Gris de partida sobre el que "rellena" el color.
+  const GREY = 'rgb(178,171,163)'
+  // El color entra un pelín después de que la tarjeta aparezca, escalonado en orden.
+  const fillDelay = startDelay + 0.14 + Math.min(index * 0.08, 1.4)
   return (
     <motion.button
       type="button"
       onClick={onClick}
       layout
-      initial={{ opacity: 0, y: 16, scale: 0.96 }}
-      animate={entered ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 16, scale: 0.96 }}
-      transition={{ duration: 0.42, delay: startDelay + Math.min(index * 0.045, 0.7), ease: [0.22, 1, 0.36, 1] }}
+      initial={{ opacity: 0, y: 14, scale: 0.97 }}
+      animate={entered ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 14, scale: 0.97 }}
+      transition={{ duration: 0.4, delay: startDelay + Math.min(index * 0.045, 0.7), ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -3 }}
       className={`group relative flex min-h-[76px] flex-col justify-center overflow-hidden rounded-lg text-left text-white shadow-sm transition-shadow hover:shadow-lg ${
         active ? 'ring-2 ring-white/80 ring-offset-2 ring-offset-[#FAF7F4]' : ''
       }`}
-      style={gf > 0 ? undefined : { background: `linear-gradient(140deg, ${bg}, ${bgDark})` }}
     >
-      {/* Zona galáctica plena (>=65%): borde arcoíris giratorio + textura estelar */}
-      {gf > 0 ? (
-        <>
-          <span className="galactic-rainbow pointer-events-none" aria-hidden />
+      {/* Base gris */}
+      <span className="pointer-events-none absolute inset-0" style={{ background: GREY }} />
+
+      {/* Capa de color que RELLENA la tarjeta (gris -> color), de abajo a arriba,
+          suave y orgánica, escalonada en orden como el mapa de actividad. */}
+      <motion.span
+        className="pointer-events-none absolute inset-0"
+        initial={{ clipPath: 'inset(100% 0% 0% 0%)' }}
+        animate={
+          entered
+            ? { clipPath: 'inset(0% 0% 0% 0%)' }
+            : { clipPath: 'inset(100% 0% 0% 0%)' }
+        }
+        transition={{ duration: 1.15, delay: fillDelay, ease: [0.33, 1, 0.68, 1] }}
+      >
+        {gf > 0 ? (
+          <>
+            <span className="galactic-rainbow pointer-events-none" aria-hidden />
+            <span
+              className="pointer-events-none absolute inset-[2.5px] rounded-[6px]"
+              style={{ background: `linear-gradient(140deg, ${bg}, ${bgDark})` }}
+            />
+            <span className="galactic-nebula pointer-events-none absolute inset-[2.5px] rounded-[6px]" />
+            <span className="galactic-stars pointer-events-none absolute inset-[2.5px] rounded-[6px]" />
+          </>
+        ) : (
           <span
-            className="pointer-events-none absolute inset-[2.5px] rounded-[6px]"
+            className="absolute inset-0"
             style={{ background: `linear-gradient(140deg, ${bg}, ${bgDark})` }}
           />
-          <span className="galactic-nebula pointer-events-none absolute inset-[2.5px] rounded-[6px]" />
-          <span className="galactic-stars pointer-events-none absolute inset-[2.5px] rounded-[6px]" />
-        </>
-      ) : null}
+        )}
+      </motion.span>
 
       <span className="relative z-10 flex w-full flex-col items-start gap-1 p-3">
         <span

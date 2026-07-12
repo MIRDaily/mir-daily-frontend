@@ -95,6 +95,21 @@ export default function PanelPage() {
     void refetchTimeSeries()
   }, [refetchTimeSeries])
 
+  // Al refrescar la página, empezar siempre desde arriba (no restaurar scroll).
+  useEffect(() => {
+    const prev =
+      typeof history !== 'undefined' && 'scrollRestoration' in history
+        ? history.scrollRestoration
+        : undefined
+    if (prev !== undefined) history.scrollRestoration = 'manual'
+    window.scrollTo(0, 0)
+    const raf = window.requestAnimationFrame(() => window.scrollTo(0, 0))
+    return () => {
+      window.cancelAnimationFrame(raf)
+      if (prev !== undefined) history.scrollRestoration = prev
+    }
+  }, [])
+
   const totalPoints = timeSeriesData?.totalPoints ?? 0
   const hasPoints = totalPoints > 0
   const scoreValue =
