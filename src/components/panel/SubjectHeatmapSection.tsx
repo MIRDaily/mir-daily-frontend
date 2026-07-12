@@ -1,7 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  AnimatePresence,
+  animate as fmAnimate,
+  motion,
+  useMotionTemplate,
+  useMotionValue,
+} from 'framer-motion'
 import { useSubjectHeatmap } from '@/hooks/useAnalytics'
 import type {
   AnalyticsMode,
@@ -11,6 +17,10 @@ import type {
 import { Segmented } from './Segmented'
 import { galacticFactor, heatColor, heatColorDark } from './charts'
 import SubjectDetail from './SubjectDetail'
+
+// Textura de grano (ruido SVG) para el "degradado granular" del relleno.
+const GRAIN_URL =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E\")"
 
 const WINDOW_OPTIONS: { value: AnalyticsWindow; label: string }[] = [
   { value: '7d', label: 'Semana' },
@@ -66,7 +76,33 @@ function SubjectCard({
   // Gris de partida sobre el que "rellena" el color.
   const GREY = 'rgb(178,171,163)'
   // El color entra un pelín después de que la tarjeta aparezca, escalonado en orden.
-  const fillDelay = startDelay + 0.14 + Math.min(index * 0.08, 1.4)
+  const fillDelay = startDelay + 0.12 + Math.min(index * 0.08, 1.4)
+
+  // Barrido de IZQUIERDA a derecha con borde MUY ancho y suave (máscara horizontal
+  // animada). El grano se añade con una textura de ruido encima del color.
+  const p = useMotionValue(-70)
+  useEffect(() => {
+    const reduce =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (!entered) {
+      p.set(-70)
+      return
+    }
+    if (reduce) {
+      p.set(150)
+      return
+    }
+    const controls = fmAnimate(p, 150, {
+      duration: 1.5,
+      delay: fillDelay,
+      ease: [0.33, 1, 0.68, 1],
+    })
+    return () => controls.stop()
+  }, [entered, fillDelay, p])
+  // Borde de la máscara de ~70% de ancho => degradado extremo (nada sólido).
+  const maskImg = useMotionTemplate`linear-gradient(90deg, #000 ${p}%, rgba(0,0,0,0) calc(${p}% + 70%))`
+
   return (
     <motion.button
       type="button"
@@ -83,17 +119,11 @@ function SubjectCard({
       {/* Base gris */}
       <span className="pointer-events-none absolute inset-0" style={{ background: GREY }} />
 
-      {/* Capa de color que RELLENA la tarjeta (gris -> color), de abajo a arriba,
-          suave y orgánica, escalonada en orden como el mapa de actividad. */}
+      {/* Capa de color que RELLENA la tarjeta de izquierda a derecha con un borde
+          de degradado muy amplio y granular; el gris se ve por debajo. */}
       <motion.span
         className="pointer-events-none absolute inset-0"
-        initial={{ clipPath: 'inset(100% 0% 0% 0%)' }}
-        animate={
-          entered
-            ? { clipPath: 'inset(0% 0% 0% 0%)' }
-            : { clipPath: 'inset(100% 0% 0% 0%)' }
-        }
-        transition={{ duration: 1.15, delay: fillDelay, ease: [0.33, 1, 0.68, 1] }}
+        style={{ WebkitMaskImage: maskImg, maskImage: maskImg }}
       >
         {gf > 0 ? (
           <>
@@ -106,10 +136,17 @@ function SubjectCard({
             <span className="galactic-stars pointer-events-none absolute inset-[2.5px] rounded-[6px]" />
           </>
         ) : (
-          <span
-            className="absolute inset-0"
-            style={{ background: `linear-gradient(140deg, ${bg}, ${bgDark})` }}
-          />
+          <>
+            <span
+              className="absolute inset-0"
+              style={{ background: `linear-gradient(140deg, ${bg}, ${bgDark})` }}
+            />
+            {/* Grano */}
+            <span
+              className="absolute inset-0 opacity-[0.35] mix-blend-overlay"
+              style={{ backgroundImage: GRAIN_URL, backgroundSize: '150px 150px' }}
+            />
+          </>
         )}
       </motion.span>
 
