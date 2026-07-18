@@ -318,10 +318,10 @@ export default function DashboardPage() {
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  // Respuesta por pregunta: índice 0-based de la opción, 'blank' si el usuario
-  // la deja en blanco a propósito (no puntúa ni penaliza), o null si aún no ha
-  // decidido. Avanzar sin marcar también la deja en blanco.
-  const [selectedAnswers, setSelectedAnswers] = useState<(number | 'blank' | null)[]>([])
+  // Respuesta por pregunta: índice 0-based de la opción marcada, o null si aún
+  // no se ha respondido. En el daily es obligatorio elegir una opción (no se
+  // permite dejar en blanco), por eso no hay estado intermedio "blank".
+  const [selectedAnswers, setSelectedAnswers] = useState<(number | null)[]>([])
   const [timeSpentSeconds, setTimeSpentSeconds] = useState<number[]>([])
   const [userId, setUserId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -1762,11 +1762,11 @@ export default function DashboardPage() {
       .map((question) => question.subject)
       .filter(Boolean)
 
-  const handleSubmit = async (answersOverride?: (number | 'blank' | null)[]) => {
+  const handleSubmit = async (answersOverride?: (number | null)[]) => {
     if (!userId) return
     if (isSubmitting) return
     const answersToSend = answersOverride ?? selectedAnswers
-    // Todas las preguntas deben estar decididas: opción marcada o en blanco.
+    // Todas las preguntas deben tener una opción marcada (no se permite blanco).
     if (answersToSend.some((answer) => answer === null)) return
     const effectiveTimeSpent = getEffectiveTimeSpent()
     setTimeSpentSeconds(effectiveTimeSpent)
@@ -1776,8 +1776,8 @@ export default function DashboardPage() {
         const answer = answersToSend[index]
         return {
           questionId: question.id,
-          // null = en blanco; el backend lo registra sin opción marcada.
-          selectedOption: answer === 'blank' || answer == null ? null : answer + 1,
+          // En el daily siempre hay una opción marcada (1..5); null es defensivo.
+          selectedOption: answer == null ? null : answer + 1,
           timeSpent: effectiveTimeSpent[index] ?? 0,
         }
       })
@@ -1856,28 +1856,13 @@ export default function DashboardPage() {
   }
 
   const handleNext = () => {
-    // Avanzar sin marcar opción = dejar la pregunta en blanco (como en el MIR).
-    let effectiveAnswers = selectedAnswers
-    if (selectedAnswers[currentQuestionIndex] == null) {
-      effectiveAnswers = [...selectedAnswers]
-      effectiveAnswers[currentQuestionIndex] = 'blank'
-      setSelectedAnswers(effectiveAnswers)
-    }
+    // En el daily es obligatorio elegir una opción: no se avanza sin marcar.
+    if (selectedAnswers[currentQuestionIndex] == null) return
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1)
       return
     }
-    // Pasamos las respuestas efectivas: el setState de justo arriba aún no se
-    // ha aplicado cuando se envía la última pregunta.
-    void handleSubmit(effectiveAnswers)
-  }
-
-  const handleBlankCurrent = () => {
-    setSelectedAnswers((prev) => {
-      const next = [...prev]
-      next[currentQuestionIndex] = prev[currentQuestionIndex] === 'blank' ? null : 'blank'
-      return next
-    })
+    void handleSubmit()
   }
 
   const handlePrevious = () => {
@@ -4456,34 +4441,6 @@ export default function DashboardPage() {
                   })}
                 </div>
 
-                {/* Dejar en blanco: en el MIR los blancos no puntúan ni penalizan */}
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleBlankCurrent}
-                    className={`flex items-center gap-2 rounded-2xl border-2 px-5 py-3 text-sm font-semibold transition-all ${
-                      currentSelection === 'blank'
-                        ? 'border-[#7D8A96]/50 bg-[#7D8A96]/10 text-[#4B5563]'
-                        : 'border-[#E9E4E1] bg-white text-[#7D8A96] hover:border-[#7D8A96]/40 hover:text-[#2D3748]'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-lg">
-                      {currentSelection === 'blank' ? 'check_circle' : 'block'}
-                    </span>
-                    {currentSelection === 'blank' ? 'Pregunta en blanco' : 'Dejar en blanco'}
-                  </button>
-                  {currentSelection === 'blank' ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#7D8A96]/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-[#7D8A96]">
-                      <span className="material-symbols-outlined text-sm">info</span>
-                      No puntúa ni penaliza
-                    </span>
-                  ) : currentSelection == null ? (
-                    <span className="text-xs font-medium text-[#9CA3AF]">
-                      Si avanzas sin marcar, la pregunta quedará en blanco.
-                    </span>
-                  ) : null}
-                </div>
-
                 <div className="pt-8 flex flex-wrap justify-between items-center gap-4">
                   <button className="flex items-center gap-2 text-[#9CA3AF] hover:text-[#7D8A96] text-sm font-semibold transition-colors">
                     <span className="material-symbols-outlined text-lg">
@@ -4508,6 +4465,7 @@ export default function DashboardPage() {
                       onClick={handleNext}
                       disabled={
                         isSubmitting ||
+                        currentSelection == null ||
                         (!userId && currentQuestionIndex === questions.length - 1)
                       }
                       className={`flex items-center gap-3 px-8 py-4 bg-[#E8A598] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#E8A598]/20 disabled:opacity-40 disabled:cursor-not-allowed ${
