@@ -77,12 +77,12 @@ export default function FlashcardDecksSection({ token }: { token: string }) {
   }
 
   return (
-    <section className="mt-12 border-t border-[#E6DEDA] pt-8">
+    <section>
       <div className="mb-5 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-[#8BA888]">style</span>
+        <div className="flex items-center gap-3">
+          <span className="material-symbols-outlined text-3xl text-[#8BA888]">style</span>
           <div>
-            <h2 className="text-2xl font-black tracking-tight text-slate-800">Flashcards</h2>
+            <h2 className="text-3xl font-black tracking-tight text-slate-800">Flashcards</h2>
             <p className="text-sm text-slate-500">
               Tus tarjetas de repaso, organizadas en grupos. No cuentan para tus estadísticas.
             </p>

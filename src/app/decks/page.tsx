@@ -16,7 +16,6 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import GooFissionLoader from '@/components/studio/GooFissionLoader'
 import UndoDeleteToast from '@/components/studio/UndoDeleteToast'
-import FlashcardDecksSection from '@/components/studio/FlashcardDecksSection'
 import { restoreDeck, softDeleteDeck } from '@/lib/studio/trash'
 import { supabase } from '@/lib/supabaseBrowser'
 
@@ -1605,9 +1604,6 @@ export default function StudioDecksPage() {
               </DndContext>
             )}
           </section>
-
-          {/* Grupos de flashcards personalizadas, debajo de los mazos */}
-          {token ? <FlashcardDecksSection token={token} /> : null}
       </main>
       {undoToast ? (
         <UndoDeleteToast

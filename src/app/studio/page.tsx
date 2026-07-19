@@ -27,9 +27,10 @@ type StudioCard = {
   icon: string
   title: string
   description: string
-  type: 'featured' | 'split-actions' | 'progress' | 'zen'
+  type: 'featured' | 'split-actions' | 'progress' | 'zen' | 'link'
   badge?: string
   cta?: string
+  href?: string
   primaryAction?: string
   secondaryAction?: string
   progress?: number
@@ -92,15 +93,22 @@ const studioCards: ReadonlyArray<StudioCard> = [
     type: 'split-actions',
   },
   {
+    id: 'mazos',
+    icon: 'layers',
+    title: 'Mazos',
+    description: 'Repaso espaciado de tus preguntas guardadas para retenerlas a largo plazo.',
+    cta: 'Ir a mis mazos',
+    href: '/decks',
+    type: 'link',
+  },
+  {
     id: 'flashcards',
     icon: 'style',
-    title: 'Mazos y Flashcards',
-    description: 'Repaso espaciado activo para retener conceptos a largo plazo.',
-    progress: 65,
-    meta: 'META DIARIA (13/20)',
-    linkOne: 'Ir a mis mazos',
-    linkTwo: 'Continuar repaso',
-    type: 'progress',
+    title: 'Flashcards',
+    description: 'Crea y repasa tus propias tarjetas (anverso y reverso) con repetición espaciada.',
+    cta: 'Ir a mis flashcards',
+    href: '/flashcards',
+    type: 'link',
   },
   {
     id: 'sala-zen',
@@ -441,6 +449,16 @@ export default function StudioPage() {
                         {card.secondaryAction}
                       </Link>
                     </div>
+                  ) : null}
+
+                  {card.type === 'link' && card.href ? (
+                    <Link
+                      href={card.href}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#E8A598] px-6 py-3 text-base font-medium text-white shadow-md shadow-[#E8A598]/20 transition-colors hover:bg-[#d18d80] sm:w-auto"
+                    >
+                      {card.cta}
+                      <span className="material-symbols-outlined">arrow_forward</span>
+                    </Link>
                   ) : null}
                 </div>
               </motion.article>

@@ -356,8 +356,8 @@ export default function FlashcardDeckPage() {
         <section className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link
-              href="/decks"
-              aria-label="Volver a mazos"
+              href="/flashcards"
+              aria-label="Volver a flashcards"
               className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#8BA888] text-white transition hover:opacity-90"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
