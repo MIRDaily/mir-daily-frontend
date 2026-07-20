@@ -196,6 +196,32 @@ export async function updateFlashcard(
   if (!res.ok) throw new Error(await readError(res, 'No se pudo actualizar la tarjeta'))
 }
 
+export async function moveFlashcards(
+  token: string,
+  itemIds: number[],
+  targetDeckId: string,
+): Promise<number> {
+  const res = await fetch(`${apiBase()}/api/studio/flashcard-cards/move`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ itemIds, targetDeckId }),
+  })
+  if (!res.ok) throw new Error(await readError(res, 'No se pudieron mover las tarjetas'))
+  const payload = (await res.json().catch(() => null)) as { moved?: number } | null
+  return payload?.moved ?? 0
+}
+
+export async function bulkDeleteFlashcards(token: string, itemIds: number[]): Promise<number> {
+  const res = await fetch(`${apiBase()}/api/studio/flashcard-cards/bulk-delete`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ itemIds }),
+  })
+  if (!res.ok) throw new Error(await readError(res, 'No se pudieron eliminar las tarjetas'))
+  const payload = (await res.json().catch(() => null)) as { deleted?: number } | null
+  return payload?.deleted ?? 0
+}
+
 export async function deleteFlashcard(
   token: string,
   deckId: string,

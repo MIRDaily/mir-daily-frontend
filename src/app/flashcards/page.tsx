@@ -6,6 +6,7 @@
 // los temas se muestran como nodos radiales; las tarjetas, como rejilla.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -13,12 +14,15 @@ import { supabase } from '@/lib/supabaseBrowser'
 import SubjectModal from '@/components/studio/SubjectModal'
 import FlashcardCreateModal from '@/components/studio/FlashcardCreateModal'
 import DropdownMenu from '@/components/studio/DropdownMenu'
-import { resolveColor, resolveIcon } from '@/lib/flashcardTheme'
+import { DEFAULT_COLOR_KEY, SUBJECT_COLORS, resolveColor, resolveIcon } from '@/lib/flashcardTheme'
 import {
+  bulkDeleteFlashcards,
+  createFlashcardDeck,
   deleteFlashcard,
   deleteFlashcardDeck,
   fetchFlashcardDecks,
   fetchFlashcards,
+  moveFlashcards,
   updateFlashcard,
   type Flashcard,
   type FlashcardDeck,
@@ -42,6 +46,11 @@ export default function FlashcardsMindMap() {
   const [subjectModal, setSubjectModal] = useState<null | { existing?: FlashcardDeck }>(null)
   const [createCtx, setCreateCtx] = useState<null | { deckId: string; topic?: string }>(null)
   const [detailCard, setDetailCard] = useState<Flashcard | null>(null)
+
+  // Selección múltiple (tipo galería)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [moveOpen, setMoveOpen] = useState(false)
 
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const [size, setSize] = useState({ w: 900, h: 560 })
@@ -189,6 +198,83 @@ export default function FlashcardsMindMap() {
     }
   }
 
+  // --- Selección múltiple ---------------------------------------------------
+  // Limpiar la selección al cambiar de nivel/rama.
+  useEffect(() => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+    setMoveOpen(false)
+  }, [path])
+
+  const toggleSelect = (itemId: number) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(itemId)) next.delete(itemId)
+      else next.add(itemId)
+      return next
+    })
+
+  const selectAll = () => setSelectedIds(new Set(leafCards.map((c) => c.itemId)))
+  const clearSelection = () => {
+    setSelectedIds(new Set())
+    setSelectMode(false)
+  }
+
+  const removeFromCurrent = (ids: Set<number>) => {
+    if (!currentSubject) return
+    const sid = currentSubject.id
+    setCardsBySubject((prev) => ({
+      ...prev,
+      [sid]: (prev[sid] ?? []).filter((c) => !ids.has(c.itemId)),
+    }))
+    setSubjects((prev) =>
+      prev.map((s) => (s.id === sid ? { ...s, totalCards: Math.max(0, s.totalCards - ids.size) } : s)),
+    )
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!window.confirm(`¿Eliminar ${selectedIds.size} tarjeta(s)? (recuperable 24h)`)) return
+    const ids = new Set(selectedIds)
+    removeFromCurrent(ids)
+    clearSelection()
+    try {
+      await bulkDeleteFlashcards(token, Array.from(ids))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudieron eliminar las tarjetas.')
+      if (currentSubject) {
+        setCardsBySubject((prev) => {
+          const copy = { ...prev }
+          delete copy[currentSubject.id]
+          return copy
+        })
+        void loadCardsFor(currentSubject.id)
+      }
+    }
+  }
+
+  const performMove = async (target: FlashcardDeck) => {
+    if (selectedIds.size === 0 || !currentSubject) return
+    const ids = new Set(selectedIds)
+    setMoveOpen(false)
+    try {
+      const moved = await moveFlashcards(token, Array.from(ids), target.id)
+      removeFromCurrent(ids)
+      setSubjects((prev) =>
+        prev.map((s) => (s.id === target.id ? { ...s, totalCards: s.totalCards + moved } : s)),
+      )
+      // Invalidar cache del destino para que recargue con las nuevas tarjetas
+      setCardsBySubject((prev) => {
+        const copy = { ...prev }
+        delete copy[target.id]
+        return copy
+      })
+      clearSelection()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudieron mover las tarjetas.')
+    }
+  }
+
   // --- Layout radial --------------------------------------------------------
   const center = { x: size.w / 2, y: size.h / 2 }
   const radialCount = level === 0 ? subjects.length : topics.list.length + (topics.noTopic > 0 ? 1 : 0)
@@ -285,7 +371,7 @@ export default function FlashcardsMindMap() {
               <>
                 <button
                   type="button"
-                  onClick={() => router.push(`/flashcards/${currentSubject.id}`)}
+                  onClick={() => router.push(`/flashcards/${currentSubject.id}?study=1`)}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-[#EAE4E2] bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
                 >
                   <span className="material-symbols-outlined text-lg">play_arrow</span>
@@ -355,6 +441,12 @@ export default function FlashcardsMindMap() {
                         topic: level === 2 && path[1] !== NO_TOPIC ? path[1] : undefined,
                       })
                     }
+                    selectMode={selectMode}
+                    selectedIds={selectedIds}
+                    onEnterSelect={() => setSelectMode(true)}
+                    onToggleSelect={toggleSelect}
+                    onSelectAll={selectAll}
+                    onClearSelect={clearSelection}
                   />
                 ) : (
                   <>
@@ -479,6 +571,64 @@ export default function FlashcardsMindMap() {
         ) : null}
       </AnimatePresence>
 
+      {/* Barra de acciones de la selección (tipo galería) */}
+      <AnimatePresence>
+        {selectMode && selectedIds.size > 0 ? (
+          <motion.div
+            initial={{ y: 70, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 70, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+            className="fixed inset-x-0 bottom-5 z-[250] flex justify-center px-4"
+          >
+            <div className="flex items-center gap-2 rounded-2xl border border-[#EAE4E2] bg-white/95 px-3 py-2 shadow-2xl shadow-black/10 backdrop-blur">
+              <span className="px-2 text-sm font-bold text-slate-700">
+                {selectedIds.size} seleccionada{selectedIds.size === 1 ? '' : 's'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setMoveOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#8BA888] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                <span className="material-symbols-outlined text-lg">drive_file_move</span>
+                Mover a grupo
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleBulkDelete()}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#C4655A] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                <span className="material-symbols-outlined text-lg">delete</span>
+                Eliminar
+              </button>
+              <button
+                type="button"
+                onClick={clearSelection}
+                aria-label="Cancelar selección"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {moveOpen ? (
+          <MoveCardsModal
+            token={token}
+            subjects={subjects.filter((s) => s.id !== currentSubject?.id)}
+            count={selectedIds.size}
+            onSubjectCreated={(deck) =>
+              setSubjects((prev) => [...prev, { ...deck, totalCards: 0, dueCards: 0 }])
+            }
+            onPick={(deck) => void performMove(deck)}
+            onClose={() => setMoveOpen(false)}
+          />
+        ) : null}
+      </AnimatePresence>
+
       <style jsx>{`
         .fc-pulse {
           animation: fcPulse 2.2s ease-in-out infinite;
@@ -575,6 +725,12 @@ function LeafGrid({
   backLabel,
   onSelect,
   onCreate,
+  selectMode,
+  selectedIds,
+  onEnterSelect,
+  onToggleSelect,
+  onSelectAll,
+  onClearSelect,
 }: {
   cards: Flashcard[]
   loading: boolean
@@ -583,10 +739,17 @@ function LeafGrid({
   backLabel: string
   onSelect: (c: Flashcard) => void
   onCreate: () => void
+  selectMode: boolean
+  selectedIds: Set<number>
+  onEnterSelect: () => void
+  onToggleSelect: (itemId: number) => void
+  onSelectAll: () => void
+  onClearSelect: () => void
 }) {
+  const allSelected = cards.length > 0 && cards.every((c) => selectedIds.has(c.itemId))
   return (
     <div className="absolute inset-0 flex flex-col p-5">
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={onBack}
@@ -598,6 +761,36 @@ function LeafGrid({
         <span className="text-sm font-semibold text-slate-400">
           {cards.length} {cards.length === 1 ? 'tarjeta' : 'tarjetas'}
         </span>
+        <div className="ml-auto flex items-center gap-2">
+          {cards.length > 0 && !selectMode ? (
+            <button
+              type="button"
+              onClick={onEnterSelect}
+              className="inline-flex items-center gap-1 rounded-lg border border-[#EAE4E2] bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+            >
+              <span className="material-symbols-outlined text-base">check_box</span>
+              Seleccionar
+            </button>
+          ) : null}
+          {selectMode ? (
+            <>
+              <button
+                type="button"
+                onClick={allSelected ? onClearSelect : onSelectAll}
+                className="rounded-lg border border-[#EAE4E2] bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                {allSelected ? 'Ninguna' : 'Todo'}
+              </button>
+              <button
+                type="button"
+                onClick={onClearSelect}
+                className="rounded-lg border border-[#EAE4E2] bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+            </>
+          ) : null}
+        </div>
       </div>
       {loading ? (
         <div className="flex flex-1 items-center justify-center text-slate-400">Cargando tarjetas…</div>
@@ -616,24 +809,44 @@ function LeafGrid({
         </div>
       ) : (
         <div className="grid flex-1 auto-rows-min grid-cols-2 gap-3 overflow-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">
-          {cards.map((c) => (
-            <button
-              key={c.itemId}
-              type="button"
-              onClick={() => onSelect(c)}
-              className="flex h-28 flex-col rounded-2xl border border-[#EAE4E2] bg-white p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
-            >
-              {c.topic ? (
-                <span
-                  className="mb-1 w-fit max-w-full truncate rounded-full px-2 py-0.5 text-[10px] font-bold"
-                  style={{ background: color.soft, color: color.text }}
-                >
-                  {c.topic}
-                </span>
-              ) : null}
-              <span className="line-clamp-3 flex-1 text-sm font-semibold text-slate-800">{c.front}</span>
-            </button>
-          ))}
+          {cards.map((c) => {
+            const checked = selectedIds.has(c.itemId)
+            return (
+              <button
+                key={c.itemId}
+                type="button"
+                onClick={() => (selectMode ? onToggleSelect(c.itemId) : onSelect(c))}
+                className={`relative flex h-28 flex-col rounded-2xl border p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                  checked ? 'border-transparent ring-2' : 'border-[#EAE4E2]'
+                }`}
+                style={{
+                  background: checked ? color.soft : '#fff',
+                  ...(checked ? ({ ['--tw-ring-color' as string]: color.ring } as React.CSSProperties) : {}),
+                }}
+              >
+                {selectMode ? (
+                  <span
+                    className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full border-2 text-white"
+                    style={{
+                      background: checked ? color.bg : 'rgba(255,255,255,0.85)',
+                      borderColor: checked ? color.bg : '#CBBFB8',
+                    }}
+                  >
+                    {checked ? <span className="material-symbols-outlined text-[15px]">check</span> : null}
+                  </span>
+                ) : null}
+                {c.topic ? (
+                  <span
+                    className="mb-1 w-fit max-w-full truncate rounded-full px-2 py-0.5 text-[10px] font-bold"
+                    style={{ background: checked ? '#fff' : color.soft, color: color.text }}
+                  >
+                    {c.topic}
+                  </span>
+                ) : null}
+                <span className="line-clamp-3 flex-1 pr-6 text-sm font-semibold text-slate-800">{c.front}</span>
+              </button>
+            )
+          })}
         </div>
       )}
     </div>
@@ -739,5 +952,149 @@ function CardDetail({
         </div>
       </motion.div>
     </motion.div>
+  )
+}
+
+function MoveCardsModal({
+  token,
+  subjects,
+  count,
+  onSubjectCreated,
+  onPick,
+  onClose,
+}: {
+  token: string
+  subjects: FlashcardDeck[]
+  count: number
+  onSubjectCreated: (deck: FlashcardDeck) => void
+  onPick: (deck: FlashcardDeck) => void
+  onClose: () => void
+}) {
+  const [creating, setCreating] = useState(false)
+  const [name, setName] = useState('')
+  const [colorKey, setColorKey] = useState(DEFAULT_COLOR_KEY)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const createAndMove = async () => {
+    if (busy || name.trim().length < 3) return
+    setBusy(true)
+    setError(null)
+    try {
+      const deck = await createFlashcardDeck(token, { name, color: colorKey, icon: 'style' })
+      onSubjectCreated(deck)
+      onPick(deck)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo crear el grupo.')
+      setBusy(false)
+    }
+  }
+
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
+    <motion.div
+      className="fixed inset-0 z-[320] flex items-center justify-center p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, y: 20, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 14, scale: 0.97 }}
+        className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl"
+      >
+        <div className="flex items-center justify-between px-5 py-4">
+          <h2 className="text-base font-black text-slate-800">
+            Mover {count} tarjeta{count === 1 ? '' : 's'}
+          </h2>
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div className="max-h-[60vh] overflow-auto px-5 pb-5">
+          {creating ? (
+            <div className="flex flex-col gap-3 rounded-2xl border border-[#EAE4E2] p-4">
+              <input
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void createAndMove()
+                  }
+                }}
+                placeholder="Nombre del nuevo grupo"
+                className="rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2.5 text-sm outline-none focus:bg-white"
+              />
+              <div className="flex flex-wrap gap-2">
+                {SUBJECT_COLORS.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    aria-label={c.label}
+                    onClick={() => setColorKey(c.key)}
+                    className="h-8 w-8 rounded-full transition-transform hover:scale-110"
+                    style={{ background: c.bg, boxShadow: colorKey === c.key ? `0 0 0 2px #fff, 0 0 0 4px ${c.ring}` : undefined }}
+                  />
+                ))}
+              </div>
+              {error ? <p className="text-sm font-medium text-[#C4655A]">{error}</p> : null}
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setCreating(false)} className="rounded-lg border border-[#EAE4E2] px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                  Atrás
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void createAndMove()}
+                  disabled={busy || name.trim().length < 3}
+                  className="rounded-lg px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+                  style={{ background: resolveColor(colorKey).bg }}
+                >
+                  {busy ? 'Moviendo…' : 'Crear y mover'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                className="flex items-center gap-2 rounded-xl border-2 border-dashed border-[#D8CDC7] px-4 py-3 text-sm font-bold text-slate-600 transition hover:border-[#8BA888] hover:bg-[#F6F8F5]"
+              >
+                <span className="material-symbols-outlined text-[#8BA888]">add</span>
+                Crear grupo nuevo
+              </button>
+              {subjects.length === 0 ? (
+                <p className="px-1 py-3 text-center text-sm text-slate-400">No hay otras asignaturas. Crea un grupo nuevo.</p>
+              ) : (
+                subjects.map((s) => {
+                  const c = resolveColor(s.color)
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => onPick(s)}
+                      className="flex items-center gap-3 rounded-xl border border-[#EAE4E2] bg-white px-3 py-2.5 text-left transition hover:bg-slate-50"
+                    >
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl text-white" style={{ background: c.bg }}>
+                        <span className="material-symbols-outlined text-lg">{resolveIcon(s.icon)}</span>
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-800">{s.name}</span>
+                      <span className="text-xs font-semibold text-slate-400">{s.totalCards}</span>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>,
+    document.body,
   )
 }

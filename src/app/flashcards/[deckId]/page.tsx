@@ -5,7 +5,7 @@
 // volteables. El estudio reutiliza el motor de sesiones de los mazos y NO
 // cuenta para las estadísticas globales.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseBrowser'
@@ -183,6 +183,22 @@ export default function FlashcardDeckPage() {
       setBusy(false)
     }
   }
+
+  // Auto-iniciar el estudio si se llega con ?study=1 (botón "Estudiar" del mapa).
+  // Leemos el query desde window para evitar el requisito de Suspense de
+  // useSearchParams en el build.
+  const autoStudyRef = useRef(false)
+  useEffect(() => {
+    if (autoStudyRef.current) return
+    if (loading || mode !== 'manage' || cards.length === 0) return
+    const wantStudy =
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('study') === '1'
+    if (!wantStudy) return
+    autoStudyRef.current = true
+    void handleStartStudy()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, mode, cards.length])
 
   const handleRate = useCallback(
     async (knew: boolean) => {
