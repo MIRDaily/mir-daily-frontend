@@ -10,8 +10,9 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseBrowser'
 import DropdownMenu from '@/components/studio/DropdownMenu'
+import FlashcardCreateModal from '@/components/studio/FlashcardCreateModal'
+import { resolveColor } from '@/lib/flashcardTheme'
 import {
-  createFlashcard,
   deleteFlashcard,
   endFlashcardSession,
   fetchFlashcards,
@@ -31,15 +32,14 @@ export default function FlashcardDeckPage() {
 
   const [token, setToken] = useState('')
   const [deckName, setDeckName] = useState('')
+  const [deckColor, setDeckColor] = useState<string | null>(null)
   const [cards, setCards] = useState<Flashcard[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<Mode>('manage')
 
-  // Alta de tarjeta
-  const [newFront, setNewFront] = useState('')
-  const [newBack, setNewBack] = useState('')
-  const [adding, setAdding] = useState(false)
+  // Alta de tarjeta (modal)
+  const [showCreate, setShowCreate] = useState(false)
 
   // Edición
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -63,6 +63,7 @@ export default function FlashcardDeckPage() {
       try {
         const { deck, cards: list } = await fetchFlashcards(authToken, deckId)
         setDeckName(deck.name || 'Grupo de flashcards')
+        setDeckColor(deck.color ?? null)
         setCards(list)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'No se pudo cargar el grupo.')
@@ -95,23 +96,6 @@ export default function FlashcardDeckPage() {
   }, [load])
 
   // ---- Gestión de tarjetas -------------------------------------------------
-
-  const handleAdd = async () => {
-    if (adding) return
-    if (!newFront.trim() || !newBack.trim()) return
-    setAdding(true)
-    setError(null)
-    try {
-      const card = await createFlashcard(token, deckId, { front: newFront, back: newBack })
-      setCards((prev) => [card, ...prev])
-      setNewFront('')
-      setNewBack('')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo crear la tarjeta.')
-    } finally {
-      setAdding(false)
-    }
-  }
 
   const startEdit = (card: Flashcard) => {
     setEditingId(card.flashcardId)
@@ -504,15 +488,29 @@ export default function FlashcardDeckPage() {
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => void handleStartStudy()}
-            disabled={cards.length === 0 || busy}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#E8A598] px-5 py-3 text-sm font-bold text-white shadow-md shadow-[#E8A598]/25 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <span className="material-symbols-outlined text-lg">play_arrow</span>
-            Estudiar
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="fc-create-btn inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white shadow-md transition-opacity hover:opacity-90"
+              style={{
+                background: resolveColor(deckColor).bg,
+                boxShadow: `0 10px 24px -10px ${resolveColor(deckColor).bg}`,
+              }}
+            >
+              <span className="material-symbols-outlined text-lg">bolt</span>
+              Crear tarjetas
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleStartStudy()}
+              disabled={cards.length === 0 || busy}
+              className="inline-flex items-center gap-2 rounded-xl border border-[#EAE4E2] bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition-opacity hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-lg">play_arrow</span>
+              Estudiar
+            </button>
+          </div>
         </section>
 
         {error ? (
@@ -520,46 +518,6 @@ export default function FlashcardDeckPage() {
             {error}
           </p>
         ) : null}
-
-        {/* Alta de tarjeta */}
-        <section className="mb-8 rounded-2xl border border-[#EAE4E2] bg-white p-5 shadow-sm">
-          <div className="mb-3 flex items-center gap-2">
-            <span className="material-symbols-outlined text-[20px] text-[#8BA888]">add_circle</span>
-            <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Nueva tarjeta</h2>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-400">Anverso</label>
-              <textarea
-                value={newFront}
-                onChange={(e) => setNewFront(e.target.value)}
-                placeholder="Pregunta o concepto"
-                rows={3}
-                className="w-full resize-y rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2 text-sm outline-none transition focus:border-[#8BA888] focus:bg-white"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-400">Reverso</label>
-              <textarea
-                value={newBack}
-                onChange={(e) => setNewBack(e.target.value)}
-                placeholder="Respuesta o explicación"
-                rows={3}
-                className="w-full resize-y rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2 text-sm outline-none transition focus:border-[#8BA888] focus:bg-white"
-              />
-            </div>
-          </div>
-          <div className="mt-3 flex justify-end">
-            <button
-              type="button"
-              onClick={() => void handleAdd()}
-              disabled={adding || !newFront.trim() || !newBack.trim()}
-              className="rounded-xl bg-[#8BA888] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {adding ? 'Añadiendo...' : 'Añadir tarjeta'}
-            </button>
-          </div>
-        </section>
 
         {/* Lista de tarjetas */}
         <section>
@@ -574,7 +532,15 @@ export default function FlashcardDeckPage() {
             <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-[#D8CDC7] bg-white/50 p-12 text-center">
               <span className="material-symbols-outlined text-4xl text-[#CBBFB8]">style</span>
               <p className="font-semibold text-slate-600">Aún no hay tarjetas</p>
-              <p className="text-sm text-slate-400">Crea la primera con el formulario de arriba.</p>
+              <p className="text-sm text-slate-400">Pulsa «Crear tarjetas» para empezar.</p>
+              <button
+                type="button"
+                onClick={() => setShowCreate(true)}
+                className="mt-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:opacity-90"
+                style={{ background: resolveColor(deckColor).bg }}
+              >
+                Crear tarjetas
+              </button>
             </div>
           ) : (
             <ul className="space-y-3">
@@ -619,22 +585,29 @@ export default function FlashcardDeckPage() {
                     </div>
                   ) : (
                     <div className="flex items-start justify-between gap-4">
-                      <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-2">
-                        <div className="min-w-0">
-                          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#C99A8D]">
-                            Anverso
+                      <div className="min-w-0 flex-1">
+                        {card.topic ? (
+                          <span className="mb-2 inline-block rounded-full bg-[#8BA888]/12 px-2 py-0.5 text-[10px] font-bold text-[#5C7A59]">
+                            {card.topic}
                           </span>
-                          <p className="whitespace-pre-wrap break-words text-sm font-semibold text-slate-800">
-                            {card.front}
-                          </p>
-                        </div>
-                        <div className="min-w-0 md:border-l md:border-[#EFE7E3] md:pl-3">
-                          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#7FA07B]">
-                            Reverso
-                          </span>
-                          <p className="whitespace-pre-wrap break-words text-sm text-slate-600">
-                            {card.back}
-                          </p>
+                        ) : null}
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="min-w-0">
+                            <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#C99A8D]">
+                              Anverso
+                            </span>
+                            <p className="whitespace-pre-wrap break-words text-sm font-semibold text-slate-800">
+                              {card.front}
+                            </p>
+                          </div>
+                          <div className="min-w-0 md:border-l md:border-[#EFE7E3] md:pl-3">
+                            <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#7FA07B]">
+                              Reverso
+                            </span>
+                            <p className="whitespace-pre-wrap break-words text-sm text-slate-600">
+                              {card.back}
+                            </p>
+                          </div>
                         </div>
                       </div>
                       <DropdownMenu
@@ -657,6 +630,28 @@ export default function FlashcardDeckPage() {
           )}
         </section>
       </main>
+
+      {showCreate ? (
+        <FlashcardCreateModal
+          token={token}
+          deckId={deckId}
+          subjectName={deckName}
+          colorKey={deckColor}
+          initialCount={cards.length}
+          onCreated={(card) => setCards((prev) => [card, ...prev])}
+          onClose={() => setShowCreate(false)}
+        />
+      ) : null}
+
+      <style jsx>{`
+        .fc-create-btn {
+          animation: fcCreatePulse 2.4s ease-in-out infinite;
+        }
+        @keyframes fcCreatePulse {
+          0%, 100% { transform: translateY(0); filter: brightness(1); }
+          50% { transform: translateY(-2px); filter: brightness(1.06); }
+        }
+      `}</style>
     </div>
   )
 }

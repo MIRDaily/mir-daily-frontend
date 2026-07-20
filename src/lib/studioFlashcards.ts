@@ -11,6 +11,8 @@ export type FlashcardDeck = {
   id: string
   name: string
   description?: string | null
+  color?: string | null
+  icon?: string | null
   created_at?: string | null
   position?: number | null
   totalCards: number
@@ -22,6 +24,7 @@ export type Flashcard = {
   flashcardId: string
   front: string
   back: string
+  topic?: string | null
   subject_id?: number | null
   topic_id?: number | null
   added_at?: string | null
@@ -88,17 +91,32 @@ export async function fetchFlashcardDecks(token: string): Promise<FlashcardDeck[
 
 export async function createFlashcardDeck(
   token: string,
-  name: string,
-  description?: string,
+  input: { name: string; color?: string; icon?: string; description?: string },
 ): Promise<FlashcardDeck> {
   const res = await fetch(`${apiBase()}/api/studio/flashcard-decks`, {
     method: 'POST',
     headers: authHeaders(token, true),
-    body: JSON.stringify({ name, description }),
+    body: JSON.stringify(input),
   })
-  if (!res.ok) throw new Error(await readError(res, 'No se pudo crear el grupo'))
+  if (!res.ok) throw new Error(await readError(res, 'No se pudo crear la asignatura'))
   const payload = (await res.json().catch(() => null)) as { deck?: FlashcardDeck } | null
-  if (!payload?.deck) throw new Error('Respuesta invalida al crear el grupo')
+  if (!payload?.deck) throw new Error('Respuesta invalida al crear la asignatura')
+  return payload.deck
+}
+
+export async function updateFlashcardDeck(
+  token: string,
+  deckId: string,
+  patch: { name?: string; color?: string; icon?: string; description?: string },
+): Promise<FlashcardDeck> {
+  const res = await fetch(`${apiBase()}/api/studio/flashcard-decks/${deckId}`, {
+    method: 'PATCH',
+    headers: authHeaders(token, true),
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) throw new Error(await readError(res, 'No se pudo actualizar la asignatura'))
+  const payload = (await res.json().catch(() => null)) as { deck?: FlashcardDeck } | null
+  if (!payload?.deck) throw new Error('Respuesta invalida al actualizar la asignatura')
   return payload.deck
 }
 
@@ -123,16 +141,24 @@ export async function restoreFlashcardDeck(token: string, deckId: string): Promi
 // Tarjetas
 // ---------------------------------------------------------------------------
 
+export type FlashcardDeckMeta = {
+  id: string
+  name: string
+  description?: string | null
+  color?: string | null
+  icon?: string | null
+}
+
 export async function fetchFlashcards(
   token: string,
   deckId: string,
-): Promise<{ deck: { id: string; name: string; description?: string | null }; cards: Flashcard[] }> {
+): Promise<{ deck: FlashcardDeckMeta; cards: Flashcard[] }> {
   const res = await fetch(`${apiBase()}/api/studio/flashcard-decks/${deckId}/cards`, {
     headers: authHeaders(token),
   })
   if (!res.ok) throw new Error(await readError(res, 'No se pudieron cargar las tarjetas'))
   const payload = (await res.json().catch(() => null)) as {
-    deck?: { id: string; name: string; description?: string | null }
+    deck?: FlashcardDeckMeta
     cards?: Flashcard[]
   } | null
   return {
@@ -144,7 +170,7 @@ export async function fetchFlashcards(
 export async function createFlashcard(
   token: string,
   deckId: string,
-  input: { front: string; back: string; subjectId?: number | null; topicId?: number | null },
+  input: { front: string; back: string; topic?: string; subjectId?: number | null; topicId?: number | null },
 ): Promise<Flashcard> {
   const res = await fetch(`${apiBase()}/api/studio/flashcard-decks/${deckId}/cards`, {
     method: 'POST',
@@ -160,7 +186,7 @@ export async function createFlashcard(
 export async function updateFlashcard(
   token: string,
   flashcardId: string,
-  patch: { front?: string; back?: string; subjectId?: number | null; topicId?: number | null },
+  patch: { front?: string; back?: string; topic?: string; subjectId?: number | null; topicId?: number | null },
 ): Promise<void> {
   const res = await fetch(`${apiBase()}/api/studio/flashcards/${flashcardId}`, {
     method: 'PATCH',
