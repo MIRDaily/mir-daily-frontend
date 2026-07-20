@@ -196,19 +196,36 @@ export async function updateFlashcard(
   if (!res.ok) throw new Error(await readError(res, 'No se pudo actualizar la tarjeta'))
 }
 
+export type BulkResult = { done: number; alreadyThere: number }
+
 export async function moveFlashcards(
   token: string,
   itemIds: number[],
   targetDeckId: string,
-): Promise<number> {
+): Promise<BulkResult> {
   const res = await fetch(`${apiBase()}/api/studio/flashcard-cards/move`, {
     method: 'POST',
     headers: authHeaders(token, true),
     body: JSON.stringify({ itemIds, targetDeckId }),
   })
   if (!res.ok) throw new Error(await readError(res, 'No se pudieron mover las tarjetas'))
-  const payload = (await res.json().catch(() => null)) as { moved?: number } | null
-  return payload?.moved ?? 0
+  const payload = (await res.json().catch(() => null)) as { moved?: number; alreadyThere?: number } | null
+  return { done: payload?.moved ?? 0, alreadyThere: payload?.alreadyThere ?? 0 }
+}
+
+export async function copyFlashcards(
+  token: string,
+  itemIds: number[],
+  targetDeckId: string,
+): Promise<BulkResult> {
+  const res = await fetch(`${apiBase()}/api/studio/flashcard-cards/copy`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ itemIds, targetDeckId }),
+  })
+  if (!res.ok) throw new Error(await readError(res, 'No se pudieron copiar las tarjetas'))
+  const payload = (await res.json().catch(() => null)) as { copied?: number; alreadyThere?: number } | null
+  return { done: payload?.copied ?? 0, alreadyThere: payload?.alreadyThere ?? 0 }
 }
 
 export async function bulkDeleteFlashcards(token: string, itemIds: number[]): Promise<number> {

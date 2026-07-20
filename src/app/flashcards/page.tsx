@@ -17,6 +17,7 @@ import DropdownMenu from '@/components/studio/DropdownMenu'
 import { DEFAULT_COLOR_KEY, SUBJECT_COLORS, resolveColor, resolveIcon } from '@/lib/flashcardTheme'
 import {
   bulkDeleteFlashcards,
+  copyFlashcards,
   createFlashcardDeck,
   deleteFlashcard,
   deleteFlashcardDeck,
@@ -50,7 +51,8 @@ export default function FlashcardsMindMap() {
   // Selección múltiple (tipo galería)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [moveOpen, setMoveOpen] = useState(false)
+  const [destCtx, setDestCtx] = useState<null | { mode: 'move' | 'copy' }>(null)
+  const [notice, setNotice] = useState<null | { title: string; message: string }>(null)
 
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const [size, setSize] = useState({ w: 900, h: 560 })
@@ -203,7 +205,7 @@ export default function FlashcardsMindMap() {
   useEffect(() => {
     setSelectMode(false)
     setSelectedIds(new Set())
-    setMoveOpen(false)
+    setDestCtx(null)
   }, [path])
 
   const toggleSelect = (itemId: number) =>
@@ -253,25 +255,56 @@ export default function FlashcardsMindMap() {
     }
   }
 
-  const performMove = async (target: FlashcardDeck) => {
+  const performDestination = async (target: FlashcardDeck, mode: 'move' | 'copy') => {
     if (selectedIds.size === 0 || !currentSubject) return
     const ids = new Set(selectedIds)
-    setMoveOpen(false)
+    setDestCtx(null)
     try {
-      const moved = await moveFlashcards(token, Array.from(ids), target.id)
-      removeFromCurrent(ids)
-      setSubjects((prev) =>
-        prev.map((s) => (s.id === target.id ? { ...s, totalCards: s.totalCards + moved } : s)),
-      )
-      // Invalidar cache del destino para que recargue con las nuevas tarjetas
-      setCardsBySubject((prev) => {
-        const copy = { ...prev }
-        delete copy[target.id]
-        return copy
-      })
+      const { done, alreadyThere } =
+        mode === 'move'
+          ? await moveFlashcards(token, Array.from(ids), target.id)
+          : await copyFlashcards(token, Array.from(ids), target.id)
+
+      // Mover saca las tarjetas del grupo actual; copiar las deja donde están.
+      if (mode === 'move' && done > 0) removeFromCurrent(ids)
+
+      if (done > 0) {
+        setSubjects((prev) =>
+          prev.map((s) => (s.id === target.id ? { ...s, totalCards: s.totalCards + done } : s)),
+        )
+        setCardsBySubject((prev) => {
+          const copy = { ...prev }
+          delete copy[target.id]
+          return copy
+        })
+      }
       clearSelection()
+
+      // Aviso si alguna ya estaba en el destino
+      if (alreadyThere > 0) {
+        const verb = mode === 'move' ? 'estaban' : 'existían'
+        setNotice({
+          title:
+            done === 0
+              ? 'Nada que ' + (mode === 'move' ? 'mover' : 'copiar')
+              : mode === 'move'
+                ? 'Movidas parcialmente'
+                : 'Copiadas parcialmente',
+          message:
+            (done > 0
+              ? `${done} ${mode === 'move' ? 'movida' : 'copiada'}${done === 1 ? '' : 's'}. `
+              : '') +
+            `${alreadyThere} ${alreadyThere === 1 ? 'ya' : 'ya'} ${verb} en «${target.name}»${
+              mode === 'copy' ? ' y no se duplicaron' : ''
+            }.`,
+        })
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudieron mover las tarjetas.')
+      setError(
+        err instanceof Error
+          ? err.message
+          : `No se pudieron ${mode === 'move' ? 'mover' : 'copiar'} las tarjetas.`,
+      )
     }
   }
 
@@ -484,6 +517,9 @@ export default function FlashcardsMindMap() {
                         ].map((t, i, arr) => {
                           const p = positionFor(i, arr.length)
                           const c = resolveColor(currentSubject?.color)
+                          const maxCount = Math.max(1, ...arr.map((x) => x.count))
+                          // Diámetro escalado por cantidad (64–124 px)
+                          const size = 64 + Math.round((t.count / maxCount) * 60)
                           return (
                             <motion.div
                               key={t.key}
@@ -493,7 +529,7 @@ export default function FlashcardsMindMap() {
                               style={{ left: p.x, top: p.y }}
                               className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
                             >
-                              <TopicNode label={t.label} count={t.count} color={c} onOpen={() => enterTopic(t.key)} />
+                              <TopicNode label={t.label} count={t.count} size={size} color={c} onOpen={() => enterTopic(t.key)} />
                             </motion.div>
                           )
                         })}
@@ -587,11 +623,19 @@ export default function FlashcardsMindMap() {
               </span>
               <button
                 type="button"
-                onClick={() => setMoveOpen(true)}
+                onClick={() => setDestCtx({ mode: 'copy' })}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#7BA7C4] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                <span className="material-symbols-outlined text-lg">content_copy</span>
+                Copiar
+              </button>
+              <button
+                type="button"
+                onClick={() => setDestCtx({ mode: 'move' })}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-[#8BA888] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
               >
                 <span className="material-symbols-outlined text-lg">drive_file_move</span>
-                Mover a grupo
+                Mover
               </button>
               <button
                 type="button"
@@ -615,17 +659,49 @@ export default function FlashcardsMindMap() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {moveOpen ? (
+        {destCtx ? (
           <MoveCardsModal
+            mode={destCtx.mode}
             token={token}
             subjects={subjects.filter((s) => s.id !== currentSubject?.id)}
             count={selectedIds.size}
             onSubjectCreated={(deck) =>
               setSubjects((prev) => [...prev, { ...deck, totalCards: 0, dueCards: 0 }])
             }
-            onPick={(deck) => void performMove(deck)}
-            onClose={() => setMoveOpen(false)}
+            onPick={(deck) => void performDestination(deck, destCtx.mode)}
+            onClose={() => setDestCtx(null)}
           />
+        ) : null}
+      </AnimatePresence>
+
+      {/* Aviso (p. ej. tarjetas que ya estaban en el destino) */}
+      <AnimatePresence>
+        {notice ? (
+          <motion.div
+            className="fixed inset-0 z-[330] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setNotice(null)} />
+            <motion.div
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              className="relative z-10 w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl"
+            >
+              <span className="material-symbols-outlined text-4xl text-[#E0B15A]">info</span>
+              <h3 className="mt-2 text-lg font-bold text-slate-800">{notice.title}</h3>
+              <p className="mt-1 text-sm text-slate-500">{notice.message}</p>
+              <button
+                type="button"
+                onClick={() => setNotice(null)}
+                className="mt-5 rounded-xl bg-[#2c3e50] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                Entendido
+              </button>
+            </motion.div>
+          </motion.div>
         ) : null}
       </AnimatePresence>
 
@@ -691,29 +767,41 @@ function SubjectNode({
 function TopicNode({
   label,
   count,
+  size,
   color,
   onOpen,
 }: {
   label: string
   count: number
+  size: number
   color: ReturnType<typeof resolveColor>
   onOpen: () => void
 }) {
+  // Burbuja cuyo diámetro refleja la cantidad de tarjetas del tema.
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex w-28 flex-col items-center gap-1.5 rounded-2xl border-2 bg-white px-3 py-3 shadow-md transition-transform hover:scale-105"
-      style={{ borderColor: color.ring }}
-    >
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: color.soft, color: color.text }}>
-        <span className="material-symbols-outlined text-xl">sell</span>
-      </span>
-      <span className="line-clamp-2 text-center text-xs font-bold text-slate-700">{label}</span>
-      <span className="text-[11px] font-semibold" style={{ color: color.text }}>
-        {count} {count === 1 ? 'tarjeta' : 'tarjetas'}
-      </span>
-    </button>
+    <div className="flex w-32 flex-col items-center">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`${label}: ${count} tarjetas`}
+        className="flex flex-col items-center justify-center rounded-full border-2 text-center shadow-md transition-transform hover:scale-105"
+        style={{
+          width: size,
+          height: size,
+          background: color.soft,
+          borderColor: color.ring,
+          color: color.text,
+        }}
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: Math.max(16, size * 0.24) }}>
+          sell
+        </span>
+        <span className="font-black leading-none" style={{ fontSize: Math.max(15, size * 0.26) }}>
+          {count}
+        </span>
+      </button>
+      <span className="mt-1.5 line-clamp-2 max-w-[8rem] text-center text-xs font-bold text-slate-700">{label}</span>
+    </div>
   )
 }
 
@@ -956,6 +1044,7 @@ function CardDetail({
 }
 
 function MoveCardsModal({
+  mode,
   token,
   subjects,
   count,
@@ -963,6 +1052,7 @@ function MoveCardsModal({
   onPick,
   onClose,
 }: {
+  mode: 'move' | 'copy'
   token: string
   subjects: FlashcardDeck[]
   count: number
@@ -970,6 +1060,7 @@ function MoveCardsModal({
   onPick: (deck: FlashcardDeck) => void
   onClose: () => void
 }) {
+  const verb = mode === 'move' ? 'Mover' : 'Copiar'
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [colorKey, setColorKey] = useState(DEFAULT_COLOR_KEY)
@@ -1008,7 +1099,7 @@ function MoveCardsModal({
       >
         <div className="flex items-center justify-between px-5 py-4">
           <h2 className="text-base font-black text-slate-800">
-            Mover {count} tarjeta{count === 1 ? '' : 's'}
+            {verb} {count} tarjeta{count === 1 ? '' : 's'}
           </h2>
           <button type="button" onClick={onClose} aria-label="Cerrar" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
             <span className="material-symbols-outlined">close</span>
@@ -1055,7 +1146,7 @@ function MoveCardsModal({
                   className="rounded-lg px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
                   style={{ background: resolveColor(colorKey).bg }}
                 >
-                  {busy ? 'Moviendo…' : 'Crear y mover'}
+                  {busy ? (mode === 'move' ? 'Moviendo…' : 'Copiando…') : `Crear y ${verb.toLowerCase()}`}
                 </button>
               </div>
             </div>
