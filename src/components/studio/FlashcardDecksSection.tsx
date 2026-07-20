@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import DropdownMenu from '@/components/studio/DropdownMenu'
 import {
   createFlashcardDeck,
   deleteFlashcardDeck,
@@ -179,39 +180,34 @@ export default function FlashcardDecksSection({ token }: { token: string }) {
                   router.push(`/flashcards/${deck.id}`)
                 }
               }}
-              className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-[#EAE4E2] bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:border-[#8BA888]/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8BA888]"
+              className={`group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-[#EAE4E2] bg-gradient-to-br from-white to-[#F6F4EF] p-5 shadow-sm transition-all hover:-translate-y-1 hover:border-[#8BA888]/50 hover:shadow-lg hover:shadow-[#8BA888]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8BA888] ${
+                deletingId === deck.id ? 'pointer-events-none opacity-50' : ''
+              }`}
             >
               <div
                 aria-hidden
-                className="pointer-events-none absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-[#8BA888]/10 to-transparent"
+                className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-[#8BA888]/10 blur-2xl transition-opacity group-hover:opacity-100"
               />
               <div className="relative z-10 flex items-start justify-between gap-2">
-                <div className="rounded-xl bg-[#8BA888]/10 p-2.5 text-[#8BA888]">
-                  <span className="material-symbols-outlined">style</span>
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#8BA888]/12 text-[#8BA888] shadow-sm transition-transform group-hover:scale-105">
+                  <span className="material-symbols-outlined text-2xl">style</span>
                 </div>
-                <button
-                  type="button"
-                  aria-label="Enviar grupo a la papelera"
-                  disabled={deletingId === deck.id}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    void handleDelete(deck)
-                  }}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                    <path d="M3 6h18" />
-                    <path d="M8 6V4h8v2" />
-                    <path d="M19 6l-1 14H6L5 6" />
-                    <path d="M10 11v6" />
-                    <path d="M14 11v6" />
-                  </svg>
-                </button>
+                <DropdownMenu
+                  ariaLabel="Acciones del grupo"
+                  items={[
+                    {
+                      label: 'Eliminar grupo',
+                      icon: 'delete',
+                      danger: true,
+                      onSelect: () => void handleDelete(deck),
+                    },
+                  ]}
+                />
               </div>
 
-              <div className="relative z-10 mt-3">
+              <div className="relative z-10 mt-4">
                 <h3 className="truncate text-lg font-bold text-slate-800">{deck.name}</h3>
-                <div className="mt-2 flex items-center gap-3 text-sm text-slate-500">
+                <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
                   <span className="inline-flex items-center gap-1">
                     <span className="material-symbols-outlined text-base">layers</span>
                     {deck.totalCards} {deck.totalCards === 1 ? 'tarjeta' : 'tarjetas'}
@@ -222,11 +218,19 @@ export default function FlashcardDecksSection({ token }: { token: string }) {
                     </span>
                   ) : deck.totalCards > 0 ? (
                     <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#8BA888]">
+                      <span className="material-symbols-outlined text-sm">check_circle</span>
                       Al día
                     </span>
                   ) : null}
                 </div>
               </div>
+
+              <span
+                aria-hidden
+                className="pointer-events-none absolute bottom-4 right-4 z-10 flex h-8 w-8 translate-x-1 items-center justify-center rounded-full bg-[#8BA888] text-white opacity-0 shadow-md transition-all group-hover:translate-x-0 group-hover:opacity-100"
+              >
+                <span className="material-symbols-outlined text-lg">arrow_forward</span>
+              </span>
             </article>
           ))}
         </div>
