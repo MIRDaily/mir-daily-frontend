@@ -12,7 +12,8 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createFlashcard, type Flashcard } from '@/lib/studioFlashcards'
-import { resolveColor } from '@/lib/flashcardTheme'
+import { MAX_FLASHCARD_CHARS, resolveColor } from '@/lib/flashcardTheme'
+import CharCounter from '@/components/studio/CharCounter'
 
 export default function FlashcardCreateModal({
   token,
@@ -76,11 +77,20 @@ export default function FlashcardCreateModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [confirmClose, hasContent])
 
+  const frontOver = front.length > MAX_FLASHCARD_CHARS
+  const backOver = back.length > MAX_FLASHCARD_CHARS
+
   const save = async () => {
     if (saving || full) return
     if (!front.trim() || !back.trim()) {
       setError('Rellena anverso y reverso.')
       if (!front.trim()) frontRef.current?.focus()
+      else backRef.current?.focus()
+      return
+    }
+    if (frontOver || backOver) {
+      setError(`El ${frontOver ? 'anverso' : 'reverso'} supera el límite de ${MAX_FLASHCARD_CHARS.toLocaleString('es-ES')} caracteres.`)
+      if (frontOver) frontRef.current?.focus()
       else backRef.current?.focus()
       return
     }
@@ -192,7 +202,10 @@ export default function FlashcardCreateModal({
           ) : (
             <>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-400">Anverso</label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-400">Anverso</label>
+                  <CharCounter length={front.length} />
+                </div>
                 <textarea
                   ref={frontRef}
                   value={front}
@@ -200,11 +213,16 @@ export default function FlashcardCreateModal({
                   onKeyDown={onFrontKey}
                   rows={3}
                   placeholder="Pregunta o concepto"
-                  className="w-full resize-y rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2 text-sm outline-none transition focus:bg-white"
+                  className={`w-full resize-y rounded-xl border bg-[#FAF7F4] px-3 py-2 text-sm outline-none transition focus:bg-white ${
+                    frontOver ? 'border-[#E8A598]' : 'border-[#EAE4E2]'
+                  }`}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-400">Reverso</label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-400">Reverso</label>
+                  <CharCounter length={back.length} />
+                </div>
                 <textarea
                   ref={backRef}
                   value={back}
@@ -212,7 +230,9 @@ export default function FlashcardCreateModal({
                   onKeyDown={onBackKey}
                   rows={3}
                   placeholder="Respuesta o explicación"
-                  className="w-full resize-y rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2 text-sm outline-none transition focus:bg-white"
+                  className={`w-full resize-y rounded-xl border bg-[#FAF7F4] px-3 py-2 text-sm outline-none transition focus:bg-white ${
+                    backOver ? 'border-[#E8A598]' : 'border-[#EAE4E2]'
+                  }`}
                 />
               </div>
             </>
@@ -237,7 +257,7 @@ export default function FlashcardCreateModal({
               <button
                 type="button"
                 onClick={() => void save()}
-                disabled={saving || full || !front.trim() || !back.trim()}
+                disabled={saving || full || !front.trim() || !back.trim() || frontOver || backOver}
                 className="inline-flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 style={{ background: color.bg, boxShadow: `0 8px 20px -8px ${color.bg}` }}
               >

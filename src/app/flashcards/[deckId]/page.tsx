@@ -11,7 +11,8 @@ import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseBrowser'
 import DropdownMenu from '@/components/studio/DropdownMenu'
 import FlashcardCreateModal from '@/components/studio/FlashcardCreateModal'
-import { resolveColor } from '@/lib/flashcardTheme'
+import CharCounter from '@/components/studio/CharCounter'
+import { MAX_FLASHCARD_CHARS, resolveColor } from '@/lib/flashcardTheme'
 import {
   deleteFlashcard,
   endFlashcardSession,
@@ -105,9 +106,12 @@ export default function FlashcardDeckPage() {
     setEditBack(card.back)
   }
 
+  const editFrontOver = editFront.length > MAX_FLASHCARD_CHARS
+  const editBackOver = editBack.length > MAX_FLASHCARD_CHARS
+
   const handleSaveEdit = async (card: Flashcard) => {
     if (savingEdit) return
-    if (!editFront.trim() || !editBack.trim()) return
+    if (!editFront.trim() || !editBack.trim() || editFrontOver || editBackOver) return
     setSavingEdit(true)
     setError(null)
     try {
@@ -262,6 +266,32 @@ export default function FlashcardDeckPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [mode, finishState, current, revealed, handleRate])
 
+  // Indicador de scroll: muestra un degradado al pie de la tarjeta 3D cuando
+  // el texto no cabe entero, para avisar de que hay más contenido debajo.
+  const frontScrollRef = useRef<HTMLDivElement | null>(null)
+  const backScrollRef = useRef<HTMLDivElement | null>(null)
+  const [frontHasMore, setFrontHasMore] = useState(false)
+  const [backHasMore, setBackHasMore] = useState(false)
+
+  const checkOverflow = useCallback(
+    (el: HTMLDivElement | null, setFlag: (v: boolean) => void) => {
+      if (!el) return
+      setFlag(el.scrollHeight - el.scrollTop - el.clientHeight > 4)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (mode !== 'study') return
+    const check = () => {
+      checkOverflow(frontScrollRef.current, setFrontHasMore)
+      checkOverflow(backScrollRef.current, setBackHasMore)
+    }
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [mode, current, checkOverflow])
+
   // ---- Render --------------------------------------------------------------
 
   // Llegada desde "Estudiar": mostramos la preparación en vez del workspace,
@@ -381,30 +411,52 @@ export default function FlashcardDeckPage() {
                   className={`flip-card ${revealed ? 'is-flipped' : ''}`}
                 >
                   <div className="flip-face flip-front">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#C99A8D]">
-                      Anverso
-                    </span>
-                    <div className="flex flex-1 items-center justify-center">
-                      <p className="whitespace-pre-wrap text-center text-2xl font-semibold leading-relaxed text-slate-800">
-                        {current.flashcard.front}
-                      </p>
+                    <div
+                      ref={frontScrollRef}
+                      onScroll={() => checkOverflow(frontScrollRef.current, setFrontHasMore)}
+                      className="flip-scroll"
+                    >
+                      <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#C99A8D]">
+                        Anverso
+                      </span>
+                      <div className="flex flex-1 items-center justify-center">
+                        <p className="whitespace-pre-wrap text-center text-2xl font-semibold leading-relaxed text-slate-800">
+                          {current.flashcard.front}
+                        </p>
+                      </div>
+                      <span className="text-center text-xs font-medium text-slate-400">
+                        Toca la tarjeta o pulsa <kbd className="kbd">Espacio</kbd> para girar
+                      </span>
                     </div>
-                    <span className="text-center text-xs font-medium text-slate-400">
-                      Toca la tarjeta o pulsa <kbd className="kbd">Espacio</kbd> para girar
-                    </span>
+                    {frontHasMore ? (
+                      <div className="flip-fade flip-fade-front" aria-hidden>
+                        <span className="material-symbols-outlined">expand_more</span>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flip-face flip-back">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#7FA07B]">
-                      Reverso
-                    </span>
-                    <div className="flex flex-1 items-center justify-center">
-                      <p className="whitespace-pre-wrap text-center text-xl leading-relaxed text-slate-700">
-                        {current.flashcard.back}
-                      </p>
+                    <div
+                      ref={backScrollRef}
+                      onScroll={() => checkOverflow(backScrollRef.current, setBackHasMore)}
+                      className="flip-scroll"
+                    >
+                      <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#7FA07B]">
+                        Reverso
+                      </span>
+                      <div className="flex flex-1 items-center justify-center">
+                        <p className="whitespace-pre-wrap text-center text-xl leading-relaxed text-slate-700">
+                          {current.flashcard.back}
+                        </p>
+                      </div>
+                      <span className="text-center text-xs font-medium text-slate-400">
+                        ¿La sabías?
+                      </span>
                     </div>
-                    <span className="text-center text-xs font-medium text-slate-400">
-                      ¿La sabías?
-                    </span>
+                    {backHasMore ? (
+                      <div className="flip-fade flip-fade-back" aria-hidden>
+                        <span className="material-symbols-outlined">expand_more</span>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -473,13 +525,17 @@ export default function FlashcardDeckPage() {
             inset: 0;
             -webkit-backface-visibility: hidden;
             backface-visibility: hidden;
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.25), 0 4px 12px -6px rgba(0, 0, 0, 0.1);
+          }
+          .flip-scroll {
+            height: 100%;
+            overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 1rem;
-            border-radius: 28px;
             padding: 2rem;
-            overflow: auto;
-            box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.25), 0 4px 12px -6px rgba(0, 0, 0, 0.1);
           }
           .flip-front {
             background: linear-gradient(150deg, #ffffff 0%, #fdf6f3 100%);
@@ -489,6 +545,35 @@ export default function FlashcardDeckPage() {
             transform: rotateY(180deg);
             background: linear-gradient(150deg, #ffffff 0%, #f1f6f0 100%);
             border: 1px solid #e0eadd;
+          }
+          /* Indicador de que hay más contenido por debajo (hace falta scroll) */
+          .flip-fade {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 48px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 4px;
+            pointer-events: none;
+            color: #a89a92;
+          }
+          .flip-fade .material-symbols-outlined {
+            font-size: 20px;
+            animation: flipFadeBounce 1.6s ease-in-out infinite;
+          }
+          .flip-fade-front {
+            background: linear-gradient(to bottom, rgba(253, 246, 243, 0) 0%, #fdf6f3 80%);
+          }
+          .flip-fade-back {
+            background: linear-gradient(to bottom, rgba(241, 246, 240, 0) 0%, #f1f6f0 80%);
+            color: #93a892;
+          }
+          @keyframes flipFadeBounce {
+            0%, 100% { transform: translateY(0); opacity: 0.7; }
+            50% { transform: translateY(3px); opacity: 1; }
           }
           .kbd {
             display: inline-flex;
@@ -606,24 +691,40 @@ export default function FlashcardDeckPage() {
                   {editingId === card.flashcardId ? (
                     <div className="flex flex-col gap-3">
                       <div className="grid gap-3 md:grid-cols-2">
-                        <textarea
-                          value={editFront}
-                          onChange={(e) => setEditFront(e.target.value)}
-                          rows={3}
-                          className="w-full resize-y rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2 text-sm outline-none focus:border-[#8BA888] focus:bg-white"
-                        />
-                        <textarea
-                          value={editBack}
-                          onChange={(e) => setEditBack(e.target.value)}
-                          rows={3}
-                          className="w-full resize-y rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2 text-sm outline-none focus:border-[#8BA888] focus:bg-white"
-                        />
+                        <div>
+                          <div className="mb-1 flex items-center justify-between">
+                            <span className="text-xs font-semibold text-slate-400">Anverso</span>
+                            <CharCounter length={editFront.length} />
+                          </div>
+                          <textarea
+                            value={editFront}
+                            onChange={(e) => setEditFront(e.target.value)}
+                            rows={3}
+                            className={`w-full resize-y rounded-xl border bg-[#FAF7F4] px-3 py-2 text-sm outline-none focus:border-[#8BA888] focus:bg-white ${
+                              editFrontOver ? 'border-[#E8A598]' : 'border-[#EAE4E2]'
+                            }`}
+                          />
+                        </div>
+                        <div>
+                          <div className="mb-1 flex items-center justify-between">
+                            <span className="text-xs font-semibold text-slate-400">Reverso</span>
+                            <CharCounter length={editBack.length} />
+                          </div>
+                          <textarea
+                            value={editBack}
+                            onChange={(e) => setEditBack(e.target.value)}
+                            rows={3}
+                            className={`w-full resize-y rounded-xl border bg-[#FAF7F4] px-3 py-2 text-sm outline-none focus:border-[#8BA888] focus:bg-white ${
+                              editBackOver ? 'border-[#E8A598]' : 'border-[#EAE4E2]'
+                            }`}
+                          />
+                        </div>
                       </div>
                       <div className="flex justify-end gap-2">
                         <button
                           type="button"
                           onClick={() => void handleSaveEdit(card)}
-                          disabled={savingEdit || !editFront.trim() || !editBack.trim()}
+                          disabled={savingEdit || !editFront.trim() || !editBack.trim() || editFrontOver || editBackOver}
                           className="rounded-lg bg-[#8BA888] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                         >
                           {savingEdit ? 'Guardando...' : 'Guardar'}

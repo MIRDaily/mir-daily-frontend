@@ -14,7 +14,8 @@ import { supabase } from '@/lib/supabaseBrowser'
 import SubjectModal from '@/components/studio/SubjectModal'
 import FlashcardCreateModal from '@/components/studio/FlashcardCreateModal'
 import DropdownMenu from '@/components/studio/DropdownMenu'
-import { DEFAULT_COLOR_KEY, SUBJECT_COLORS, resolveColor, resolveIcon } from '@/lib/flashcardTheme'
+import { DEFAULT_COLOR_KEY, MAX_FLASHCARD_CHARS, SUBJECT_COLORS, resolveColor, resolveIcon } from '@/lib/flashcardTheme'
+import CharCounter from '@/components/studio/CharCounter'
 import {
   bulkDeleteFlashcards,
   copyFlashcards,
@@ -963,8 +964,11 @@ function CardDetail({
   const [flipped, setFlipped] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  const frontOver = front.length > MAX_FLASHCARD_CHARS
+  const backOver = back.length > MAX_FLASHCARD_CHARS
+
   const save = async () => {
-    if (saving || !front.trim() || !back.trim()) return
+    if (saving || !front.trim() || !back.trim() || frontOver || backOver) return
     setSaving(true)
     try {
       await updateFlashcard(token, card.flashcardId, { front, back, topic: topic.trim() || undefined })
@@ -1004,11 +1008,33 @@ function CardDetail({
           {editing ? (
             <div className="flex flex-col gap-3">
               <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Tema (opcional)" className="rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2 text-sm outline-none focus:bg-white" />
-              <textarea value={front} onChange={(e) => setFront(e.target.value)} rows={3} className="resize-y rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2 text-sm outline-none focus:bg-white" />
-              <textarea value={back} onChange={(e) => setBack(e.target.value)} rows={3} className="resize-y rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2 text-sm outline-none focus:bg-white" />
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Anverso</span>
+                  <CharCounter length={front.length} />
+                </div>
+                <textarea
+                  value={front}
+                  onChange={(e) => setFront(e.target.value)}
+                  rows={3}
+                  className={`w-full resize-y rounded-xl border bg-[#FAF7F4] px-3 py-2 text-sm outline-none focus:bg-white ${frontOver ? 'border-[#E8A598]' : 'border-[#EAE4E2]'}`}
+                />
+              </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Reverso</span>
+                  <CharCounter length={back.length} />
+                </div>
+                <textarea
+                  value={back}
+                  onChange={(e) => setBack(e.target.value)}
+                  rows={3}
+                  className={`w-full resize-y rounded-xl border bg-[#FAF7F4] px-3 py-2 text-sm outline-none focus:bg-white ${backOver ? 'border-[#E8A598]' : 'border-[#EAE4E2]'}`}
+                />
+              </div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-[#EAE4E2] px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
-                <button type="button" onClick={() => void save()} disabled={saving || !front.trim() || !back.trim()} className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-40" style={{ background: color.bg }}>
+                <button type="button" onClick={() => void save()} disabled={saving || !front.trim() || !back.trim() || frontOver || backOver} className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-40" style={{ background: color.bg }}>
                   {saving ? 'Guardando…' : 'Guardar'}
                 </button>
               </div>

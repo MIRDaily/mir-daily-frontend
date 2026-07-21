@@ -52,3 +52,10 @@ export const DEFAULT_ICON = 'style'
 export function resolveIcon(icon?: string | null): string {
   return icon && SUBJECT_ICONS.includes(icon) ? icon : DEFAULT_ICON
 }
+
+// Tope de caracteres por cara de la tarjeta (anverso/reverso), en línea con
+// el límite del backend. No es un límite "de diseño" (Anki tampoco lo
+// impone): es solo protección anti-abuso.
+export const MAX_FLASHCARD_CHARS = 5000
+// A partir de este umbral el contador cambia de color para avisar.
+export const FLASHCARD_CHARS_WARN_AT = 4500
