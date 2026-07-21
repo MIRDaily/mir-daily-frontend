@@ -55,6 +55,8 @@ export default function FlashcardDeckPage() {
   const [busy, setBusy] = useState(false)
   const [studied, setStudied] = useState(0)
   const [finishState, setFinishState] = useState<null | 'done' | 'limit' | 'expired'>(null)
+  // true mientras se prepara el estudio automático (llegada con ?study=1)
+  const [autoStudy, setAutoStudy] = useState(false)
 
   const load = useCallback(
     async (authToken: string) => {
@@ -181,24 +183,33 @@ export default function FlashcardDeckPage() {
       setError(err instanceof Error ? err.message : 'No se pudo iniciar el estudio.')
     } finally {
       setBusy(false)
+      // Deja de "preparar": si fue bien ya estamos en modo estudio; si falló,
+      // se muestra el workspace con el error.
+      setAutoStudy(false)
     }
   }
 
   // Auto-iniciar el estudio si se llega con ?study=1 (botón "Estudiar" del mapa).
   // Leemos el query desde window para evitar el requisito de Suspense de
-  // useSearchParams en el build.
+  // useSearchParams en el build. Mientras se prepara NO se pinta el workspace,
+  // para que no parpadee la lista antes del test.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (new URLSearchParams(window.location.search).get('study') === '1') setAutoStudy(true)
+  }, [])
+
   const autoStudyRef = useRef(false)
   useEffect(() => {
-    if (autoStudyRef.current) return
-    if (loading || mode !== 'manage' || cards.length === 0) return
-    const wantStudy =
-      typeof window !== 'undefined' &&
-      new URLSearchParams(window.location.search).get('study') === '1'
-    if (!wantStudy) return
+    if (!autoStudy || autoStudyRef.current) return
+    if (loading || mode !== 'manage') return
+    if (cards.length === 0) {
+      setAutoStudy(false) // no hay nada que estudiar: mostrar el workspace
+      return
+    }
     autoStudyRef.current = true
     void handleStartStudy()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, mode, cards.length])
+  }, [autoStudy, loading, mode, cards.length])
 
   const handleRate = useCallback(
     async (knew: boolean) => {
@@ -252,6 +263,33 @@ export default function FlashcardDeckPage() {
   }, [mode, finishState, current, revealed, handleRate])
 
   // ---- Render --------------------------------------------------------------
+
+  // Llegada desde "Estudiar": mostramos la preparación en vez del workspace,
+  // así no parpadea la lista de tarjetas antes de arrancar el test.
+  if (autoStudy && mode === 'manage') {
+    const c = resolveColor(deckColor)
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-gradient-to-b from-[#FAF7F4] to-[#F3ECE8] px-6 text-center">
+        <span
+          className="flex h-20 w-20 items-center justify-center rounded-3xl text-white shadow-lg"
+          style={{ background: c.bg, boxShadow: `0 16px 34px -14px ${c.bg}` }}
+        >
+          <span className="material-symbols-outlined text-4xl">style</span>
+        </span>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Flashcards</p>
+          <h1 className="text-2xl font-black text-slate-800">{deckName || 'Preparando…'}</h1>
+        </div>
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
+          <span
+            className="h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
+            style={{ borderColor: c.bg, borderTopColor: 'transparent' }}
+          />
+          Preparando tu sesión de estudio…
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
