@@ -1,10 +1,13 @@
 ﻿'use client'
 
-import { useLayoutEffect, useMemo } from 'react'
+import { useLayoutEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { debugRender } from '@/lib/debugRSC'
 import { useAuth } from '@/hooks/useAuth'
+import { SingleSheetArt, StackedSheetsArt } from '@/components/studio/SimulacrosHoverArt'
+import { DeckArt } from '@/components/studio/MazosHoverArt'
+import { FlipCardArt } from '@/components/studio/FlashcardsHoverArt'
 
 type QuickStat = {
   label: string
@@ -171,6 +174,10 @@ export default function StudioPage() {
   debugRender('StudioPage')
   const { user, loading } = useAuth()
   const reduceMotion = useReducedMotion()
+  const [simulacrosHovered, setSimulacrosHovered] = useState(false)
+  const [simulacrosArtVariant, setSimulacrosArtVariant] = useState<0 | 1>(0)
+  const [mazosHovered, setMazosHovered] = useState(false)
+  const [flashcardsHovered, setFlashcardsHovered] = useState(false)
 
   useLayoutEffect(() => {
     const prevScrollRestoration = window.history.scrollRestoration
@@ -358,9 +365,49 @@ export default function StudioPage() {
                       : 'border-[#EAE4E2] bg-white'
                 }`}
                 {...entranceProps(reduceMotion, 0.32 + index * 0.08, 20, 0.98)}
+                {...(card.id === 'preguntas-simulacros'
+                  ? {
+                      onMouseEnter: () => setSimulacrosHovered(true),
+                      onMouseLeave: () => {
+                        setSimulacrosHovered(false)
+                        setSimulacrosArtVariant((v) => (v === 0 ? 1 : 0))
+                      },
+                    }
+                  : card.id === 'mazos'
+                    ? {
+                        onMouseEnter: () => setMazosHovered(true),
+                        onMouseLeave: () => setMazosHovered(false),
+                      }
+                    : card.id === 'flashcards'
+                      ? {
+                          onMouseEnter: () => setFlashcardsHovered(true),
+                          onMouseLeave: () => setFlashcardsHovered(false),
+                        }
+                      : {})}
               >
+                {card.id === 'preguntas-simulacros' ? (
+                  <AnimatePresence initial={false}>
+                    {simulacrosArtVariant === 0 ? (
+                      <SingleSheetArt key="single" hovered={simulacrosHovered} />
+                    ) : (
+                      <StackedSheetsArt key="stacked" hovered={simulacrosHovered} />
+                    )}
+                  </AnimatePresence>
+                ) : null}
+                {card.id === 'mazos' ? <DeckArt hovered={mazosHovered} /> : null}
+                {card.id === 'flashcards' ? <FlipCardArt hovered={flashcardsHovered} /> : null}
                 <div className="relative z-10 flex h-full flex-col justify-between">
-                  <div>
+                  <div
+                    className={
+                      card.id === 'preguntas-simulacros'
+                        ? 'sm:pr-56'
+                        : card.id === 'mazos'
+                          ? 'sm:pr-72'
+                          : card.id === 'flashcards'
+                            ? 'sm:pr-44'
+                            : undefined
+                    }
+                  >
                     <div className="mb-4 flex items-start justify-between gap-2">
                       <div
                         className={`rounded-xl p-3 ${
