@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { SingleSheetArt, StackedSheetsArt } from '@/components/studio/SimulacrosHoverArt'
 import { DeckArt } from '@/components/studio/MazosHoverArt'
 import { FlipCardArt } from '@/components/studio/FlashcardsHoverArt'
+import { WaveCta } from '@/components/studio/SimulacroWaveArt'
 
 type QuickStat = {
   label: string
@@ -178,6 +179,7 @@ export default function StudioPage() {
   const [simulacrosArtVariant, setSimulacrosArtVariant] = useState<0 | 1>(0)
   const [mazosHovered, setMazosHovered] = useState(false)
   const [flashcardsHovered, setFlashcardsHovered] = useState(false)
+  const [featuredHovered, setFeaturedHovered] = useState(false)
 
   useLayoutEffect(() => {
     const prevScrollRestoration = window.history.scrollRestoration
@@ -357,7 +359,7 @@ export default function StudioPage() {
               <motion.article
                 key={card.id}
                 id={card.id}
-                className={`group relative overflow-hidden rounded-2xl border p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md ${
+                className={`group relative overflow-hidden rounded-2xl border-2 p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-[#2c3e50] hover:shadow-[4px_4px_0_0_#2c3e50] ${
                   card.type === 'featured'
                     ? 'border-[#E8A598]/30 bg-gradient-to-br from-white to-[#fff0ec] md:col-span-2'
                     : card.type === 'zen'
@@ -383,7 +385,12 @@ export default function StudioPage() {
                           onMouseEnter: () => setFlashcardsHovered(true),
                           onMouseLeave: () => setFlashcardsHovered(false),
                         }
-                      : {})}
+                      : card.id === 'simulacros'
+                        ? {
+                            onMouseEnter: () => setFeaturedHovered(true),
+                            onMouseLeave: () => setFeaturedHovered(false),
+                          }
+                        : {})}
               >
                 {card.id === 'preguntas-simulacros' ? (
                   <AnimatePresence initial={false}>
@@ -396,7 +403,17 @@ export default function StudioPage() {
                 ) : null}
                 {card.id === 'mazos' ? <DeckArt hovered={mazosHovered} /> : null}
                 {card.id === 'flashcards' ? <FlipCardArt hovered={flashcardsHovered} /> : null}
-                <div className="relative z-10 flex h-full flex-col justify-between">
+                {card.id === 'simulacros' ? (
+                  <WaveCta hovered={featuredHovered}>
+                    <span className="material-symbols-outlined">play_arrow</span>
+                    {card.cta}
+                  </WaveCta>
+                ) : null}
+                <div
+                  className={`relative z-10 flex h-full flex-col justify-between ${
+                    card.type === 'featured' ? 'pointer-events-none' : ''
+                  }`}
+                >
                   <div
                     className={
                       card.id === 'preguntas-simulacros'
@@ -437,10 +454,7 @@ export default function StudioPage() {
                   </div>
 
                   {card.type === 'featured' ? (
-                    <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#E8A598] px-6 py-3 text-base font-medium text-white shadow-md shadow-[#E8A598]/20 transition-colors hover:bg-[#d18d80] sm:w-auto">
-                      <span className="material-symbols-outlined">play_arrow</span>
-                      {card.cta}
-                    </button>
+                    <div aria-hidden="true" className="pointer-events-none h-[54px]" />
                   ) : null}
 
                   {card.type === 'split-actions' ? (
