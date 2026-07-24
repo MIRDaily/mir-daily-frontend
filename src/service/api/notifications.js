@@ -132,7 +132,20 @@ export function formatNotificationTime(value) {
   }).format(date)
 }
 
+// Los dos avisos del daily son ambos kind='study', asi que sin esto saldrian
+// con el mismo icono. El sobre es la metafora del daily; el reloj marca que
+// esta a punto de expirar.
+const ICON_BY_TYPE = {
+  daily_available: 'mail',
+  daily_expiring: 'hourglass_bottom',
+}
+
 export function resolveNotificationIcon(item) {
+  const type = String(item?.type ?? '').trim().toLowerCase()
+  if (ICON_BY_TYPE[type]) {
+    return ICON_BY_TYPE[type]
+  }
+
   const icon = String(item?.icon ?? '').trim().toLowerCase()
   const kind = String(item?.kind ?? '').trim().toLowerCase()
   const title = String(item?.title ?? '').trim().toLowerCase()

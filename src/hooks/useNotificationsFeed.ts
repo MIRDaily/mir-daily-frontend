@@ -14,6 +14,7 @@ export type NotificationItem = {
   title: string
   body: string
   kind?: 'study' | 'system' | string
+  type?: string
   icon?: string
   unread?: boolean
   createdAt?: string
