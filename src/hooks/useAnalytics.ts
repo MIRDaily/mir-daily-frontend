@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   fetchEffort,
+  fetchMonthlyProgress,
   fetchSubjectHeatmap,
   fetchSubjectTrend,
   fetchTopicHeatmap,
@@ -10,6 +11,7 @@ import {
   type AnalyticsMode,
   type AnalyticsWindow,
   type EffortResponse,
+  type MonthlyProgressResponse,
   type SubjectHeatmapResponse,
   type SubjectTrendResponse,
   type TopicHeatmapResponse,
@@ -151,6 +153,43 @@ export function useSubjectTrend(
       }
     },
     [subjectId, window],
+  )
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void load(controller.signal)
+    return () => controller.abort()
+  }, [load])
+
+  return { data, loading, error, refetch: () => load() }
+}
+
+// Progreso mensual del Studio: volumen del último mes, del previo y del año.
+// enabled=false (p. ej. sesión aún sin resolver) deja el hook inactivo en vez
+// de disparar una petición que el backend rechazaría con 401.
+export function useMonthlyProgress(enabled = true): AsyncState<MonthlyProgressResponse> {
+  const [data, setData] = useState<MonthlyProgressResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!enabled) {
+        setData(null)
+        return
+      }
+      setLoading(true)
+      setError(null)
+      try {
+        setData(await fetchMonthlyProgress(signal))
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        setError(err instanceof Error ? err.message : 'No se pudo cargar el progreso.')
+      } finally {
+        setLoading(false)
+      }
+    },
+    [enabled],
   )
 
   useEffect(() => {

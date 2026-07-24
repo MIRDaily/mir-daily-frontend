@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { debugRender } from '@/lib/debugRSC'
 import { useAuth } from '@/hooks/useAuth'
+import { useMonthlyProgress } from '@/hooks/useAnalytics'
+import type { MonthlyProgressResponse } from '@/services/analyticsService'
 import { SingleSheetArt, StackedSheetsArt } from '@/components/studio/SimulacrosHoverArt'
 import { DeckArt } from '@/components/studio/MazosHoverArt'
 import { FlipCardArt } from '@/components/studio/FlashcardsHoverArt'
@@ -21,6 +23,8 @@ type OverviewCard = {
   title: string
   value: string
   badge?: string
+  /** Color del badge: verde si la tendencia sube, rojo si baja, neutro si no cambia. */
+  badgeTone?: 'up' | 'down' | 'flat'
   description: string
   icon: string
   tone: 'success' | 'error'
@@ -58,23 +62,52 @@ const quickStats: ReadonlyArray<QuickStat> = [
   },
 ] as const
 
-const overviewCards: ReadonlyArray<OverviewCard> = [
-  {
-    title: 'Progreso Mensual',
-    value: '+182',
-    badge: '↑ +5.2%',
-    description: '15.678 preguntas/flashcards realizadas en el último año',
-    icon: 'trending_up',
-    tone: 'success',
-  },
-  {
-    title: 'Punto Débil Detectado',
-    value: 'Digestivo',
-    description: 'Precisión baja en patología esofágica (45%).',
-    icon: 'priority_high',
-    tone: 'error',
-  },
-] as const
+const weakPointCard: OverviewCard = {
+  title: 'Punto Débil Detectado',
+  value: 'Digestivo',
+  description: 'Precisión baja en patología esofágica (45%).',
+  icon: 'priority_high',
+  tone: 'error',
+}
+
+const numberFormat = new Intl.NumberFormat('es-ES')
+
+// "Progreso Mensual" con datos reales: preguntas repasadas en los últimos 30
+// días, su variación frente a los 30 previos y el acumulado del año.
+function buildProgressCard(
+  progress: MonthlyProgressResponse | null,
+  loading: boolean,
+): OverviewCard {
+  const base = { title: 'Progreso Mensual', icon: 'trending_up', tone: 'success' as const }
+
+  if (!progress) {
+    return {
+      ...base,
+      value: '—',
+      description: loading
+        ? 'Calculando tu actividad…'
+        : 'Empieza a repasar para ver aquí tu progreso.',
+    }
+  }
+
+  const { month, year, trendPct } = progress
+  // Mismo volumen que el mes previo no es "subir": ni flecha arriba ni verde.
+  const trendPrefix = trendPct == null ? '' : trendPct > 0 ? '↑ +' : trendPct < 0 ? '↓ ' : '→ '
+
+  return {
+    ...base,
+    value: month.questions > 0 ? `+${numberFormat.format(month.questions)}` : '0',
+    // Sin mes previo con actividad no hay tendencia honesta que enseñar.
+    badge:
+      trendPct == null ? undefined : `${trendPrefix}${numberFormat.format(trendPct)}%`,
+    badgeTone:
+      trendPct == null ? undefined : trendPct > 0 ? 'up' : trendPct < 0 ? 'down' : 'flat',
+    description:
+      year.questions === 1
+        ? '1 pregunta repasada en el último año'
+        : `${numberFormat.format(year.questions)} preguntas repasadas en el último año`,
+  }
+}
 
 const studioCards: ReadonlyArray<StudioCard> = [
   {
@@ -180,6 +213,15 @@ export default function StudioPage() {
   const [mazosHovered, setMazosHovered] = useState(false)
   const [flashcardsHovered, setFlashcardsHovered] = useState(false)
   const [featuredHovered, setFeaturedHovered] = useState(false)
+  const monthlyProgress = useMonthlyProgress(Boolean(user))
+
+  const overviewCards = useMemo<ReadonlyArray<OverviewCard>>(
+    () => [
+      buildProgressCard(monthlyProgress.data, monthlyProgress.loading || loading),
+      weakPointCard,
+    ],
+    [monthlyProgress.data, monthlyProgress.loading, loading],
+  )
 
   useLayoutEffect(() => {
     const prevScrollRestoration = window.history.scrollRestoration
@@ -330,7 +372,15 @@ export default function StudioPage() {
                         {card.value}
                       </p>
                       {card.badge ? (
-                        <span className="rounded-lg bg-[#8BA888]/10 px-2 py-0.5 text-sm font-bold text-[#8BA888]">
+                        <span
+                          className={`rounded-lg px-2 py-0.5 text-sm font-bold ${
+                            card.badgeTone === 'down'
+                              ? 'bg-[#C4655A]/10 text-[#C4655A]'
+                              : card.badgeTone === 'flat'
+                                ? 'bg-[#7D8A96]/10 text-[#7D8A96]'
+                                : 'bg-[#8BA888]/10 text-[#8BA888]'
+                          }`}
+                        >
                           {card.badge}
                         </span>
                       ) : null}

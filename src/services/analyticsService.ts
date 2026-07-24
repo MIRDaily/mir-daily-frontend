@@ -124,6 +124,21 @@ export type SubjectTrendResponse = {
   points: TrendPoint[];
 };
 
+export type MonthlyProgressWindow = {
+  from: string;
+  to: string;
+  /** Preguntas repasadas (acierto + fallo + blanco) en la ventana. */
+  questions: number;
+};
+
+export type MonthlyProgressResponse = {
+  month: MonthlyProgressWindow;
+  previousMonth: MonthlyProgressWindow;
+  year: MonthlyProgressWindow;
+  /** Variación % del último mes frente a los 30 días previos; null si no hubo actividad previa. */
+  trendPct: number | null;
+};
+
 async function fetchWithAuth(path: string, signal?: AbortSignal) {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -205,6 +220,16 @@ export async function fetchEffort(
   const res = await fetchWithAuth(`/api/analytics/effort?${params}`, signal);
   if (!res.ok) {
     throw new Error(await readError(res, `Esfuerzo (${res.status})`));
+  }
+  return res.json();
+}
+
+export async function fetchMonthlyProgress(
+  signal?: AbortSignal,
+): Promise<MonthlyProgressResponse> {
+  const res = await fetchWithAuth("/api/analytics/monthly-progress", signal);
+  if (!res.ok) {
+    throw new Error(await readError(res, `Progreso mensual (${res.status})`));
   }
   return res.json();
 }
