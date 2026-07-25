@@ -234,15 +234,25 @@ function LazyCard({
   className,
   children,
   onInViewChange,
+  once = false,
 }: {
   className: string
   children: ReactNode
   onInViewChange?: (inView: boolean) => void
+  // Por defecto la tarjeta se revela cada vez que vuelve a entrar en el
+  // viewport (comportamiento habitual al hacer scroll por la página). Para
+  // contenido con navegación interna que reposiciona el scroll por su cuenta
+  // (p. ej. el carrusel de revisión del daily), eso compite con su propio
+  // ajuste de scroll: la reaparición de esta tarjeta (opacity/y/scale) se
+  // dispara justo cuando cruza el umbral de visibilidad, desplazando el
+  // contenido despues de que ya se hubiera posicionado. `once` deja la
+  // animación de entrada fija tras la primera vez que se revela.
+  once?: boolean
 }) {
   const ref = useRef<HTMLDivElement | null>(null)
   const inView = useInView(ref, {
     amount: 0.35,
-    once: false,
+    once,
     margin: '0px 0px -10% 0px',
   })
   useEffect(() => {
@@ -4026,7 +4036,7 @@ export default function DashboardPage() {
                     </LazyCard>
                   </div>
                   <div ref={reviewSectionRef} className="w-full">
-                    <LazyCard className="w-full">
+                    <LazyCard className="w-full" once>
                       <DailyReviewCarousel questions={reviewQuestions} />
                     </LazyCard>
                   </div>
