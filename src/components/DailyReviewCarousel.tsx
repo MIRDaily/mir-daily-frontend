@@ -2,6 +2,42 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 
+// El carrusel puede vivir dentro de un contenedor con su propio scroll interno
+// (p. ej. la vista de resultados del daily es un overlay `fixed inset-0
+// overflow-y-auto`, no la ventana del navegador). Buscamos el ancestro que
+// realmente scrollea en vez de asumir que es `window`, para que el ajuste de
+// scroll al cambiar de pregunta funcione en cualquier contexto.
+function findScrollableAncestor(el: HTMLElement): Element {
+  let node = el.parentElement
+  while (node && node !== document.body) {
+    const overflowY = getComputedStyle(node).overflowY
+    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
+      return node
+    }
+    node = node.parentElement
+  }
+  return document.scrollingElement || document.documentElement
+}
+
+// No confiamos en `Element.scrollTo({behavior:'smooth'})`: su soporte es
+// inconsistente entre navegadores/entornos (verificado: en algunos casos no
+// mueve el scroll en absoluto, con o sin `window`). Animamos el scrollTop a
+// mano con requestAnimationFrame, que solo depende de la asignación directa
+// de scrollTop (esa sí funciona siempre).
+function animateScrollTop(el: Element, target: number, duration: number) {
+  const start = el.scrollTop
+  const change = target - start
+  if (Math.abs(change) < 1) return
+  const startTime = performance.now()
+  const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+  const step = (now: number) => {
+    const progress = Math.min(1, (now - startTime) / duration)
+    el.scrollTop = start + change * easeOutCubic(progress)
+    if (progress < 1) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
+}
+
 interface Question {
   reviewId?: string | number | null
   questionId?: string | number | null
@@ -82,21 +118,37 @@ function DailyReviewCarousel({ questions }: Props) {
     // final ya asentada: calcular el scroll a partir de ahí dejaba la
     // tarjeta desplazada (arriba quedaba oculta) una vez terminaba la
     // animación. En su lugar medimos el viewport del carrusel, que es
-    // estático (sin transform) y por tanto siempre fiable, y solo tocamos el
-    // scroll VERTICAL de la ventana (nunca el horizontal, que rompía el
-    // carrusel al mezclarse con su propia animación de deslizamiento).
+    // estático (sin transform) y por tanto siempre fiable.
     const container = carouselViewportRef.current
     if (!container) return
+
+    // Tampoco asumimos que "la página" (window) es lo que scrollea: la
+    // revisión del daily vive dentro de un overlay de pantalla completa con
+    // su propio scroll interno (fixed + overflow-y-auto), así que hay que
+    // mover ESE contenedor, no la ventana (que en ese contexto ni siquiera
+    // se desplaza). Buscamos el ancestro scrollable real; si no hay ninguno
+    // (p. ej. el carrusel vive directamente en una página normal), cae de
+    // vuelta al scroll del documento.
+    const scrollable = findScrollableAncestor(container)
+    const scrollableRect = scrollable.getBoundingClientRect()
     const prefersReducedMotion =
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const rect = container.getBoundingClientRect()
     const scrollMarginTop = parseFloat(getComputedStyle(container).scrollMarginTop) || 0
-    const targetY = window.scrollY + rect.top - scrollMarginTop
-    window.scrollTo({
-      top: Math.max(0, targetY),
-      behavior: prefersReducedMotion ? 'auto' : 'smooth',
-    })
+    const targetTop = Math.max(
+      0,
+      scrollable.scrollTop + (rect.top - scrollableRect.top) - scrollMarginTop,
+    )
+    // Con la pestaña en segundo plano los navegadores pausan
+    // requestAnimationFrame (para ahorrar batería/CPU): si intentáramos
+    // animar, el scroll podría quedarse a medias. En ese caso (y si el
+    // usuario prefiere menos movimiento) aplicamos el ajuste al instante.
+    if (prefersReducedMotion || document.hidden) {
+      scrollable.scrollTop = targetTop
+    } else {
+      animateScrollTop(scrollable, targetTop, 400)
+    }
   }, [index, activeQuestion, getQuestionKey])
 
   useEffect(() => {
