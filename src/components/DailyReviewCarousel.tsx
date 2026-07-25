@@ -438,12 +438,14 @@ function DailyReviewCarousel({ questions }: Props) {
                     </button>
                     <AnimatePresence initial={false}>
                       {imageShown ? (
+                        // Mismo motivo que la explicación: sin animar `height`
+                        // para no competir con el scroll nativo dentro de la
+                        // tarjeta.
                         <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
                           transition={{ duration: 0.3, ease: 'easeOut' }}
-                          className="overflow-hidden"
                         >
                           <div className="mt-3">
                             <ZoomableImage
@@ -478,12 +480,19 @@ function DailyReviewCarousel({ questions }: Props) {
 
                 <AnimatePresence initial={false}>
                   {isExpanded && (
+                    // Ojo: NO se anima `height` (0 -> 'auto'). Esa animación
+                    // fuerza un recálculo de layout en CADA fotograma durante
+                    // 0.3s; si el usuario hace scroll dentro de la tarjeta
+                    // justo en ese momento (algo muy habitual: desplegar la
+                    // explicación y bajar a leerla), el scroll nativo compite
+                    // con esos recálculos y se percibe como una pausa/tirón.
+                    // El espacio se reserva al instante y solo el contenido
+                    // hace fade-in, evitando el conflicto por completo.
                     <motion.div
-                      initial={{ opacity: 0, y: -10, height: 0 }}
-                      animate={{ opacity: 1, y: 0, height: 'auto' }}
-                      exit={{ opacity: 0, y: -10, height: 0 }}
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.3, ease: 'easeOut' }}
-                      className="overflow-hidden"
                     >
                       <div className="mt-4 rounded-2xl border border-[#E9E4E1] bg-[#FAF7F4] px-4 py-4 text-sm text-[#7D8A96] leading-relaxed">
                         {q.explanation || 'No hay explicación disponible para esta pregunta.'}
