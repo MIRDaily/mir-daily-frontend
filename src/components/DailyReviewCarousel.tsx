@@ -50,6 +50,12 @@ function DailyReviewCarousel({ questions }: Props) {
     [],
   )
 
+  // Viewport del carrusel (el contenedor que envuelve las tarjetas). A
+  // diferencia de las tarjetas, este div NUNCA lleva transform/animación de
+  // framer-motion, así que su posición es estable incluso mientras la
+  // tarjeta activa todavía está a mitad de su transición de entrada.
+  const carouselViewportRef = useRef<HTMLDivElement | null>(null)
+
   // Además del scroll interno, la propia página puede estar desplazada (p. ej.
   // el usuario bajó para leer el final de una pregunta larga). Si al cambiar
   // de pregunta no movemos también la página, la tarjeta nueva puede quedar
@@ -62,25 +68,30 @@ function DailyReviewCarousel({ questions }: Props) {
   useEffect(() => {
     const key = getQuestionKey(activeQuestion, index)
     const el = cardRefs.current.get(key)
-    if (!el) return
-    el.scrollTop = 0
+    if (el) el.scrollTop = 0
 
     if (isFirstRenderRef.current) {
       isFirstRenderRef.current = false
       return
     }
 
-    // Ojo: NO usamos el.scrollIntoView() aquí. Su ajuste horizontal por
-    // defecto (inline: 'nearest') puede tocar el scrollLeft del contenedor
-    // overflow-x-hidden que oculta las tarjetas prev/next mientras la tarjeta
-    // todavía está a mitad de su animación horizontal (framer-motion), lo que
-    // provocaba un salto/doble animación y dejaba el carrusel desplazado. En
-    // su lugar movemos solo el scroll VERTICAL de la ventana, a mano.
+    // Ojo: NO medimos la tarjeta activa ni usamos el.scrollIntoView() aquí.
+    // La tarjeta todavía está a mitad de su transición de framer-motion
+    // (scale/opacity/blur, 0.5s) cuando este efecto se dispara, así que su
+    // getBoundingClientRect() en ese instante NO coincide con su posición
+    // final ya asentada: calcular el scroll a partir de ahí dejaba la
+    // tarjeta desplazada (arriba quedaba oculta) una vez terminaba la
+    // animación. En su lugar medimos el viewport del carrusel, que es
+    // estático (sin transform) y por tanto siempre fiable, y solo tocamos el
+    // scroll VERTICAL de la ventana (nunca el horizontal, que rompía el
+    // carrusel al mezclarse con su propia animación de deslizamiento).
+    const container = carouselViewportRef.current
+    if (!container) return
     const prefersReducedMotion =
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const rect = el.getBoundingClientRect()
-    const scrollMarginTop = parseFloat(getComputedStyle(el).scrollMarginTop) || 0
+    const rect = container.getBoundingClientRect()
+    const scrollMarginTop = parseFloat(getComputedStyle(container).scrollMarginTop) || 0
     const targetY = window.scrollY + rect.top - scrollMarginTop
     window.scrollTo({
       top: Math.max(0, targetY),
@@ -194,7 +205,10 @@ function DailyReviewCarousel({ questions }: Props) {
           <span className="material-symbols-outlined text-[20px]">chevron_left</span>
         </button>
 
-        <div className="relative flex w-full max-w-6xl justify-center items-start overflow-x-hidden overflow-y-visible min-h-[720px] sm:min-h-[780px] py-6">
+        <div
+          ref={carouselViewportRef}
+          className="relative flex w-full max-w-6xl scroll-mt-24 justify-center items-start overflow-x-hidden overflow-y-visible min-h-[720px] sm:min-h-[780px] py-6"
+        >
           <div className="pointer-events-none absolute inset-y-0 left-0 z-[3] w-10 sm:w-20 bg-gradient-to-r from-[#FAF7F4] via-[#FAF7F4]/90 to-transparent" />
           <div className="pointer-events-none absolute inset-y-0 right-0 z-[3] w-10 sm:w-20 bg-gradient-to-l from-[#FAF7F4] via-[#FAF7F4]/90 to-transparent" />
           {questions.map((q, i) => {
@@ -234,7 +248,7 @@ function DailyReviewCarousel({ questions }: Props) {
                       : 'blur(6px)',
                 }}
                 transition={{ duration: 0.5, ease: 'easeOut' }}
-                className={`absolute w-[90%] sm:w-[82%] max-w-4xl max-h-[75vh] overflow-y-auto no-scrollbar scroll-mt-24 rounded-3xl border border-white/60 ring-1 ring-white/70 bg-white p-5 sm:p-7 shadow-[0_18px_40px_rgba(125,138,150,0.16)] ${
+                className={`absolute w-[90%] sm:w-[82%] max-w-4xl max-h-[75vh] overflow-y-auto no-scrollbar rounded-3xl border border-white/60 ring-1 ring-white/70 bg-white p-5 sm:p-7 shadow-[0_18px_40px_rgba(125,138,150,0.16)] ${
                   isSide ? 'cursor-pointer' : 'cursor-default'
                 }`}
                 style={{
