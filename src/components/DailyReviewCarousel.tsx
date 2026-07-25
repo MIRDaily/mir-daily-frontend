@@ -70,12 +70,21 @@ function DailyReviewCarousel({ questions }: Props) {
       return
     }
 
+    // Ojo: NO usamos el.scrollIntoView() aquí. Su ajuste horizontal por
+    // defecto (inline: 'nearest') puede tocar el scrollLeft del contenedor
+    // overflow-x-hidden que oculta las tarjetas prev/next mientras la tarjeta
+    // todavía está a mitad de su animación horizontal (framer-motion), lo que
+    // provocaba un salto/doble animación y dejaba el carrusel desplazado. En
+    // su lugar movemos solo el scroll VERTICAL de la ventana, a mano.
     const prefersReducedMotion =
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    el.scrollIntoView({
+    const rect = el.getBoundingClientRect()
+    const scrollMarginTop = parseFloat(getComputedStyle(el).scrollMarginTop) || 0
+    const targetY = window.scrollY + rect.top - scrollMarginTop
+    window.scrollTo({
+      top: Math.max(0, targetY),
       behavior: prefersReducedMotion ? 'auto' : 'smooth',
-      block: 'start',
     })
   }, [index, activeQuestion, getQuestionKey])
 
