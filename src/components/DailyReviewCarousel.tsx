@@ -50,11 +50,33 @@ function DailyReviewCarousel({ questions }: Props) {
     [],
   )
 
+  // Además del scroll interno, la propia página puede estar desplazada (p. ej.
+  // el usuario bajó para leer el final de una pregunta larga). Si al cambiar
+  // de pregunta no movemos también la página, la tarjeta nueva puede quedar
+  // parcialmente por encima del viewport. Hacemos un scroll suave para que la
+  // parte superior de la tarjeta activa quede siempre a la vista, tanto al
+  // avanzar como al retroceder. En el primer render (montaje) no se anima,
+  // solo en las navegaciones posteriores.
+  const isFirstRenderRef = useRef(true)
   const activeQuestion = questions[index]
   useEffect(() => {
     const key = getQuestionKey(activeQuestion, index)
     const el = cardRefs.current.get(key)
-    if (el) el.scrollTop = 0
+    if (!el) return
+    el.scrollTop = 0
+
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false
+      return
+    }
+
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    el.scrollIntoView({
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      block: 'start',
+    })
   }, [index, activeQuestion, getQuestionKey])
 
   useEffect(() => {
@@ -203,7 +225,7 @@ function DailyReviewCarousel({ questions }: Props) {
                       : 'blur(6px)',
                 }}
                 transition={{ duration: 0.5, ease: 'easeOut' }}
-                className={`absolute w-[90%] sm:w-[82%] max-w-4xl max-h-[75vh] overflow-y-auto no-scrollbar rounded-3xl border border-white/60 ring-1 ring-white/70 bg-white p-5 sm:p-7 shadow-[0_18px_40px_rgba(125,138,150,0.16)] ${
+                className={`absolute w-[90%] sm:w-[82%] max-w-4xl max-h-[75vh] overflow-y-auto no-scrollbar scroll-mt-24 rounded-3xl border border-white/60 ring-1 ring-white/70 bg-white p-5 sm:p-7 shadow-[0_18px_40px_rgba(125,138,150,0.16)] ${
                   isSide ? 'cursor-pointer' : 'cursor-default'
                 }`}
                 style={{
