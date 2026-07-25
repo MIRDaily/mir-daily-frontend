@@ -24,16 +24,37 @@ function findScrollableAncestor(el: HTMLElement): Element {
 // mueve el scroll en absoluto, con o sin `window`). Animamos el scrollTop a
 // mano con requestAnimationFrame, que solo depende de la asignación directa
 // de scrollTop (esa sí funciona siempre).
-function animateScrollTop(el: Element, target: number, duration: number) {
-  const start = el.scrollTop
-  const change = target - start
-  if (Math.abs(change) < 1) return
+//
+// Importante: el destino se RECALCULA en cada fotograma en vez de fijarse al
+// inicio. Durante la animación el layout cambia (la tarjeta que se va tenía
+// la explicación desplegada y era mucho más alta que la que entra, y el
+// carrusel y sus contenedores están animando a la vez), así que un destino
+// calculado una sola vez queda obsoleto a media animación y el scroll acaba
+// en un sitio equivocado. Recalculando convergemos siempre a la posición
+// correcta, aunque el contenido se reacomode por el camino.
+function animateScrollTopTo(
+  el: Element,
+  getTarget: () => number,
+  duration: number,
+) {
   const startTime = performance.now()
   const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+  let lastProgress = 0
   const step = (now: number) => {
     const progress = Math.min(1, (now - startTime) / duration)
-    el.scrollTop = start + change * easeOutCubic(progress)
-    if (progress < 1) requestAnimationFrame(step)
+    const target = getTarget()
+    const remaining = target - el.scrollTop
+    if (progress >= 1) {
+      el.scrollTop = target
+      return
+    }
+    // Avance proporcional a lo que queda de curva de easing en este frame.
+    const eased = easeOutCubic(progress)
+    const lastEased = easeOutCubic(lastProgress)
+    const factor = eased === 1 ? 1 : (eased - lastEased) / (1 - lastEased)
+    el.scrollTop = el.scrollTop + remaining * factor
+    lastProgress = progress
+    requestAnimationFrame(step)
   }
   requestAnimationFrame(step)
 }
@@ -101,55 +122,77 @@ function DailyReviewCarousel({ questions }: Props) {
   // solo en las navegaciones posteriores.
   const isFirstRenderRef = useRef(true)
   const activeQuestion = questions[index]
-  useEffect(() => {
-    const key = getQuestionKey(activeQuestion, index)
-    const el = cardRefs.current.get(key)
-    if (el) el.scrollTop = 0
 
+  // Lleva la parte superior de la tarjeta activa a la vista. Hay TRES
+  // superficies de scroll implicadas y hay que tratarlas todas, porque
+  // cualquiera de ellas puede haber quedado desplazada al leer una pregunta
+  // larga:
+  //   1. La tarjeta activa (max-h-[75vh] overflow-y-auto): su scroll interno.
+  //   2. El contenedor del carrusel: lleva `overflow-x-hidden`, y en CSS eso
+  //      convierte el eje Y en `auto` aunque se pida `visible`, así que
+  //      TAMBIÉN puede scrollear (esto se nos escapaba antes).
+  //   3. El ancestro que scrollea de verdad: en la revisión del daily es un
+  //      overlay `fixed inset-0 overflow-y-auto`, NO la ventana.
+  const bringActiveCardIntoView = useCallback(
+    (animate: boolean) => {
+      const container = carouselViewportRef.current
+      if (!container) return
+
+      // 1 y 2: scrolls internos al tope.
+      const key = getQuestionKey(questions[index], index)
+      const card = cardRefs.current.get(key)
+      if (card) card.scrollTop = 0
+      container.scrollTop = 0
+
+      // 3: colocar el contenedor (referencia estática, sin transform) arriba.
+      const scrollable = findScrollableAncestor(container)
+      // El destino se calcula sobre la posición ACTUAL, por lo que sirve tanto
+      // para el ajuste instantáneo como para recalcularlo en cada fotograma
+      // mientras el layout se reacomoda.
+      const computeTarget = () => {
+        const scrollableRect = scrollable.getBoundingClientRect()
+        const rect = container.getBoundingClientRect()
+        const scrollMarginTop =
+          parseFloat(getComputedStyle(container).scrollMarginTop) || 0
+        return Math.max(
+          0,
+          scrollable.scrollTop + (rect.top - scrollableRect.top) - scrollMarginTop,
+        )
+      }
+
+      const prefersReducedMotion =
+        typeof window !== 'undefined' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      // Con la pestaña en segundo plano los navegadores pausan
+      // requestAnimationFrame, así que animar dejaría el scroll a medias.
+      if (!animate || prefersReducedMotion || document.hidden) {
+        scrollable.scrollTop = computeTarget()
+      } else {
+        animateScrollTopTo(scrollable, computeTarget, 400)
+      }
+    },
+    [index, questions, getQuestionKey],
+  )
+
+  useEffect(() => {
     if (isFirstRenderRef.current) {
       isFirstRenderRef.current = false
+      // En el montaje solo normalizamos los scrolls internos, sin mover la
+      // página (el usuario puede estar mirando otra parte de los resultados).
+      const key = getQuestionKey(questions[index], index)
+      const card = cardRefs.current.get(key)
+      if (card) card.scrollTop = 0
       return
     }
 
-    // Ojo: NO medimos la tarjeta activa ni usamos el.scrollIntoView() aquí.
-    // La tarjeta todavía está a mitad de su transición de framer-motion
-    // (scale/opacity/blur, 0.5s) cuando este efecto se dispara, así que su
-    // getBoundingClientRect() en ese instante NO coincide con su posición
-    // final ya asentada: calcular el scroll a partir de ahí dejaba la
-    // tarjeta desplazada (arriba quedaba oculta) una vez terminaba la
-    // animación. En su lugar medimos el viewport del carrusel, que es
-    // estático (sin transform) y por tanto siempre fiable.
-    const container = carouselViewportRef.current
-    if (!container) return
+    bringActiveCardIntoView(true)
 
-    // Tampoco asumimos que "la página" (window) es lo que scrollea: la
-    // revisión del daily vive dentro de un overlay de pantalla completa con
-    // su propio scroll interno (fixed + overflow-y-auto), así que hay que
-    // mover ESE contenedor, no la ventana (que en ese contexto ni siquiera
-    // se desplaza). Buscamos el ancestro scrollable real; si no hay ninguno
-    // (p. ej. el carrusel vive directamente en una página normal), cae de
-    // vuelta al scroll del documento.
-    const scrollable = findScrollableAncestor(container)
-    const scrollableRect = scrollable.getBoundingClientRect()
-    const prefersReducedMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const rect = container.getBoundingClientRect()
-    const scrollMarginTop = parseFloat(getComputedStyle(container).scrollMarginTop) || 0
-    const targetTop = Math.max(
-      0,
-      scrollable.scrollTop + (rect.top - scrollableRect.top) - scrollMarginTop,
-    )
-    // Con la pestaña en segundo plano los navegadores pausan
-    // requestAnimationFrame (para ahorrar batería/CPU): si intentáramos
-    // animar, el scroll podría quedarse a medias. En ese caso (y si el
-    // usuario prefiere menos movimiento) aplicamos el ajuste al instante.
-    if (prefersReducedMotion || document.hidden) {
-      scrollable.scrollTop = targetTop
-    } else {
-      animateScrollTop(scrollable, targetTop, 400)
-    }
-  }, [index, activeQuestion, getQuestionKey])
+    // Segunda pasada tras asentarse la transición del carrusel (0.5s) y
+    // cualquier animación de entrada de los contenedores que lo envuelven:
+    // si algo desplazó el contenido mientras animaba, esto lo corrige.
+    const settleTimer = window.setTimeout(() => bringActiveCardIntoView(false), 560)
+    return () => window.clearTimeout(settleTimer)
+  }, [index, activeQuestion, getQuestionKey, questions, bringActiveCardIntoView])
 
   useEffect(() => {
     if (!activeQuestion?.hasImage || !activeQuestion?.imageUrl) return
