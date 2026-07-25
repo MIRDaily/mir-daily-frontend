@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 
 interface Question {
@@ -33,7 +33,30 @@ function DailyReviewCarousel({ questions }: Props) {
   const total = questions.length
   const safeTotal = Math.max(total, 1)
 
+  const getQuestionKey = useCallback((q: Question, i: number) =>
+    String(q.reviewId ?? q.id ?? i), [])
+
+  // Cada tarjeta conserva su propio scroll interno mientras permanece montada
+  // (todas las preguntas se renderizan siempre, solo la activa es visible).
+  // Al pasar a ser la activa, la reiniciamos a la parte superior para que
+  // nunca aparezca ya desplazada hacia abajo (p. ej. tras haber hecho scroll
+  // en una visita anterior a la misma pregunta).
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const setCardRef = useCallback(
+    (key: string) => (el: HTMLDivElement | null) => {
+      if (el) cardRefs.current.set(key, el)
+      else cardRefs.current.delete(key)
+    },
+    [],
+  )
+
   const activeQuestion = questions[index]
+  useEffect(() => {
+    const key = getQuestionKey(activeQuestion, index)
+    const el = cardRefs.current.get(key)
+    if (el) el.scrollTop = 0
+  }, [index, activeQuestion, getQuestionKey])
+
   useEffect(() => {
     if (!activeQuestion?.hasImage || !activeQuestion?.imageUrl) return
     const onKeyDown = (e: KeyboardEvent) => {
@@ -114,8 +137,6 @@ function DailyReviewCarousel({ questions }: Props) {
     )
   }
 
-  const getQuestionKey = useCallback((q: Question, i: number) =>
-    String(q.reviewId ?? q.id ?? i), [])
   const adjacentIndexes = useMemo(() => {
     const prevIndex = (index - 1 + safeTotal) % safeTotal
     const nextIndex = (index + 1) % safeTotal
@@ -142,7 +163,7 @@ function DailyReviewCarousel({ questions }: Props) {
           <span className="material-symbols-outlined text-[20px]">chevron_left</span>
         </button>
 
-        <div className="relative flex w-full max-w-6xl justify-center items-center overflow-x-hidden overflow-y-visible min-h-[720px] sm:min-h-[780px] py-6">
+        <div className="relative flex w-full max-w-6xl justify-center items-start overflow-x-hidden overflow-y-visible min-h-[720px] sm:min-h-[780px] py-6">
           <div className="pointer-events-none absolute inset-y-0 left-0 z-[3] w-10 sm:w-20 bg-gradient-to-r from-[#FAF7F4] via-[#FAF7F4]/90 to-transparent" />
           <div className="pointer-events-none absolute inset-y-0 right-0 z-[3] w-10 sm:w-20 bg-gradient-to-l from-[#FAF7F4] via-[#FAF7F4]/90 to-transparent" />
           {questions.map((q, i) => {
@@ -164,6 +185,7 @@ function DailyReviewCarousel({ questions }: Props) {
             return (
               <motion.div
                 key={questionKey}
+                ref={setCardRef(questionKey)}
                 onClick={() => {
                   if (isSide) {
                     setImageShown(false)
