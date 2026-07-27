@@ -23,15 +23,23 @@ import type {
   SimulacroResult,
 } from '@/lib/simulacro/types'
 
-// Mensaje único reutilizado en todos los puntos de salida (botón "Salir",
-// atrás del navegador, cerrar/recargar pestaña, cualquier enlace de
-// navegación) mientras hay un simulacro en curso.
+// Mensaje único reutilizado en el modal propio (botón "Salir", atrás del
+// navegador, cualquier enlace de navegación) mientras hay un simulacro en
+// curso. Cerrar/recargar la pestaña usa el diálogo nativo del navegador
+// aparte (ver el useEffect de "beforeunload" más abajo): ese SÍ es
+// obligatoriamente nativo, ningún navegador deja sustituirlo por UI propia.
 const EXIT_WARNING =
   'Si sales ahora no podrás continuar este simulacro ni se guardará en tu historial. ¿Seguro que quieres salir?'
 
 export default function SimulacroPage() {
   const router = useRouter()
   const [phase, setPhase] = useState<SimulacroPhase>('builder')
+  // Modal propio de "¿seguro que quieres salir?" (no el nativo del navegador)
+  // para el botón "Salir", el botón atrás y los enlaces de navegación.
+  // Cerrar/recargar la pestaña sí usa el diálogo nativo más abajo: ningún
+  // navegador permite sustituirlo por una UI propia (medida anti-phishing).
+  const [showExitModal, setShowExitModal] = useState(false)
+  const exitResolverRef = useRef<((confirmed: boolean) => void) | null>(null)
   const [mode, setMode] = useState<SimulacroConfig['mode']>('immediate')
   const [questions, setQuestions] = useState<SimulacroQuestion[]>([])
   const [answers, setAnswers] = useState<SimulacroAnswer[]>([])
@@ -182,9 +190,23 @@ export default function SimulacroPage() {
     setPhase('builder')
   }
 
+  // Abre el modal propio y devuelve una promesa que se resuelve cuando el
+  // usuario elige "Salir" (true) o "Cancelar" (false).
+  const askToLeave = () =>
+    new Promise<boolean>((resolve) => {
+      exitResolverRef.current = resolve
+      setShowExitModal(true)
+    })
+
+  const resolveExit = (confirmed: boolean) => {
+    setShowExitModal(false)
+    exitResolverRef.current?.(confirmed)
+    exitResolverRef.current = null
+  }
+
   // El botón "Salir" del runner ya no descarta el progreso sin avisar.
-  const handleExitClick = () => {
-    if (window.confirm(EXIT_WARNING)) {
+  const handleExitClick = async () => {
+    if (await askToLeave()) {
       handleRestart()
     }
   }
@@ -209,12 +231,14 @@ export default function SimulacroPage() {
     if (phase !== 'running') return
     window.history.pushState({ simulacroGuard: true }, '')
     const onPopState = () => {
-      if (window.confirm(EXIT_WARNING)) {
-        handleRestart()
-        window.history.back()
-      } else {
-        window.history.pushState({ simulacroGuard: true }, '')
-      }
+      askToLeave().then((confirmed) => {
+        if (confirmed) {
+          handleRestart()
+          window.history.back()
+        } else {
+          window.history.pushState({ simulacroGuard: true }, '')
+        }
+      })
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
@@ -244,10 +268,12 @@ export default function SimulacroPage() {
       if (url.pathname === window.location.pathname) return
 
       e.preventDefault()
-      if (window.confirm(EXIT_WARNING)) {
-        handleRestart()
-        router.push(url.pathname + url.search + url.hash)
-      }
+      askToLeave().then((confirmed) => {
+        if (confirmed) {
+          handleRestart()
+          router.push(url.pathname + url.search + url.hash)
+        }
+      })
     }
     document.addEventListener('click', onClick, true)
     return () => document.removeEventListener('click', onClick, true)
@@ -288,6 +314,40 @@ export default function SimulacroPage() {
           />
         )}
       </main>
+
+      {showExitModal ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#2D3748]/40 p-4 backdrop-blur-sm"
+          onClick={() => resolveExit(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-[#F0EBE8] bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center gap-2">
+              <span className="material-symbols-outlined text-2xl text-[#C4655A]">warning</span>
+              <p className="text-base font-bold text-[#2D3748]">Salir del simulacro</p>
+            </div>
+            <p className="text-sm leading-relaxed text-[#7D8A96]">{EXIT_WARNING}</p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => resolveExit(false)}
+                className="flex-1 rounded-xl border border-[#7D8A96]/30 bg-white px-4 py-2.5 text-sm font-semibold text-[#7D8A96] transition-colors hover:bg-[#F2EFED]"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => resolveExit(true)}
+                className="flex-1 rounded-xl bg-[#C4655A] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#a8493f]"
+              >
+                Salir
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
