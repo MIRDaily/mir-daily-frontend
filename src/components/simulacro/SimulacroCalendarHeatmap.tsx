@@ -1,25 +1,24 @@
 'use client'
 
-// Heatmap-calendario de simulacros: tira continua de semanas (como GitHub)
-// del año natural elegido (enero-diciembre, hasta 3 años de histórico), con
-// scroll horizontal si no cabe. Cada día es un cuadrito coloreado de rojo
-// pastel (bajo acierto) a verde pastel (alto acierto).
-//
-// GOTCHA de CSS: un contenedor con overflow-x distinto de "visible" fuerza
-// el overflow-y a "auto" también (no se puede dejar un eje visible y el otro
-// no), así que cualquier tooltip que sobresaliera por arriba del contenedor
-// se recortaba. Fix: el propio contenedor con scroll reserva espacio real
-// arriba (padding-top) y se compensa con un margin-top negativo igual, para
-// que el tooltip tenga sitio DENTRO de la caja sin mover nada visualmente.
+// Heatmap-calendario de simulacros: 12 meses naturales (enero-diciembre) del
+// año elegido, hasta 3 años de histórico, como tarjetas SEPARADAS — cada mes
+// es un mini-calendario real (semanas en filas, días en columnas
+// lunes→domingo: si el día 1 cae en domingo, va en la última columna de la
+// primera fila). Coloreado de rojo pastel (bajo acierto) a verde pastel
+// (alto acierto).
 
 import { useEffect, useMemo, useState } from 'react'
 import { fetchSimulacroCalendar } from '@/lib/simulacro/queries'
 import type { SimulacroCalendarDay } from '@/lib/simulacro/types'
 
-const WEEK_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] as const
-const CELL_PX = 11
+const WEEKDAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] as const
+const MONTH_NAMES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+] as const
+
+const CELL_PX = 12
 const GAP_PX = 3
-const TOOLTIP_RESERVE_PX = 32 // espacio reservado arriba para que el tooltip no se recorte
 const MAX_YEARS_BACK = 2 // 3 años de histórico en total (año actual + 2 atrás)
 
 const RED_PASTEL = { r: 0xf3, g: 0xb7, b: 0xae }
@@ -45,30 +44,23 @@ function formatDayLabel(iso: string): string {
   return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-// Semanas (columnas) que cubren el año natural COMPLETO (1-ene..31-dic),
-// lunes-domingo, siempre entero aunque el año esté en curso — los días
-// futuros se pintan como huecos más abajo, pero las columnas de los meses
-// que faltan deben seguir presentes. La primera y la última semana pueden
-// asomar días del año anterior/siguiente para completar la semana: esos
-// también se pintan como huecos, no como datos.
-function buildYearWeeks(year: number): Date[][] {
-  const start = new Date(year, 0, 1)
-  const startDow = (start.getDay() + 6) % 7
-  const gridStart = new Date(start)
-  gridStart.setDate(gridStart.getDate() - startDow)
+// Semanas (filas) de un mes real: lunes en la 1ª columna, domingo en la 7ª.
+// Huecos (null) antes del día 1 y después del último día para completar
+// semanas de 7 — así el día 1 en domingo cae en la última columna de la
+// primera fila, como un calendario de verdad.
+function buildMonthWeeks(year: number, month: number): (Date | null)[][] {
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const leading = (new Date(year, month, 1).getDay() + 6) % 7
+  const totalCells = Math.ceil((leading + daysInMonth) / 7) * 7
 
-  const end = new Date(year, 11, 31)
-  const endDow = (end.getDay() + 6) % 7
-  const gridEnd = new Date(end)
-  gridEnd.setDate(gridEnd.getDate() + (6 - endDow))
-
-  const days: Date[] = []
-  for (let d = new Date(gridStart); d <= gridEnd; d.setDate(d.getDate() + 1)) {
-    days.push(new Date(d))
+  const cells: (Date | null)[] = []
+  for (let i = 0; i < totalCells; i++) {
+    const dayNum = i - leading + 1
+    cells.push(dayNum >= 1 && dayNum <= daysInMonth ? new Date(year, month, dayNum) : null)
   }
 
-  const weeks: Date[][] = []
-  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7))
+  const weeks: (Date | null)[][] = []
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
   return weeks
 }
 
@@ -92,15 +84,10 @@ export default function SimulacroCalendarHeatmap({
     return d
   }, [])
 
-  const lastRealDay = useMemo(
-    () => (year === currentYear ? today : new Date(year, 11, 31)),
-    [year, currentYear, today],
-  )
-
   useEffect(() => {
     let active = true
     const from = `${year}-01-01`
-    const to = isoDateLocal(lastRealDay)
+    const to = year === currentYear ? isoDateLocal(today) : `${year}-12-31`
     fetchSimulacroCalendar(from, to)
       .then((data) => {
         if (!active) return
@@ -126,19 +113,10 @@ export default function SimulacroCalendarHeatmap({
     return map
   }, [days])
 
-  const weeks = useMemo(() => buildYearWeeks(year), [year])
-
-  const monthLabels = useMemo(() => {
-    let lastMonth = -1
-    return weeks.map((week) => {
-      const first = week.find((d) => d.getFullYear() === year)
-      if (!first) return ''
-      const month = first.getMonth()
-      if (month === lastMonth) return ''
-      lastMonth = month
-      return first.toLocaleDateString('es-ES', { month: 'short' })
-    })
-  }, [weeks, year])
+  const months = useMemo(
+    () => Array.from({ length: 12 }, (_, m) => ({ month: m, weeks: buildMonthWeeks(year, m) })),
+    [year],
+  )
 
   const hasAnyData = (days ?? []).length > 0
 
@@ -193,7 +171,11 @@ export default function SimulacroCalendarHeatmap({
           {error}
         </p>
       ) : loading ? (
-        <div className="mt-5 h-40 animate-pulse rounded-xl bg-[#F2EEEB]" />
+        <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="h-40 animate-pulse rounded-xl bg-[#F2EEEB]" />
+          ))}
+        </div>
       ) : (
         <>
           {!hasAnyData ? (
@@ -202,84 +184,72 @@ export default function SimulacroCalendarHeatmap({
             </p>
           ) : null}
 
-          <div
-            className="overflow-x-auto pb-2"
-            style={{ paddingTop: TOOLTIP_RESERVE_PX, marginTop: 20 - TOOLTIP_RESERVE_PX }}
-          >
-            <div className="inline-flex gap-[3px]">
+          <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {months.map(({ month, weeks }) => (
               <div
-                className="flex flex-col justify-between pr-1"
-                style={{ marginTop: 16, gap: GAP_PX }}
+                key={month}
+                className="rounded-xl border border-[#F0EBE8] bg-[#FAF7F4]/60 p-3"
               >
-                {WEEK_LABELS.map((label, i) => (
-                  <span
-                    key={label}
-                    className="text-[9px] font-bold uppercase text-[#7D8A96]"
-                    style={{ height: CELL_PX, lineHeight: `${CELL_PX}px`, visibility: i % 2 === 0 ? 'visible' : 'hidden' }}
-                  >
-                    {label}
-                  </span>
-                ))}
-              </div>
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-[#7D8A96]">
+                  {MONTH_NAMES[month]}
+                </p>
 
-              {weeks.map((week, colIndex) => (
-                <div
-                  key={colIndex}
-                  className="relative flex flex-col"
-                  style={{ gap: GAP_PX, width: CELL_PX }}
-                >
-                  {/* Espaciador de ancho fijo: el label de mes va en position:absolute
-                      para que un nombre de mes más ancho que una celda (p. ej. "sep")
-                      nunca ensanche esta columna y desalinee toda la rejilla. */}
-                  <div style={{ height: 16 }} />
-                  {monthLabels[colIndex] ? (
-                    <span className="pointer-events-none absolute left-0 top-0 whitespace-nowrap text-[9px] font-bold uppercase text-[#7D8A96]">
-                      {monthLabels[colIndex]}
+                <div className="flex" style={{ gap: GAP_PX }}>
+                  {WEEKDAY_LABELS.map((label) => (
+                    <span
+                      key={label}
+                      className="text-center text-[8px] font-bold uppercase text-[#7D8A96]/70"
+                      style={{ width: CELL_PX }}
+                    >
+                      {label}
                     </span>
-                  ) : null}
-                  {week.map((date) => {
-                    const outOfYear = date.getFullYear() !== year
-                    const future = date > today
-                    if (outOfYear || future) {
-                      return (
-                        <div key={date.toISOString()} style={{ width: CELL_PX, height: CELL_PX }} />
-                      )
-                    }
-
-                    const iso = isoDateLocal(date)
-                    const entry = byDay.get(iso)
-                    const tooltip = entry
-                      ? `${formatDayLabel(iso)} · ${entry.total_questions} preguntas · ${entry.accuracy}% aciertos${entry.session_count > 1 ? ` (${entry.session_count} simulacros)` : ''}`
-                      : formatDayLabel(iso)
-
-                    return (
-                      <div key={iso} className="group/cell relative">
-                        <button
-                          type="button"
-                          disabled={!entry}
-                          onClick={() => entry && handleDayClick(entry)}
-                          className={`block rounded-[3px] transition-transform ${entry ? 'hover:scale-125' : 'cursor-default'}`}
-                          style={{
-                            width: CELL_PX,
-                            height: CELL_PX,
-                            backgroundColor: entry ? accuracyToColor(entry.accuracy) : '#EDE8E5',
-                          }}
-                          aria-label={tooltip}
-                        />
-                        <span className="pointer-events-none absolute -top-2 left-1/2 z-20 w-max -translate-x-1/2 -translate-y-full rounded bg-[#374151] px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/cell:opacity-100">
-                          {tooltip}
-                        </span>
-                      </div>
-                    )
-                  })}
+                  ))}
                 </div>
-              ))}
-            </div>
+
+                <div className="mt-1 flex flex-col" style={{ gap: GAP_PX }}>
+                  {weeks.map((week, wi) => (
+                    <div key={wi} className="flex" style={{ gap: GAP_PX }}>
+                      {week.map((date, di) => {
+                        if (!date || date > today) {
+                          return <div key={di} style={{ width: CELL_PX, height: CELL_PX }} />
+                        }
+
+                        const iso = isoDateLocal(date)
+                        const entry = byDay.get(iso)
+                        const tooltip = entry
+                          ? `${formatDayLabel(iso)} · ${entry.total_questions} preguntas · ${entry.accuracy}% aciertos${entry.session_count > 1 ? ` (${entry.session_count} simulacros)` : ''}`
+                          : formatDayLabel(iso)
+
+                        return (
+                          <div key={di} className="group/cell relative">
+                            <button
+                              type="button"
+                              disabled={!entry}
+                              onClick={() => entry && handleDayClick(entry)}
+                              className={`block rounded-[3px] transition-transform ${entry ? 'hover:scale-125' : 'cursor-default'}`}
+                              style={{
+                                width: CELL_PX,
+                                height: CELL_PX,
+                                backgroundColor: entry ? accuracyToColor(entry.accuracy) : '#EDE8E5',
+                              }}
+                              aria-label={tooltip}
+                            />
+                            <span className="pointer-events-none absolute -top-2 left-1/2 z-20 w-max -translate-x-1/2 -translate-y-full rounded bg-[#374151] px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/cell:opacity-100">
+                              {tooltip}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </>
       )}
 
-      <div className="mt-4 flex items-center gap-2 text-[10px] font-semibold text-[#7D8A96]">
+      <div className="mt-5 flex items-center gap-2 text-[10px] font-semibold text-[#7D8A96]">
         <span>Menos aciertos</span>
         <span
           className="h-2.5 w-24 rounded-full"
