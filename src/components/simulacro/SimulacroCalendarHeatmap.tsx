@@ -171,9 +171,9 @@ export default function SimulacroCalendarHeatmap({
           {error}
         </p>
       ) : loading ? (
-        <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="mt-5 flex gap-4 overflow-x-hidden">
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="h-40 animate-pulse rounded-xl bg-[#F2EEEB]" />
+            <div key={i} className="h-40 w-[168px] shrink-0 animate-pulse rounded-xl bg-[#F2EEEB]" />
           ))}
         </div>
       ) : (
@@ -184,11 +184,12 @@ export default function SimulacroCalendarHeatmap({
             </p>
           ) : null}
 
-          <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {months.map(({ month, weeks }) => (
+          <div className="mt-5 overflow-x-auto pb-2">
+            <div className="flex gap-4">
+              {months.map(({ month, weeks }) => (
               <div
                 key={month}
-                className="rounded-xl border border-[#F0EBE8] bg-[#FAF7F4]/60 p-3"
+                className="w-[168px] shrink-0 rounded-xl border border-[#F0EBE8] bg-[#FAF7F4]/60 p-3"
               >
                 <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-[#7D8A96]">
                   {MONTH_NAMES[month]}
@@ -244,7 +245,8 @@ export default function SimulacroCalendarHeatmap({
                   ))}
                 </div>
               </div>
-            ))}
+              ))}
+            </div>
           </div>
         </>
       )}
