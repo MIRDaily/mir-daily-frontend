@@ -11,14 +11,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { fetchSimulacroCalendar } from '@/lib/simulacro/queries'
 import type { SimulacroCalendarDay } from '@/lib/simulacro/types'
 
-const WEEKDAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] as const
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ] as const
 
-const CELL_PX = 12
-const GAP_PX = 3
+const CELL_PX = 9
+const GAP_PX = 2
+const CARD_WIDTH_PX = 108 // 7 * (CELL_PX + GAP_PX) - GAP_PX
 const MAX_YEARS_BACK = 2 // 3 años de histórico en total (año actual + 2 atrás)
 
 const RED_PASTEL = { r: 0xf3, g: 0xb7, b: 0xae }
@@ -171,9 +171,13 @@ export default function SimulacroCalendarHeatmap({
           {error}
         </p>
       ) : loading ? (
-        <div className="mt-5 flex gap-4 overflow-x-hidden">
+        <div className="mt-5 flex gap-2 overflow-x-hidden">
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="h-40 w-[168px] shrink-0 animate-pulse rounded-xl bg-[#F2EEEB]" />
+            <div
+              key={i}
+              className="h-28 shrink-0 animate-pulse rounded-lg bg-[#F2EEEB]"
+              style={{ width: CARD_WIDTH_PX }}
+            />
           ))}
         </div>
       ) : (
@@ -185,29 +189,14 @@ export default function SimulacroCalendarHeatmap({
           ) : null}
 
           <div className="mt-5 overflow-x-auto pb-2">
-            <div className="flex gap-4">
+            <div className="flex gap-2">
               {months.map(({ month, weeks }) => (
-              <div
-                key={month}
-                className="w-[168px] shrink-0 rounded-xl border border-[#F0EBE8] bg-[#FAF7F4]/60 p-3"
-              >
-                <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-[#7D8A96]">
-                  {MONTH_NAMES[month]}
+              <div key={month} className="shrink-0" style={{ width: CARD_WIDTH_PX }}>
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[#7D8A96]/80">
+                  {MONTH_NAMES[month].slice(0, 3)}
                 </p>
 
-                <div className="flex" style={{ gap: GAP_PX }}>
-                  {WEEKDAY_LABELS.map((label) => (
-                    <span
-                      key={label}
-                      className="text-center text-[8px] font-bold uppercase text-[#7D8A96]/70"
-                      style={{ width: CELL_PX }}
-                    >
-                      {label}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="mt-1 flex flex-col" style={{ gap: GAP_PX }}>
+                <div className="flex flex-col" style={{ gap: GAP_PX }}>
                   {weeks.map((week, wi) => (
                     <div key={wi} className="flex" style={{ gap: GAP_PX }}>
                       {week.map((date, di) => {
