@@ -1,0 +1,253 @@
+'use client'
+
+// Heatmap-calendario de simulacros: últimos 12 meses rodantes, un cuadrito
+// por día coloreado de rojo pastel (bajo acierto) a verde pastel (alto
+// acierto). Mismo patrón visual/tooltip que ActivityHeatmapGrid.tsx
+// (grupos con nombre + capa absoluta que aparece al hover).
+
+import { useEffect, useMemo, useState } from 'react'
+import { fetchSimulacroCalendar } from '@/lib/simulacro/queries'
+import type { SimulacroCalendarDay } from '@/lib/simulacro/types'
+
+const WEEK_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] as const
+const TOTAL_DAYS = 371 // 53 semanas, cubre 12 meses rodantes con margen
+const CELL_PX = 11
+const GAP_PX = 3
+
+const RED_PASTEL = { r: 0xf3, g: 0xb7, b: 0xae }
+const GREEN_PASTEL = { r: 0xb9, g: 0xdc, b: 0xb4 }
+
+function accuracyToColor(pct: number): string {
+  const t = Math.max(0, Math.min(1, pct / 100))
+  const r = Math.round(RED_PASTEL.r + (GREEN_PASTEL.r - RED_PASTEL.r) * t)
+  const g = Math.round(RED_PASTEL.g + (GREEN_PASTEL.g - RED_PASTEL.g) * t)
+  const b = Math.round(RED_PASTEL.b + (GREEN_PASTEL.b - RED_PASTEL.b) * t)
+  return `rgb(${r}, ${g}, ${b})`
+}
+
+function isoDateLocal(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function formatDayLabel(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`)
+  return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+type SimulacroCalendarHeatmapProps = {
+  onOpenSession: (sessionId: string) => void
+}
+
+export default function SimulacroCalendarHeatmap({
+  onOpenSession,
+}: SimulacroCalendarHeatmapProps) {
+  const [days, setDays] = useState<SimulacroCalendarDay[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [picker, setPicker] = useState<SimulacroCalendarDay | null>(null)
+
+  useEffect(() => {
+    let active = true
+    fetchSimulacroCalendar()
+      .then((data) => {
+        if (active) setDays(data)
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setError(err instanceof Error ? err.message : 'No se pudo cargar el calendario.')
+        }
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const byDay = useMemo(() => {
+    const map = new Map<string, SimulacroCalendarDay>()
+    for (const d of days ?? []) map.set(d.day, d)
+    return map
+  }, [days])
+
+  const weeks = useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const start = new Date(today)
+    start.setDate(start.getDate() - (TOTAL_DAYS - 1))
+    const startDow = (start.getDay() + 6) % 7 // 0 = lunes
+    start.setDate(start.getDate() - startDow)
+
+    const todayDow = (today.getDay() + 6) % 7
+    const end = new Date(today)
+    end.setDate(end.getDate() + (6 - todayDow))
+
+    const cells: { date: Date; future: boolean }[] = []
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      cells.push({ date: new Date(d), future: d > today })
+    }
+
+    const cols: { date: Date; future: boolean }[][] = []
+    for (let i = 0; i < cells.length; i += 7) cols.push(cells.slice(i, i + 7))
+    return cols
+  }, [])
+
+  const monthLabels = useMemo(() => {
+    let lastMonth = -1
+    return weeks.map((week) => {
+      const first = week[0]?.date
+      if (!first) return ''
+      const month = first.getMonth()
+      if (month === lastMonth) return ''
+      lastMonth = month
+      return first.toLocaleDateString('es-ES', { month: 'short' })
+    })
+  }, [weeks])
+
+  const handleDayClick = (entry: SimulacroCalendarDay) => {
+    if (entry.session_ids.length === 1) {
+      onOpenSession(entry.session_ids[0])
+      return
+    }
+    setPicker(entry)
+  }
+
+  if (error) {
+    return (
+      <div className="mb-6 rounded-2xl border border-[#E8A598]/30 bg-[#FFF8F6] px-4 py-3 text-sm font-semibold text-[#C4655A]">
+        {error}
+      </div>
+    )
+  }
+
+  if (!days) {
+    return (
+      <div className="mb-6 h-40 animate-pulse rounded-2xl bg-white/60" />
+    )
+  }
+
+  return (
+    <div className="mb-8 rounded-2xl border border-[#F0EBE8] bg-white p-6 shadow-sm">
+      <h3 className="text-lg font-bold text-[#374151]">Últimos 12 meses</h3>
+      <p className="mt-1 text-xs text-[#7D8A96]">
+        Un cuadrito por día. El color va de rojo (menos aciertos) a verde
+        (más aciertos); toca un día para repasar ese simulacro.
+      </p>
+
+      <div className="mt-5 overflow-x-auto pb-2">
+        <div className="inline-flex gap-[3px]">
+          <div
+            className="flex flex-col justify-between pr-1"
+            style={{ marginTop: 16, gap: GAP_PX }}
+          >
+            {WEEK_LABELS.map((label, i) => (
+              <span
+                key={label}
+                className="text-[9px] font-bold uppercase text-[#7D8A96]"
+                style={{ height: CELL_PX, lineHeight: `${CELL_PX}px`, visibility: i % 2 === 0 ? 'visible' : 'hidden' }}
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+
+          {weeks.map((week, colIndex) => (
+            <div key={colIndex} className="flex flex-col" style={{ gap: GAP_PX }}>
+              <span className="block h-4 text-[9px] font-bold uppercase text-[#7D8A96]">
+                {monthLabels[colIndex]}
+              </span>
+              {week.map(({ date, future }) => {
+                if (future) {
+                  return (
+                    <div
+                      key={date.toISOString()}
+                      style={{ width: CELL_PX, height: CELL_PX }}
+                    />
+                  )
+                }
+                const iso = isoDateLocal(date)
+                const entry = byDay.get(iso)
+                const hasData = Boolean(entry)
+                const tooltip = entry
+                  ? `${formatDayLabel(iso)} · ${entry.total_questions} preguntas · ${entry.accuracy}% aciertos${entry.session_count > 1 ? ` (${entry.session_count} simulacros)` : ''}`
+                  : formatDayLabel(iso)
+
+                return (
+                  <div key={iso} className="group/cell relative">
+                    <button
+                      type="button"
+                      disabled={!hasData}
+                      onClick={() => entry && handleDayClick(entry)}
+                      className={`block rounded-[3px] transition-transform ${hasData ? 'hover:scale-125' : 'cursor-default'}`}
+                      style={{
+                        width: CELL_PX,
+                        height: CELL_PX,
+                        backgroundColor: entry ? accuracyToColor(entry.accuracy) : '#EDE8E5',
+                      }}
+                      aria-label={tooltip}
+                    />
+                    <span className="pointer-events-none absolute -top-2 left-1/2 z-20 w-max -translate-x-1/2 -translate-y-full rounded bg-[#374151] px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/cell:opacity-100">
+                      {tooltip}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center gap-2 text-[10px] font-semibold text-[#7D8A96]">
+        <span>Menos aciertos</span>
+        <span
+          className="h-2.5 w-24 rounded-full"
+          style={{ background: `linear-gradient(90deg, ${accuracyToColor(0)}, ${accuracyToColor(50)}, ${accuracyToColor(100)})` }}
+        />
+        <span>Más aciertos</span>
+      </div>
+
+      {picker ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#2D3748]/40 p-4 backdrop-blur-sm"
+          onClick={() => setPicker(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-[#F0EBE8] bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="mb-1 text-sm font-bold text-[#2D3748]">
+              {formatDayLabel(picker.day)}
+            </p>
+            <p className="mb-4 text-xs text-[#7D8A96]">
+              Hiciste {picker.session_count} simulacros ese día. Elige cuál repasar:
+            </p>
+            <div className="flex flex-col gap-2">
+              {picker.session_ids.map((id, i) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setPicker(null)
+                    onOpenSession(id)
+                  }}
+                  className="flex items-center justify-between rounded-xl border border-[#EAE4E2] px-4 py-3 text-left text-sm font-semibold text-[#2c3e50] transition-colors hover:border-[#E8A598]/40 hover:bg-[#FAF7F4]"
+                >
+                  {i === 0 ? 'Simulacro más reciente' : `Simulacro anterior ${i + 1}`}
+                  <span className="material-symbols-outlined text-[#7D8A96]">chevron_right</span>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setPicker(null)}
+              className="mt-4 w-full rounded-xl border border-[#7D8A96]/30 bg-white px-4 py-2.5 text-sm font-medium text-[#7D8A96] transition-colors hover:bg-[#F2EFED]"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}

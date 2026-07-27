@@ -5,7 +5,8 @@
 // se obtienen del BACKEND (autenticado); el cliente nunca recibe la respuesta
 // correcta hasta que el usuario responde y el servidor la valida (/check).
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import SimulacroBuilder from '@/components/simulacro/SimulacroBuilder'
 import SimulacroRunner from '@/components/simulacro/SimulacroRunner'
 import SimulacroResultsGrid from '@/components/simulacro/SimulacroResultsGrid'
@@ -22,7 +23,14 @@ import type {
   SimulacroResult,
 } from '@/lib/simulacro/types'
 
+// Mensaje único reutilizado en todos los puntos de salida (botón "Salir",
+// atrás del navegador, cerrar/recargar pestaña, cualquier enlace de
+// navegación) mientras hay un simulacro en curso.
+const EXIT_WARNING =
+  'Si sales ahora no podrás continuar este simulacro ni se guardará en tu historial. ¿Seguro que quieres salir?'
+
 export default function SimulacroPage() {
+  const router = useRouter()
   const [phase, setPhase] = useState<SimulacroPhase>('builder')
   const [mode, setMode] = useState<SimulacroConfig['mode']>('immediate')
   const [questions, setQuestions] = useState<SimulacroQuestion[]>([])
@@ -174,6 +182,78 @@ export default function SimulacroPage() {
     setPhase('builder')
   }
 
+  // El botón "Salir" del runner ya no descarta el progreso sin avisar.
+  const handleExitClick = () => {
+    if (window.confirm(EXIT_WARNING)) {
+      handleRestart()
+    }
+  }
+
+  // Cerrar/recargar la pestaña o navegar a una URL externa mientras hay un
+  // simulacro en curso (mismo patrón que ZenRoomClient.tsx: "exit friction").
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (phase === 'running') {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [phase])
+
+  // Botón "atrás" del navegador: se empuja un estado centinela al entrar en
+  // la fase "running"; el primer "atrás" lo consume y dispara la
+  // confirmación en vez de abandonar la página directamente.
+  useEffect(() => {
+    if (phase !== 'running') return
+    window.history.pushState({ simulacroGuard: true }, '')
+    const onPopState = () => {
+      if (window.confirm(EXIT_WARNING)) {
+        handleRestart()
+        window.history.back()
+      } else {
+        window.history.pushState({ simulacroGuard: true }, '')
+      }
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase])
+
+  // Cualquier enlace de navegación interna (el header global es persistente
+  // en todas las páginas) también debe avisar antes de sacar al usuario de
+  // un simulacro en curso, no solo "Salir" y el botón atrás.
+  useEffect(() => {
+    if (phase !== 'running') return
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      const anchor = (e.target as HTMLElement | null)?.closest('a')
+      const href = anchor?.getAttribute('href')
+      if (!anchor || !href || href.startsWith('#')) return
+      if (anchor.target && anchor.target !== '_self') return
+
+      let url: URL
+      try {
+        url = new URL(href, window.location.href)
+      } catch {
+        return
+      }
+      if (url.origin !== window.location.origin) return
+      if (url.pathname === window.location.pathname) return
+
+      e.preventDefault()
+      if (window.confirm(EXIT_WARNING)) {
+        handleRestart()
+        router.push(url.pathname + url.search + url.hash)
+      }
+    }
+    document.addEventListener('click', onClick, true)
+    return () => document.removeEventListener('click', onClick, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, router])
+
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[#FAF7F4] text-[#7D8A96]">
       {/* Fondo decorativo coherente con Studio */}
@@ -197,7 +277,7 @@ export default function SimulacroPage() {
             onSelect={handleSelect}
             onBlank={handleBlank}
             onFinish={handleFinish}
-            onExit={handleRestart}
+            onExit={handleExitClick}
           />
         ) : (
           <SimulacroResultsGrid

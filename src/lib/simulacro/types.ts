@@ -78,3 +78,13 @@ export interface SimulacroHistoryDetail {
   answers: SimulacroAnswer[]
   results: SimulacroResult[]
 }
+
+/** Un día agregado del heatmap-calendario (puede mezclar varias sesiones del mismo día). */
+export interface SimulacroCalendarDay {
+  day: string
+  session_count: number
+  total_questions: number
+  correct_count: number
+  accuracy: number
+  session_ids: string[]
+}

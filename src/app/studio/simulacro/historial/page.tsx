@@ -7,12 +7,15 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import SimulacroCalendarHeatmap from '@/components/simulacro/SimulacroCalendarHeatmap'
 import SimulacroResultsGrid from '@/components/simulacro/SimulacroResultsGrid'
 import {
   fetchSimulacroHistory,
   fetchSimulacroHistoryDetail,
 } from '@/lib/simulacro/queries'
 import type { SimulacroHistoryDetail, SimulacroHistorySession } from '@/lib/simulacro/types'
+
+const PAGE_SIZE = 20
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-ES', {
@@ -26,6 +29,8 @@ function formatDate(iso: string) {
 
 export default function SimulacroHistorialPage() {
   const [sessions, setSessions] = useState<SimulacroHistorySession[]>([])
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -36,10 +41,12 @@ export default function SimulacroHistorialPage() {
 
   useEffect(() => {
     let active = true
-    fetchSimulacroHistory()
+    // Pide una de más para saber si hay página siguiente sin un COUNT aparte.
+    fetchSimulacroHistory(PAGE_SIZE + 1, page * PAGE_SIZE)
       .then((data) => {
         if (!active) return
-        setSessions(data)
+        setHasMore(data.length > PAGE_SIZE)
+        setSessions(data.slice(0, PAGE_SIZE))
         setError(null)
       })
       .catch((err: unknown) => {
@@ -54,7 +61,7 @@ export default function SimulacroHistorialPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [page])
 
   const openSession = (id: string) => {
     setSelectedId(id)
@@ -134,6 +141,8 @@ export default function SimulacroHistorialPage() {
           </p>
         </header>
 
+        <SimulacroCalendarHeatmap onOpenSession={openSession} />
+
         {loading ? (
           <div className="flex flex-col gap-3">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -197,8 +206,11 @@ export default function SimulacroHistorialPage() {
                           </span>
                         ))}
                         {session.subjects.length > 4 ? (
-                          <span className="rounded-full bg-[#F2EFED] px-2.5 py-1 text-[11px] font-semibold text-[#7D8A96]">
+                          <span className="group/chip relative rounded-full bg-[#F2EFED] px-2.5 py-1 text-[11px] font-semibold text-[#7D8A96]">
                             +{session.subjects.length - 4}
+                            <span className="pointer-events-none absolute -top-2 left-1/2 z-20 w-max max-w-[16rem] -translate-x-1/2 -translate-y-full rounded bg-[#374151] px-2 py-1 text-center text-[10px] font-medium normal-case text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/chip:opacity-100">
+                              {session.subjects.slice(4).join(', ')}
+                            </span>
                           </span>
                         ) : null}
                       </div>
@@ -227,6 +239,38 @@ export default function SimulacroHistorialPage() {
             })}
           </div>
         )}
+
+        {!loading && !error && (sessions.length > 0 || page > 0) ? (
+          <div className="mt-6 flex items-center justify-center gap-4">
+            <button
+              type="button"
+              disabled={page === 0}
+              onClick={() => {
+                setLoading(true)
+                setPage((p) => Math.max(0, p - 1))
+              }}
+              className="flex items-center gap-1.5 rounded-xl border border-[#E9E4E1] px-4 py-2 text-sm font-semibold text-[#7D8A96] transition-all hover:border-[#E8A598]/40 hover:text-[#2D3748] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span className="material-symbols-outlined text-lg">arrow_back</span>
+              Anterior
+            </button>
+            <span className="text-xs font-bold uppercase tracking-wide text-[#7D8A96]">
+              Página {page + 1}
+            </span>
+            <button
+              type="button"
+              disabled={!hasMore}
+              onClick={() => {
+                setLoading(true)
+                setPage((p) => p + 1)
+              }}
+              className="flex items-center gap-1.5 rounded-xl border border-[#E9E4E1] px-4 py-2 text-sm font-semibold text-[#7D8A96] transition-all hover:border-[#E8A598]/40 hover:text-[#2D3748] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Siguiente
+              <span className="material-symbols-outlined text-lg">arrow_forward</span>
+            </button>
+          </div>
+        ) : null}
 
         <div className="mt-8">
           <Link

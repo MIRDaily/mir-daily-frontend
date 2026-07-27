@@ -6,6 +6,7 @@
 
 import { supabase } from '@/lib/supabaseBrowser'
 import type {
+  SimulacroCalendarDay,
   SimulacroConfig,
   SimulacroHistoryDetail,
   SimulacroHistorySession,
@@ -125,4 +126,11 @@ export async function fetchSimulacroHistoryDetail(
   sessionId: string,
 ): Promise<SimulacroHistoryDetail> {
   return apiFetch<SimulacroHistoryDetail>(`/history/${sessionId}`)
+}
+
+export async function fetchSimulacroCalendar(days = 400): Promise<SimulacroCalendarDay[]> {
+  const { days: rows } = await apiFetch<{ days: SimulacroCalendarDay[] }>(
+    `/calendar?days=${days}`,
+  )
+  return rows ?? []
 }
