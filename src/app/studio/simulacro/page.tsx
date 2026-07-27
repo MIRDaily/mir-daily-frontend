@@ -335,7 +335,7 @@ export default function SimulacroPage() {
                 onClick={() => resolveExit(false)}
                 className="flex-1 rounded-xl border border-[#7D8A96]/30 bg-white px-4 py-2.5 text-sm font-semibold text-[#7D8A96] transition-colors hover:bg-[#F2EFED]"
               >
-                Cancelar
+                Quedarme
               </button>
               <button
                 type="button"

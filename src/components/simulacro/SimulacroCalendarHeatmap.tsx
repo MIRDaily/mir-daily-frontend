@@ -138,10 +138,7 @@ export default function SimulacroCalendarHeatmap({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-bold text-[#374151]">Calendario de simulacros</h3>
-          <p className="mt-1 text-xs text-[#7D8A96]">
-            Un cuadrito por día. El color va de rojo (menos aciertos) a verde
-            (más aciertos); toca un día para repasar ese simulacro.
-          </p>
+          <p className="mt-1 text-xs text-[#7D8A96]">Un cuadrito por día.</p>
         </div>
         <div className="flex items-center gap-2">
           <button

@@ -128,11 +128,7 @@ export default function SimulacroHistorialPage() {
 
       <main className="relative z-10 mx-auto w-full max-w-4xl px-6 py-10">
         <header className="mb-8">
-          <span className="inline-flex items-center gap-2 rounded-full border border-[#E8A598]/30 bg-[#E8A598]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[#d18d80]">
-            <span className="material-symbols-outlined text-base">history</span>
-            Historial
-          </span>
-          <h1 className="mt-4 text-4xl font-black tracking-tight text-[#2c3e50]">
+          <h1 className="text-4xl font-black tracking-tight text-[#2c3e50]">
             Tus simulacros
           </h1>
           <p className="mt-2 text-base font-light text-[#7D8A96]">
