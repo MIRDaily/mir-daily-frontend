@@ -515,9 +515,12 @@ export default function StudioPage() {
                       >
                         {card.primaryAction}
                       </Link>
-                      <button className="flex-1 rounded-xl border border-[#7D8A96]/30 bg-white px-4 py-3 text-base font-medium transition-colors hover:border-[#7D8A96]/50 hover:bg-[#F2EFED]">
+                      <Link
+                        href="/studio/simulacro/historial"
+                        className="flex flex-1 items-center justify-center rounded-xl border border-[#7D8A96]/30 bg-white px-4 py-3 text-base font-medium transition-colors hover:border-[#7D8A96]/50 hover:bg-[#F2EFED]"
+                      >
                         {card.secondaryAction}
-                      </button>
+                      </Link>
                     </div>
                   ) : null}
 

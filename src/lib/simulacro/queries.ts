@@ -7,6 +7,9 @@
 import { supabase } from '@/lib/supabaseBrowser'
 import type {
   SimulacroConfig,
+  SimulacroHistoryDetail,
+  SimulacroHistorySession,
+  SimulacroMode,
   SimulacroQuestion,
   SimulacroResult,
   Subject,
@@ -92,4 +95,34 @@ export async function checkSimulacroAnswers(
     body: JSON.stringify({ answers, sessionId }),
   })
   return results ?? []
+}
+
+// Marca la sesión como terminada. El backend solo la guarda en el historial
+// si de verdad hay >=50 respuestas persistidas para ese sessionId; si el
+// simulacro se dejó a medias, esta llamada no crea nada. Best-effort: un
+// fallo aquí no debe romper la pantalla de resultados.
+export async function finishSimulacroSession(
+  sessionId: string,
+  mode: SimulacroMode,
+): Promise<{ saved: boolean; total: number }> {
+  return apiFetch<{ saved: boolean; total: number }>('/finish', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId, mode }),
+  })
+}
+
+export async function fetchSimulacroHistory(
+  limit = 20,
+  offset = 0,
+): Promise<SimulacroHistorySession[]> {
+  const { sessions } = await apiFetch<{ sessions: SimulacroHistorySession[] }>(
+    `/history?limit=${limit}&offset=${offset}`,
+  )
+  return sessions ?? []
+}
+
+export async function fetchSimulacroHistoryDetail(
+  sessionId: string,
+): Promise<SimulacroHistoryDetail> {
+  return apiFetch<SimulacroHistoryDetail>(`/history/${sessionId}`)
 }

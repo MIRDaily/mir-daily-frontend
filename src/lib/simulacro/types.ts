@@ -56,3 +56,25 @@ export interface SimulacroAnswer {
   /** Segundos dedicados a la pregunta (para analítica). */
   timeSpent?: number
 }
+
+// Historial: solo se guardan simulacros COMPLETADOS con >=50 preguntas
+// (ver POST /api/simulacro/finish). Una fila resumen por simulacro pasado.
+export interface SimulacroHistorySession {
+  id: string
+  mode: SimulacroMode | null
+  total_questions: number
+  correct_count: number
+  wrong_count: number
+  blank_count: number
+  time_spent_seconds: number
+  started_at: string | null
+  finished_at: string
+  subjects: string[]
+}
+
+/** Repaso completo de un simulacro guardado: misma forma que consume SimulacroResultsGrid. */
+export interface SimulacroHistoryDetail {
+  questions: SimulacroQuestion[]
+  answers: SimulacroAnswer[]
+  results: SimulacroResult[]
+}

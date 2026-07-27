@@ -12,6 +12,7 @@ import SimulacroResultsGrid from '@/components/simulacro/SimulacroResultsGrid'
 import {
   checkSimulacroAnswers,
   fetchSimulacroQuestions,
+  finishSimulacroSession,
 } from '@/lib/simulacro/queries'
 import type {
   SimulacroAnswer,
@@ -155,6 +156,13 @@ export default function SimulacroPage() {
       }
     }
     setPhase('results')
+
+    // Guarda el simulacro en el historial (best-effort: el backend solo lo
+    // guarda de verdad si hay >=50 respuestas persistidas para esta sesión;
+    // un fallo de red aquí no debe afectar a la pantalla de resultados).
+    if (sessionIdRef.current) {
+      finishSimulacroSession(sessionIdRef.current, mode).catch(() => {})
+    }
   }
 
   const handleRestart = () => {
