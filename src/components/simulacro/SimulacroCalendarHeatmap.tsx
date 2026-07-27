@@ -45,17 +45,21 @@ function formatDayLabel(iso: string): string {
   return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-// Semanas (columnas) que cubren el año natural completo, lunes-domingo. La
-// primera y la última semana pueden asomar días del año anterior/siguiente
-// para completar la semana: esos se pintan como huecos, no como datos.
-function buildYearWeeks(year: number, lastRealDay: Date): Date[][] {
+// Semanas (columnas) que cubren el año natural COMPLETO (1-ene..31-dic),
+// lunes-domingo, siempre entero aunque el año esté en curso — los días
+// futuros se pintan como huecos más abajo, pero las columnas de los meses
+// que faltan deben seguir presentes. La primera y la última semana pueden
+// asomar días del año anterior/siguiente para completar la semana: esos
+// también se pintan como huecos, no como datos.
+function buildYearWeeks(year: number): Date[][] {
   const start = new Date(year, 0, 1)
   const startDow = (start.getDay() + 6) % 7
   const gridStart = new Date(start)
   gridStart.setDate(gridStart.getDate() - startDow)
 
-  const endDow = (lastRealDay.getDay() + 6) % 7
-  const gridEnd = new Date(lastRealDay)
+  const end = new Date(year, 11, 31)
+  const endDow = (end.getDay() + 6) % 7
+  const gridEnd = new Date(end)
   gridEnd.setDate(gridEnd.getDate() + (6 - endDow))
 
   const days: Date[] = []
@@ -122,7 +126,7 @@ export default function SimulacroCalendarHeatmap({
     return map
   }, [days])
 
-  const weeks = useMemo(() => buildYearWeeks(year, lastRealDay), [year, lastRealDay])
+  const weeks = useMemo(() => buildYearWeeks(year), [year])
 
   const monthLabels = useMemo(() => {
     let lastMonth = -1
@@ -219,10 +223,20 @@ export default function SimulacroCalendarHeatmap({
               </div>
 
               {weeks.map((week, colIndex) => (
-                <div key={colIndex} className="flex flex-col" style={{ gap: GAP_PX }}>
-                  <span className="block h-4 text-[9px] font-bold uppercase text-[#7D8A96]">
-                    {monthLabels[colIndex]}
-                  </span>
+                <div
+                  key={colIndex}
+                  className="relative flex flex-col"
+                  style={{ gap: GAP_PX, width: CELL_PX }}
+                >
+                  {/* Espaciador de ancho fijo: el label de mes va en position:absolute
+                      para que un nombre de mes más ancho que una celda (p. ej. "sep")
+                      nunca ensanche esta columna y desalinee toda la rejilla. */}
+                  <div style={{ height: 16 }} />
+                  {monthLabels[colIndex] ? (
+                    <span className="pointer-events-none absolute left-0 top-0 whitespace-nowrap text-[9px] font-bold uppercase text-[#7D8A96]">
+                      {monthLabels[colIndex]}
+                    </span>
+                  ) : null}
                   {week.map((date) => {
                     const outOfYear = date.getFullYear() !== year
                     const future = date > today
