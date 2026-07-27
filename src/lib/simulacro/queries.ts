@@ -128,9 +128,13 @@ export async function fetchSimulacroHistoryDetail(
   return apiFetch<SimulacroHistoryDetail>(`/history/${sessionId}`)
 }
 
-export async function fetchSimulacroCalendar(days = 400): Promise<SimulacroCalendarDay[]> {
-  const { days: rows } = await apiFetch<{ days: SimulacroCalendarDay[] }>(
-    `/calendar?days=${days}`,
+// from/to en formato YYYY-MM-DD (año natural elegido en el heatmap-calendario).
+export async function fetchSimulacroCalendar(
+  from: string,
+  to: string,
+): Promise<SimulacroCalendarDay[]> {
+  const { days } = await apiFetch<{ days: SimulacroCalendarDay[] }>(
+    `/calendar?from=${from}&to=${to}`,
   )
-  return rows ?? []
+  return days ?? []
 }
