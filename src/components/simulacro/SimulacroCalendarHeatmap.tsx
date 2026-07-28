@@ -20,6 +20,12 @@ const CELL_PX = 9
 const GAP_PX = 2
 const CARD_WIDTH_PX = 108 // 7 * (CELL_PX + GAP_PX) - GAP_PX
 const MAX_YEARS_BACK = 2 // 3 años de histórico en total (año actual + 2 atrás)
+// Espacio reservado arriba del contenedor con scroll horizontal para que el
+// tooltip de la fila superior de cada mes quepa DENTRO de la caja: un
+// overflow-x distinto de "visible" fuerza el overflow-y a "auto" también, así
+// que cualquier tooltip que sobresaliera por arriba se recortaría. Se
+// compensa con un margin-top negativo igual para no mover nada visualmente.
+const TOOLTIP_RESERVE_PX = 32
 
 const RED_PASTEL = { r: 0xf3, g: 0xb7, b: 0xae }
 const GREEN_PASTEL = { r: 0xb9, g: 0xdc, b: 0xb4 }
@@ -185,7 +191,10 @@ export default function SimulacroCalendarHeatmap({
             </p>
           ) : null}
 
-          <div className="mt-5 overflow-x-auto pb-2">
+          <div
+            className="overflow-x-auto pb-2"
+            style={{ paddingTop: TOOLTIP_RESERVE_PX, marginTop: 20 - TOOLTIP_RESERVE_PX }}
+          >
             <div className="flex gap-2">
               {months.map(({ month, weeks }) => (
               <div key={month} className="shrink-0" style={{ width: CARD_WIDTH_PX }}>
