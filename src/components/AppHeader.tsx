@@ -10,6 +10,7 @@ import { getOnboardingDeferredFlag } from '@/lib/onboarding'
 import { supabase } from '@/lib/supabaseBrowser'
 import NotificationsPopup from '@/components/NotificationsPopup'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
+import type { HeaderBackAction } from '@/providers/HeaderUIProvider'
 
 type HeaderTab = 'studio' | 'library' | 'daily' | 'dashboard' | 'zen' | 'medguess' | null
 
@@ -17,6 +18,7 @@ type AppHeaderProps = {
   activeTab?: HeaderTab
   blurred?: boolean
   className?: string
+  backAction?: HeaderBackAction | null
 }
 
 function getNavClass(activeTab: HeaderTab, tab: Exclude<HeaderTab, null>) {
@@ -30,6 +32,7 @@ export default function AppHeader({
   activeTab = null,
   blurred = false,
   className = '',
+  backAction = null,
 }: AppHeaderProps) {
   const { profile, loading: profileLoading } = useProfile()
   const { unreadCount, refreshUnreadCount } = useNotificationsContext()
@@ -80,22 +83,32 @@ export default function AppHeader({
       } ${className}`.trim()}
     >
       <div className="relative max-w-7xl mx-auto flex items-center justify-between">
-        <Link className="flex items-center gap-3 group" href="/dashboard">
-          <div className="size-8 text-[#E8A598] flex items-center justify-center transition-transform group-hover:scale-105">
-            <svg
-              className="size-8"
-              fill="currentColor"
-              viewBox="0 0 48 48"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <path d="M42.4379 44C42.4379 44 36.0744 33.9038 41.1692 24C46.8624 12.9336 42.2078 4 42.2078 4L7.01134 4C7.01134 4 11.6577 12.932 5.96912 23.9969C0.876273 33.9029 7.27094 44 7.27094 44L42.4379 44Z" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#7D8A96] group-hover:text-[#E8A598] transition-colors">
-            MIR<span className="text-[#E8A598]">Daily</span>
-          </h1>
-        </Link>
+        {backAction ? (
+          <Link
+            className="flex items-center gap-2 text-sm font-semibold tracking-wider text-[#E8A598] uppercase transition-colors hover:text-[#D4978C]"
+            href={backAction.href}
+          >
+            <span className="material-symbols-outlined text-xl">arrow_back</span>
+            {backAction.label}
+          </Link>
+        ) : (
+          <Link className="flex items-center gap-3 group" href="/dashboard">
+            <div className="size-8 text-[#E8A598] flex items-center justify-center transition-transform group-hover:scale-105">
+              <svg
+                className="size-8"
+                fill="currentColor"
+                viewBox="0 0 48 48"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path d="M42.4379 44C42.4379 44 36.0744 33.9038 41.1692 24C46.8624 12.9336 42.2078 4 42.2078 4L7.01134 4C7.01134 4 11.6577 12.932 5.96912 23.9969C0.876273 33.9029 7.27094 44 7.27094 44L42.4379 44Z" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-[#7D8A96] group-hover:text-[#E8A598] transition-colors">
+              MIR<span className="text-[#E8A598]">Daily</span>
+            </h1>
+          </Link>
+        )}
         <LayoutGroup id="header-tabs">
           <div className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
             <Link className={getNavClass(activeTab, 'studio')} href="/studio">

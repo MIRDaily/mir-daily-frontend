@@ -1,6 +1,8 @@
 'use client'
 
+import { useEffect } from 'react'
 import Link from 'next/link'
+import { useHeaderUI } from '@/providers/HeaderUIProvider'
 
 type MiniGame = {
   id: string
@@ -23,6 +25,13 @@ const MINI_GAMES: ReadonlyArray<MiniGame> = [
 ]
 
 export default function MinijuegosPage() {
+  const { setBackAction } = useHeaderUI()
+
+  useEffect(() => {
+    setBackAction({ label: 'Estudio', href: '/studio' })
+    return () => setBackAction(null)
+  }, [setBackAction])
+
   return (
     <main className="relative min-h-screen overflow-x-hidden bg-[#FAF7F4] px-6 py-8 text-[#7D8A96] antialiased">
       <div className="pointer-events-none fixed top-[-10%] right-[-5%] z-0 h-96 w-96 rounded-full bg-[#E8A598]/10 blur-3xl" />
@@ -30,13 +39,6 @@ export default function MinijuegosPage() {
 
       <div className="relative z-10 mx-auto flex max-w-7xl flex-col gap-8">
         <section className="flex flex-col gap-2">
-          <Link
-            href="/studio"
-            className="mb-1 flex items-center gap-2 text-sm font-semibold tracking-wider text-[#E8A598] uppercase"
-          >
-            <span className="material-symbols-outlined text-base">arrow_back</span>
-            Volver a Estudio
-          </Link>
           <h1 className="text-4xl font-black tracking-tight text-[#2C3E50]">Minijuegos</h1>
           <p className="max-w-2xl text-lg font-light text-[#7D8A96]">Repasa a base de juego rápido, ideal para huecos entre sesiones de estudio.</p>
         </section>
