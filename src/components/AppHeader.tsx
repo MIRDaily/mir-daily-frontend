@@ -12,7 +12,7 @@ import NotificationsPopup from '@/components/NotificationsPopup'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
 import type { HeaderBackAction } from '@/providers/HeaderUIProvider'
 
-type HeaderTab = 'studio' | 'library' | 'daily' | 'dashboard' | 'zen' | 'medguess' | null
+type HeaderTab = 'studio' | 'library' | 'daily' | 'dashboard' | 'versus' | 'medguess' | null
 
 type AppHeaderProps = {
   activeTab?: HeaderTab
@@ -145,8 +145,8 @@ export default function AppHeader({
               )}
               Panel
             </Link>
-            <Link className={getNavClass(activeTab, 'zen')} href="/zen">
-              {activeTab === 'zen' && (
+            <Link className={getNavClass(activeTab, 'versus')} href="/versus">
+              {activeTab === 'versus' && (
                 <motion.span
                   initial={false}
                   layoutId="header-active-tab-indicator"
@@ -154,7 +154,7 @@ export default function AppHeader({
                   transition={{ type: 'spring', stiffness: 450, damping: 36 }}
                 />
               )}
-              Zen
+              Versus
             </Link>
             <Link className={getNavClass(activeTab, 'medguess')} href="/medguess">
               {activeTab === 'medguess' && (

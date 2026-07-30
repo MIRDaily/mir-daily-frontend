@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
 
-type HeaderTab = 'studio' | 'library' | 'daily' | 'dashboard' | 'zen' | 'medguess' | null
+type HeaderTab = 'studio' | 'library' | 'daily' | 'dashboard' | 'versus' | 'medguess' | null
 
 function shouldShowHeader(pathname: string): boolean {
   return (
@@ -17,17 +17,26 @@ function shouldShowHeader(pathname: string): boolean {
     pathname.startsWith('/profile') ||
     pathname.startsWith('/notifications') ||
     pathname.startsWith('/zen') ||
+    pathname.startsWith('/versus') ||
     pathname.startsWith('/library') ||
     pathname.startsWith('/medguess')
   )
 }
 
 function resolveActiveTab(pathname: string): HeaderTab {
-  if (pathname.startsWith('/studio') || pathname.startsWith('/decks') || pathname.startsWith('/session')) return 'studio'
+  // Zen ya no tiene pestaña propia: se entra desde la tarjeta "Sala Zen" del
+  // Studio, así que mantiene esa pestaña marcada en vez de dejar el header sin
+  // ninguna activa.
+  if (
+    pathname.startsWith('/studio') ||
+    pathname.startsWith('/decks') ||
+    pathname.startsWith('/session') ||
+    pathname.startsWith('/zen')
+  ) return 'studio'
   if (pathname.startsWith('/library')) return 'library'
   if (pathname.startsWith('/panel')) return 'dashboard'
   if (pathname.startsWith('/dashboard')) return 'daily'
-  if (pathname.startsWith('/zen')) return 'zen'
+  if (pathname.startsWith('/versus')) return 'versus'
   if (pathname.startsWith('/medguess')) return 'medguess'
   return null
 }
