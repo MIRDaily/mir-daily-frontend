@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { ANTIBIOTICS, COVERAGE_LABELS, shuffleArray, type Antibiotic, type Coverage } from './data'
 
-type ScreenName = 'start' | 'game' | 'results'
+export type ScreenName = 'start' | 'game' | 'results'
 type Mode = 'study' | 'quick'
 type Direction = 'right' | 'left' | 'up' | 'down'
 
@@ -40,7 +40,12 @@ const SWIPE_THRESHOLD = 90
 const DRAG_THRESHOLD = 8
 const MAX_ROTATE = 18
 
-export default function GramSwipeGame() {
+type GramSwipeGameProps = {
+  /** Notifica a la página contenedora cuando cambia de pantalla (start/game/results), para que pueda ocultar su propio botón de volver mientras hay una partida en curso y evitar duplicar el que ya protege el progreso con confirmación. */
+  onScreenChange?: (screen: ScreenName) => void
+}
+
+export default function GramSwipeGame({ onScreenChange }: GramSwipeGameProps) {
   const [screen, setScreen] = useState<ScreenName>('start')
   const [mode, setMode] = useState<Mode>('study')
   const [queue, setQueue] = useState<Antibiotic[]>([])
@@ -48,6 +53,10 @@ export default function GramSwipeGame() {
   const [skippedIds, setSkippedIds] = useState<Set<number>>(new Set())
   const [score, setScore] = useState(0)
   const [feedback, setFeedback] = useState<FeedbackState | null>(null)
+
+  useEffect(() => {
+    onScreenChange?.(screen)
+  }, [screen, onScreenChange])
 
   const animatingRef = useRef(false)
   const [animating, setAnimating] = useState(false)
