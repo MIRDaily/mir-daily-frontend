@@ -599,6 +599,20 @@ export default function StudioPage() {
                   </div>
                 </Link>
               </motion.div>
+              <motion.div {...entranceProps(reduceMotion, 0.48, 16, 0.98)}>
+                <Link
+                  href="/studio/minijuegos"
+                  className="group flex cursor-pointer items-center gap-4 rounded-xl border border-[#EAE4E2] bg-white p-4 transition-colors hover:border-[#E8A598]/50"
+                >
+                  <div className="rounded-lg bg-[#F2EFED] p-2 text-[#7D8A96] transition-colors group-hover:bg-[#E8A598] group-hover:text-white">
+                    <span className="material-symbols-outlined">sports_esports</span>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-[#2c3e50]">Minijuegos</h4>
+                    <p className="text-xs">Repasa jugando: GramSwipe y más</p>
+                  </div>
+                </Link>
+              </motion.div>
             </div>
           </motion.section>
         </div>
