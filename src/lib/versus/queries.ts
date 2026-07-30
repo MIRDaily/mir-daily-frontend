@@ -77,3 +77,34 @@ export async function leaveRoom(pin: string): Promise<{ closed: boolean }> {
     method: 'POST',
   })
 }
+
+export async function startGame(
+  pin: string,
+  config: { subjectIds: number[]; topicIds: number[]; count: number },
+): Promise<{ total: number }> {
+  return apiFetch<{ total: number }>(`/rooms/${pin.toUpperCase()}/start`, {
+    method: 'POST',
+    body: JSON.stringify(config),
+  })
+}
+
+// No devuelve si se acertó: la corrección llega por el canal en 'reveal',
+// cuando el servidor ha cerrado el plazo para todos.
+export async function submitAnswer(
+  pin: string,
+  idx: number,
+  selectedOption: number | null,
+): Promise<{ accepted: boolean }> {
+  return apiFetch<{ accepted: boolean }>(`/rooms/${pin.toUpperCase()}/answer`, {
+    method: 'POST',
+    body: JSON.stringify({ idx, selectedOption }),
+  })
+}
+
+// La llama cualquier cliente al agotarse su cuenta atrás. El servidor decide si
+// de verdad toca avanzar, así que llamarla de más es inofensivo.
+export async function advanceRoom(pin: string): Promise<{ advanced: boolean }> {
+  return apiFetch<{ advanced: boolean }>(`/rooms/${pin.toUpperCase()}/advance`, {
+    method: 'POST',
+  })
+}

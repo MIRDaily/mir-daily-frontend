@@ -7,6 +7,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { getAvatarUrl, getSafeAvatarId } from '@/lib/avatar'
 import { useVersusRoom } from '@/hooks/useVersusRoom'
 import { leaveRoom } from '@/lib/versus/queries'
+import VersusRunner from '@/components/versus/VersusRunner'
+import VersusStartPanel from '@/components/versus/VersusStartPanel'
 
 type VersusRoomProps = {
   pin: string
@@ -14,8 +16,19 @@ type VersusRoomProps = {
 
 export default function VersusRoom({ pin }: VersusRoomProps) {
   const router = useRouter()
-  const { room, players, playerId, isHost, connected, closed, loading, error } =
-    useVersusRoom(pin)
+  const {
+    room,
+    players,
+    playerId,
+    isHost,
+    phase,
+    progress,
+    clockOffset,
+    connected,
+    closed,
+    loading,
+    error,
+  } = useVersusRoom(pin)
   const [copied, setCopied] = useState(false)
   const [leaving, setLeaving] = useState(false)
 
@@ -72,6 +85,20 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
           Volver a Versus
         </button>
       </div>
+    )
+  }
+
+  // Con la partida en marcha manda el runner: el lobby ya no pinta nada.
+  if (room.status !== 'lobby' && phase) {
+    return (
+      <VersusRunner
+        pin={pin}
+        phase={phase}
+        players={players}
+        playerId={playerId}
+        progress={progress}
+        clockOffset={clockOffset}
+      />
     )
   }
 
@@ -171,30 +198,23 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
         </div>
       </section>
 
+      {/* Configuración y arranque: solo el anfitrión */}
+      {isHost ? (
+        <VersusStartPanel pin={pin} canStart={players.length >= 2} />
+      ) : (
+        <div className="mb-8 flex items-center justify-center gap-2 rounded-xl bg-[#F2EFED] px-5 py-4 text-sm font-semibold text-[#7D8A96]">
+          <span className="material-symbols-outlined text-[18px]">schedule</span>
+          Esperando a que el anfitrión empiece
+        </div>
+      )}
+
       {/* Acciones */}
       <section className="flex flex-col gap-3 sm:flex-row">
-        {isHost ? (
-          <button
-            type="button"
-            disabled
-            title="El bucle de preguntas llega en el siguiente hito"
-            className="flex flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-[#F2EFED] px-5 py-3 text-sm font-semibold text-[#7D8A96]/60"
-          >
-            <span className="material-symbols-outlined text-[18px]">lock</span>
-            Empezar partida
-          </button>
-        ) : (
-          <div className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#F2EFED] px-5 py-3 text-sm font-semibold text-[#7D8A96]">
-            <span className="material-symbols-outlined text-[18px]">schedule</span>
-            Esperando al anfitrión
-          </div>
-        )}
-
         <button
           type="button"
           onClick={handleLeave}
           disabled={leaving}
-          className="rounded-xl border-2 border-[#EAE4E2] px-5 py-3 text-sm font-semibold text-[#7D8A96] transition-colors hover:border-[#C4655A]/40 hover:text-[#C4655A] disabled:opacity-60"
+          className="flex-1 rounded-xl border-2 border-[#EAE4E2] px-5 py-3 text-sm font-semibold text-[#7D8A96] transition-colors hover:border-[#C4655A]/40 hover:text-[#C4655A] disabled:opacity-60"
         >
           {isHost ? 'Cerrar sala' : 'Salir'}
         </button>

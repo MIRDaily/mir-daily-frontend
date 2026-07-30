@@ -3,13 +3,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseBrowser'
 import { fetchRoomState } from '@/lib/versus/queries'
-import type { VersusPlayer, VersusRoom } from '@/lib/versus/types'
+import type {
+  VersusPhase,
+  VersusPlayer,
+  VersusRoom,
+  VersusStatus,
+} from '@/lib/versus/types'
 
 type UseVersusRoomResult = {
   room: VersusRoom | null
+  status: VersusStatus | null
   players: VersusPlayer[]
   playerId: string | null
   isHost: boolean
+  phase: VersusPhase | null
+  /** Cuántos han respondido ya la pregunta en curso (sin decir qué). */
+  progress: { answered: number; total: number } | null
+  /** Diferencia entre el reloj del servidor y el del navegador, en ms. */
+  clockOffset: number
   connected: boolean
   closed: boolean
   loading: boolean
@@ -18,14 +29,16 @@ type UseVersusRoomResult = {
 }
 
 // El canal es público (cualquiera con el PIN puede escuchar), así que el
-// servidor no emite por aquí nada que no pueda verse: la plantilla de la sala y
-// los cambios de fase. La respuesta correcta de una pregunta viajará solo en el
-// evento de revelado, cuando el backend ya haya cerrado el plazo.
+// servidor solo emite por ahí lo que puede verse en cada fase. Este hook no
+// decide nada del juego: refleja lo que dice el servidor y corrige el reloj.
 export function useVersusRoom(pin: string): UseVersusRoomResult {
   const [room, setRoom] = useState<VersusRoom | null>(null)
   const [players, setPlayers] = useState<VersusPlayer[]>([])
   const [playerId, setPlayerId] = useState<string | null>(null)
   const [isHost, setIsHost] = useState(false)
+  const [phase, setPhase] = useState<VersusPhase | null>(null)
+  const [progress, setProgress] = useState<{ answered: number; total: number } | null>(null)
+  const [clockOffset, setClockOffset] = useState(0)
   const [connected, setConnected] = useState(false)
   const [closed, setClosed] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -33,6 +46,13 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
 
   // Evita que una resincronización lenta pise el estado de una sala ya cerrada.
   const closedRef = useRef(false)
+
+  // El navegador puede ir adelantado o atrasado respecto al servidor. Todos los
+  // plazos se calculan contra el reloj del servidor, así que cada evento trae
+  // su `serverNow` y aquí se guarda la diferencia.
+  const syncClock = useCallback((serverNow: number | undefined) => {
+    if (typeof serverNow === 'number') setClockOffset(serverNow - Date.now())
+  }, [])
 
   const refresh = useCallback(async () => {
     try {
@@ -42,13 +62,15 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
       setPlayers(state.players)
       setPlayerId(state.playerId)
       setIsHost(state.isHost)
+      setPhase(state.phase ?? null)
+      syncClock(state.phase?.serverNow)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo cargar la sala')
     } finally {
       setLoading(false)
     }
-  }, [pin])
+  }, [pin, syncClock])
 
   useEffect(() => {
     closedRef.current = false
@@ -67,6 +89,28 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
       if (Array.isArray(next.players)) setPlayers(next.players)
     })
 
+    // Durante la pregunta solo llega el contador, nunca qué ha elegido nadie.
+    channel.on('broadcast', { event: 'progress' }, ({ payload }) => {
+      if (closedRef.current) return
+      const next = payload as { answered: number; total: number }
+      setProgress({ answered: next.answered, total: next.total })
+    })
+
+    for (const event of ['question', 'picks', 'reveal', 'ended'] as const) {
+      channel.on('broadcast', { event }, ({ payload }) => {
+        if (closedRef.current) return
+        const next = payload as VersusPhase & { status?: VersusStatus }
+        syncClock(next.serverNow)
+        // El nombre del evento al que estamos suscritos determina la variante
+        // de la unión; TypeScript no puede deducirlo dentro del bucle.
+        setPhase({ ...next, event } as VersusPhase)
+        if (event === 'question') setProgress(null)
+        if (next.status) {
+          setRoom((prev) => (prev ? { ...prev, status: next.status! } : prev))
+        }
+      })
+    }
+
     channel.on('broadcast', { event: 'room_closed' }, () => {
       closedRef.current = true
       setClosed(true)
@@ -78,7 +122,7 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
       setConnected(isSubscribed)
 
       // Al (re)suscribirse se vuelve a pedir el estado: mientras el websocket
-      // estuvo caído pudieron entrar o salir jugadores y esos broadcasts se
+      // estuvo caído pudieron pasar rondas enteras y esos broadcasts se
       // perdieron. Este es el único camino de recuperación.
       if (isSubscribed && !closedRef.current) void refresh()
     })
@@ -86,7 +130,21 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
     return () => {
       void supabase.removeChannel(channel)
     }
-  }, [pin, refresh])
+  }, [pin, refresh, syncClock])
 
-  return { room, players, playerId, isHost, connected, closed, loading, error, refresh }
+  return {
+    room,
+    status: room?.status ?? null,
+    players,
+    playerId,
+    isHost,
+    phase,
+    progress,
+    clockOffset,
+    connected,
+    closed,
+    loading,
+    error,
+    refresh,
+  }
 }

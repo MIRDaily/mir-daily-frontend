@@ -38,11 +38,76 @@ export type VersusPlayer = {
   isGuest: boolean
 }
 
+// Eventos que emite el servidor por el canal. Durante 'question' no viaja nada
+// que revele la respuesta; 'picks' enseña qué eligió cada uno pero todavía no
+// cuál era la buena; la corrección llega solo en 'reveal'.
+export type VersusQuestionEvent = {
+  event: 'question'
+  idx: number
+  total: number
+  statement: string
+  subject: string | null
+  topic: string | null
+  hasImage: boolean
+  imageUrl: string | null
+  options: string[]
+  /** Instante (ms epoch del servidor) en que termina la cuenta atrás. */
+  startsAt: number
+  endsAt: number
+  serverNow: number
+}
+
+export type VersusPicksEvent = {
+  event: 'picks'
+  idx: number
+  serverNow: number
+  endsAt: number
+  picks: { playerId: string; selected: number | null }[]
+}
+
+export type VersusRevealEvent = {
+  event: 'reveal'
+  idx: number
+  serverNow: number
+  endsAt: number
+  correctIndex: number
+  explanation: string | null
+  results: {
+    playerId: string
+    selected: number | null
+    isCorrect: boolean | null
+    msTaken: number
+    points: number
+  }[]
+  scores: VersusScore[]
+}
+
+export type VersusEndedEvent = {
+  event: 'ended'
+  serverNow: number
+  scores: VersusScore[]
+}
+
+export type VersusScore = {
+  playerId: string
+  score: number
+  correct: number
+  answered: number
+}
+
+export type VersusPhase =
+  | VersusQuestionEvent
+  | VersusPicksEvent
+  | VersusRevealEvent
+  | VersusEndedEvent
+
 export type VersusRoomState = {
   room: VersusRoom
   players: VersusPlayer[]
   playerId: string | null
   isHost: boolean
+  phase?: VersusPhase | null
+  answered?: boolean
 }
 
 export type VersusJoinResult = VersusRoomState & {
@@ -55,6 +120,8 @@ export type VersusErrorCode =
   | 'USERNAME_REQUIRED'
   | 'ALREADY_STARTED'
   | 'ROOM_FULL'
+  | 'NOT_ENOUGH_PLAYERS'
+  | 'NO_QUESTIONS'
 
 export class VersusError extends Error {
   code?: VersusErrorCode
