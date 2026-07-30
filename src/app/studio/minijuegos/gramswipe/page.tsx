@@ -13,7 +13,9 @@ export default function GramSwipePage() {
   const [gameScreen, setGameScreen] = useState<ScreenName>('start')
 
   useEffect(() => {
-    setBackAction(gameScreen === 'game' ? null : { label: 'Minijuegos', href: '/studio/minijuegos' })
+    setBackAction(
+      gameScreen === 'game' ? null : { label: 'Minijuegos', href: '/studio/minijuegos', current: 'GramSwipe' },
+    )
     return () => setBackAction(null)
   }, [gameScreen, setBackAction])
 
