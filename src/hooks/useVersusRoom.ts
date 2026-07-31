@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseBrowser'
-import { fetchRoomState } from '@/lib/versus/queries'
+import {
+  fetchRoomState,
+  getAccessToken,
+  pingRoom,
+  sayGoodbye,
+} from '@/lib/versus/queries'
 import type {
   VersusPhase,
   VersusPlayer,
@@ -86,6 +91,49 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
     setClosed(false)
     void refresh()
   }, [refresh])
+
+  // Latido. Es la única forma que tiene el servidor de distinguir "está
+  // pensando la respuesta" de "cerró la pestaña hace un minuto": pulsar Salir
+  // no lo hace nadie en mitad de una partida.
+  useEffect(() => {
+    if (!pin || closed) return
+
+    let alive = true
+    const beat = () => {
+      if (!alive || closedRef.current) return
+      void pingRoom(pin).catch(() => {})
+    }
+
+    beat()
+    const id = window.setInterval(beat, 8000)
+
+    // `pagehide` cubre cerrar pestaña y navegar fuera; `visibilitychange` es lo
+    // que dispara iOS al bloquear el móvil, donde `pagehide` no es fiable.
+    let token: string | null = null
+    void getAccessToken()
+      .then((value) => {
+        token = value
+      })
+      .catch(() => {})
+
+    const goodbye = () => {
+      if (token && !closedRef.current) sayGoodbye(pin, token)
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') goodbye()
+      else beat()
+    }
+
+    window.addEventListener('pagehide', goodbye)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      alive = false
+      window.clearInterval(id)
+      window.removeEventListener('pagehide', goodbye)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [pin, closed])
 
   useEffect(() => {
     if (!pin) return

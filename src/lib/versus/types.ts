@@ -38,6 +38,8 @@ export type VersusPlayer = {
   isGuest: boolean
   /** Se fue con la partida empezada: sigue en el marcador, pero en gris. */
   left: boolean
+  /** Late todavía. Se deshace solo si vuelve, a diferencia de `left`. */
+  connected: boolean
 }
 
 // Eventos que emite el servidor por el canal. Durante 'question' no viaja nada

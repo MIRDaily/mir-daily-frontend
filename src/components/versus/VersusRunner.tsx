@@ -396,7 +396,7 @@ export default function VersusRunner({
                     key={row.playerId}
                     className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 ${
                       isMe ? 'border-[#E8A598] bg-[#E8A598]/8' : 'border-[#EAE4E2] bg-white'
-                    } ${player?.left ? 'opacity-50' : ''}`}
+                    } ${player && (player.left || !player.connected) ? 'opacity-50' : ''}`}
                   >
                     <span className="w-5 text-sm font-black text-[#7D8A96]">{position + 1}</span>
                     {player ? (
@@ -410,8 +410,10 @@ export default function VersusRunner({
                     ) : null}
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#2c3e50]">
                       {player?.nickname ?? 'Jugador'}
-                      {player?.left ? (
-                        <span className="ml-2 text-xs font-medium text-[#7D8A96]">se ha ido</span>
+                      {player && (player.left || !player.connected) ? (
+                        <span className="ml-2 text-xs font-medium text-[#7D8A96]">
+                          {player.left ? 'se ha ido' : 'desconectado'}
+                        </span>
                       ) : null}
                     </span>
                     <span className="text-sm font-black text-[#2c3e50]">{row.score}</span>

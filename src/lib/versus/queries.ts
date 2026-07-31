@@ -78,6 +78,38 @@ export async function leaveRoom(pin: string): Promise<{ closed: boolean }> {
   })
 }
 
+// Latido: le dice al servidor que este jugador sigue delante de la pantalla.
+// Sin esto, el servidor no distingue entre "está pensando la respuesta" y
+// "cerró la pestaña hace un minuto", y la ronda espera igual a los dos.
+export async function pingRoom(pin: string): Promise<void> {
+  await apiFetch<{ ok: boolean }>(`/rooms/${pin.toUpperCase()}/ping`, {
+    method: 'POST',
+  })
+}
+
+// Despedida al cerrar la pestaña, para que el resto no cargue con los 25 s de
+// gracia del latido. `keepalive` deja que la petición sobreviva a la descarga
+// de la página; sendBeacon no sirve porque no admite cabecera de autorización.
+// Es best-effort a propósito: si no llega (crash, sin red), el latido caduca
+// solo y el efecto es el mismo, solo que más tarde.
+export function sayGoodbye(pin: string, token: string): void {
+  void fetch(`${API_URL}/api/game/rooms/${pin.toUpperCase()}/ping`, {
+    method: 'POST',
+    keepalive: true,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ bye: true }),
+  }).catch(() => {})
+}
+
+// El token hay que tenerlo YA cuando se dispara `pagehide`: pedirlo entonces es
+// asíncrono y la página puede morir antes de que resuelva.
+export async function getAccessToken(): Promise<string> {
+  return getToken()
+}
+
 export async function startGame(
   pin: string,
   config: { subjectIds: number[]; topicIds: number[]; count: number },
