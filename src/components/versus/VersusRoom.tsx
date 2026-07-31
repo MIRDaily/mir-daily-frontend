@@ -23,6 +23,7 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
     isHost,
     phase,
     progress,
+    restored,
     clockOffset,
     connected,
     closed,
@@ -97,6 +98,7 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
         players={players}
         playerId={playerId}
         progress={progress}
+        restored={restored}
         clockOffset={clockOffset}
       />
     )

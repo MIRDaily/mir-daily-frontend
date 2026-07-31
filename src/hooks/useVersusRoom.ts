@@ -6,6 +6,7 @@ import { fetchRoomState } from '@/lib/versus/queries'
 import type {
   VersusPhase,
   VersusPlayer,
+  VersusRestoredAnswer,
   VersusRoom,
   VersusStatus,
 } from '@/lib/versus/types'
@@ -19,6 +20,8 @@ type UseVersusRoomResult = {
   phase: VersusPhase | null
   /** Cuántos han respondido ya la pregunta en curso (sin decir qué). */
   progress: { answered: number; total: number } | null
+  /** Lo que este jugador ya respondió en la ronda en curso, al reconectar. */
+  restored: VersusRestoredAnswer | null
   /** Diferencia entre el reloj del servidor y el del navegador, en ms. */
   clockOffset: number
   connected: boolean
@@ -38,6 +41,7 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
   const [isHost, setIsHost] = useState(false)
   const [phase, setPhase] = useState<VersusPhase | null>(null)
   const [progress, setProgress] = useState<{ answered: number; total: number } | null>(null)
+  const [restored, setRestored] = useState<VersusRestoredAnswer | null>(null)
   const [clockOffset, setClockOffset] = useState(0)
   const [connected, setConnected] = useState(false)
   const [closed, setClosed] = useState(false)
@@ -64,6 +68,11 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
       setIsHost(state.isHost)
       setPhase(state.phase ?? null)
       syncClock(state.phase?.serverNow)
+      setRestored(
+        state.answered && state.room.currentIndex >= 0
+          ? { idx: state.room.currentIndex, selected: state.mySelection ?? null }
+          : null,
+      )
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo cargar la sala')
@@ -140,6 +149,7 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
     isHost,
     phase,
     progress,
+    restored,
     clockOffset,
     connected,
     closed,

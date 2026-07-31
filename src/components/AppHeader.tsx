@@ -28,6 +28,18 @@ function getNavClass(activeTab: HeaderTab, tab: Exclude<HeaderTab, null>) {
   return 'relative text-[#7D8A96] hover:text-[#E8A598] font-medium transition-colors pb-1'
 }
 
+// En móvil las pestañas de arriba no caben, así que van en una fila propia bajo
+// la cabecera, desplazable. Sin esto no había NINGUNA forma de cambiar de
+// sección desde el móvil, que es justo desde donde se entra a una sala.
+const MOBILE_TABS: { tab: Exclude<HeaderTab, null>; href: string; label: string }[] = [
+  { tab: 'studio', href: '/studio', label: 'Studio' },
+  { tab: 'library', href: '/library', label: 'Biblioteca' },
+  { tab: 'daily', href: '/dashboard', label: 'Daily' },
+  { tab: 'dashboard', href: '/panel', label: 'Panel' },
+  { tab: 'versus', href: '/versus', label: 'Versus' },
+  { tab: 'medguess', href: '/medguess', label: 'MedGuess' },
+]
+
 export default function AppHeader({
   activeTab = null,
   blurred = false,
@@ -255,6 +267,24 @@ export default function AppHeader({
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="md:hidden -mx-6 mt-3 overflow-x-auto border-t border-[#7D8A96]/10 px-6 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex w-max items-center gap-6">
+          {MOBILE_TABS.map(({ tab, href, label }) => (
+            <Link
+              key={tab}
+              href={href}
+              className={`whitespace-nowrap text-sm ${
+                activeTab === tab
+                  ? 'font-bold text-[#E8A598]'
+                  : 'font-medium text-[#7D8A96]'
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
         </div>
       </div>
 

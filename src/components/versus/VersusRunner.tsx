@@ -6,7 +6,12 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 import { getAvatarUrl, getSafeAvatarId } from '@/lib/avatar'
 import { advanceRoom, submitAnswer } from '@/lib/versus/queries'
-import type { VersusPhase, VersusPlayer, VersusQuestionEvent } from '@/lib/versus/types'
+import type {
+  VersusPhase,
+  VersusPlayer,
+  VersusQuestionEvent,
+  VersusRestoredAnswer,
+} from '@/lib/versus/types'
 
 type VersusRunnerProps = {
   pin: string
@@ -14,6 +19,7 @@ type VersusRunnerProps = {
   players: VersusPlayer[]
   playerId: string | null
   progress: { answered: number; total: number } | null
+  restored: VersusRestoredAnswer | null
   clockOffset: number
 }
 
@@ -25,13 +31,23 @@ export default function VersusRunner({
   players,
   playerId,
   progress,
+  restored,
   clockOffset,
 }: VersusRunnerProps) {
   // Todo se mide contra el reloj del SERVIDOR, no contra el del navegador.
   const serverNow = () => Date.now() + clockOffset
 
   const [now, setNow] = useState(serverNow)
-  const [selected, setSelected] = useState<number | null>(null)
+
+  // Al recargar a mitad de pregunta, el servidor dice si ya se había respondido
+  // y qué. Sin esto la pantalla invitaría a contestar otra vez y el servidor
+  // rechazaría el duplicado. `answered` va aparte de `selected` porque se puede
+  // haber respondido en blanco.
+  // 'ended' es la única fase sin pregunta detrás, así que no tiene índice.
+  const phaseIdx = phase.event === 'ended' ? -1 : phase.idx
+  const restoredHere = restored && restored.idx === phaseIdx ? restored : null
+  const [selected, setSelected] = useState<number | null>(restoredHere?.selected ?? null)
+  const [answered, setAnswered] = useState(Boolean(restoredHere))
   const [sending, setSending] = useState(false)
 
   // 'picks' y 'reveal' no reenvían el enunciado ni las opciones (serían los
@@ -43,13 +59,28 @@ export default function VersusRunner({
 
   const playersById = new Map(players.map((p) => [p.id, p]))
 
-  // Al cambiar de pregunta se limpia la selección local.
+  // Solo al CAMBIAR de pregunta se limpia la selección. Si se resincronizara
+  // con cada evento, un refresco a mitad de ronda borraría lo ya pulsado.
+  const seededIdx = useRef<number | null>(restoredHere ? phaseIdx : null)
   useEffect(() => {
     if (phase.event !== 'question') return
     setCurrent(phase)
-    setSelected(null)
     setSending(false)
+    if (seededIdx.current === phase.idx) return
+    seededIdx.current = phase.idx
+    setSelected(null)
+    setAnswered(false)
   }, [phase])
+
+  // La restauración puede llegar DESPUÉS de la pregunta (el refresco por HTTP
+  // tarda más que el broadcast), así que se aplica cuando llega, y nunca por
+  // encima de una respuesta ya dada en esta pantalla.
+  useEffect(() => {
+    if (phase.event !== 'question' || answered) return
+    if (!restored || restored.idx !== phase.idx) return
+    setSelected(restored.selected)
+    setAnswered(true)
+  }, [phase, restored, answered])
 
   // Un único temporizador para todas las cuentas atrás de la pantalla.
   useEffect(() => {
@@ -81,15 +112,19 @@ export default function VersusRunner({
   }, [phase, pin, clockOffset])
 
   async function handleSelect(index: number) {
-    if (phase.event !== 'question' || selected !== null || sending) return
+    if (phase.event !== 'question' || answered || sending) return
     // Bloqueo al pulsar, estilo Kahoot: sin cambios de última milésima, y así
     // el tiempo de respuesta significa algo.
     setSelected(index)
+    setAnswered(true)
     setSending(true)
     try {
       await submitAnswer(pin, phase.idx, index)
     } catch {
+      // Si el servidor la rechaza (fuera de tiempo, ronda ya cerrada) se
+      // devuelve el control en vez de dejar la pantalla bloqueada en falso.
       setSelected(null)
+      setAnswered(false)
     } finally {
       setSending(false)
     }
@@ -130,6 +165,9 @@ export default function VersusRunner({
                 ) : null}
                 <span className="min-w-0 flex-1 truncate font-semibold text-[#2c3e50]">
                   {player?.nickname ?? 'Jugador'}
+                  {player?.left ? (
+                    <span className="ml-2 text-xs font-medium text-[#7D8A96]">se fue</span>
+                  ) : null}
                 </span>
                 <span className="text-sm text-[#7D8A96]">{row.correct} aciertos</span>
                 <span className="w-16 text-right font-black text-[#2c3e50]">{row.score}</span>
@@ -273,7 +311,7 @@ export default function VersusRunner({
               key={index}
               type="button"
               onClick={() => handleSelect(index)}
-              disabled={phase.event !== 'question' || selected !== null}
+              disabled={phase.event !== 'question' || answered}
               className={`flex w-full items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors disabled:cursor-default ${tone}`}
             >
               <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#F2EFED] text-sm font-black text-[#2c3e50]">
@@ -316,7 +354,7 @@ export default function VersusRunner({
       {/* Pie: contador anónimo, o resultado propio */}
       {phase.event === 'question' ? (
         <p className="text-center text-sm font-medium text-[#7D8A96]">
-          {selected !== null
+          {answered
             ? 'Respuesta enviada. Esperando al resto…'
             : progress
               ? `${progress.answered} de ${progress.total} han respondido`
@@ -331,18 +369,57 @@ export default function VersusRunner({
       ) : null}
 
       {phase.event === 'reveal' ? (
-        <div className="rounded-2xl border-2 border-[#EAE4E2] bg-white p-5">
-          <p className="mb-2 font-bold text-[#2c3e50]">
-            {myResult?.isCorrect
-              ? `¡Correcto! +${myResult.points}`
-              : myResult?.selected === null || myResult === undefined
-                ? 'Sin respuesta'
-                : 'Fallaste'}
-          </p>
-          {phase.explanation ? (
-            <p className="text-sm leading-relaxed text-[#7D8A96]">{phase.explanation}</p>
-          ) : null}
-        </div>
+        <>
+          <div className="mb-4 rounded-2xl border-2 border-[#EAE4E2] bg-white p-5">
+            <p className="mb-2 font-bold text-[#2c3e50]">
+              {myResult?.isCorrect
+                ? `¡Correcto! +${myResult.points}`
+                : myResult?.selected === null || myResult === undefined
+                  ? 'Sin respuesta'
+                  : 'Fallaste'}
+            </p>
+            {phase.explanation ? (
+              <p className="text-sm leading-relaxed text-[#7D8A96]">{phase.explanation}</p>
+            ) : null}
+          </div>
+
+          {/* Marcador acumulado: sin esto no hay forma de saber si vas ganando
+              hasta el podio final, que es la mitad de la gracia. */}
+          <ol className="space-y-2">
+            {[...phase.scores]
+              .sort((a, b) => b.score - a.score)
+              .map((row, position) => {
+                const player = playersById.get(row.playerId)
+                const isMe = row.playerId === playerId
+                return (
+                  <li
+                    key={row.playerId}
+                    className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 ${
+                      isMe ? 'border-[#E8A598] bg-[#E8A598]/8' : 'border-[#EAE4E2] bg-white'
+                    } ${player?.left ? 'opacity-50' : ''}`}
+                  >
+                    <span className="w-5 text-sm font-black text-[#7D8A96]">{position + 1}</span>
+                    {player ? (
+                      <Image
+                        src={getAvatarUrl(getSafeAvatarId(player.avatarId))}
+                        alt=""
+                        width={28}
+                        height={28}
+                        className="size-7 rounded-full object-cover"
+                      />
+                    ) : null}
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#2c3e50]">
+                      {player?.nickname ?? 'Jugador'}
+                      {player?.left ? (
+                        <span className="ml-2 text-xs font-medium text-[#7D8A96]">se ha ido</span>
+                      ) : null}
+                    </span>
+                    <span className="text-sm font-black text-[#2c3e50]">{row.score}</span>
+                  </li>
+                )
+              })}
+          </ol>
+        </>
       ) : null}
     </div>
   )

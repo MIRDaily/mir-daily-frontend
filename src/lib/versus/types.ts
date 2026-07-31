@@ -36,6 +36,8 @@ export type VersusPlayer = {
   avatarId: number
   score: number
   isGuest: boolean
+  /** Se fue con la partida empezada: sigue en el marcador, pero en gris. */
+  left: boolean
 }
 
 // Eventos que emite el servidor por el canal. Durante 'question' no viaja nada
@@ -101,6 +103,13 @@ export type VersusPhase =
   | VersusRevealEvent
   | VersusEndedEvent
 
+// Lo que este jugador ya respondió en la ronda en curso. Que exista significa
+// que respondió, aunque `selected` sea null (dejó la pregunta en blanco).
+export type VersusRestoredAnswer = {
+  idx: number
+  selected: number | null
+}
+
 export type VersusRoomState = {
   room: VersusRoom
   players: VersusPlayer[]
@@ -108,6 +117,7 @@ export type VersusRoomState = {
   isHost: boolean
   phase?: VersusPhase | null
   answered?: boolean
+  mySelection?: number | null
 }
 
 export type VersusJoinResult = VersusRoomState & {
