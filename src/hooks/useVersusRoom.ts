@@ -107,8 +107,13 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
     beat()
     const id = window.setInterval(beat, 8000)
 
-    // `pagehide` cubre cerrar pestaña y navegar fuera; `visibilitychange` es lo
-    // que dispara iOS al bloquear el móvil, donde `pagehide` no es fiable.
+    // Hay tres formas distintas de dejar de estar delante de la sala y cada una
+    // avisa por su lado:
+    //   - cerrar la pestaña o el navegador  -> pagehide
+    //   - irse a otra pestaña o bloquear el móvil -> visibilitychange
+    //   - pulsar otra sección de MIRDaily   -> ni una ni otra, porque es
+    //     navegación de cliente y la página no se descarga: solo se desmonta
+    //     este componente, así que el aviso tiene que salir de la limpieza.
     let token: string | null = null
     void getAccessToken()
       .then((value) => {
@@ -132,6 +137,7 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
       window.clearInterval(id)
       window.removeEventListener('pagehide', goodbye)
       document.removeEventListener('visibilitychange', onVisibility)
+      goodbye()
     }
   }, [pin, closed])
 
