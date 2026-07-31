@@ -56,6 +56,10 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
   // Evita que una resincronización lenta pise el estado de una sala ya cerrada.
   const closedRef = useRef(false)
 
+  // El manejador del canal necesita el playerId actual sin depender de que el
+  // efecto se vuelva a crear, así que se guarda también en una referencia.
+  const playerIdRef = useRef<string | null>(null)
+
   // El navegador puede ir adelantado o atrasado respecto al servidor. Todos los
   // plazos se calculan contra el reloj del servidor, así que cada evento trae
   // su `serverNow` y aquí se guarda la diferencia.
@@ -70,6 +74,7 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
       setRoom(state.room)
       setPlayers(state.players)
       setPlayerId(state.playerId)
+      playerIdRef.current = state.playerId
       setIsHost(state.isHost)
       setPhase(state.phase ?? null)
       syncClock(state.phase?.serverNow)
@@ -173,6 +178,16 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
         }
       })
     }
+
+    // Si el anfitrión desaparece del lobby, el servidor traspasa el rol. Llega
+    // el id de JUGADOR del nuevo anfitrión, no su user_id: es lo único con lo
+    // que cada cliente puede reconocerse a sí mismo.
+    channel.on('broadcast', { event: 'host_changed' }, ({ payload }) => {
+      if (closedRef.current) return
+      const next = payload as { hostPlayerId: string | null }
+      const mine = playerIdRef.current
+      setIsHost(mine !== null && mine === next.hostPlayerId)
+    })
 
     channel.on('broadcast', { event: 'room_closed' }, () => {
       closedRef.current = true
