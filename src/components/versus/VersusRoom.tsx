@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { getAvatarUrl, getSafeAvatarId } from '@/lib/avatar'
 import { useVersusRoom } from '@/hooks/useVersusRoom'
 import { leaveRoom } from '@/lib/versus/queries'
+import VersusPresenceToasts from '@/components/versus/VersusPresenceToasts'
 import VersusRunner from '@/components/versus/VersusRunner'
 import VersusStartPanel from '@/components/versus/VersusStartPanel'
 
@@ -92,15 +93,18 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
   // Con la partida en marcha manda el runner: el lobby ya no pinta nada.
   if (room.status !== 'lobby' && phase) {
     return (
-      <VersusRunner
-        pin={pin}
-        phase={phase}
-        players={players}
-        playerId={playerId}
-        progress={progress}
-        restored={restored}
-        clockOffset={clockOffset}
-      />
+      <>
+        <VersusRunner
+          pin={pin}
+          phase={phase}
+          players={players}
+          playerId={playerId}
+          progress={progress}
+          restored={restored}
+          clockOffset={clockOffset}
+        />
+        <VersusPresenceToasts players={players} playerId={playerId} />
+      </>
     )
   }
 
@@ -227,6 +231,8 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
           Eres el anfitrión: si sales, la sala se cierra para todos.
         </p>
       ) : null}
+
+      <VersusPresenceToasts players={players} playerId={playerId} />
     </div>
   )
 }
