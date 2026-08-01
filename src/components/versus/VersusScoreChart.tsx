@@ -1,6 +1,13 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import type { VersusPlayer, VersusSeries } from '@/lib/versus/types'
 
 type VersusScoreChartProps = {
@@ -40,10 +47,92 @@ const PAD = { top: 16, right: 56, bottom: 28, left: 44 }
 // (que no llega a ejecutarse) y evita el aviso de React.
 const useMeasureEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
+// Trazado con arranque y frenada (no lineal), y cada jugador entrando algo
+// después que el anterior, para poder seguir una línea a la vez en vez de ver
+// todas dispararse a la vez.
+const DRAW_MS = 900
+const STAGGER_MS = 160
+const EASE = 'cubic-bezier(0.65, 0, 0.35, 1)'
+
+// Separación mínima entre rótulos del final. Cuando dos líneas acaban juntas
+// los números se pisan (y con eso no se lee ninguno de los dos). A 11px de
+// fuente la caja del texto mide 14, así que 15 deja un pelo de aire; con 13 se
+// tocaban por un píxel.
+const LABEL_GAP = 15
+
+// Quien ha pedido menos movimiento en el sistema ve el gráfico ya dibujado.
+// Es un almacén externo, no estado propio: leerlo así lo hace seguro en SSR y
+// además responde si el usuario cambia la preferencia con la página abierta.
+const REDUCED_MOTION = '(prefers-reduced-motion: reduce)'
+
+function useReducedMotion() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const query = window.matchMedia(REDUCED_MOTION)
+      query.addEventListener('change', onChange)
+      return () => query.removeEventListener('change', onChange)
+    },
+    () => window.matchMedia(REDUCED_MOTION).matches,
+    () => false,
+  )
+}
+
 function niceCeil(value: number) {
   if (value <= 0) return 100
   const magnitude = 10 ** Math.floor(Math.log10(value))
   return Math.ceil(value / magnitude) * magnitude
+}
+
+// Interpolación cúbica MONÓTONA (Fritsch–Carlson). La suavidad normal (una
+// spline de Catmull-Rom, por ejemplo) se pasa de largo al cambiar la pendiente,
+// y aquí eso sería mentir: la puntuación es acumulada y NUNCA baja, así que un
+// sobrepaso dibujaría una bajada que no ocurrió. Esta preserva la monotonía —
+// lo plano se queda plano y lo que sube solo sube.
+function monotonePath(points: { x: number; y: number }[]) {
+  if (points.length === 0) return ''
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`
+
+  const n = points.length
+  const dx: number[] = []
+  const slope: number[] = []
+
+  for (let i = 0; i < n - 1; i += 1) {
+    const h = points[i + 1].x - points[i].x
+    dx.push(h)
+    slope.push(h === 0 ? 0 : (points[i + 1].y - points[i].y) / h)
+  }
+
+  // Tangente inicial en cada punto: media de las pendientes vecinas.
+  const m: number[] = [slope[0]]
+  for (let i = 1; i < n - 1; i += 1) m.push((slope[i - 1] + slope[i]) / 2)
+  m.push(slope[n - 2])
+
+  // Y aquí está el truco que evita el sobrepaso: donde el tramo es plano la
+  // tangente se fuerza a 0, y en el resto se recorta al círculo de radio 3.
+  for (let i = 0; i < n - 1; i += 1) {
+    if (slope[i] === 0) {
+      m[i] = 0
+      m[i + 1] = 0
+      continue
+    }
+    const a = m[i] / slope[i]
+    const b = m[i + 1] / slope[i]
+    const s = a * a + b * b
+    if (s > 9) {
+      const t = 3 / Math.sqrt(s)
+      m[i] = t * a * slope[i]
+      m[i + 1] = t * b * slope[i]
+    }
+  }
+
+  let d = `M ${points[0].x} ${points[0].y}`
+  for (let i = 0; i < n - 1; i += 1) {
+    const h = dx[i] / 3
+    d += ` C ${points[i].x + h} ${points[i].y + m[i] * h}`
+    d += ` ${points[i + 1].x - h} ${points[i + 1].y - m[i + 1] * h}`
+    d += ` ${points[i + 1].x} ${points[i + 1].y}`
+  }
+  return d
 }
 
 export default function VersusScoreChart({
@@ -54,6 +143,7 @@ export default function VersusScoreChart({
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const [width, setWidth] = useState(640)
   const [hover, setHover] = useState<number | null>(null)
+  const instant = useReducedMotion()
 
   // Se mide el ancho real en vez de escalar un viewBox: escalar encogería
   // también el texto, y en móvil los rótulos quedarían ilegibles.
@@ -123,6 +213,39 @@ export default function VersusScoreChart({
   // amontonarían y manda la leyenda.
   const directLabels = shown.length <= 4
 
+  // Reparto de los rótulos del final. Cuando dos jugadores acaban con
+  // puntuaciones parecidas sus números se pisan y no se lee ninguno, así que se
+  // separan y se les dibuja un tirante hasta su línea: sin el tirante, un
+  // número movido deja de pertenecer a nada.
+  const labelSlots = (() => {
+    if (!directLabels) return []
+
+    const wanted = shown.map((serie, index) => ({
+      index,
+      value: serie.points.at(-1) ?? 0,
+      anchor: y(serie.points.at(-1) ?? 0),
+    }))
+
+    const sorted = [...wanted].sort((a, b) => a.anchor - b.anchor)
+
+    let previous = -Infinity
+    for (const slot of sorted) {
+      const at = Math.max(slot.anchor, previous + LABEL_GAP)
+      ;(slot as typeof slot & { at: number }).at = at
+      previous = at
+    }
+
+    // Si al separarlos se salen por abajo, se sube el grupo entero en bloque.
+    const overflow = (sorted.at(-1) as { at: number } | undefined)?.at ?? 0
+    const limit = PAD.top + innerH
+    const shift = overflow > limit ? overflow - limit : 0
+
+    return sorted.map((slot) => {
+      const at = (slot as typeof slot & { at: number }).at - shift
+      return { index: slot.index, value: slot.value, anchor: slot.anchor, at }
+    })
+  })()
+
   function handleMove(event: React.MouseEvent<SVGSVGElement>) {
     const rect = event.currentTarget.getBoundingClientRect()
     const px = event.clientX - rect.left
@@ -144,6 +267,11 @@ export default function VersusScoreChart({
       {/* El ancho se mide, pero si por lo que sea la medida se queda vieja (una
           rotación de pantalla que no dispare ningún evento), el gráfico scrollea
           dentro de su caja en vez de reventar el ancho de la página. */}
+      <style>{`
+        @keyframes versus-draw { from { stroke-dashoffset: 1 } to { stroke-dashoffset: 0 } }
+        @keyframes versus-fade { from { opacity: 0 } to { opacity: 1 } }
+      `}</style>
+
       <div ref={wrapRef} className="w-full overflow-x-auto">
         <svg
           width={width}
@@ -212,13 +340,22 @@ export default function VersusScoreChart({
 
           {shown.map((serie, index) => {
             const color = SERIES_COLORS[index]
-            const path = [0, ...serie.points]
-              .map((value, round) => `${round === 0 ? 'M' : 'L'} ${x(round)} ${y(value)}`)
-              .join(' ')
+            const path = monotonePath(
+              [0, ...serie.points].map((value, round) => ({ x: x(round), y: y(value) })),
+            )
             const last = serie.points.at(-1) ?? 0
+            const delay = index * STAGGER_MS
+            const slot = labelSlots.find((s) => s.index === index)
+            const nudged = slot ? Math.abs(slot.at - slot.anchor) > 1 : false
 
             return (
               <g key={serie.playerId}>
+                {/* pathLength=1 normaliza el largo del trazo, así se puede
+                    animar el dibujado sin medirlo en el DOM. */}
+                {/* pathLength=1 normaliza el largo del trazo, así se puede
+                    animar el dibujado sin medirlo en el DOM. El estado natural
+                    es "dibujado" y la animación solo lo retrasa: si por lo que
+                    sea no llegara a ejecutarse, el gráfico se ve igual. */}
                 <path
                   d={path}
                   fill="none"
@@ -226,17 +363,67 @@ export default function VersusScoreChart({
                   strokeWidth={2}
                   strokeLinejoin="round"
                   strokeLinecap="round"
+                  pathLength={1}
+                  strokeDasharray={1}
+                  strokeDashoffset={0}
+                  style={
+                    instant
+                      ? undefined
+                      : { animation: `versus-draw ${DRAW_MS}ms ${EASE} ${delay}ms both` }
+                  }
                 />
-                {/* Marcador final con anillo del color de la superficie, para
-                    que siga leyéndose donde dos líneas se cruzan */}
-                <circle
-                  cx={x(rounds)}
-                  cy={y(last)}
-                  r={4}
-                  fill={color}
-                  stroke={SURFACE}
-                  strokeWidth={2}
-                />
+
+                {/* Lo del final aparece cuando su línea ha terminado de
+                    dibujarse, no antes. */}
+                <g
+                  style={
+                    instant
+                      ? undefined
+                      : {
+                          animation: `versus-fade 260ms ease-out ${
+                            delay + DRAW_MS - 120
+                          }ms both`,
+                        }
+                  }
+                >
+                  {/* Marcador final con anillo del color de la superficie, para
+                      que siga leyéndose donde dos líneas se cruzan */}
+                  <circle
+                    cx={x(rounds)}
+                    cy={y(last)}
+                    r={4}
+                    fill={color}
+                    stroke={SURFACE}
+                    strokeWidth={2}
+                  />
+
+                  {slot ? (
+                    <>
+                      {nudged ? (
+                        <line
+                          x1={x(rounds) + 5}
+                          y1={slot.anchor}
+                          x2={x(rounds) + 12}
+                          y2={slot.at}
+                          stroke={color}
+                          strokeWidth={1}
+                          strokeOpacity={0.55}
+                        />
+                      ) : null}
+                      <text
+                        x={x(rounds) + (nudged ? 15 : 8)}
+                        y={slot.at + 4}
+                        fontSize={11}
+                        fontWeight={700}
+                        fill={INK}
+                        style={{ fontVariantNumeric: 'tabular-nums' }}
+                      >
+                        {slot.value}
+                      </text>
+                    </>
+                  ) : null}
+                </g>
+
                 {hover !== null ? (
                   <circle
                     cx={x(hover)}
@@ -246,18 +433,6 @@ export default function VersusScoreChart({
                     stroke={SURFACE}
                     strokeWidth={2}
                   />
-                ) : null}
-                {directLabels ? (
-                  <text
-                    x={x(rounds) + 8}
-                    y={y(last) + 4}
-                    fontSize={11}
-                    fontWeight={700}
-                    fill={INK}
-                    style={{ fontVariantNumeric: 'tabular-nums' }}
-                  >
-                    {last}
-                  </text>
                 ) : null}
               </g>
             )
