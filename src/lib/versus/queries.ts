@@ -112,7 +112,13 @@ export async function getAccessToken(): Promise<string> {
 
 export async function startGame(
   pin: string,
-  config: { subjectIds: number[]; topicIds: number[]; count: number },
+  config: {
+    subjectIds: number[]
+    topicIds: number[]
+    count: number
+    mode: VersusMode
+    lives: number
+  },
 ): Promise<{ total: number }> {
   return apiFetch<{ total: number }>(`/rooms/${pin.toUpperCase()}/start`, {
     method: 'POST',

@@ -40,6 +40,10 @@ export type VersusPlayer = {
   left: boolean
   /** Late todavía. Se deshace solo si vuelve, a diferencia de `left`. */
   connected: boolean
+  /** Guardia: vidas restantes. null en los modos que no eliminan. */
+  lives: number | null
+  /** Guardia: en qué pregunta cayó. null = sigue en pie. */
+  eliminatedAtIdx: number | null
 }
 
 // Eventos que emite el servidor por el canal. Durante 'question' no viaja nada
@@ -74,6 +78,8 @@ export type VersusRevealEvent = {
   idx: number
   serverNow: number
   endsAt: number
+  /** Guardia: quién ha caído en esta ronda. */
+  eliminated: string[]
   correctIndex: number
   explanation: string | null
   results: {

@@ -8,7 +8,9 @@ import VersusRematch from '@/components/versus/VersusRematch'
 import VersusScoreChart from '@/components/versus/VersusScoreChart'
 import { getAvatarUrl, getSafeAvatarId } from '@/lib/avatar'
 import { advanceRoom, submitAnswer } from '@/lib/versus/queries'
+import { VersusElimination, VersusIntro } from '@/components/versus/VersusCinematics'
 import type {
+  VersusMode,
   VersusPhase,
   VersusPlayer,
   VersusQuestionEvent,
@@ -23,6 +25,7 @@ type VersusRunnerProps = {
   progress: { answered: number; total: number } | null
   restored: VersusRestoredAnswer | null
   clockOffset: number
+  mode: VersusMode
 }
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
@@ -35,6 +38,7 @@ export default function VersusRunner({
   progress,
   restored,
   clockOffset,
+  mode,
 }: VersusRunnerProps) {
   // Todo se mide contra el reloj del SERVIDOR, no contra el del navegador.
   const serverNow = () => Date.now() + clockOffset
@@ -115,6 +119,9 @@ export default function VersusRunner({
 
   async function handleSelect(index: number) {
     if (phase.event !== 'question' || answered || sending) return
+    // Los eliminados de Guardia miran; el servidor también lo rechaza, pero
+    // así no se les enciende la opción como si hubieran respondido.
+    if (mode === 'survival' && playerId && playersById.get(playerId)?.eliminatedAtIdx != null) return
     // Bloqueo al pulsar, estilo Kahoot: sin cambios de última milésima, y así
     // el tiempo de respuesta significa algo.
     setSelected(index)
@@ -136,7 +143,18 @@ export default function VersusRunner({
   // Final de partida
   // ==========================
   if (phase.event === 'ended') {
-    const ranking = [...phase.scores].sort((a, b) => b.score - a.score)
+    // En Guardia no gana quien más puntúa sino quien aguanta: primero los que
+    // siguen en pie, y a los caídos se les ordena por lo tarde que cayeron.
+    const ranking =
+      mode === 'survival'
+        ? [...phase.scores].sort((a, b) => {
+            const pa = playersById.get(a.playerId)
+            const pb = playersById.get(b.playerId)
+            const ca = pa?.eliminatedAtIdx ?? Infinity
+            const cb = pb?.eliminatedAtIdx ?? Infinity
+            return cb - ca || b.score - a.score
+          })
+        : [...phase.scores].sort((a, b) => b.score - a.score)
     return (
       <div className="mx-auto w-full max-w-2xl text-center">
         <div className="mb-5 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#E8A598] to-[#d18d80] text-white shadow-lg shadow-[#E8A598]/25">
@@ -171,7 +189,13 @@ export default function VersusRunner({
                     <span className="ml-2 text-xs font-medium text-[#7D8A96]">se fue</span>
                   ) : null}
                 </span>
-                <span className="text-sm text-[#7D8A96]">{row.correct} aciertos</span>
+                <span className="text-sm text-[#7D8A96]">
+                  {mode === 'survival'
+                    ? player?.eliminatedAtIdx == null
+                      ? 'En pie'
+                      : `Cayó en la ${player.eliminatedAtIdx + 1}`
+                    : `${row.correct} aciertos`}
+                </span>
                 <span className="w-16 text-right font-black text-[#2c3e50]">{row.score}</span>
               </li>
             )
@@ -203,6 +227,11 @@ export default function VersusRunner({
     const remaining = Math.ceil((phase.startsAt - now) / 1000)
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center">
+        {/* Solo antes de la primera: en las siguientes rondas la cuenta atrás
+            ya no necesita presentación. */}
+        {phase.idx === 0 ? (
+          <VersusIntro players={players} mode={mode} runKey={`${pin}-intro`} />
+        ) : null}
         <p className="mb-4 text-sm font-bold uppercase tracking-wider text-[#7D8A96]/70">
           Pregunta {phase.idx + 1} de {phase.total}
         </p>
@@ -256,8 +285,45 @@ export default function VersusRunner({
       ? Math.max(0, Math.min(1, (question.endsAt - now) / (question.endsAt - question.startsAt)))
       : 0
 
+  const survival = mode === 'survival'
+  const me = playerId ? playersById.get(playerId) : undefined
+  const outOfPlay = survival && me?.eliminatedAtIdx != null
+  const standing = players.filter((p) => p.eliminatedAtIdx == null)
+  const fallenNow =
+    phase.event === 'reveal'
+      ? phase.eliminated.map((id) => playersById.get(id)).filter((p): p is VersusPlayer => !!p)
+      : []
+
   return (
     <div className="mx-auto w-full max-w-3xl">
+
+      {survival && fallenNow.length > 0 ? (
+        <VersusElimination
+          fallen={fallenNow}
+          runKey={`${pin}-caida-${idx}`}
+          playerId={playerId}
+        />
+      ) : null}
+
+      {/* Guardia: vidas propias y cuántos quedan en pie */}
+      {survival ? (
+        <div className="mb-3 flex items-center justify-between rounded-xl border-2 border-[#EAE4E2] bg-white px-4 py-2">
+          <span className="flex items-center gap-1">
+            {outOfPlay ? (
+              <span className="text-sm font-bold text-[#C4655A]">Eliminado</span>
+            ) : (
+              Array.from({ length: Math.max(me?.lives ?? 0, 0) }, (_, i) => (
+                <span key={i} className="material-symbols-outlined text-[18px] text-[#C4655A]">
+                  favorite
+                </span>
+              ))
+            )}
+          </span>
+          <span className="text-sm font-semibold text-[#7D8A96]">
+            {standing.length} en pie
+          </span>
+        </div>
+      ) : null}
 
       {/* Cabecera: progreso y reloj */}
       <div className="mb-4 flex items-center justify-between text-sm font-semibold text-[#7D8A96]">
@@ -325,7 +391,7 @@ export default function VersusRunner({
               key={index}
               type="button"
               onClick={() => handleSelect(index)}
-              disabled={phase.event !== 'question' || answered}
+              disabled={phase.event !== 'question' || answered || outOfPlay}
               className={`flex w-full items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors disabled:cursor-default ${tone}`}
             >
               <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#F2EFED] text-sm font-black text-[#2c3e50]">
@@ -368,11 +434,13 @@ export default function VersusRunner({
       {/* Pie: contador anónimo, o resultado propio */}
       {phase.event === 'question' ? (
         <p className="text-center text-sm font-medium text-[#7D8A96]">
-          {answered
-            ? 'Respuesta enviada. Esperando al resto…'
-            : progress
-              ? `${progress.answered} de ${progress.total} han respondido`
-              : 'Elige una opción'}
+          {outOfPlay
+            ? 'Tu guardia acabó. Ahora solo miras.'
+            : answered
+              ? 'Respuesta enviada. Esperando al resto…'
+              : progress
+                ? `${progress.answered} de ${progress.total} han respondido`
+                : 'Elige una opción'}
         </p>
       ) : null}
 

@@ -102,6 +102,7 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
           progress={progress}
           restored={restored}
           clockOffset={clockOffset}
+          mode={room.mode}
         />
         <VersusPresenceToasts players={players} playerId={playerId} />
       </>
