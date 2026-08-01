@@ -50,15 +50,17 @@ const useMeasureEffect = typeof window === 'undefined' ? useEffect : useLayoutEf
 // Trazado con arranque y frenada (no lineal), y cada jugador entrando algo
 // después que el anterior, para poder seguir una línea a la vez en vez de ver
 // todas dispararse a la vez.
-const DRAW_MS = 900
-const STAGGER_MS = 160
+const DRAW_MS = 2600
+const STAGGER_MS = 500
 const EASE = 'cubic-bezier(0.65, 0, 0.35, 1)'
+
+const LINE_WIDTH = 5
+const DOT_RADIUS = 6
 
 // Separación mínima entre rótulos del final. Cuando dos líneas acaban juntas
 // los números se pisan (y con eso no se lee ninguno de los dos). A 11px de
-// fuente la caja del texto mide 14, así que 15 deja un pelo de aire; con 13 se
-// tocaban por un píxel.
-const LABEL_GAP = 15
+// fuente la caja del texto mide 14, así que esto deja aire de sobra.
+const LABEL_GAP = 17
 
 // Quien ha pedido menos movimiento en el sistema ve el gráfico ya dibujado.
 // Es un almacén externo, no estado propio: leerlo así lo hace seguro en SSR y
@@ -220,30 +222,38 @@ export default function VersusScoreChart({
   const labelSlots = (() => {
     if (!directLabels) return []
 
-    const wanted = shown.map((serie, index) => ({
-      index,
-      value: serie.points.at(-1) ?? 0,
-      anchor: y(serie.points.at(-1) ?? 0),
-    }))
+    const sorted = shown
+      .map((serie, index) => ({
+        index,
+        value: serie.points.at(-1) ?? 0,
+        anchor: y(serie.points.at(-1) ?? 0),
+      }))
+      .sort((a, b) => a.anchor - b.anchor)
 
-    const sorted = [...wanted].sort((a, b) => a.anchor - b.anchor)
+    const top = PAD.top + 6
+    const bottom = PAD.top + innerH - 2
+    const at = sorted.map((slot) => slot.anchor)
 
-    let previous = -Infinity
-    for (const slot of sorted) {
-      const at = Math.max(slot.anchor, previous + LABEL_GAP)
-      ;(slot as typeof slot & { at: number }).at = at
-      previous = at
+    // Tres pasadas en vez de una: empujar hacia abajo, y luego recolocar contra
+    // cada borde. Con una sola pasada, dos rótulos juntos al fondo del gráfico
+    // se salían por abajo, y moverlos en bloque sacaba a los de arriba.
+    for (let i = 1; i < at.length; i += 1) {
+      at[i] = Math.max(at[i], at[i - 1] + LABEL_GAP)
+    }
+    if (at.length > 0 && at[at.length - 1] > bottom) {
+      at[at.length - 1] = bottom
+      for (let i = at.length - 2; i >= 0; i -= 1) {
+        at[i] = Math.min(at[i], at[i + 1] - LABEL_GAP)
+      }
+    }
+    if (at.length > 0 && at[0] < top) {
+      at[0] = top
+      for (let i = 1; i < at.length; i += 1) {
+        at[i] = Math.max(at[i], at[i - 1] + LABEL_GAP)
+      }
     }
 
-    // Si al separarlos se salen por abajo, se sube el grupo entero en bloque.
-    const overflow = (sorted.at(-1) as { at: number } | undefined)?.at ?? 0
-    const limit = PAD.top + innerH
-    const shift = overflow > limit ? overflow - limit : 0
-
-    return sorted.map((slot) => {
-      const at = (slot as typeof slot & { at: number }).at - shift
-      return { index: slot.index, value: slot.value, anchor: slot.anchor, at }
-    })
+    return sorted.map((slot, i) => ({ ...slot, at: at[i] }))
   })()
 
   function handleMove(event: React.MouseEvent<SVGSVGElement>) {
@@ -256,19 +266,15 @@ export default function VersusScoreChart({
 
   return (
     <section className="mt-8">
-      <h2 className="mb-1 text-sm font-bold uppercase tracking-wider text-[#7D8A96]/70">
+      <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-[#7D8A96]/70">
         Cómo se decidió
       </h2>
-      <p className="mb-4 text-xs text-[#7D8A96]">
-        Puntuación acumulada tras cada pregunta. Una fallada suma 0 y la línea se
-        queda plana.
-      </p>
 
       {/* El ancho se mide, pero si por lo que sea la medida se queda vieja (una
           rotación de pantalla que no dispare ningún evento), el gráfico scrollea
           dentro de su caja en vez de reventar el ancho de la página. */}
       <style>{`
-        @keyframes versus-draw { from { stroke-dashoffset: 1 } to { stroke-dashoffset: 0 } }
+        @keyframes versus-draw { from { stroke-dashoffset: 1.02 } to { stroke-dashoffset: 0 } }
         @keyframes versus-fade { from { opacity: 0 } to { opacity: 1 } }
       `}</style>
 
@@ -360,11 +366,14 @@ export default function VersusScoreChart({
                   d={path}
                   fill="none"
                   stroke={color}
-                  strokeWidth={2}
+                  strokeWidth={LINE_WIDTH}
                   strokeLinejoin="round"
                   strokeLinecap="round"
                   pathLength={1}
-                  strokeDasharray={1}
+                  // Un pelín por encima de 1 a propósito: con el guion medido
+                  // justo al largo del trazo, el redondeo deja a veces un
+                  // mordisco en el último píxel, y con la línea gorda se ve.
+                  strokeDasharray={1.02}
                   strokeDashoffset={0}
                   style={
                     instant
@@ -391,7 +400,7 @@ export default function VersusScoreChart({
                   <circle
                     cx={x(rounds)}
                     cy={y(last)}
-                    r={4}
+                    r={DOT_RADIUS}
                     fill={color}
                     stroke={SURFACE}
                     strokeWidth={2}
@@ -399,19 +408,22 @@ export default function VersusScoreChart({
 
                   {slot ? (
                     <>
+                      {/* Tirante en gris fino, NO en el color de la serie: en
+                          color se leía como si la línea siguiera bajando, justo
+                          lo contrario de lo que dicen los datos. */}
                       {nudged ? (
                         <line
-                          x1={x(rounds) + 5}
+                          x1={x(rounds) + DOT_RADIUS + 1}
                           y1={slot.anchor}
-                          x2={x(rounds) + 12}
+                          x2={x(rounds) + DOT_RADIUS + 7}
                           y2={slot.at}
-                          stroke={color}
+                          stroke={MUTED}
                           strokeWidth={1}
-                          strokeOpacity={0.55}
+                          strokeOpacity={0.5}
                         />
                       ) : null}
                       <text
-                        x={x(rounds) + (nudged ? 15 : 8)}
+                        x={x(rounds) + DOT_RADIUS + (nudged ? 10 : 4)}
                         y={slot.at + 4}
                         fontSize={11}
                         fontWeight={700}
@@ -428,7 +440,7 @@ export default function VersusScoreChart({
                   <circle
                     cx={x(hover)}
                     cy={y(hover === 0 ? 0 : (serie.points[hover - 1] ?? 0))}
-                    r={4}
+                    r={DOT_RADIUS}
                     fill={color}
                     stroke={SURFACE}
                     strokeWidth={2}
@@ -450,7 +462,7 @@ export default function VersusScoreChart({
             <li key={serie.playerId} className="flex items-center gap-2">
               <span
                 aria-hidden
-                className="h-0.5 w-4 rounded-full"
+                className="h-1 w-5 rounded-full"
                 style={{ backgroundColor: SERIES_COLORS[index] }}
               />
               <span className={`text-xs ${isMe ? 'font-bold text-[#2c3e50]' : 'text-[#7D8A96]'}`}>
