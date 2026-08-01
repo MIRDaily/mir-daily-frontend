@@ -323,7 +323,13 @@ export function VersusLifeLost({ wounded, runKey, playerId }: HurtProps) {
 // Caída
 // ---------------------------------------------------------------------------
 
-const FALL_MS = 3200
+const FALL_MS = 4200
+
+// La caída NO arranca a la vez que el revelado: primero se ve la correcta y se
+// rompen los corazones, y solo entonces se lleva la pantalla. Por eso la ronda
+// con muerte dura 11 s en vez de 6 (ver game_tick): 2,6 s de espera + 4,2 s de
+// despedida caben con margen, sin que nada se pise ni se corte.
+const FALL_DELAY_MS = 2600
 
 type EliminationProps = {
   fallen: VersusPlayer[]
@@ -333,9 +339,21 @@ type EliminationProps = {
 
 export function VersusElimination({ fallen, runKey, playerId }: EliminationProps) {
   const instant = useReducedMotion()
-  const gone = useTransientOverlay(runKey, FALL_MS + 200)
+  const gone = useTransientOverlay(runKey, FALL_DELAY_MS + FALL_MS + 200)
+  const [waiting, setWaiting] = useState(true)
+  const [seenKey, setSeenKey] = useState(runKey)
 
-  if (instant || gone || fallen.length === 0) return null
+  if (seenKey !== runKey) {
+    setSeenKey(runKey)
+    setWaiting(true)
+  }
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setWaiting(false), FALL_DELAY_MS)
+    return () => window.clearTimeout(id)
+  }, [runKey])
+
+  if (instant || gone || waiting || fallen.length === 0) return null
 
   const meCaigo = playerId !== null && fallen.some((p) => p.id === playerId)
 

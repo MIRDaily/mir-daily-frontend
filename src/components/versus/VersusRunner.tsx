@@ -14,6 +14,7 @@ import {
   VersusLifeLost,
   VersusRelay,
 } from '@/components/versus/VersusCinematics'
+import VersusGuardiaHud from '@/components/versus/VersusGuardiaHud'
 import VersusGuardiaTimeline from '@/components/versus/VersusGuardiaTimeline'
 import type {
   VersusMode,
@@ -324,7 +325,9 @@ export default function VersusRunner({
   const survival = mode === 'survival'
   const me = playerId ? playersById.get(playerId) : undefined
   const outOfPlay = survival && me?.eliminatedAtIdx != null
-  const standing = players.filter((p) => p.eliminatedAtIdx == null)
+  // Las vidas de partida no viajan aparte: el que más conserva marca el total,
+  // que es exactamente lo que hace falta para dibujar los huecos.
+  const maxLives = Math.max(1, ...players.map((p) => p.lives ?? 0))
   const fallenNow =
     phase.event === 'reveal'
       ? phase.eliminated.map((id) => playersById.get(id)).filter((p): p is VersusPlayer => !!p)
@@ -337,38 +340,40 @@ export default function VersusRunner({
   return (
     <div className="mx-auto w-full max-w-3xl">
 
-      {/* Si alguien cae, manda la caída: dos overlays a la vez sería ruido. */}
-      {survival && fallenNow.length > 0 ? (
-        <VersusElimination
-          fallen={fallenNow}
-          runKey={`${pin}-caida-${idx}`}
-          playerId={playerId}
-        />
-      ) : survival && woundedNow.length > 0 ? (
+      {/* En secuencia, no a la vez: primero se rompen los corazones (abajo, sin
+          tapar), y a los 2,6 s la caída se lleva la pantalla. Por eso la ronda
+          con muerte dura 11 s en vez de 6. */}
+      {survival && woundedNow.length > 0 ? (
         <VersusLifeLost
           wounded={woundedNow}
           runKey={`${pin}-vida-${idx}`}
           playerId={playerId}
         />
       ) : null}
+      {survival && fallenNow.length > 0 ? (
+        <VersusElimination
+          fallen={fallenNow}
+          runKey={`${pin}-caida-${idx}`}
+          playerId={playerId}
+        />
+      ) : null}
 
-      {/* Guardia: vidas propias y cuántos quedan en pie */}
+      {/* HUD permanente: las vidas de TODOS, en todas las fases. Sin esto se
+          perdían vidas y se moría sin que nada lo contara. */}
       {survival ? (
-        <div className="mb-3 flex items-center justify-between rounded-xl border-2 border-[#EAE4E2] bg-white px-4 py-2">
-          <span className="flex items-center gap-1">
-            {outOfPlay ? (
-              <span className="text-sm font-bold text-[#C4655A]">Eliminado</span>
-            ) : (
-              Array.from({ length: Math.max(me?.lives ?? 0, 0) }, (_, i) => (
-                <span key={i} className="material-symbols-outlined text-[18px] text-[#C4655A]">
-                  favorite
-                </span>
-              ))
-            )}
-          </span>
-          <span className="text-sm font-semibold text-[#7D8A96]">
-            {standing.length} en pie
-          </span>
+        <VersusGuardiaHud
+          players={players}
+          playerId={playerId}
+          wounded={phase.event === 'reveal' ? phase.wounded : []}
+          eliminated={phase.event === 'reveal' ? phase.eliminated : []}
+          maxLives={maxLives}
+        />
+      ) : null}
+
+      {outOfPlay ? (
+        <div className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-[#2c3e50] px-4 py-2 text-sm font-bold text-white">
+          <span className="material-symbols-outlined text-[18px]">visibility</span>
+          Estás de espectador
         </div>
       ) : null}
 
@@ -470,9 +475,8 @@ export default function VersusRunner({
                 </AnimatePresence>
               </span>
 
-              {phase.event === 'reveal' && isCorrect ? (
-                <span className="material-symbols-outlined shrink-0 text-[#8BA888]">check_circle</span>
-              ) : null}
+              {/* Sin tick: la opción correcta ya va en verde y el resto
+                  apagadas. Un icono encima solo repite lo que el color ya dice. */}
             </button>
           )
         })}
@@ -500,12 +504,22 @@ export default function VersusRunner({
       {phase.event === 'reveal' ? (
         <>
           <div className="mb-4 rounded-2xl border-2 border-[#EAE4E2] bg-white p-5">
+            {/* En Guardia no se juega por puntos sino por vidas, así que un
+                "+1" ahí no dice nada: lo que importa es si sigues entero. */}
             <p className="mb-2 font-bold text-[#2c3e50]">
-              {myResult?.isCorrect
-                ? `¡Correcto! +${myResult.points}`
-                : myResult?.selected === null || myResult === undefined
-                  ? 'Sin respuesta'
-                  : 'Fallaste'}
+              {survival
+                ? myResult?.isCorrect
+                  ? '¡Correcto! Sigues en pie'
+                  : outOfPlay
+                    ? 'Se acabó tu guardia'
+                    : myResult?.selected === null || myResult === undefined
+                      ? 'Sin respuesta. Pierdes una vida'
+                      : 'Fallaste. Pierdes una vida'
+                : myResult?.isCorrect
+                  ? `¡Correcto! +${myResult.points}`
+                  : myResult?.selected === null || myResult === undefined
+                    ? 'Sin respuesta'
+                    : 'Fallaste'}
             </p>
             {phase.explanation ? (
               <p className="text-sm leading-relaxed text-[#7D8A96]">{phase.explanation}</p>
@@ -513,8 +527,10 @@ export default function VersusRunner({
           </div>
 
           {/* Marcador acumulado: sin esto no hay forma de saber si vas ganando
-              hasta el podio final, que es la mitad de la gracia. */}
-          <ol className="space-y-2">
+              hasta el podio final, que es la mitad de la gracia.
+              En Guardia no se pinta: los puntos no deciden nada ahí y el HUD de
+              arriba ya lleva la cuenta que importa, que son las vidas. */}
+          <ol className={`space-y-2 ${survival ? 'hidden' : ''}`}>
             {[...phase.scores]
               .sort((a, b) => b.score - a.score)
               .map((row, position) => {
