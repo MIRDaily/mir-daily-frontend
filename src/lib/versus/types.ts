@@ -80,6 +80,8 @@ export type VersusRevealEvent = {
   endsAt: number
   /** Guardia: quién ha caído en esta ronda. */
   eliminated: string[]
+  /** Guardia: quién ha perdido una vida sin llegar a caer. */
+  wounded: string[]
   correctIndex: number
   explanation: string | null
   results: {

@@ -8,7 +8,13 @@ import VersusRematch from '@/components/versus/VersusRematch'
 import VersusScoreChart from '@/components/versus/VersusScoreChart'
 import { getAvatarUrl, getSafeAvatarId } from '@/lib/avatar'
 import { advanceRoom, submitAnswer } from '@/lib/versus/queries'
-import { VersusElimination, VersusIntro } from '@/components/versus/VersusCinematics'
+import {
+  VersusElimination,
+  VersusIntro,
+  VersusLifeLost,
+  VersusRelay,
+} from '@/components/versus/VersusCinematics'
+import VersusGuardiaTimeline from '@/components/versus/VersusGuardiaTimeline'
 import type {
   VersusMode,
   VersusPhase,
@@ -202,7 +208,17 @@ export default function VersusRunner({
           })}
         </ol>
 
-        <VersusScoreChart series={phase.series} players={players} playerId={playerId} />
+        {/* En Guardia lo que hay que leer es quién aguantó hasta dónde, no
+            quién puntuó más: cronología en vez de marcador. */}
+        {mode === 'survival' ? (
+          <VersusGuardiaTimeline
+            series={phase.series}
+            players={players}
+            playerId={playerId}
+          />
+        ) : (
+          <VersusScoreChart series={phase.series} players={players} playerId={playerId} />
+        )}
 
         <VersusRematch
           pin={pin}
@@ -225,12 +241,32 @@ export default function VersusRunner({
   // pantallas. El plazo de respuesta se mide desde el final de esta cuenta.
   if (phase.event === 'question' && now < phase.startsAt) {
     const remaining = Math.ceil((phase.startsAt - now) / 1000)
+
+    // En Guardia, entre pregunta y pregunta la cuenta atrás se convierte en el
+    // recuento de supervivientes: es el hilo del modo y el momento natural
+    // para verlo, sin robarle tiempo a nada.
+    if (mode === 'survival' && phase.idx > 0) {
+      return (
+        <div className="flex min-h-[50vh] flex-col items-center justify-center">
+          <VersusRelay
+            standing={players.filter((p) => p.eliminatedAtIdx == null)}
+            fallen={players.filter((p) => p.eliminatedAtIdx != null)}
+            remaining={remaining}
+          />
+        </div>
+      )
+    }
+
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center">
-        {/* Solo antes de la primera: en las siguientes rondas la cuenta atrás
-            ya no necesita presentación. */}
+        {/* Solo antes de la primera: en las siguientes rondas manda el relevo. */}
         {phase.idx === 0 ? (
-          <VersusIntro players={players} mode={mode} runKey={`${pin}-intro`} />
+          <VersusIntro
+            players={players}
+            mode={mode}
+            lives={players[0]?.lives ?? null}
+            runKey={`${pin}-intro`}
+          />
         ) : null}
         <p className="mb-4 text-sm font-bold uppercase tracking-wider text-[#7D8A96]/70">
           Pregunta {phase.idx + 1} de {phase.total}
@@ -293,14 +329,25 @@ export default function VersusRunner({
     phase.event === 'reveal'
       ? phase.eliminated.map((id) => playersById.get(id)).filter((p): p is VersusPlayer => !!p)
       : []
+  const woundedNow =
+    phase.event === 'reveal'
+      ? phase.wounded.map((id) => playersById.get(id)).filter((p): p is VersusPlayer => !!p)
+      : []
 
   return (
     <div className="mx-auto w-full max-w-3xl">
 
+      {/* Si alguien cae, manda la caída: dos overlays a la vez sería ruido. */}
       {survival && fallenNow.length > 0 ? (
         <VersusElimination
           fallen={fallenNow}
           runKey={`${pin}-caida-${idx}`}
+          playerId={playerId}
+        />
+      ) : survival && woundedNow.length > 0 ? (
+        <VersusLifeLost
+          wounded={woundedNow}
+          runKey={`${pin}-vida-${idx}`}
           playerId={playerId}
         />
       ) : null}
