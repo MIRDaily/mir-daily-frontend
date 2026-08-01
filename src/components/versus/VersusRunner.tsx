@@ -1,10 +1,11 @@
 'use client'
 
 import Image from 'next/image'
-import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
+import VersusRematch from '@/components/versus/VersusRematch'
+import VersusScoreChart from '@/components/versus/VersusScoreChart'
 import { getAvatarUrl, getSafeAvatarId } from '@/lib/avatar'
 import { advanceRoom, submitAnswer } from '@/lib/versus/queries'
 import type {
@@ -177,24 +178,17 @@ export default function VersusRunner({
           })}
         </ol>
 
-        {/* Sin esto la partida acababa en un callejón sin salida: el podio, y
-            ninguna forma evidente de irse que no fuera el botón del navegador. */}
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link
-            href="/versus"
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#E8A598] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#E8A598]/20 transition-colors hover:bg-[#d18d80]"
-          >
-            <span className="material-symbols-outlined text-[18px]">swords</span>
-            Otra partida
-          </Link>
-          <Link
-            href="/studio"
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-[#EAE4E2] px-5 py-3 text-sm font-semibold text-[#7D8A96] transition-colors hover:border-[#E8A598]/50 hover:text-[#d18d80]"
-          >
-            <span className="material-symbols-outlined text-[18px]">home</span>
-            Salir del Versus
-          </Link>
-        </div>
+        <VersusScoreChart series={phase.series} players={players} playerId={playerId} />
+
+        <VersusRematch
+          pin={pin}
+          players={players}
+          playerId={playerId}
+          votes={phase.votes}
+          rematchUntil={phase.rematchUntil}
+          rematchPin={phase.rematchPin}
+          clockOffset={clockOffset}
+        />
       </div>
     )
   }

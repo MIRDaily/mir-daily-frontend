@@ -86,10 +86,24 @@ export type VersusRevealEvent = {
   scores: VersusScore[]
 }
 
+// Puntuación ACUMULADA de cada jugador ronda a ronda. Una ronda fallada suma 0
+// y la línea se queda plana; no son los puntos de cada pregunta.
+export type VersusSeries = {
+  playerId: string
+  points: number[]
+}
+
 export type VersusEndedEvent = {
   event: 'ended'
   serverNow: number
   scores: VersusScore[]
+  series: VersusSeries[]
+  /** Quiénes han votado repetir. */
+  votes: string[]
+  /** Fin del plazo de votación (ms epoch del servidor). */
+  rematchUntil: number | null
+  /** Código de la sala de revancha, cuando ya se ha creado. */
+  rematchPin: string | null
 }
 
 export type VersusScore = {

@@ -133,6 +133,17 @@ export async function submitAnswer(
   })
 }
 
+// Voto para repetir partida. Devuelve `pin` en cuanto la sala nueva existe;
+// hasta entonces solo la lista de quién ha votado.
+export async function voteRematch(
+  pin: string,
+): Promise<{ votes: string[]; pin: string | null }> {
+  return apiFetch<{ votes: string[]; pin: string | null }>(
+    `/rooms/${pin.toUpperCase()}/rematch`,
+    { method: 'POST' },
+  )
+}
+
 // La llama cualquier cliente al agotarse su cuenta atrás. El servidor decide si
 // de verdad toca avanzar, así que llamarla de más es inofensivo.
 export async function advanceRoom(pin: string): Promise<{ advanced: boolean }> {

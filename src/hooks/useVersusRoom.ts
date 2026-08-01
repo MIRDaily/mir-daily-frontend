@@ -182,6 +182,27 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
     // Si el anfitrión desaparece del lobby, el servidor traspasa el rol. Llega
     // el id de JUGADOR del nuevo anfitrión, no su user_id: es lo único con lo
     // que cada cliente puede reconocerse a sí mismo.
+    // Votos de revancha: se fusionan sobre la fase final que ya está en
+    // pantalla, sin volver a pedir nada.
+    channel.on('broadcast', { event: 'rematch' }, ({ payload }) => {
+      if (closedRef.current) return
+      const next = payload as { votes: string[]; rematchUntil: number }
+      syncClock((payload as { serverNow?: number }).serverNow)
+      setPhase((prev) =>
+        prev && prev.event === 'ended'
+          ? { ...prev, votes: next.votes, rematchUntil: next.rematchUntil }
+          : prev,
+      )
+    })
+
+    channel.on('broadcast', { event: 'rematch_ready' }, ({ payload }) => {
+      if (closedRef.current) return
+      const next = payload as { pin: string }
+      setPhase((prev) =>
+        prev && prev.event === 'ended' ? { ...prev, rematchPin: next.pin } : prev,
+      )
+    })
+
     channel.on('broadcast', { event: 'host_changed' }, ({ payload }) => {
       if (closedRef.current) return
       const next = payload as { hostPlayerId: string | null }
