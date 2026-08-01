@@ -39,6 +39,10 @@ const PAD = { top: 22, right: 46, bottom: 30, left: 34 }
 const LINE_WIDTH = 5
 const FACE = 30
 
+// Separación entre trazos que irían pegados. Pequeña a propósito: lo justo
+// para que se distingan dos guardias idénticas sin mover lo que se lee.
+const TRACK_GAP = 3.5
+
 const DRAW_MS = 2600
 const STAGGER_MS = 420
 const EASE = 'cubic-bezier(0.65, 0, 0.35, 1)'
@@ -163,6 +167,71 @@ export default function VersusGuardiaTimeline({ series, players, playerId }: Pro
   const x = (round: number) => PAD.left + (innerW * round) / rounds
   const y = (value: number) => PAD.top + innerH - (innerH * value) / top
 
+  // Dos jugadores con la misma trayectoria (lo normal en Guardia: los que no
+  // aciertan nada van los dos planos en cero) dibujarían el mismo trazo y uno
+  // taparía al otro por completo. Se separan unos píxeles para que se vean los
+  // dos. El desvío es minúsculo frente a la altura del gráfico, así que no
+  // cambia lo que se lee.
+  const trackOffset = (index: number) =>
+    (index - (shown.length - 1) / 2) * TRACK_GAP
+
+  // Dónde acaba la guardia de cada uno, ya con las caras separadas: si dos
+  // caen en la misma pregunta con los mismos aciertos, sus caras caerían
+  // exactamente en el mismo punto y solo se vería una.
+  const endpoints = (() => {
+    const raw = shown.map((serie, index) => {
+      const player = byId.get(serie.playerId)
+      const fellAt = player?.eliminatedAtIdx ?? null
+      const lastRound = fellAt === null ? rounds : fellAt + 1
+      return {
+        index,
+        serie,
+        player,
+        fellAt,
+        lastRound,
+        x: x(lastRound),
+        anchorY: y(serie.points[lastRound - 1] ?? 0) + trackOffset(index),
+      }
+    })
+
+    // Se reparten por columnas: solo compiten entre sí las caras que caen en la
+    // misma pregunta.
+    const porColumna = new Map<number, typeof raw>()
+    for (const item of raw) {
+      const grupo = porColumna.get(item.lastRound) ?? []
+      grupo.push(item)
+      porColumna.set(item.lastRound, grupo)
+    }
+
+    const colocadas = new Map<number, number>()
+    for (const grupo of porColumna.values()) {
+      const orden = [...grupo].sort((a, b) => a.anchorY - b.anchorY)
+      const at = orden.map((g) => g.anchorY)
+
+      for (let i = 1; i < at.length; i += 1) {
+        at[i] = Math.max(at[i], at[i - 1] + FACE + 4)
+      }
+      const suelo = PAD.top + innerH - FACE / 2
+      if (at.length > 0 && at[at.length - 1] > suelo) {
+        at[at.length - 1] = suelo
+        for (let i = at.length - 2; i >= 0; i -= 1) {
+          at[i] = Math.min(at[i], at[i + 1] - FACE - 4)
+        }
+      }
+      const techo = PAD.top + FACE / 2
+      if (at.length > 0 && at[0] < techo) {
+        at[0] = techo
+        for (let i = 1; i < at.length; i += 1) {
+          at[i] = Math.max(at[i], at[i - 1] + FACE + 4)
+        }
+      }
+
+      orden.forEach((g, i) => colocadas.set(g.index, at[i]))
+    }
+
+    return raw.map((item) => ({ ...item, y: colocadas.get(item.index) ?? item.anchorY }))
+  })()
+
   return (
     <section className="mt-8">
       <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-[#7D8A96]/70">
@@ -174,10 +243,12 @@ export default function VersusGuardiaTimeline({ series, players, playerId }: Pro
         @keyframes vs-mark  { from { opacity: 0; transform: scale(0.3) } to { opacity: 1; transform: scale(1) } }
       `}</style>
 
-      <div
-        ref={wrapRef}
-        className="w-full overflow-x-auto rounded-2xl border-2 border-[#EAE4E2] bg-[#FAF7F4] p-1"
-      >
+      {/* La medida va en un div SIN relleno: clientWidth incluye el padding, así
+          que midiendo el que lo tenía el SVG salía unos píxeles más ancho que su
+          hueco y aparecía una barra de scroll. Y overflow-hidden en vez de auto:
+          la gráfica se adapta a cada partida, nunca se desplaza. */}
+      <div className="w-full overflow-hidden rounded-2xl border-2 border-[#EAE4E2] bg-[#FAF7F4] p-1">
+        <div ref={wrapRef} className="w-full">
         <svg
           width={width}
           height={HEIGHT}
@@ -213,22 +284,16 @@ export default function VersusGuardiaTimeline({ series, players, playerId }: Pro
             </text>
           ))}
 
-          {shown.map((serie, index) => {
+          {endpoints.map(({ serie, index, player, fellAt, lastRound, x: endX, y: endY, anchorY }) => {
             const color = SERIES_COLORS[index]
-            const player = byId.get(serie.playerId)
-            const fellAt = player?.eliminatedAtIdx ?? null
             const delay = index * STAGGER_MS
 
             // El trazo se corta donde cayó: dibujar más allá sería contar una
             // guardia que ya no jugó.
-            const lastRound = fellAt === null ? rounds : fellAt + 1
             const points = [0, ...serie.points.slice(0, lastRound)].map((value, round) => ({
               x: x(round),
-              y: y(value),
+              y: y(value) + trackOffset(index),
             }))
-
-            const endX = x(lastRound)
-            const endY = y(serie.points[lastRound - 1] ?? 0)
 
             return (
               <g key={serie.playerId}>
@@ -248,6 +313,22 @@ export default function VersusGuardiaTimeline({ series, players, playerId }: Pro
                       : { animation: `vs-track ${DRAW_MS}ms ${EASE} ${delay}ms both` }
                   }
                 />
+
+                {/* Si la cara tuvo que apartarse para no pisar a otra, un
+                    tirante fino la ata a su trazo: si no, dejaría de
+                    pertenecer a ninguna línea. */}
+                {Math.abs(endY - anchorY) > 1 ? (
+                  <line
+                    x1={endX}
+                    y1={anchorY}
+                    x2={endX}
+                    y2={endY}
+                    stroke={color}
+                    strokeWidth={1.5}
+                    strokeDasharray="3 3"
+                    opacity={0.7}
+                  />
+                ) : null}
 
                 {/* La cara clavada donde acabó su guardia */}
                 <g
@@ -319,6 +400,7 @@ export default function VersusGuardiaTimeline({ series, players, playerId }: Pro
             )
           })}
         </svg>
+        </div>
       </div>
 
       {/* Leyenda: la identidad nunca depende solo del color */}

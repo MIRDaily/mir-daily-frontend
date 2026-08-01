@@ -36,12 +36,14 @@ export default function VersusGuardiaHud({
   })
 
   const enPie = orden.filter((p) => p.eliminatedAtIdx == null).length
-  const apretado = players.length > 6
 
   return (
+    // Flotante a un lado en pantallas anchas, para que no empuje la pregunta ni
+    // robe altura. En móvil no hay hueco lateral, así que ahí vuelve al flujo,
+    // arriba del todo: seguir viendo las vidas importa más que el sitio.
     <section
       aria-label="Vidas de la sala"
-      className="mb-4 rounded-2xl border-2 border-[#EAE4E2] bg-white px-3 py-2.5"
+      className="mb-4 rounded-2xl border-2 border-[#EAE4E2] bg-white/95 px-3 py-2.5 shadow-[0_10px_30px_rgba(125,138,150,0.18)] backdrop-blur-sm xl:fixed xl:right-6 xl:top-28 xl:z-40 xl:mb-0 xl:w-60"
     >
       <style>{`
         @keyframes hud-break {
@@ -65,7 +67,9 @@ export default function VersusGuardiaHud({
         </span>
       </div>
 
-      <ul className={`grid gap-x-3 gap-y-1.5 ${apretado ? 'sm:grid-cols-2' : ''}`}>
+      {/* En el flujo (móvil) caben dos columnas si hay mucha gente; flotando en
+          el lateral siempre va en una, que es estrecho. */}
+      <ul className={`grid gap-x-3 gap-y-1.5 ${players.length > 6 ? 'sm:grid-cols-2 xl:grid-cols-1' : ''}`}>
         {orden.map((player) => {
           const caido = player.eliminatedAtIdx != null
           const herido = wounded.includes(player.id)
