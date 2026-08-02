@@ -60,6 +60,10 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
   // efecto se vuelva a crear, así que se guarda también en una referencia.
   const playerIdRef = useRef<string | null>(null)
 
+  // Y la fase anterior, para detectar el arranque de la partida sin leer estado
+  // dentro de un actualizador.
+  const statusRef = useRef<VersusStatus | null>(null)
+
   // El navegador puede ir adelantado o atrasado respecto al servidor. Todos los
   // plazos se calculan contra el reloj del servidor, así que cada evento trae
   // su `serverNow` y aquí se guarda la diferencia.
@@ -72,6 +76,7 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
       const state = await fetchRoomState(pin)
       if (closedRef.current) return
       setRoom(state.room)
+      statusRef.current = state.room.status
       setPlayers(state.players)
       setPlayerId(state.playerId)
       playerIdRef.current = state.playerId
@@ -174,6 +179,18 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
         setPhase({ ...next, event } as VersusPhase)
         if (event === 'question') setProgress(null)
         if (next.status) {
+          // El modo y las vidas se fijan en /start y NO viajan en los eventos de
+          // fase, así que al arrancar hay que volver a leer la sala: si no,
+          // `mode` se queda en el 'classic' con el que nació y toda la partida
+          // de Guardia se juega como si fuera clásica (sin HUD de vidas y, lo
+          // peor, sin bloquear a los eliminados).
+          //
+          // El estado anterior se lee de una referencia y no del actualizador de
+          // setRoom, que tiene que ser puro.
+          const antes = statusRef.current
+          statusRef.current = next.status
+          if (antes === 'lobby' && next.status !== 'lobby') void refresh()
+
           setRoom((prev) => (prev ? { ...prev, status: next.status! } : prev))
         }
       })

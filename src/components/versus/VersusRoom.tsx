@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { getAvatarUrl, getSafeAvatarId } from '@/lib/avatar'
 import { useVersusRoom } from '@/hooks/useVersusRoom'
 import { leaveRoom } from '@/lib/versus/queries'
+import type { VersusMode } from '@/lib/versus/types'
 import VersusPresenceToasts from '@/components/versus/VersusPresenceToasts'
 import VersusRunner from '@/components/versus/VersusRunner'
 import VersusStartPanel from '@/components/versus/VersusStartPanel'
@@ -90,6 +91,16 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
     )
   }
 
+  // El modo se fija en /start y no viaja en los eventos de fase, así que
+  // `room.mode` puede llegar desfasado si el refresco de arranque tarda o falla.
+  // Como red, se deduce de los propios datos: si alguien tiene vidas, es
+  // Guardia. Dos vías para lo mismo, porque de esto cuelga que a un eliminado
+  // se le bloqueen las opciones.
+  const mode: VersusMode =
+    room.mode !== 'survival' && players.some((p) => p.lives != null)
+      ? 'survival'
+      : room.mode
+
   // Con la partida en marcha manda el runner: el lobby ya no pinta nada.
   if (room.status !== 'lobby' && phase) {
     return (
@@ -102,7 +113,7 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
           progress={progress}
           restored={restored}
           clockOffset={clockOffset}
-          mode={room.mode}
+          mode={mode}
         />
         <VersusPresenceToasts players={players} playerId={playerId} />
       </>
