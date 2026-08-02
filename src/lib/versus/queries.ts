@@ -139,6 +139,17 @@ export async function submitAnswer(
   })
 }
 
+// "Ya he leído". Con la mayoría de los que siguen jugando, la ronda avanza sin
+// esperar el minuto entero.
+export async function voteContinue(
+  pin: string,
+): Promise<{ votes: string[]; total: number }> {
+  return apiFetch<{ votes: string[]; total: number }>(
+    `/rooms/${pin.toUpperCase()}/continue`,
+    { method: 'POST' },
+  )
+}
+
 // Voto para repetir partida. Devuelve `pin` en cuanto la sala nueva existe;
 // hasta entonces solo la lista de quién ha votado.
 export async function voteRematch(

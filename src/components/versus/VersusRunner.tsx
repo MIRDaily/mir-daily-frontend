@@ -7,7 +7,7 @@ import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 import VersusRematch from '@/components/versus/VersusRematch'
 import VersusScoreChart from '@/components/versus/VersusScoreChart'
 import { getAvatarUrl, getSafeAvatarId } from '@/lib/avatar'
-import { advanceRoom, submitAnswer } from '@/lib/versus/queries'
+import { advanceRoom, submitAnswer, voteContinue } from '@/lib/versus/queries'
 import {
   VersusElimination,
   VersusIntro,
@@ -62,6 +62,7 @@ export default function VersusRunner({
   const [selected, setSelected] = useState<number | null>(restoredHere?.selected ?? null)
   const [answered, setAnswered] = useState(Boolean(restoredHere))
   const [sending, setSending] = useState(false)
+  const [continuing, setContinuing] = useState(false)
 
   // 'picks' y 'reveal' no reenvían el enunciado ni las opciones (serían los
   // mismos bytes en cada fase), así que se conserva la última pregunta que
@@ -123,6 +124,18 @@ export default function VersusRunner({
     return () => window.clearTimeout(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, pin, clockOffset])
+
+  async function handleContinue() {
+    if (phase.event !== 'reveal' || continuing) return
+    setContinuing(true)
+    try {
+      await voteContinue(pin)
+    } catch {
+      // Que falle no rompe nada: el minuto de lectura sigue corriendo.
+    } finally {
+      setContinuing(false)
+    }
+  }
 
   async function handleSelect(index: number) {
     if (phase.event !== 'question' || answered || sending) return
@@ -325,6 +338,15 @@ export default function VersusRunner({
   const survival = mode === 'survival'
   const me = playerId ? playersById.get(playerId) : undefined
   const outOfPlay = survival && me?.eliminatedAtIdx != null
+
+  // Estado del minuto de lectura del revelado.
+  const yaContinuo =
+    phase.event === 'reveal' && playerId !== null && phase.continueVotes.includes(playerId)
+  const puedeSaltar = phase.event === 'reveal' && now >= phase.skipFrom
+  const segundosLectura =
+    phase.event === 'reveal' ? Math.max(0, Math.ceil((phase.endsAt - now) / 1000)) : 0
+  const ratioLectura =
+    phase.event === 'reveal' ? Math.max(0, Math.min(1, segundosLectura / 60)) : 0
   // Las vidas de partida no viajan aparte: el que más conserva marca el total,
   // que es exactamente lo que hace falta para dibujar los huecos.
   const maxLives = Math.max(1, ...players.map((p) => p.lives ?? 0))
@@ -524,6 +546,55 @@ export default function VersusRunner({
             {phase.explanation ? (
               <p className="text-sm leading-relaxed text-[#7D8A96]">{phase.explanation}</p>
             ) : null}
+          </div>
+
+          {/* Un minuto para leer, saltable por mayoría. El contador va a la
+              vista para que se entienda por qué avanza (o por qué no). */}
+          <div className="mb-4 flex flex-col gap-3 rounded-2xl border-2 border-[#EAE4E2] bg-white p-4 sm:flex-row sm:items-center">
+            <div className="flex-1">
+              <p className="text-sm font-bold text-[#2c3e50]">
+                {yaContinuo
+                  ? 'Esperando al resto…'
+                  : outOfPlay
+                    ? 'Los que siguen jugando deciden cuándo pasar'
+                    : '¿Ya lo has leído?'}
+              </p>
+              <p className="text-xs text-[#7D8A96]">
+                {phase.continueTotal > 0
+                  ? `${phase.continueVotes.length} de ${phase.continueTotal} quieren pasar · hacen falta ${
+                      Math.floor(phase.continueTotal / 2) + 1
+                    }`
+                  : 'Sin nadie jugando, pasa sola'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span
+                className={`tabular-nums text-sm font-bold ${
+                  segundosLectura <= 10 ? 'text-[#C4655A]' : 'text-[#7D8A96]'
+                }`}
+              >
+                {segundosLectura}s
+              </span>
+              <button
+                type="button"
+                onClick={handleContinue}
+                disabled={outOfPlay || yaContinuo || !puedeSaltar || continuing}
+                className="flex items-center justify-center gap-2 rounded-xl bg-[#E8A598] px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-[#E8A598]/20 transition-colors hover:bg-[#d18d80] disabled:cursor-default disabled:bg-[#F2EFED] disabled:text-[#7D8A96]/60 disabled:shadow-none"
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {yaContinuo ? 'check' : 'arrow_forward'}
+                </span>
+                {yaContinuo ? 'Listo' : 'Continuar'}
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-[#EAE4E2]">
+            <div
+              className={`h-full ${segundosLectura <= 10 ? 'bg-[#C4655A]' : 'bg-[#E8A598]'}`}
+              style={{ width: `${ratioLectura * 100}%` }}
+            />
           </div>
 
           {/* Marcador acumulado: sin esto no hay forma de saber si vas ganando

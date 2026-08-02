@@ -218,7 +218,11 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
 
       {/* Configuración y arranque: solo el anfitrión */}
       {isHost ? (
-        <VersusStartPanel pin={pin} canStart={players.length >= 2} />
+        <VersusStartPanel
+          pin={pin}
+          canStart={players.length >= 2}
+          preset={{ mode: room.mode, ...(room.config ?? {}) }}
+        />
       ) : (
         <div className="mb-8 flex items-center justify-center gap-2 rounded-xl bg-[#F2EFED] px-5 py-4 text-sm font-semibold text-[#7D8A96]">
           <span className="material-symbols-outlined text-[18px]">schedule</span>

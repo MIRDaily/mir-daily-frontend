@@ -28,6 +28,14 @@ export type VersusRoom = {
 export type VersusConfig = {
   secondsPerQuestion: number
   maxPlayers: number
+  /** Guardia: vidas con las que se arranca. */
+  lives?: number
+  /** Qué se jugó, para que la revancha nazca ya configurada igual. */
+  selection?: {
+    subjectIds?: number[]
+    topicIds?: number[]
+    count?: number
+  }
 }
 
 export type VersusPlayer = {
@@ -82,6 +90,12 @@ export type VersusRevealEvent = {
   eliminated: string[]
   /** Guardia: quién ha perdido una vida sin llegar a caer. */
   wounded: string[]
+  /** A partir de cuándo cuentan los votos de continuar (ms epoch servidor). */
+  skipFrom: number
+  /** Quién ha pulsado ya "continuar". */
+  continueVotes: string[]
+  /** Sobre cuántos hace falta la mayoría (los que siguen jugando). */
+  continueTotal: number
   correctIndex: number
   explanation: string | null
   results: {

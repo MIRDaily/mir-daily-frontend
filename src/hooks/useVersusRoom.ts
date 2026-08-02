@@ -212,6 +212,18 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
       )
     })
 
+    // Votos de "continuar": se fusionan sobre el revelado que ya está en
+    // pantalla, para que el contador suba en vivo sin pedir nada.
+    channel.on('broadcast', { event: 'continue' }, ({ payload }) => {
+      if (closedRef.current) return
+      const next = payload as { idx: number; votes: string[]; total: number }
+      setPhase((prev) =>
+        prev && prev.event === 'reveal' && prev.idx === next.idx
+          ? { ...prev, continueVotes: next.votes, continueTotal: next.total }
+          : prev,
+      )
+    })
+
     channel.on('broadcast', { event: 'rematch_ready' }, ({ payload }) => {
       if (closedRef.current) return
       const next = payload as { pin: string }

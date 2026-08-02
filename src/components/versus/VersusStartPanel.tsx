@@ -11,6 +11,12 @@ import type { VersusMode } from '@/lib/versus/types'
 type VersusStartPanelProps = {
   pin: string
   canStart: boolean
+  /** Config heredada de la partida anterior, si esta sala es una revancha. */
+  preset?: {
+    mode?: VersusMode
+    lives?: number
+    selection?: { subjectIds?: number[]; topicIds?: number[]; count?: number }
+  } | null
 }
 
 const COUNTS = [5, 10, 15, 20] as const
@@ -39,14 +45,21 @@ const MODES = [
   },
 ]
 
-export default function VersusStartPanel({ pin, canStart }: VersusStartPanelProps) {
+export default function VersusStartPanel({
+  pin,
+  canStart,
+  preset,
+}: VersusStartPanelProps) {
   const [subjects, setSubjects] = useState<Subject[]>([])
-  const [selected, setSelected] = useState<number[]>([])
-  const [count, setCount] = useState<number>(10)
-  const [mode, setMode] = useState<VersusMode>('classic')
-  const [lives, setLives] = useState<number>(1)
+  // Si esta sala es una revancha, la config de la partida anterior viene en la
+  // sala y todo llega ya elegido: la gracia de repetir es no volver a montarlo.
+  const [selected, setSelected] = useState<number[]>(preset?.selection?.subjectIds ?? [])
+  const [count, setCount] = useState<number>(preset?.selection?.count ?? 10)
+  const [mode, setMode] = useState<VersusMode>(preset?.mode ?? 'classic')
+  const [lives, setLives] = useState<number>(preset?.lives ?? 1)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const esRevancha = (preset?.selection?.subjectIds?.length ?? 0) > 0
 
   useEffect(() => {
     fetchSubjects()
@@ -76,9 +89,15 @@ export default function VersusStartPanel({ pin, canStart }: VersusStartPanelProp
 
   return (
     <section className="mb-8 rounded-2xl border-2 border-[#EAE4E2] bg-white p-6">
-      <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-[#7D8A96]/70">
+      <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-[#7D8A96]/70">
         Configura la partida
       </h2>
+      {esRevancha ? (
+        <p className="mb-4 flex items-center gap-1.5 text-xs font-semibold text-[#6a8a67]">
+          <span className="material-symbols-outlined text-[16px]">replay</span>
+          Misma configuración que la partida anterior. Cámbiala si quieres.
+        </p>
+      ) : null}
 
       <p className="mb-3 text-sm font-semibold text-[#2c3e50]">Modo</p>
       <div className="mb-6 grid gap-2 sm:grid-cols-3">
