@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 // se reutiliza su consulta en vez de duplicar el endpoint.
 import { fetchSubjects } from '@/lib/simulacro/queries'
 import type { Subject } from '@/lib/simulacro/types'
-import { startGame } from '@/lib/versus/queries'
+import { fetchPool, startGame } from '@/lib/versus/queries'
 import type { VersusMode } from '@/lib/versus/types'
 
 type VersusStartPanelProps = {
@@ -59,13 +59,37 @@ export default function VersusStartPanel({
   const [lives, setLives] = useState<number>(preset?.lives ?? 1)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Cuántas preguntas hay de cada asignatura. Se pide UNA vez: una pregunta
+  // pertenece a una sola asignatura, así que el fondo de una selección es la
+  // suma de las suyas y no hace falta volver a preguntar a cada clic.
+  const [fondo, setFondo] = useState<Record<string, number> | null>(null)
   const esRevancha = (preset?.selection?.subjectIds?.length ?? 0) > 0
 
   useEffect(() => {
+    let vivo = true
     fetchSubjects()
-      .then(setSubjects)
+      .then((lista) => {
+        if (!vivo) return
+        setSubjects(lista)
+        return fetchPool(lista.map((s) => s.id))
+      })
+      .then((pool) => {
+        if (vivo && pool) setFondo(pool.bySubject)
+      })
       .catch(() => setError('No se pudieron cargar las asignaturas.'))
+    return () => {
+      vivo = false
+    }
   }, [])
+
+  // Lo que de verdad se va a jugar. El servidor coge las que hay y se calla, así
+  // que elegir 20 sobre una asignatura de 5 daba una partida de 5 sin que nadie
+  // lo dijera: ni al configurarla, ni al empezar.
+  const disponibles = fondo
+    ? selected.reduce((total, id) => total + (fondo[String(id)] ?? 0), 0)
+    : null
+  const seJugaran = disponibles === null ? count : Math.min(count, disponibles)
+  const seQuedaCorto = disponibles !== null && disponibles < count
 
   function toggle(id: number) {
     setSelected((prev) =>
@@ -164,40 +188,76 @@ export default function VersusStartPanel({
       <div className="mb-6 flex flex-wrap gap-2">
         {subjects.map((subject) => {
           const on = selected.includes(subject.id)
+          // Cuántas preguntas tiene. Sin esto, el catálogo enseña por igual una
+          // asignatura de 152 preguntas y otra de 1.
+          const hay = fondo ? (fondo[String(subject.id)] ?? 0) : null
+          const vacia = hay === 0
+
           return (
             <button
               key={subject.id}
               type="button"
               onClick={() => toggle(subject.id)}
-              className={`rounded-lg border-2 px-3 py-1.5 text-sm font-medium transition-colors ${
+              disabled={vacia}
+              title={vacia ? 'Todavía no hay preguntas de esta asignatura' : undefined}
+              className={`flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 on
                   ? 'border-[#E8A598] bg-[#E8A598]/10 text-[#d18d80]'
                   : 'border-[#EAE4E2] text-[#7D8A96] hover:border-[#E8A598]/40'
               }`}
             >
               {subject.name}
+              {hay !== null ? (
+                <span
+                  className={`text-xs font-bold tabular-nums ${
+                    on ? 'text-[#d18d80]/70' : 'text-[#7D8A96]/60'
+                  }`}
+                >
+                  {hay}
+                </span>
+              ) : null}
             </button>
           )
         })}
       </div>
 
       <p className="mb-3 text-sm font-semibold text-[#2c3e50]">Preguntas</p>
-      <div className="mb-6 flex gap-2">
-        {COUNTS.map((value) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setCount(value)}
-            className={`rounded-lg border-2 px-4 py-1.5 text-sm font-bold transition-colors ${
-              count === value
-                ? 'border-[#E8A598] bg-[#E8A598]/10 text-[#d18d80]'
-                : 'border-[#EAE4E2] text-[#7D8A96] hover:border-[#E8A598]/40'
-            }`}
-          >
-            {value}
-          </button>
-        ))}
+      <div className="mb-2 flex gap-2">
+        {COUNTS.map((value) => {
+          // No se bloquea pedir más de las que hay: se marca. Pedir 20 sobre un
+          // fondo de 5 es una elección legítima ("todas las que haya"), lo que
+          // no vale es que nadie lo diga.
+          const pasa = disponibles !== null && value > disponibles
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setCount(value)}
+              className={`rounded-lg border-2 px-4 py-1.5 text-sm font-bold transition-colors ${
+                count === value
+                  ? 'border-[#E8A598] bg-[#E8A598]/10 text-[#d18d80]'
+                  : pasa
+                    ? 'border-[#EAE4E2] text-[#7D8A96]/40 hover:border-[#E8A598]/40'
+                    : 'border-[#EAE4E2] text-[#7D8A96] hover:border-[#E8A598]/40'
+              }`}
+            >
+              {value}
+            </button>
+          )
+        })}
       </div>
+
+      <p className="mb-6 text-xs leading-relaxed text-[#7D8A96]">
+        {selected.length === 0
+          ? 'Elige alguna asignatura para ver cuántas preguntas hay.'
+          : disponibles === null
+            ? 'Contando las preguntas disponibles…'
+            : seQuedaCorto
+              ? `Solo hay ${disponibles} ${
+                  disponibles === 1 ? 'pregunta' : 'preguntas'
+                } con esta selección, así que la partida será de ${seJugaran}. Marca más asignaturas si quieres una más larga.`
+              : `Hay ${disponibles} disponibles: se jugarán ${seJugaran}, elegidas al azar.`}
+      </p>
 
       <button
         type="button"

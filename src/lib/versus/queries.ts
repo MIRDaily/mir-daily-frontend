@@ -110,6 +110,23 @@ export async function getAccessToken(): Promise<string> {
   return getToken()
 }
 
+// Cuántas preguntas hay de cada asignatura. Lo contesta el mismo código que
+// luego elige las preguntas de la partida, así que el número que se enseña al
+// configurarla es el que se va a jugar.
+export async function fetchPool(
+  subjectIds: number[],
+  topicIds: number[] = [],
+): Promise<{ available: number; bySubject: Record<string, number> }> {
+  if (subjectIds.length === 0) return { available: 0, bySubject: {} }
+
+  const params = new URLSearchParams({ subjectIds: subjectIds.join(',') })
+  if (topicIds.length > 0) params.set('topicIds', topicIds.join(','))
+
+  return apiFetch<{ available: number; bySubject: Record<string, number> }>(
+    `/pool?${params.toString()}`,
+  )
+}
+
 export async function startGame(
   pin: string,
   config: {
