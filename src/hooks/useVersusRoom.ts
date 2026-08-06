@@ -5,15 +5,17 @@ import { supabase } from '@/lib/supabaseBrowser'
 import {
   fetchRoomState,
   getAccessToken,
+  joinRoom,
   pingRoom,
   sayGoodbye,
 } from '@/lib/versus/queries'
-import type {
-  VersusPhase,
-  VersusPlayer,
-  VersusRestoredAnswer,
-  VersusRoom,
-  VersusStatus,
+import {
+  VersusError,
+  type VersusPhase,
+  type VersusPlayer,
+  type VersusRestoredAnswer,
+  type VersusRoom,
+  type VersusStatus,
 } from '@/lib/versus/types'
 
 type UseVersusRoomResult = {
@@ -33,6 +35,8 @@ type UseVersusRoomResult = {
   closed: boolean
   loading: boolean
   error: string | null
+  /** Por qué no se pudo entrar en la sala al llegar con la URL puesta. */
+  joinError: VersusError | null
   refresh: () => Promise<void>
 }
 
@@ -52,6 +56,7 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
   const [closed, setClosed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [joinError, setJoinError] = useState<VersusError | null>(null)
 
   // Evita que una resincronización lenta pise el estado de una sala ya cerrada.
   const closedRef = useRef(false)
@@ -71,9 +76,29 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
     if (typeof serverNow === 'number') setClockOffset(serverNow - Date.now())
   }, [])
 
+  // Entrar en la sala es una acción aparte de leerla, y hasta ahora solo la
+  // hacía el formulario de /versus. Quien llegaba con la URL puesta —el enlace
+  // compartido en vez del código, o el salto a la sala de revancha— veía el
+  // lobby entero sin estar dentro: no salía en la lista, el anfitrión no le
+  // contaba y la partida empezaba sin él. Se intenta UNA vez; si la sala ya
+  // arrancó o está llena, el error se enseña y no se reintenta.
+  const joinTried = useRef(false)
+
   const refresh = useCallback(async () => {
     try {
-      const state = await fetchRoomState(pin)
+      let state = await fetchRoomState(pin)
+
+      if (!state.playerId && !joinTried.current && state.room.status === 'lobby') {
+        joinTried.current = true
+        try {
+          state = await joinRoom(pin)
+        } catch (err) {
+          // Se sigue con lo que devolvió el GET: mirar la sala sin poder entrar
+          // es mejor que una pantalla de error, y el motivo se enseña arriba.
+          setJoinError(err instanceof VersusError ? err : new VersusError('No se pudo entrar en la sala.'))
+        }
+      }
+
       if (closedRef.current) return
       setRoom(state.room)
       statusRef.current = state.room.status
@@ -99,6 +124,12 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
   useEffect(() => {
     closedRef.current = false
     setClosed(false)
+    // Cambiar de sala es empezar de cero. Al saltar a la revancha, el router
+    // reutiliza esta pantalla con otro `pin` en vez de montarla otra vez, así
+    // que sin esto la sala nueva heredaría el "ya lo intenté" de la anterior y
+    // nadie entraría en ella.
+    joinTried.current = false
+    setJoinError(null)
     void refresh()
   }, [refresh])
 
@@ -274,6 +305,7 @@ export function useVersusRoom(pin: string): UseVersusRoomResult {
     closed,
     loading,
     error,
+    joinError,
     refresh,
   }
 }

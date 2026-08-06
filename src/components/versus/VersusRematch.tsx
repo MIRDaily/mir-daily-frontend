@@ -43,11 +43,16 @@ export default function VersusRematch({
     return () => window.clearInterval(id)
   }, [clockOffset])
 
-  // En cuanto existe la sala nueva, todos los que votaron entran solos: la
-  // gracia de esto es no tener que pasarse el código otra vez.
+  // En cuanto existe la sala nueva, los que VOTARON entran solos: la gracia de
+  // esto es no tener que pasarse el código otra vez.
+  //
+  // Solo los que votaron: `rematch_ready` va al canal entero, y arrastrar
+  // también a quien no quiso repetir lo dejaba en una sala en la que el
+  // servidor no le había metido —no aparecía en la lista y nadie le contaba—.
+  // A ese se le ofrece el enlace y que decida él.
   useEffect(() => {
-    if (rematchPin) router.push(`/versus/${rematchPin}`)
-  }, [rematchPin, router])
+    if (rematchPin && iVoted) router.push(`/versus/${rematchPin}`)
+  }, [rematchPin, iVoted, router])
 
   async function handleVote() {
     if (iVoted || voting) return
@@ -64,6 +69,29 @@ export default function VersusRematch({
   }
 
   const voters = players.filter((p) => votes.includes(p.id))
+
+  // La revancha ya existe y este jugador no votó: se le enseña la puerta en vez
+  // de meterle dentro. Si entra, la sala le admite como uno más.
+  if (rematchPin && !iVoted) {
+    return (
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+        <Link
+          href={`/versus/${rematchPin}`}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#E8A598] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#E8A598]/20 transition-colors hover:bg-[#d18d80]"
+        >
+          <span className="material-symbols-outlined text-[18px]">swords</span>
+          Se juega otra: entrar
+        </Link>
+        <Link
+          href="/studio"
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-[#EAE4E2] px-5 py-3 text-sm font-semibold text-[#7D8A96] transition-colors hover:border-[#E8A598]/50 hover:text-[#d18d80]"
+        >
+          <span className="material-symbols-outlined text-[18px]">home</span>
+          Salir del Versus
+        </Link>
+      </div>
+    )
+  }
 
   // Vencido el plazo sin suficientes votos, no se deja el botón engañando: se
   // ofrece el camino normal.

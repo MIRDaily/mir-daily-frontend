@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { getAvatarUrl, getSafeAvatarId } from '@/lib/avatar'
 import { useVersusRoom } from '@/hooks/useVersusRoom'
@@ -31,9 +31,17 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
     closed,
     loading,
     error,
+    joinError,
   } = useVersusRoom(pin)
   const [copied, setCopied] = useState(false)
   const [leaving, setLeaving] = useState(false)
+
+  // Sin nombre de usuario no se puede jugar: se manda al onboarding igual que
+  // hace el formulario de /versus, porque llegar con la URL puesta se salta ese
+  // camino.
+  useEffect(() => {
+    if (joinError?.code === 'USERNAME_REQUIRED') router.push('/onboarding')
+  }, [joinError, router])
 
   const maxPlayers = room?.config?.maxPlayers ?? 8
 
@@ -122,6 +130,28 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
 
   return (
     <div className="mx-auto w-full max-w-3xl">
+
+      {/* Se llegó a la sala pero no se pudo entrar (empezada, llena…). Decirlo
+          es lo único que evita quedarse esperando a una partida en la que no
+          se está. */}
+      {playerId === null && joinError ? (
+        <div
+          role="alert"
+          className="mb-6 flex items-start gap-3 rounded-2xl border-2 border-[#C4655A]/25 bg-[#C4655A]/8 px-5 py-4"
+        >
+          <span className="material-symbols-outlined text-[20px] text-[#C4655A]">
+            visibility
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-[#C4655A]">
+              Estás mirando, no jugando
+            </p>
+            <p className="mt-0.5 text-sm leading-relaxed text-[#7D8A96]">
+              {joinError.message}
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {/* Código de la sala */}
       <section className="mb-8 flex flex-col items-center text-center">

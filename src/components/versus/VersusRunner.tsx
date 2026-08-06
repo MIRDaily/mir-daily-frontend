@@ -22,6 +22,7 @@ import type {
   VersusPlayer,
   VersusQuestionEvent,
   VersusRestoredAnswer,
+  VersusRoundContent,
 } from '@/lib/versus/types'
 
 type VersusRunnerProps = {
@@ -64,9 +65,9 @@ export default function VersusRunner({
   const [sending, setSending] = useState(false)
   const [continuing, setContinuing] = useState(false)
 
-  // 'picks' y 'reveal' no reenvían el enunciado ni las opciones (serían los
-  // mismos bytes en cada fase), así que se conserva la última pregunta que
-  // llegó. También es lo que se muestra tras reconectar a mitad de ronda.
+  // Última pregunta recibida por el canal. Hoy el enunciado y las opciones
+  // viajan también en 'picks' y 'reveal' (ver `contenido` más abajo), así que
+  // esto es solo la red de seguridad para un evento que llegara sin ellas.
   const [current, setCurrent] = useState<VersusQuestionEvent | null>(
     phase.event === 'question' ? phase : null,
   )
@@ -302,9 +303,25 @@ export default function VersusRunner({
   }
 
   const idx = phase.idx
-  const total = current?.total ?? null
-  const question = current
+
+  // El contenido de la ronda sale de la fase que hay en pantalla, sea cual sea:
+  // el servidor lo manda en 'question', en 'picks' y en 'reveal'. Esto es lo
+  // que hace que reconectar a mitad de ronda (recargar, volver de segundo
+  // plano, resuscribirse al canal) enseñe la pregunta en vez de un hueco.
+  // `current` solo entra si la fase llegara sin contenido.
+  // (aquí la fase ya no puede ser 'ended': esa rama sale arriba con el podio)
+  const contenido: VersusRoundContent | null = phase.options
+    ? (phase as VersusRoundContent)
+    : current
+
+  const total = contenido?.total ?? null
+  const question = contenido
   const answering = phase.event === 'question'
+
+  // Los plazos SIEMPRE salen de la fase, nunca del contenido guardado: mezclar
+  // el reloj de una pregunta con el enunciado de otra es como se cuelan las
+  // cuentas atrás fantasma.
+  const asking = phase.event === 'question' ? phase : null
 
   const picksByOption = new Map<number, VersusPlayer[]>()
   if (phase.event === 'picks' || phase.event === 'reveal') {
@@ -326,13 +343,13 @@ export default function VersusRunner({
     phase.event === 'reveal' ? phase.results.find((r) => r.playerId === playerId) : null
 
   const secondsLeft =
-    answering && question && now >= question.startsAt
-      ? Math.max(0, Math.ceil((question.endsAt - now) / 1000))
+    asking && now >= asking.startsAt
+      ? Math.max(0, Math.ceil((asking.endsAt - now) / 1000))
       : null
 
   const timeRatio =
-    answering && question && question.endsAt > question.startsAt
-      ? Math.max(0, Math.min(1, (question.endsAt - now) / (question.endsAt - question.startsAt)))
+    asking && asking.endsAt > asking.startsAt
+      ? Math.max(0, Math.min(1, (asking.endsAt - now) / (asking.endsAt - asking.startsAt)))
       : 0
 
   const survival = mode === 'survival'

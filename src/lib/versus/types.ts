@@ -54,12 +54,12 @@ export type VersusPlayer = {
   eliminatedAtIdx: number | null
 }
 
-// Eventos que emite el servidor por el canal. Durante 'question' no viaja nada
-// que revele la respuesta; 'picks' enseña qué eligió cada uno pero todavía no
-// cuál era la buena; la corrección llega solo en 'reveal'.
-export type VersusQuestionEvent = {
-  event: 'question'
-  idx: number
+// El enunciado y las opciones de la ronda. Viajan en las TRES fases que tienen
+// pregunta detrás y no solo en 'question': quien se reconecta a mitad de ronda
+// recibe la fase en la que esté la sala, y sin esto se encontraba la tarjeta
+// vacía y las opciones sin pintar. Opcional en 'picks'/'reveal' porque un
+// backend anterior no las mandaba.
+export type VersusRoundContent = {
   total: number
   statement: string
   subject: string | null
@@ -67,13 +67,21 @@ export type VersusQuestionEvent = {
   hasImage: boolean
   imageUrl: string | null
   options: string[]
+}
+
+// Eventos que emite el servidor por el canal. Durante 'question' no viaja nada
+// que revele la respuesta; 'picks' enseña qué eligió cada uno pero todavía no
+// cuál era la buena; la corrección llega solo en 'reveal'.
+export type VersusQuestionEvent = VersusRoundContent & {
+  event: 'question'
+  idx: number
   /** Instante (ms epoch del servidor) en que termina la cuenta atrás. */
   startsAt: number
   endsAt: number
   serverNow: number
 }
 
-export type VersusPicksEvent = {
+export type VersusPicksEvent = Partial<VersusRoundContent> & {
   event: 'picks'
   idx: number
   serverNow: number
@@ -81,7 +89,7 @@ export type VersusPicksEvent = {
   picks: { playerId: string; selected: number | null }[]
 }
 
-export type VersusRevealEvent = {
+export type VersusRevealEvent = Partial<VersusRoundContent> & {
   event: 'reveal'
   idx: number
   serverNow: number
