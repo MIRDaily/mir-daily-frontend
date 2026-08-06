@@ -122,6 +122,7 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
           restored={restored}
           clockOffset={clockOffset}
           mode={mode}
+          lives={room.config?.lives ?? null}
         />
         <VersusPresenceToasts players={players} playerId={playerId} />
       </>

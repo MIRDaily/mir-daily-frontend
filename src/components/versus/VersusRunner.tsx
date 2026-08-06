@@ -34,6 +34,8 @@ type VersusRunnerProps = {
   restored: VersusRestoredAnswer | null
   clockOffset: number
   mode: VersusMode
+  /** Guardia: vidas con las que se repartió, de la config de la sala. */
+  lives: number | null
 }
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
@@ -47,6 +49,7 @@ export default function VersusRunner({
   restored,
   clockOffset,
   mode,
+  lives,
 }: VersusRunnerProps) {
   // Todo se mide contra el reloj del SERVIDOR, no contra el del navegador.
   const serverNow = () => Date.now() + clockOffset
@@ -279,7 +282,7 @@ export default function VersusRunner({
           <VersusIntro
             players={players}
             mode={mode}
-            lives={players[0]?.lives ?? null}
+            lives={lives ?? players[0]?.lives ?? null}
             runKey={`${pin}-intro`}
           />
         ) : null}
@@ -364,9 +367,13 @@ export default function VersusRunner({
     phase.event === 'reveal' ? Math.max(0, Math.ceil((phase.endsAt - now) / 1000)) : 0
   const ratioLectura =
     phase.event === 'reveal' ? Math.max(0, Math.min(1, segundosLectura / 60)) : 0
-  // Las vidas de partida no viajan aparte: el que más conserva marca el total,
-  // que es exactamente lo que hace falta para dibujar los huecos.
-  const maxLives = Math.max(1, ...players.map((p) => p.lives ?? 0))
+  // Cuántos corazones se dibujan. Sale de la CONFIG de la sala, que es con lo
+  // que se repartió: sacarlo del que más conserva (como se hacía) encogía el
+  // total según moría la gente, así que si todos perdían una vida todos
+  // volvían a verse llenos y no había hueco que mirar — que es justo lo que el
+  // HUD existe para enseñar. El máximo de la plantilla se queda como suelo por
+  // si la config viniera sin `lives` (salas de antes de Guardia).
+  const maxLives = Math.max(1, lives ?? 1, ...players.map((p) => p.lives ?? 0))
   const fallenNow =
     phase.event === 'reveal'
       ? phase.eliminated.map((id) => playersById.get(id)).filter((p): p is VersusPlayer => !!p)
