@@ -20,7 +20,11 @@ type VersusStartPanelProps = {
 }
 
 const COUNTS = [5, 10, 15, 20] as const
-const LIVES = [1, 2, 3] as const
+// El backend acepta de 1 a 5 y la app las ofrece todas. Aquí se quedaban en 3,
+// así que una revancha heredada de una partida montada desde el móvil con 4 o 5
+// no marcaba ningún botón: parecía que no había vidas elegidas y se jugaba con
+// las que traía.
+const LIVES = [1, 2, 3, 4, 5] as const
 
 // Solo los modos con reglas escritas. Los demás siguen anunciados en /versus
 // como "próximamente", pero aquí no se pueden elegir.

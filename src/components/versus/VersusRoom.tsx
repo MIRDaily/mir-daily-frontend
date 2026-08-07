@@ -99,6 +99,34 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
     )
   }
 
+  // Llegar a una sala que ya está jugando sin estar dentro. Antes el servidor
+  // mandaba la partida entera a cualquiera con el PIN y esto no existía; ahora
+  // la fase solo viaja a los de dentro, así que hay que decirlo en vez de
+  // enseñar un lobby de una partida que ya va por la mitad.
+  if (playerId === null && room.status !== 'lobby') {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center text-center">
+        <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F2EFED] text-[#7D8A96]">
+          <span className="material-symbols-outlined text-3xl">door_front</span>
+        </div>
+        <h1 className="mb-2 text-2xl font-black tracking-tight text-[#2c3e50]">
+          Esta partida ya ha empezado
+        </h1>
+        <p className="mb-6 text-sm leading-relaxed text-[#7D8A96]">
+          No estás en ella, y a mitad de partida no se entra. Pídeles el código
+          de la siguiente, o monta tú una sala.
+        </p>
+        <button
+          type="button"
+          onClick={() => router.push('/versus')}
+          className="rounded-xl bg-[#E8A598] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#d18d80]"
+        >
+          Volver a Versus
+        </button>
+      </div>
+    )
+  }
+
   // El modo se fija en /start y no viaja en los eventos de fase, así que
   // `room.mode` puede llegar desfasado si el refresco de arranque tarda o falla.
   // Como red, se deduce de los propios datos: si alguien tiene vidas, es
