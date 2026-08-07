@@ -15,6 +15,9 @@ export type VersusStatus =
   | 'scoreboard'
   | 'ended'
 
+// Sin `hostUserId`: el user_id del anfitrión no viaja a los clientes. Para
+// saber si mandas está `isHost`, que lo resuelve el servidor, y al anfitrión
+// nuevo se le reconoce por el playerId que trae `host_changed`.
 export type VersusRoom = {
   id: string
   pin: string
@@ -22,7 +25,6 @@ export type VersusRoom = {
   status: VersusStatus
   config: VersusConfig
   currentIndex: number
-  hostUserId: string
 }
 
 export type VersusConfig = {
