@@ -44,6 +44,8 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
   }, [joinError, router])
 
   const maxPlayers = room?.config?.maxPlayers ?? 8
+  // Quién está de verdad delante de la pantalla ahora mismo.
+  const presentes = players.filter((p) => p.connected).length
 
   async function handleCopy() {
     try {
@@ -226,8 +228,17 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
           <h2 className="text-sm font-bold uppercase tracking-wider text-[#7D8A96]/70">
             En la sala
           </h2>
+          {/* Se cuentan los que ESTÁN. Quien cierra la pestaña se queda en la
+              lista (puede volver, y en el lobby su fila no guarda nada que
+              perder), pero contarlo aquí decía "2 / 8" con una sola persona
+              delante de la pantalla. */}
           <span className="text-sm font-semibold text-[#7D8A96]">
-            {players.length} / {maxPlayers}
+            {presentes} / {maxPlayers}
+            {presentes !== players.length ? (
+              <span className="ml-1.5 font-medium text-[#7D8A96]/60">
+                ({players.length - presentes} sin conexión)
+              </span>
+            ) : null}
           </span>
         </div>
 
@@ -243,17 +254,27 @@ export default function VersusRoom({ pin }: VersusRoomProps) {
                 transition={{ type: 'spring', stiffness: 420, damping: 32 }}
                 className={`flex items-center gap-3 rounded-xl border-2 bg-white p-3 ${
                   player.id === playerId ? 'border-[#E8A598]' : 'border-[#EAE4E2]'
-                }`}
+                } ${player.connected ? '' : 'opacity-50'}`}
               >
                 <Image
                   src={getAvatarUrl(getSafeAvatarId(player.avatarId))}
                   alt=""
                   width={36}
                   height={36}
-                  className="size-9 shrink-0 rounded-full object-cover"
+                  className={`size-9 shrink-0 rounded-full object-cover ${
+                    player.connected ? '' : 'grayscale'
+                  }`}
                 />
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#2c3e50]">
                   {player.nickname}
+                  {/* Sin esto, quien cerraba la pestaña seguía en la lista
+                      exactamente igual que quien estaba delante, y el anfitrión
+                      empezaba la partida contando con él. */}
+                  {player.connected ? null : (
+                    <span className="ml-1.5 block text-[11px] font-medium text-[#7D8A96]">
+                      sin conexión
+                    </span>
+                  )}
                 </span>
                 {player.id === playerId ? (
                   <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-[#E8A598]">
