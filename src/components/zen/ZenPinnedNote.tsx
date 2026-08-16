@@ -37,6 +37,18 @@ export default function ZenPinnedNote({
   const [opacityIdx, setOpacityIdx] = useState(1)
   const [hiddenFor, setHiddenFor] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  // El hover se lleva en JS y no en CSS: con una regla `:hover` la nota estaba
+  // siempre al 100 % mientras pulsabas el botón de transparencia, así que el
+  // cambio no se veía y parecía que el botón no hacía nada.
+  const [hovering, setHovering] = useState(false)
+  // Tras tocar la transparencia se ignora el hover un momento, para que veas
+  // el nivel que acabas de elegir sin tener que apartar el ratón.
+  const [previewing, setPreviewing] = useState(false)
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (previewTimer.current) clearTimeout(previewTimer.current)
+  }, [])
   const noteRef = useRef<HTMLDivElement>(null)
   const dragOffset = useRef<Pos>({ x: 0, y: 0 })
 
@@ -121,6 +133,9 @@ export default function ZenPinnedNote({
     const next = (opacityIdx + 1) % OPACITY_STEPS.length
     setOpacityIdx(next)
     localStorage.setItem(OPACITY_KEY, String(next))
+    setPreviewing(true)
+    if (previewTimer.current) clearTimeout(previewTimer.current)
+    previewTimer.current = setTimeout(() => setPreviewing(false), 1100)
   }
 
   function hide() {
@@ -149,12 +164,14 @@ export default function ZenPinnedNote({
     <div
       ref={noteRef}
       className="zen-pinned-note fixed z-[70] select-none"
+      onPointerEnter={() => setHovering(true)}
+      onPointerLeave={() => setHovering(false)}
       style={{
         left: pos.x,
         top: pos.y,
         width: NOTE_W,
         // Al arrastrar se muestra entero: si no, cuesta ver dónde lo sueltas.
-        opacity: dragging ? 1 : OPACITY_STEPS[opacityIdx],
+        opacity: dragging || (hovering && !previewing) ? 1 : OPACITY_STEPS[opacityIdx],
         cursor: dragging ? 'grabbing' : undefined,
       }}
     >
@@ -170,10 +187,15 @@ export default function ZenPinnedNote({
           <button
             type="button"
             onClick={cycleOpacity}
-            title="Cambiar la transparencia"
-            className="rounded p-0.5 text-[#8a6d1f]/70 transition-colors hover:bg-[#E2C36B]/40 hover:text-[#8a6d1f]"
+            title={`Transparencia: ${Math.round(OPACITY_STEPS[opacityIdx] * 100)} %. Pulsa para cambiarla.`}
+            className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[#8a6d1f]/70 transition-colors hover:bg-[#E2C36B]/40 hover:text-[#8a6d1f]"
           >
             <span className="material-symbols-outlined text-[15px]">opacity</span>
+            {/* El nivel, a la vista: el cambio se nota aunque tengas el ratón
+                encima y la nota esté momentáneamente opaca. */}
+            <span className="text-[9px] font-bold tabular-nums">
+              {Math.round(OPACITY_STEPS[opacityIdx] * 100)}
+            </span>
           </button>
           <button
             type="button"

@@ -64,6 +64,10 @@ const CHAT_HISTORY_LIMIT = 60
  *  a media faena, su muñeco no se queda secuestrado para siempre. */
 const CLAIM_TTL_MS = 8000
 const POSE_THROTTLE_MS = 100
+/** Espera antes de emitir un cambio de perfil, para agrupar ráfagas de clics. */
+const PROFILE_DEBOUNCE_MS = 450
+const MAX_RESUBSCRIBES = 4
+const RESUBSCRIBE_BASE_MS = 1500
 /** Lo que tarda el muñeco en estallar al marcharse su dueño. */
 export const POP_DURATION_MS = 650
 export const PIN_MAX_LENGTH = 90
@@ -175,6 +179,8 @@ export function useZenRoom({
   const initialPoseRef = useRef(initialPose)
   const popTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([])
   const pinnedRef = useRef<ZenPinned>(null)
+  const retriesRef = useRef(0)
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     initialPoseRef.current = initialPose
@@ -405,6 +411,7 @@ export function useZenRoom({
 
     channel.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
+        retriesRef.current = 0
         joinedAtRef.current = Date.now()
         setConnected(true)
         const p = profileRef.current
@@ -419,6 +426,16 @@ export function useZenRoom({
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         // Sin canal la sala sigue siendo jugable: se queda como la de siempre.
         setConnected(false)
+        // Pero se intenta volver, con espera creciente: antes, una caída
+        // puntual dejaba la sala aislada hasta recargar la página.
+        if (retriesRef.current < MAX_RESUBSCRIBES) {
+          const wait = RESUBSCRIBE_BASE_MS * 2 ** retriesRef.current
+          retriesRef.current += 1
+          retryTimerRef.current = setTimeout(() => {
+            // `subscribe` sobre un canal caído lo reabre con sus manejadores.
+            channel.subscribe()
+          }, wait)
+        }
       }
     })
 
@@ -438,21 +455,32 @@ export function useZenRoom({
       catPoseRef.current = null
       for (const t of popTimersRef.current) clearTimeout(t)
       popTimersRef.current = []
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
+      retriesRef.current = 0
       void supabase.removeChannel(channel)
     }
   }, [topic, myId, send])
 
-  // Republicar el perfil cuando cambia el color o el humor.
+  // Republicar el perfil cuando cambia el color o el humor, con antirrebote.
+  //
+  // Sin él, pasar rápido por los colores del editor emitía una presencia por
+  // clic; la ráfaga superaba el límite de tasa de Realtime y el canal se caía,
+  // dejando la sala en "Sin conexión". Nadie necesita ver el color intermedio
+  // mientras eliges, así que basta con emitir el que quede al parar.
   useEffect(() => {
     const ch = channelRef.current
     if (!ch || !connected) return
-    void ch.track({
-      id: myId,
-      name,
-      color,
-      mood,
-      joinedAt: joinedAtRef.current,
-    } satisfies PresenceRow)
+    const timer = setTimeout(() => {
+      void ch.track({
+        id: myId,
+        name,
+        color,
+        mood,
+        joinedAt: joinedAtRef.current,
+      } satisfies PresenceRow)
+    }, PROFILE_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
   }, [connected, myId, name, color, mood])
 
   // ── Acciones ──────────────────────────────────────────────────────────────

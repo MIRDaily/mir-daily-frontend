@@ -181,6 +181,13 @@ const BUBBLE_MS = 5200
  *  segundo): suficiente para que el vuelo se vea fluido sin saturar el canal. */
 const FLIGHT_THROTTLE_MS = 45
 
+/** El suelo de la sala, en fracción de su alto. Igual que el de la física. */
+const DRAG_FLOOR_PCT = 0.88
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(Math.max(v, min), Math.max(min, max))
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function resolvePreset(raw: string | null): ZenPreset {
@@ -1272,8 +1279,22 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
       if (throwPhaseRef.current !== 'drag') return
 
       const zr = zenRoomEl.getBoundingClientRect()
-      const nx = ev.clientX - zr.left - throwGrabOff.current.x
-      const ny = ev.clientY - zr.top  - throwGrabOff.current.y
+      // Acotado a la sala: sin esto el muñeco se podía arrastrar fuera de la
+      // habitación (e incluso fuera de la pantalla) y quedarse ahí colgado.
+      // Se usa el mismo suelo que la física del vuelo para que no cuelen los
+      // pies por debajo de la tarima.
+      const halfW = el.offsetWidth  * 0.5
+      const halfH = el.offsetHeight * 0.5
+      const nx = clamp(
+        ev.clientX - zr.left - throwGrabOff.current.x,
+        halfW,
+        zenRoomEl.offsetWidth - halfW,
+      )
+      const ny = clamp(
+        ev.clientY - zr.top  - throwGrabOff.current.y,
+        halfH,
+        zenRoomEl.offsetHeight * DRAG_FLOOR_PCT - halfH,
+      )
       phys.current.x = nx
       phys.current.y = ny
 

@@ -1103,12 +1103,12 @@ textarea:disabled {
   to   { opacity: 1; translate: -50% -10px; scale: 1; }
 }
 
-/* Post-it del mensaje fijado: discreto de fondo, legible al acercarse. */
+/* Post-it del mensaje fijado: discreto de fondo, legible al acercarse.
+   La opacidad la calcula el componente (hover incluido); aquí solo se suaviza
+   el cambio. Con una regla `:hover` que la forzara, el botón de transparencia
+   no parecía hacer nada porque el ratón estaba encima al pulsarlo. */
 .zen-pinned-note {
   transition: opacity 220ms ease;
-}
-.zen-pinned-note:hover {
-  opacity: 1 !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
