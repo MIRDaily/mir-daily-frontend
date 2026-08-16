@@ -11,6 +11,7 @@ import { SingleSheetArt, StackedSheetsArt } from '@/components/studio/Simulacros
 import { DeckArt } from '@/components/studio/MazosHoverArt'
 import { FlipCardArt } from '@/components/studio/FlashcardsHoverArt'
 import { WaveCta } from '@/components/studio/SimulacroWaveArt'
+import { ZenTimerArt } from '@/components/studio/ZenHoverArt'
 
 type QuickStat = {
   label: string
@@ -154,7 +155,6 @@ const studioCards: ReadonlyArray<StudioCard> = [
     description: 'Relajación y mindfulness para mejorar tu concentración.',
     primaryAction: 'Crear Sala',
     secondaryAction: 'Unirme',
-    badge: 'LIVE',
     type: 'zen',
   },
 ] as const
@@ -213,6 +213,7 @@ export default function StudioPage() {
   const [mazosHovered, setMazosHovered] = useState(false)
   const [flashcardsHovered, setFlashcardsHovered] = useState(false)
   const [featuredHovered, setFeaturedHovered] = useState(false)
+  const [zenHovered, setZenHovered] = useState(false)
   const monthlyProgress = useMonthlyProgress(Boolean(user))
 
   const overviewCards = useMemo<ReadonlyArray<OverviewCard>>(
@@ -440,7 +441,12 @@ export default function StudioPage() {
                             onMouseEnter: () => setFeaturedHovered(true),
                             onMouseLeave: () => setFeaturedHovered(false),
                           }
-                        : {})}
+                        : card.id === 'sala-zen'
+                          ? {
+                              onMouseEnter: () => setZenHovered(true),
+                              onMouseLeave: () => setZenHovered(false),
+                            }
+                          : {})}
               >
                 {card.id === 'preguntas-simulacros' ? (
                   <AnimatePresence initial={false}>
@@ -453,6 +459,7 @@ export default function StudioPage() {
                 ) : null}
                 {card.id === 'mazos' ? <DeckArt hovered={mazosHovered} /> : null}
                 {card.id === 'flashcards' ? <FlipCardArt hovered={flashcardsHovered} /> : null}
+                {card.id === 'sala-zen' ? <ZenTimerArt hovered={zenHovered} /> : null}
                 {card.id === 'simulacros' ? (
                   <WaveCta hovered={featuredHovered}>
                     <span className="material-symbols-outlined">play_arrow</span>
@@ -472,7 +479,9 @@ export default function StudioPage() {
                           ? 'sm:pr-72'
                           : card.id === 'flashcards'
                             ? 'sm:pr-44'
-                            : undefined
+                            : card.id === 'sala-zen'
+                              ? 'sm:pr-44'
+                              : undefined
                     }
                   >
                     <div className="mb-4 flex items-start justify-between gap-2">
