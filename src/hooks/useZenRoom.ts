@@ -102,6 +102,18 @@ export function zenChannelTopic(mode: ZenMode, code: string, preset: ZenPreset):
   return `zen:public:${preset}`
 }
 
+/** Ids realmente presentes en el canal ahora mismo. */
+function presentIds(channel: RealtimeChannel): Set<string> {
+  const out = new Set<string>()
+  const state = channel.presenceState<PresenceRow>()
+  for (const key of Object.keys(state)) {
+    for (const row of state[key] ?? []) {
+      if (row?.id) out.add(row.id)
+    }
+  }
+  return out
+}
+
 function sanitizeChat(raw: string): string {
   // Sin saltos de línea ni espacios en ristra: el chat es una tira lateral
   // estrecha y un mensaje "decorado" la rompe entera.
@@ -151,6 +163,8 @@ export function useZenRoom({
   const joinedAtRef = useRef(0)
 
   const [connected, setConnected] = useState(false)
+  /** Al subir, se tira el canal y se monta uno nuevo. */
+  const [reconnectNonce, setReconnectNonce] = useState(0)
   const [isHost, setIsHost] = useState(true)
   const [peers, setPeers] = useState<ZenPeer[]>([])
   const [messages, setMessages] = useState<ZenChatMessage[]>([])
@@ -259,10 +273,14 @@ export function useZenRoom({
     })
 
     channel.on('presence', { event: 'leave' }, ({ leftPresences }) => {
-      // Antes de borrarlos del todo se quedan un instante para que estallen.
+      // OJO: actualizar la presencia (p. ej. al cambiar de color) llega al resto
+      // como una salida seguida de una entrada. Sin comprobar quién sigue
+      // realmente en la sala, cambiar de color hacía estallar tu muñeco en la
+      // pantalla de los demás como si te hubieras marchado.
+      const stillHere = presentIds(channel)
       const gone = (leftPresences ?? []) as unknown as PresenceRow[]
       const popping = gone
-        .filter((row) => row?.id && row.id !== myId)
+        .filter((row) => row?.id && row.id !== myId && !stillHere.has(row.id))
         .map((row) => ({
           id: row.id,
           name: String(row.name ?? 'Alguien').slice(0, 24),
@@ -283,13 +301,14 @@ export function useZenRoom({
       }
 
       readPresence()
-      // Al irse alguien, se sueltan los muñecos que tuviera agarrados.
-      const left = Object.keys(channel.presenceState<PresenceRow>())
+      // Al irse alguien de verdad, se sueltan los muñecos que tuviera agarrados.
+      // Se compara contra los ids presentes, no contra las claves del estado,
+      // que es lo que antes soltaba agarres legítimos por una salida falsa.
       setClaims((prev) => {
         const next = { ...prev }
         let changed = false
         for (const [target, claim] of Object.entries(next)) {
-          if (claim.byId !== myId && !left.includes(claim.byId)) {
+          if (claim.byId !== myId && !stillHere.has(claim.byId)) {
             delete next[target]
             changed = true
           }
@@ -426,15 +445,14 @@ export function useZenRoom({
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         // Sin canal la sala sigue siendo jugable: se queda como la de siempre.
         setConnected(false)
-        // Pero se intenta volver, con espera creciente: antes, una caída
-        // puntual dejaba la sala aislada hasta recargar la página.
+        // Y se vuelve a intentar con espera creciente. Se rehace el canal
+        // entero (subiendo el testigo) en vez de resuscribir este: un canal ya
+        // cerrado está desenganchado del socket y `subscribe` sobre él no
+        // devuelve ni un estado.
         if (retriesRef.current < MAX_RESUBSCRIBES) {
           const wait = RESUBSCRIBE_BASE_MS * 2 ** retriesRef.current
           retriesRef.current += 1
-          retryTimerRef.current = setTimeout(() => {
-            // `subscribe` sobre un canal caído lo reabre con sus manejadores.
-            channel.subscribe()
-          }, wait)
+          retryTimerRef.current = setTimeout(() => setReconnectNonce((n) => n + 1), wait)
         }
       }
     })
@@ -460,7 +478,23 @@ export function useZenRoom({
       retriesRef.current = 0
       void supabase.removeChannel(channel)
     }
-  }, [topic, myId, send])
+  }, [topic, myId, send, reconnectNonce])
+
+  // El navegador estrangula los temporizadores de las pestañas en segundo
+  // plano, así que Realtime pierde el latido y el servidor acaba cerrando el
+  // canal. Al volver a la pestaña se reconstruye en el acto en vez de esperar
+  // a que se agoten los reintentos.
+  useEffect(() => {
+    if (!topic) return
+    function onVisible() {
+      if (document.visibilityState !== 'visible') return
+      if (channelRef.current?.state === 'joined') return
+      retriesRef.current = 0
+      setReconnectNonce((n) => n + 1)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [topic])
 
   // Republicar el perfil cuando cambia el color o el humor, con antirrebote.
   //

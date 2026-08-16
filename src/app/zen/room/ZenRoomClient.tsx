@@ -974,11 +974,15 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
       popping,
     })
 
+    // Cinturón y tirantes: si alguien apareciera a la vez en la lista de
+    // presentes y en la de salientes, React vería dos muñecos con la misma
+    // clave. Gana el presente.
+    const aqui = new Set(room.peers.map((p) => p.id))
     return [
       ...mine,
       ...room.peers.map((p) => toAvatar(p, false)),
       // Los que acaban de irse siguen un instante para estallar.
-      ...room.leaving.map((p) => toAvatar(p, true)),
+      ...room.leaving.filter((p) => !aqui.has(p.id)).map((p) => toAvatar(p, true)),
     ]
   }, [avatars, shared, room.peers, room.leaving, room.foreignPoseOnMe])
 
