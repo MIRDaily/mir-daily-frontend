@@ -1,6 +1,6 @@
 'use client'
 
-import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ZenTimerProvider, useZenTimer, type ZenPreset } from '@/state/zenTimerStore'
@@ -10,6 +10,8 @@ import ZenRoom, { DESK_SLOTS, SOFA_SLOTS } from '@/components/zen/ZenRoom'
 import ZenAvatar, { type ZenAvatarData, type AvatarState, type UserMood } from '@/components/zen/ZenAvatar'
 import { useAuthContext } from '@/providers/AuthProvider'
 import { playBell } from '@/lib/zenAudio'
+import ZenChat from '@/components/zen/ZenChat'
+import { useZenRoom, type ZenMode } from '@/hooks/useZenRoom'
 
 // ─── localStorage keys ────────────────────────────────────────────────────────
 
@@ -17,7 +19,7 @@ const ZEN_DATE_KEY     = 'zen_sessions_date'
 const ZEN_COUNT_KEY    = 'zen_sessions_count'
 const ZEN_STREAK_LAST  = 'zen_streak_last_date'
 const ZEN_STREAK_CNT   = 'zen_streak_count'
-const ZEN_USERNAME_KEY = 'zen_username'
+// (el alias local `zen_username` se retiró: el nombre sale de la cuenta)
 const ZEN_VISITED_KEY  = 'zen_visited'
 
 // ─── localStorage utilities ───────────────────────────────────────────────────
@@ -157,6 +159,10 @@ const USER_ENTRY_Y        = 125
 const USER_ENTRY_DELAY_MS = 800
 
 // ─── Extended local avatar type ───────────────────────────────────────────────
+
+/** Única fuente de marcas de tiempo de la física del lanzamiento: el historial
+ *  de puntero y la velocidad tienen que compartir origen o el cálculo no cuadra. */
+const throwNow = () => Date.now()
 
 /** Augments ZenAvatarData with a stable floor position for desk-less bots. */
 type ExtAvatarData = ZenAvatarData & {
@@ -358,34 +364,69 @@ const PAGE_BG: Record<string, string> = {
 
 // ─── Root export ─────────────────────────────────────────────────────────────
 
+function resolveMode(raw: string | null): ZenMode {
+  return raw === 'public' || raw === 'private' ? raw : 'solo'
+}
+
+function resolveCode(raw: string | null): string {
+  return String(raw ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5)
+}
+
+/** Reparte los sitios de forma estable a partir del id: sin negociar nada,
+ *  cada cliente coloca a los demás donde ellos mismos se colocan. */
+function slotFromId(id: string, slots: number): number {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+  return h % Math.max(1, slots)
+}
+
 export default function ZenRoomClient() {
   const searchParams = useSearchParams()
   const preset = resolvePreset(searchParams.get('preset'))
+  const mode = resolveMode(searchParams.get('mode'))
+  const code = resolveCode(searchParams.get('code'))
   return (
     <ZenTimerProvider initialPreset={preset}>
-      <ZenRoomView />
+      <ZenRoomView mode={mode} code={code} />
     </ZenTimerProvider>
   )
 }
 
+/** display_name → username → prefijo del email, igual que el saludo del Studio. */
+function resolveZenName(
+  user: { display_name?: string; username?: string; email?: string } | null | undefined,
+): string {
+  const displayName = String(user?.display_name ?? '').trim()
+  if (displayName) return displayName
+
+  const username = String(user?.username ?? '').trim()
+  if (username) return username
+
+  const email = String(user?.email ?? '').trim()
+  if (email.includes('@')) return email.split('@')[0]
+
+  return 'tú'
+}
+
 // ─── Inner view ───────────────────────────────────────────────────────────────
 
-function ZenRoomView() {
+function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
   const router                = useRouter()
   const { user }              = useAuthContext()
-  const { state: timerState } = useZenTimer()
-  const authUsername          = user?.username ?? user?.display_name ?? 'tú'
+  const { state: timerState, dispatch: timerDispatch } = useZenTimer()
+  const shared                = mode !== 'solo'
+  // Mismo orden que el saludo del Studio, para que el nombre no cambie según
+  // la pantalla en la que estés.
+  const authUsername          = resolveZenName(user)
 
   // ── Stable per-session values — SSR-safe defaults, randomised after mount ──
   const [botCount, setBotCount] = useState(7)
   const [roomName, setRoomName] = useState(ROOM_NAMES[0])
 
   // ── User identity ─────────────────────────────────────────────────────────
-  const [displayName, setDisplayName] = useState('')
-  const [editingName, setEditingName] = useState(false)
-  const [nameInput,   setNameInput]   = useState('')
-
-  const effectiveUsername = displayName || authUsername
+  // El nombre sale siempre de la cuenta: en una sala compartida tiene que
+  // coincidir con el que ve el resto de la app, no con un alias local.
+  const effectiveUsername = authUsername
 
   // ── Character editor state ─────────────────────────────────────────────────
   const [userMood,  setUserMood]  = useState<UserMood>('neutral')
@@ -424,6 +465,8 @@ function ZenRoomView() {
   // ── Physics / throw refs ───────────────────────────────────────────────────
   // Phase: 'idle' | 'drag' | 'fly' | 'fallen' | 'returning'
   const throwPhaseRef = useRef<'idle' | 'drag' | 'fly' | 'fallen' | 'returning'>('idle')
+  // A quién estás zarandeando. Puede ser tu muñeco o el de otra persona.
+  const throwTargetRef = useRef<string | null>(null)
   // Physics body (absolute px from room top-left, velocity in px/frame)
   const phys          = useRef({ x: 0, y: 0, vx: 0, vy: 0 })
   // Anchor: React-managed desk position (xPct, yPct) captured at grab start
@@ -435,23 +478,71 @@ function ZenRoomView() {
   // ── Fullscreen state ──────────────────────────────────────────────────────
   const [isFullscreen, setIsFullscreen] = useState(false)
 
+  // ── Sala compartida ───────────────────────────────────────────────────────
+  const room = useZenRoom({
+    mode,
+    code,
+    preset: timerState.preset,
+    name: effectiveUsername,
+    color: userColor,
+    mood: userMood,
+  })
+  const [chatOpen, setChatOpen] = useState(false)
+  // Al entrar a una sala compartida el reloj lo marca el anfitrión, pero
+  // cualquiera puede desengancharse y llevar su propio ritmo.
+  const [timerSynced, setTimerSynced] = useState(true)
+
+  const connectedToRoom = room.connected
+  const myClaim = room.claims[room.myId]
+  const iAmGrabbed = Boolean(myClaim && myClaim.byId !== room.myId)
+
+  /** Traduce el muñeco local al id que viaja por la red. */
+  function netIdOf(avatar: ExtAvatarData): string {
+    return avatar.isUser ? room.myId : avatar.id
+  }
+
+  /** Pide el turno para zarandear a alguien. En solo siempre se concede. */
+  function grabAvatar(avatarId: string): boolean {
+    if (!shared || !room.connected) return true
+    const target = avatars.find((a) => a.id === avatarId)
+    return room.claim(target ? netIdOf(target) : avatarId)
+  }
+
+  function releaseGrab(avatarId: string) {
+    if (!shared || !room.connected) return
+    const target = avatars.find((a) => a.id === avatarId)
+    room.releaseClaim(target ? netIdOf(target) : avatarId)
+  }
+
+  /** Publica dónde está el muñeco que llevas en la mano. */
+  function publishGrabbedPose(xPct: number, yPct: number, state: AvatarState) {
+    if (!shared || !room.connected) return
+    const id = throwTargetRef.current
+    if (!id) return
+    const target = avatars.find((a) => a.id === id)
+    const netId = target ? netIdOf(target) : id
+    if (netId === room.myId) room.publishPose({ xPct, yPct, state })
+    else room.publishPoseFor(netId, { xPct, yPct, state })
+  }
+
   // ── Client-only init: random values + localStorage (runs once after mount) ─
   useEffect(() => {
-    const count      = Math.floor(Math.random() * 7) + 5
+    // En una sala compartida los compañeros son personas: nada de bots.
+    const count      = shared ? 0 : Math.floor(Math.random() * 7) + 5
     const name       = ROOM_NAMES[Math.floor(Math.random() * ROOM_NAMES.length)]
-    const saved      = localStorage.getItem(ZEN_USERNAME_KEY) ?? ''
-    const effName    = saved || authUsername
     const suffixes   = makeBotSuffixes()
-    const userSlot   = Math.floor(Math.random() * DESK_SLOTS.length)
+    // Compartida: el sitio sale del id, así todos te colocan donde tú te pones.
+    const userSlot   = shared
+      ? slotFromId(room.myId, DESK_SLOTS.length)
+      : Math.floor(Math.random() * DESK_SLOTS.length)
     // Character editor persistence
     const savedColor = localStorage.getItem(ZEN_USER_COLOR_KEY) ?? USER_COLORS[0]
     const savedMood  = (localStorage.getItem(ZEN_USER_MOOD_KEY) as UserMood | null) ?? 'neutral'
     setBotCount(count)
     setRoomName(name)
-    setDisplayName(saved)
     setUserColor(savedColor)
     setUserMood(MOOD_STEPS.includes(savedMood) ? savedMood : 'neutral')
-    setAvatars(buildInitialAvatars(effName, count, suffixes, userSlot, savedColor))
+    setAvatars(buildInitialAvatars(authUsername, count, suffixes, userSlot, savedColor))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load session counts from localStorage ─────────────────────────────────
@@ -807,17 +898,90 @@ function ZenRoomView() {
     else               document.exitFullscreen().catch(() => {})
   }
 
-  function handleNameSave(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const trimmed = nameInput.trim().slice(0, 20)
-    setDisplayName(trimmed)
-    if (trimmed) {
-      localStorage.setItem(ZEN_USERNAME_KEY, trimmed)
-    } else {
-      localStorage.removeItem(ZEN_USERNAME_KEY)
+  // ── Sala compartida: derivados y sincronización ───────────────────────────
+
+  // Los compañeros reales no se guardan en el estado local: se derivan en el
+  // render. Así las rutinas locales (tics, café, paseos) solo tocan a los bots
+  // y nunca pelean con las posiciones que llegan por la red.
+  const renderAvatars = useMemo<ExtAvatarData[]>(() => {
+    const mine = avatars.map((a) => {
+      if (!a.isUser || !room.foreignPoseOnMe) return a
+      // Te tienen agarrado: mandan ellos sobre tu muñeco.
+      const p = room.foreignPoseOnMe
+      return { ...a, xPct: p.xPct, yPct: p.yPct, state: p.state }
+    })
+    if (!shared) return mine
+
+    const remotes: ExtAvatarData[] = room.peers.map((p) => ({
+      id: p.id,
+      username: p.name,
+      color: p.color,
+      xPct: p.xPct,
+      yPct: p.yPct,
+      deskIndex: slotFromId(p.id, DESK_SLOTS.length),
+      state: p.state,
+      isUser: false,
+    }))
+    return [...mine, ...remotes]
+  }, [avatars, shared, room.peers, room.foreignPoseOnMe])
+
+  // Publica tu posición cuando tu muñeco se mueve por las rutinas locales.
+  const myAvatar = avatars.find((a) => a.isUser)
+  const myX = myAvatar?.xPct ?? 50
+  const myY = myAvatar?.yPct ?? 50
+  const myState = myAvatar?.state ?? 'idle'
+  const publishPose = room.publishPose
+  useEffect(() => {
+    if (!shared || !connectedToRoom) return
+    // Mientras te zarandean, quien manda publica por ti.
+    if (iAmGrabbed) return
+    publishPose({ xPct: myX, yPct: myY, state: myState }, true)
+  }, [shared, connectedToRoom, iAmGrabbed, myX, myY, myState, publishPose])
+
+  // El anfitrión dicta el reloj; el resto lo adopta salvo que se desenganche.
+  // El estado del reloj se lee de una ref para que el intervalo no se recree
+  // cada segundo con el tic: hacerlo emitía un broadcast por render.
+  const timerStateRef = useRef(timerState)
+  useEffect(() => {
+    timerStateRef.current = timerState
+  }, [timerState])
+
+  const publishTimer = room.publishTimer
+  useEffect(() => {
+    if (!shared || !connectedToRoom || !room.isHost) return
+    const publish = () => {
+      const s = timerStateRef.current
+      publishTimer({
+        phase: s.phase,
+        timeRemaining: s.timeRemaining,
+        cycle: s.cycle,
+        running: s.running,
+        preset: s.preset,
+        studyDuration: s.studyDuration,
+        breakDuration: s.breakDuration,
+      })
     }
-    setEditingName(false)
-  }
+    publish()
+    const id = setInterval(publish, 3000)
+    return () => clearInterval(id)
+  }, [shared, connectedToRoom, room.isHost, publishTimer])
+
+  const remoteTimer = room.remoteTimer
+  useEffect(() => {
+    if (!shared || room.isHost || !timerSynced || !remoteTimer) return
+    timerDispatch({
+      type: 'SYNC',
+      snapshot: {
+        phase: remoteTimer.phase,
+        timeRemaining: remoteTimer.timeRemaining,
+        cycle: remoteTimer.cycle,
+        running: remoteTimer.running,
+        preset: remoteTimer.preset,
+        studyDuration: remoteTimer.studyDuration,
+        breakDuration: remoteTimer.breakDuration,
+      },
+    })
+  }, [shared, room.isHost, timerSynced, remoteTimer, timerDispatch])
 
   // ── Physics helpers ───────────────────────────────────────────────────────
   //
@@ -919,9 +1083,10 @@ function ZenRoomView() {
               // transition React just wrote and lock the CSS vars so the element
               // stays visually at the fallen position. Animating vars → 0 then
               // slides the avatar to the desk without any left/top animation.
+              const backId = throwTargetRef.current
               flushSync(() => {
                 setAvatars(prev => prev.map(a =>
-                  a.isUser
+                  a.id === backId
                     ? { ...a, xPct: deskXPct, yPct: deskYPct, state: 'walking' as AvatarState }
                     : a,
                 ))
@@ -949,8 +1114,11 @@ function ZenRoomView() {
                 } else {
                   clearPhysVars(el)
                   throwPhaseRef.current = 'idle'
+                  const doneId = throwTargetRef.current
+                  throwTargetRef.current = null
+                  if (doneId) releaseGrab(doneId)
                   setAvatars(prev => prev.map(a =>
-                    a.isUser ? { ...a, state: 'idle' as AvatarState } : a,
+                    a.id === doneId ? { ...a, state: 'idle' as AvatarState } : a,
                   ))
                 }
               }
@@ -967,18 +1135,24 @@ function ZenRoomView() {
       const anchorXpx = (throwAnchor.current.xPct / 100) * rW
       const anchorYpx = (throwAnchor.current.yPct / 100) * rH
       setPhysVars(el, p.x - anchorXpx, p.y - anchorYpx)
+      publishGrabbedPose((p.x / rW) * 100, (p.y / rH) * 100, 'idle')
       throwRafRef.current = requestAnimationFrame(tick)
     }
 
     throwRafRef.current = requestAnimationFrame(tick)
   }
 
-  function handleAvatarPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+  function handleAvatarPointerDown(e: React.PointerEvent<HTMLDivElement>, avatarId: string) {
     if (throwPhaseRef.current !== 'idle') return
+
+    // En una sala compartida hay que pedir el turno: si otro lo tiene agarrado,
+    // aquí no se hace nada. El que agarra primero manda.
+    if (!grabAvatar(avatarId)) return
 
     e.preventDefault()
     e.stopPropagation()
 
+    throwTargetRef.current = avatarId
     const el = e.currentTarget as HTMLElement
     // The avatar's offsetParent is the ZenRoom container (position:relative)
     const zenRoom = el.offsetParent as HTMLElement | null
@@ -993,17 +1167,17 @@ function ZenRoomView() {
     const centerX = elRect.left + elRect.width  / 2 - zenRect.left
     const centerY = elRect.top  + elRect.height / 2 - zenRect.top
 
-    const userAvatar = avatars.find(a => a.isUser)
-    if (!userAvatar) return
+    const grabbed = avatars.find(a => a.id === avatarId)
+    if (!grabbed) return
 
-    throwAnchor.current   = { xPct: userAvatar.xPct, yPct: userAvatar.yPct, deskIndex: userAvatar.deskIndex }
+    throwAnchor.current   = { xPct: grabbed.xPct, yPct: grabbed.yPct, deskIndex: grabbed.deskIndex }
     throwPhaseRef.current = 'drag'
     phys.current          = { x: centerX, y: centerY, vx: 0, vy: 0 }
     throwGrabOff.current  = {
       x: e.clientX - zenRect.left - centerX,
       y: e.clientY - zenRect.top  - centerY,
     }
-    throwMhist.current = [{ x: e.clientX, y: e.clientY, t: Date.now() }]
+    throwMhist.current = [{ x: e.clientX, y: e.clientY, t: throwNow() }]
     el.style.zIndex = '50'
 
     // Notifica al cozy cursor que hay un click sostenido (activa su wiggle/grab state)
@@ -1036,7 +1210,14 @@ function ZenRoomView() {
           `translate3d(${(ev.clientX - 3).toFixed(1)}px, ${(ev.clientY - 1).toFixed(1)}px, 0)`
       }
 
-      throwMhist.current.push({ x: ev.clientX, y: ev.clientY, t: Date.now() })
+      // Que el resto de la sala vea el zarandeo en directo.
+      publishGrabbedPose(
+        (nx / zenRoomEl.offsetWidth) * 100,
+        (ny / zenRoomEl.offsetHeight) * 100,
+        'idle',
+      )
+
+      throwMhist.current.push({ x: ev.clientX, y: ev.clientY, t: throwNow() })
       if (throwMhist.current.length > 6) throwMhist.current.shift()
     }
 
@@ -1075,6 +1256,21 @@ function ZenRoomView() {
       className="relative min-h-screen overflow-x-hidden"
       style={{ backgroundColor: pageBg, transition: 'background-color 2s ease' }}
     >
+
+      {/* ── Chat efímero de la sala compartida ── */}
+      {shared && !isFullscreen ? (
+        <ZenChat
+          open={chatOpen}
+          onToggle={() => setChatOpen((v) => !v)}
+          connected={room.connected}
+          messages={room.messages}
+          peers={room.peers}
+          myId={room.myId}
+          mutedIds={room.mutedIds}
+          onSend={room.sendChat}
+          onToggleMute={room.toggleMute}
+        />
+      ) : null}
 
       {/* Page ambient blobs */}
       <div className="pointer-events-none fixed inset-0 z-0 [background-image:radial-gradient(circle_at_30%_30%,rgba(139,168,136,0.06)_0,transparent_40%),radial-gradient(circle_at_70%_65%,rgba(232,165,152,0.06)_0,transparent_40%)]" />
@@ -1206,7 +1402,7 @@ function ZenRoomView() {
               />
             )}
 
-            {avatars.map((avatar, i) => (
+            {renderAvatars.map((avatar, i) => (
               <ZenAvatar
                 key={avatar.id}
                 username={avatar.username}
@@ -1216,7 +1412,8 @@ function ZenRoomView() {
                 isUser={avatar.isUser}
                 state={avatar.state}
                 animDelay={i * 120}
-                onPointerDown={avatar.isUser ? handleAvatarPointerDown : undefined}
+                // Ahora se puede agarrar a cualquiera, no solo a uno mismo.
+                onPointerDown={(e) => handleAvatarPointerDown(e, avatar.id)}
                 forceMood={avatar.isUser ? userMood : undefined}
               />
             ))}
@@ -1294,41 +1491,70 @@ function ZenRoomView() {
             </p>
           )}
 
-          {/* User identity — display name with inline edit */}
-          {editingName ? (
-            <form onSubmit={handleNameSave} className="flex items-center gap-1.5">
-              <input
-                autoFocus
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-                maxLength={20}
-                placeholder={authUsername}
-                className="w-32 rounded-lg border border-[#E8A598]/50 bg-white px-2.5 py-1 text-xs font-medium text-[#2c3e50] outline-none focus:border-[#E8A598] focus:ring-1 focus:ring-[#E8A598]/20"
-              />
-              <button
-                type="submit"
-                className="rounded-lg bg-[#E8A598] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#d18d80]"
-              >
-                ✓
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditingName(false)}
-                className="rounded-lg border border-[#EAE4E2] bg-white px-2.5 py-1 text-xs text-[#7D8A96] hover:border-[#7D8A96]/30"
-              >
-                ✕
-              </button>
-            </form>
-          ) : (
-            <button
-              type="button"
-              onClick={() => { setNameInput(displayName || authUsername); setEditingName(true) }}
-              className="flex items-center gap-1.5 rounded-full border border-[#EAE4E2] bg-white/80 px-3.5 py-1.5 text-xs font-medium text-[#7D8A96] shadow-sm transition-colors hover:border-[#7D8A96]/30 hover:text-[#2c3e50]"
-            >
-              <span>@{effectiveUsername}</span>
-              <span className="material-symbols-outlined text-[12px] opacity-50">edit</span>
-            </button>
-          )}
+          {/* Identidad: el nombre de la cuenta, sin alias editable */}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <span className="flex items-center gap-1.5 rounded-full border border-[#EAE4E2] bg-white/80 px-3.5 py-1.5 text-xs font-medium text-[#7D8A96] shadow-sm">
+              <span className="material-symbols-outlined text-[13px] opacity-60">account_circle</span>
+              <span>{effectiveUsername}</span>
+            </span>
+
+            {shared ? (
+              <>
+                <span
+                  className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium shadow-sm ${
+                    room.connected
+                      ? 'border-[#8BA888]/30 bg-[#8BA888]/10 text-[#6a8a67]'
+                      : 'border-[#EAE4E2] bg-white/80 text-[#7D8A96]'
+                  }`}
+                  title={
+                    room.connected
+                      ? 'Conectado a la sala compartida'
+                      : 'Sin conexión: estás estudiando en local'
+                  }
+                >
+                  <span className="material-symbols-outlined text-[13px]">
+                    {room.connected ? 'groups' : 'cloud_off'}
+                  </span>
+                  {room.connected ? `${room.peers.length + 1} en la sala` : 'Sin conexión'}
+                </span>
+
+                {code ? (
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard?.writeText(code).catch(() => {})}
+                    title="Copiar el código para invitar"
+                    className="flex items-center gap-1.5 rounded-full border border-[#E8A598]/30 bg-[#E8A598]/10 px-3.5 py-1.5 text-xs font-bold tracking-[0.15em] text-[#d18d80] shadow-sm transition-colors hover:bg-[#E8A598]/20"
+                  >
+                    <span className="material-symbols-outlined text-[13px]">content_copy</span>
+                    {code}
+                  </button>
+                ) : null}
+
+                {!room.isHost ? (
+                  <button
+                    type="button"
+                    onClick={() => setTimerSynced((v) => !v)}
+                    aria-pressed={timerSynced}
+                    title={
+                      timerSynced
+                        ? 'Sigues el reloj de la sala. Púlsalo para ir a tu aire.'
+                        : 'Llevas tu propio ritmo. Púlsalo para volver al de la sala.'
+                    }
+                    className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium shadow-sm transition-colors ${
+                      timerSynced
+                        ? 'border-[#8BA888]/30 bg-[#8BA888]/10 text-[#6a8a67] hover:bg-[#8BA888]/20'
+                        : 'border-[#EAE4E2] bg-white/80 text-[#7D8A96] hover:border-[#7D8A96]/30'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[13px]">
+                      {timerSynced ? 'sync' : 'sync_disabled'}
+                    </span>
+                    {timerSynced ? 'Reloj de la sala' : 'Mi propio ritmo'}
+                  </button>
+                ) : null}
+              </>
+            ) : null}
+          </div>
         </div>}
 
         {/* ── Timer + Controls + Character editor row — hidden in fullscreen ── */}

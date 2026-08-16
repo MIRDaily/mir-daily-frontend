@@ -33,6 +33,8 @@ export type ZenTimerAction =
   | { type: 'TICK' }
   | { type: 'SET_PRESET'; preset: ZenPreset }
   | { type: 'SET_CUSTOM_TIMES'; studyMinutes: number; breakMinutes: number }
+  /** Adopta el reloj del anfitrión en una sala compartida. */
+  | { type: 'SYNC'; snapshot: ZenTimerState }
 
 // ─── Preset Definitions ───────────────────────────────────────────────────────
 
@@ -171,6 +173,21 @@ function zenTimerReducer(state: ZenTimerState, action: ZenTimerAction): ZenTimer
         running: false,
         phase: 'idle',
         cycle: 1,
+      }
+    }
+
+    case 'SYNC': {
+      const s = action.snapshot
+      // Reemplazo total y sin condiciones: el anfitrión es la única fuente de
+      // verdad mientras estés sincronizado, así que no hay nada que fusionar.
+      return {
+        phase: s.phase,
+        timeRemaining: Math.max(0, Math.round(s.timeRemaining)),
+        cycle: Math.max(1, Math.round(s.cycle)),
+        running: s.running,
+        preset: s.preset,
+        studyDuration: s.studyDuration,
+        breakDuration: s.breakDuration,
       }
     }
 
