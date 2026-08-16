@@ -1,6 +1,6 @@
 'use client'
 
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { memo, type ReactNode, useEffect, useRef, useState } from 'react'
 import ZenDesk from './ZenDesk'
 
 // ─── Desk positions — left ¾ of room ──────────────────────────────────────────
@@ -65,6 +65,38 @@ export default function ZenRoom({ children, occupiedDesks = [], catSync }: ZenRo
       role="img"
     >
 
+      <RoomScenery />
+
+      {/* ── Desks ── */}
+      {DESK_SLOTS.map((slot, i) => (
+        <ZenDesk
+          key={i}
+          xPct={slot.xPct}
+          yPct={slot.yPct}
+          index={i}
+          occupied={occupiedSet.has(i)}
+        />
+      ))}
+
+      {/* ── Walking cat ── */}
+      <WalkingCat sync={catSync} />
+
+      {/* ── Overlays (avatars etc.) ── */}
+      {children}
+
+    </div>
+  )
+}
+
+
+/**
+ * Suelo, paredes, estanterías, ventana, sofás, plantas y lámparas: nada de esto
+ * depende de props ni de estado, así que se memoiza. Sin esto, cada posición
+ * que llegaba de la red repintaba el decorado entero.
+ */
+const RoomScenery = memo(function RoomScenery() {
+  return (
+    <>
       {/* ── Floor ── */}
       <div
         className="absolute inset-0"
@@ -133,27 +165,9 @@ export default function ZenRoom({ children, occupiedDesks = [], catSync }: ZenRo
       {/* ── Floor lamps ── */}
       <FloorLamp xPct={5}  />
       <FloorLamp xPct={68} />
-
-      {/* ── Desks ── */}
-      {DESK_SLOTS.map((slot, i) => (
-        <ZenDesk
-          key={i}
-          xPct={slot.xPct}
-          yPct={slot.yPct}
-          index={i}
-          occupied={occupiedSet.has(i)}
-        />
-      ))}
-
-      {/* ── Walking cat ── */}
-      <WalkingCat sync={catSync} />
-
-      {/* ── Overlays (avatars etc.) ── */}
-      {children}
-
-    </div>
+    </>
   )
-}
+})
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -422,9 +436,9 @@ export type ZenCatSync = {
   /** Quién simula al gato. En sala compartida, solo el anfitrión. */
   drive: boolean
   /** El anfitrión emite aquí cada paso. */
-  onPose?: (pose: { x: number; y: number; flip: boolean; sleeping: boolean }) => void
+  onPose?: (pose: { x: number; y: number; flip: boolean; sleeping: boolean; at: number }) => void
   /** Los demás leen de aquí lo que emite el anfitrión. */
-  getPose?: () => { x: number; y: number; flip: boolean; sleeping: boolean } | null
+  getPose?: () => { x: number; y: number; flip: boolean; sleeping: boolean; at: number } | null
 }
 
 function WalkingCat({ sync }: { sync?: ZenCatSync }) {
@@ -453,7 +467,7 @@ function WalkingCat({ sync }: { sync?: ZenCatSync }) {
     }
     let rafId: number
     let lastSleeping: boolean | null = null
-    let lastSeen: string | null = null
+    let lastSeen: number | null = null
     let quietSince = performance.now()
     // Interpolación: llegan ~5 poses por segundo, así que se camina hacia la
     // última en vez de dar saltos de una a otra.
@@ -464,12 +478,12 @@ function WalkingCat({ sync }: { sync?: ZenCatSync }) {
       const pose = syncRef.current?.getPose?.() ?? null
       const el = catRef.current
 
-      if (pose) {
-        const stamp = `${pose.x}|${pose.y}|${pose.sleeping}`
-        if (stamp !== lastSeen) {
-          lastSeen = stamp
-          quietSince = now
-        }
+      if (pose && pose.at !== lastSeen) {
+        // Se mira la marca de tiempo y no la posición: el gato pasa ratos
+        // quieto (pausa) y dormido (hasta 4 min), y con el valor como criterio
+        // el seguidor lo daba por perdido y se ponía a simular por su cuenta.
+        lastSeen = pose.at
+        quietSince = now
       }
 
       if (now - quietSince > HOST_QUIET_MS) {
@@ -509,6 +523,7 @@ function WalkingCat({ sync }: { sync?: ZenCatSync }) {
     let frameCount  = 0
     let rafId: number
     let snapX = x, snapY = y, snapTimer = 0
+    let lastFlip = true
 
     function nearDesk(px: number, py: number): boolean {
       return DESK_SLOTS.some(d => {
@@ -569,6 +584,12 @@ function WalkingCat({ sync }: { sync?: ZenCatSync }) {
           setIsSleeping(false)
           // Short groggy pause before moving again
           pauseFrames = Math.round(60 + Math.random() * 120)
+        }
+        // Latido lento durante la siesta: sin él el resto se queda sin noticias
+        // durante minutos y acaba simulando su propio gato.
+        const dormido = syncRef.current
+        if (dormido?.drive && dormido.onPose && frameCount % 60 === 0) {
+          dormido.onPose({ x, y, flip: lastFlip, sleeping: true, at: Date.now() })
         }
         rafId = requestAnimationFrame(step)
         return
@@ -632,9 +653,10 @@ function WalkingCat({ sync }: { sync?: ZenCatSync }) {
 
         // Se emite ~7 veces por segundo: suficiente para que el gato ajeno se
         // mueva con naturalidad sin saturar el canal.
+        lastFlip = flip
         const emit = syncRef.current
         if (emit?.drive && emit.onPose && frameCount % 12 === 0) {
-          emit.onPose({ x, y: y + bob, flip, sleeping: sleepFrames > 0 })
+          emit.onPose({ x, y: y + bob, flip, sleeping: false, at: Date.now() })
         }
       }
 

@@ -22,8 +22,9 @@ export type ZenPose = {
   flying?: boolean
 }
 
-/** El gato lo simula el anfitrión y el resto solo lo reproduce. */
-export type ZenCatPose = { x: number; y: number; flip: boolean; sleeping: boolean }
+/** El gato lo simula el anfitrión y el resto solo lo reproduce. `at` permite al
+ *  seguidor saber si sigue llegando algo aunque el gato esté quieto o dormido. */
+export type ZenCatPose = { x: number; y: number; flip: boolean; sleeping: boolean; at: number }
 
 export type ZenPinned = { text: string; byName: string; at: number } | null
 
@@ -64,6 +65,8 @@ const CHAT_HISTORY_LIMIT = 60
  *  a media faena, su muñeco no se queda secuestrado para siempre. */
 const CLAIM_TTL_MS = 8000
 const POSE_THROTTLE_MS = 100
+/** Cada cuánto se revisa si algún agarre se ha quedado huérfano. */
+const CLAIM_SWEEP_MS = 2000
 /** Espera antes de emitir un cambio de perfil, para agrupar ráfagas de clics. */
 const PROFILE_DEBOUNCE_MS = 450
 const MAX_RESUBSCRIBES = 4
@@ -185,6 +188,9 @@ export function useZenRoom({
   const posesRef = useRef<Record<string, ZenPose>>({})
   const lastChatAtRef = useRef(0)
   const lastPoseSentRef = useRef(0)
+  /** Última vez que llegó movimiento de cada muñeco agarrado. En ref para no
+   *  provocar un render por cada una de las ~22 poses por segundo del vuelo. */
+  const grabActivityRef = useRef<Record<string, number>>({})
   const myPoseRef = useRef<ZenPose>({ xPct: 50, yPct: 50, state: 'idle' })
 
   // El perfil viaja en presencia; guardarlo en una ref evita re-suscribir el
@@ -331,6 +337,8 @@ export function useZenRoom({
         flying: Boolean(p.flying),
       }
 
+      if (pose.flying) grabActivityRef.current[p.id] = Date.now()
+
       // El canal va con `self: false`, así que una pose con mi propio id solo
       // puede venir de alguien que me tiene agarrado y me está zarandeando.
       if (p.id === myId) {
@@ -400,6 +408,7 @@ export function useZenRoom({
         y: c.y,
         flip: Boolean(c.flip),
         sleeping: Boolean(c.sleeping),
+        at: Number(c.at) || Date.now(),
       }
     })
 
@@ -479,6 +488,35 @@ export function useZenRoom({
       void supabase.removeChannel(channel)
     }
   }, [topic, myId, send, reconnectNonce])
+
+  // Barrido de agarres muertos.
+  //
+  // Si quien te tiene agarrado se cae, cierra la pestaña de golpe o pierde la
+  // red, nunca llega su "drop". Sin esto el agarre quedaba vivo para siempre:
+  // tu cliente dejaba de publicar tu posición y tu muñeco se quedaba congelado
+  // en la pantalla de todos, sin arreglo salvo recargar.
+  useEffect(() => {
+    if (!connected) return
+    const id = setInterval(() => {
+      const now = Date.now()
+      setClaims((prev) => {
+        const next: Record<string, ZenClaim> = {}
+        let changed = false
+        for (const [target, claim] of Object.entries(prev)) {
+          const vivo = Math.max(claim.at, grabActivityRef.current[target] ?? 0)
+          if (claim.byId !== myId && now - vivo > CLAIM_TTL_MS) {
+            changed = true
+            delete grabActivityRef.current[target]
+            if (target === myId) setForeignPoseOnMe(null)
+            continue
+          }
+          next[target] = claim
+        }
+        return changed ? next : prev
+      })
+    }, CLAIM_SWEEP_MS)
+    return () => clearInterval(id)
+  }, [connected, myId])
 
   // El navegador estrangula los temporizadores de las pestañas en segundo
   // plano, así que Realtime pierde el latido y el servidor acaba cerrando el

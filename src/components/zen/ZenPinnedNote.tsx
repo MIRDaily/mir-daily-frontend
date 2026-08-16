@@ -113,6 +113,16 @@ export default function ZenPinnedNote({
     }
   }, [dragging])
 
+  // Si encoges la ventana, la nota podía quedarse fuera de la pantalla y sin
+  // forma de recuperarla salvo borrando el almacenamiento local.
+  useEffect(() => {
+    function onResize() {
+      setPos((prev) => (prev ? clampToViewport(prev) : prev))
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
   // Guardar la posición al soltar, no en cada píxel del arrastre.
   useEffect(() => {
     if (dragging || !pos) return

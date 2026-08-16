@@ -520,6 +520,12 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
   // cualquiera puede desengancharse y llevar su propio ritmo.
   const [timerSynced, setTimerSynced] = useState(true)
 
+  // Una privada sin código no es ninguna sala: sin él no hay canal al que
+  // engancharse y te quedabas en una sala muda con aspecto de compartida.
+  useEffect(() => {
+    if (mode === 'private' && !code) router.replace('/zen')
+  }, [mode, code, router])
+
   const connectedToRoom = room.connected
   const myClaim = room.claims[room.myId]
   const iAmGrabbed = Boolean(myClaim && myClaim.byId !== room.myId)
