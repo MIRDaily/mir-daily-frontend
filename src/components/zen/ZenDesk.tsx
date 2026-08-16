@@ -31,10 +31,9 @@ export default function ZenDesk({
   useEffect(() => {
     if (flipRef.current) clearTimeout(flipRef.current)
 
-    if (!isStudying) {
-      setFlipped(false)
-      return
-    }
+    // El reseteo se hace al limpiar, no aquí: así no encadena un render extra
+    // cada vez que alguien se levanta del pupitre.
+    if (!isStudying) return
 
     function scheduleNext() {
       const gap = 60000 + Math.random() * 60000  // 1–2 min
@@ -51,7 +50,10 @@ export default function ZenDesk({
       scheduleNext()
     }, initial)
 
-    return () => { if (flipRef.current) clearTimeout(flipRef.current) }
+    return () => {
+      if (flipRef.current) clearTimeout(flipRef.current)
+      setFlipped(false)
+    }
   }, [isStudying, index])
 
   // ── Paper positions via CSS transform so transition animates the swap ───────

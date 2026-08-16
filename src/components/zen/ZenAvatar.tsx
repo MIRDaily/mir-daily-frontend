@@ -112,10 +112,9 @@ export default function ZenAvatar({
   useEffect(() => {
     if (talkCycleRef.current) clearTimeout(talkCycleRef.current)
 
-    if (!isInConversation) {
-      setIsTalking(false)
-      return
-    }
+    // Sin reseteo: el render ya exige `isInConversation` para pintar la boca
+    // hablando, así que un valor viejo aquí no se ve.
+    if (!isInConversation) return
 
     function cycle(nowTalking: boolean) {
       setIsTalking(nowTalking)
@@ -143,14 +142,18 @@ export default function ZenAvatar({
   const emojiShowRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const emojiHideRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => {
+  // Recordar el último emoji para que el fundido de salida tenga qué mostrar.
+  // Es el patrón de ajustar estado durante el render que documenta React: no
+  // necesita efecto y evita un render extra por cada emoji.
+  const [prevEmoji, setPrevEmoji] = useState<string | null>(null)
+  if (activeEmoji !== prevEmoji) {
+    setPrevEmoji(activeEmoji)
     if (activeEmoji) setDisplayEmoji(activeEmoji)
-  }, [activeEmoji])
+  }
 
   useEffect(() => {
     if (emojiShowRef.current) clearTimeout(emojiShowRef.current)
     if (emojiHideRef.current) clearTimeout(emojiHideRef.current)
-    setActiveEmoji(null)
 
     if (!isInConversation) return
 

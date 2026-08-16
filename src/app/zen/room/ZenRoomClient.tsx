@@ -157,7 +157,6 @@ const BREAK_X = { min: 8,  max: 70 }   // wanderers stay in the desk area
 const BREAK_Y = { min: 34, max: 86 }
 
 const USER_ENTRY_Y        = 125
-const USER_ENTRY_DELAY_MS = 800
 
 // ─── Extended local avatar type ───────────────────────────────────────────────
 
@@ -439,7 +438,9 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
   const authUsername          = resolveZenName(user)
 
   // ── Stable per-session values — SSR-safe defaults, randomised after mount ──
-  const [botCount, setBotCount] = useState(7)
+  // Solo se usa para sembrar la lista inicial de avatares; no hace falta leerlo
+  // después, pero sí guardarlo para que el sorteo ocurra una única vez.
+  const [, setBotCount] = useState(7)
   const [roomName, setRoomName] = useState(ROOM_NAMES[0])
 
   // ── User identity ─────────────────────────────────────────────────────────
@@ -455,7 +456,6 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
   const [avatars, setAvatars] = useState<ExtAvatarData[]>(() =>
     buildInitialAvatars(authUsername, 7),
   )
-  const [pageBg,          setPageBg]          = useState(PAGE_BG.idle)
   const [sessionCount,    setSessionCount]    = useState(0)
   const [streakCount,     setStreakCount]      = useState(0)
   const [completionToast, setCompletionToast] = useState<string | null>(null)
@@ -580,6 +580,11 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
   }
 
   // ── Client-only init: random values + localStorage (runs once after mount) ─
+  //
+  // Tiene que ser un efecto: sortear valores o leer localStorage en el
+  // inicializador de useState daría un HTML de servidor distinto del primer
+  // render del cliente y React se quejaría de la hidratación. Corre una sola
+  // vez, así que no encadena renders.
   useEffect(() => {
     // En una sala compartida los compañeros son personas: nada de bots.
     const count      = shared ? 0 : Math.floor(Math.random() * 7) + 5
@@ -598,19 +603,25 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
     setUserColor(savedColor)
     setUserMood(MOOD_STEPS.includes(savedMood) ? savedMood : 'neutral')
     setAvatars(buildInitialAvatars(authUsername, count, suffixes, userSlot, savedColor))
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    // Siembra de arranque: corre una sola vez a propósito. Reejecutarla al
+    // cambiar de nombre o de modo repoblaría la sala desde cero.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ── Load session counts from localStorage ─────────────────────────────────
+  // Mismo caso que el de arriba: valor que solo existe en el cliente.
   useEffect(() => {
     const data = loadSessionData()
     setSessionCount(data.count)
     setStreakCount(data.streak)
   }, [])
 
-  // ── Sync user colour → avatars array + localStorage ───────────────────────
+  // ── Persist user colour ───────────────────────────────────────────────────
+  // El color no se copia al array de avatares: se aplica al pintar (ver
+  // `renderAvatars`). Duplicarlo en estado obligaba a un efecto que reescribía
+  // la lista entera con cada cambio.
   useEffect(() => {
     localStorage.setItem(ZEN_USER_COLOR_KEY, userColor)
-    setAvatars(prev => prev.map(a => a.isUser ? { ...a, color: userColor } : a))
   }, [userColor])
 
   // ── Persist user mood → localStorage ─────────────────────────────────────
@@ -642,7 +653,7 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
       if (welcomeToastRef.current) clearTimeout(welcomeToastRef.current)
       if (innerTimer)              clearTimeout(innerTimer)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // ── Entry animation: all desk avatars walk in staggered on mount ──────────
   useEffect(() => {
@@ -676,14 +687,20 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
     })
 
     return () => timers.forEach(clearTimeout)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
-  // ── Bell + background + session increment on phase transitions ────────────
+  // El fondo es función pura de la fase: derivado, no duplicado en estado.
+  const pageBg = PAGE_BG[timerState.phase] ?? PAGE_BG.idle
+
+  // ── Bell + session increment on phase transitions ─────────────────────────
+  //
+  // Reaccionar a un cambio de fase es justo para lo que está un efecto. El
+  // contador de sesiones se apunta en localStorage y hay que releerlo, así que
+  // no se puede derivar del render.
   useEffect(() => {
     if (!isMountedRef.current) { isMountedRef.current = true; return }
 
     const phase = timerState.phase
-    setPageBg(PAGE_BG[phase] ?? PAGE_BG.idle)
     if (phase === 'study' || phase === 'break') void playBell(phase)
 
     if (phase === 'break' && prevPhaseRef.current === 'study') {
@@ -699,14 +716,11 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
     prevPhaseRef.current = phase
   }, [timerState.phase])
 
-  // ── Sync username when auth resolves or user edits their display name ──────
-  useEffect(() => {
-    setAvatars((prev) =>
-      prev.map((a) => (a.isUser ? { ...a, username: effectiveUsername } : a)),
-    )
-  }, [effectiveUsername])
-
   // ── Drive avatar positions + states from timer phase ──────────────────────
+  //
+  // Coreografía: al cambiar de fase los muñecos se levantan, pasean y se
+  // sientan con temporizadores encadenados. Son posiciones que evolucionan en
+  // el tiempo, no un valor derivable del render.
   useEffect(() => {
     if (studyTimeoutRef.current)  clearTimeout(studyTimeoutRef.current)
     if (breakIntervalRef.current) clearInterval(breakIntervalRef.current)
@@ -885,7 +899,7 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
       if (coffeeTimerRef.current)   clearTimeout(coffeeTimerRef.current)
       if (coffeeRestoreRef.current) clearTimeout(coffeeRestoreRef.current)
     }
-  }, [timerState.phase]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [timerState.phase])
 
   // ── Fullscreen API ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -960,10 +974,14 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
   // y nunca pelean con las posiciones que llegan por la red.
   const renderAvatars = useMemo<ExtAvatarData[]>(() => {
     const mine = avatars.map((a) => {
-      if (!a.isUser || !room.foreignPoseOnMe) return a
+      if (!a.isUser) return a
+      // Nombre y color se aplican aquí, que son la única fuente de verdad: así
+      // no hace falta un efecto que los copie al estado en cada cambio.
+      const yo = { ...a, username: effectiveUsername, color: userColor }
+      if (!room.foreignPoseOnMe) return yo
       // Te tienen agarrado: mandan ellos sobre tu muñeco.
       const p = room.foreignPoseOnMe
-      return { ...a, xPct: p.xPct, yPct: p.yPct, state: p.state, flying: p.flying }
+      return { ...yo, xPct: p.xPct, yPct: p.yPct, state: p.state, flying: p.flying }
     })
     if (!shared) return mine
 
@@ -990,7 +1008,11 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
       // Los que acaban de irse siguen un instante para estallar.
       ...room.leaving.filter((p) => !aqui.has(p.id)).map((p) => toAvatar(p, true)),
     ]
-  }, [avatars, shared, room.peers, room.leaving, room.foreignPoseOnMe])
+    // `room` entero queda fuera a propósito: cambia de identidad en cada render
+    // y meterlo aquí reintroduciría la inundación del canal que ya tumbó la
+    // sala una vez. Se depende solo de los campos que se leen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [avatars, shared, room.peers, room.leaving, room.foreignPoseOnMe, effectiveUsername, userColor])
 
   // El gato lo simula el anfitrión y lo reproduce el resto, para que todos vean
   // al mismo gato en el mismo sitio haciendo lo mismo.
