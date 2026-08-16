@@ -11,6 +11,7 @@ import ZenAvatar, { type ZenAvatarData, type AvatarState, type UserMood } from '
 import { useAuthContext } from '@/providers/AuthProvider'
 import { playBell } from '@/lib/zenAudio'
 import ZenChat from '@/components/zen/ZenChat'
+import ZenPinnedNote from '@/components/zen/ZenPinnedNote'
 import { useZenRoom, type ZenMode } from '@/hooks/useZenRoom'
 
 // ─── localStorage keys ────────────────────────────────────────────────────────
@@ -175,6 +176,10 @@ type ExtAvatarData = ZenAvatarData & {
 
 /** Cuánto aguanta en pantalla el bocadillo de un mensaje. */
 const BUBBLE_MS = 5200
+
+/** Cada cuánto se emite la posición de un muñeco por los aires (~22 por
+ *  segundo): suficiente para que el vuelo se vea fluido sin saturar el canal. */
+const FLIGHT_THROTTLE_MS = 45
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -474,6 +479,7 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
   const throwPhaseRef = useRef<'idle' | 'drag' | 'fly' | 'fallen' | 'returning'>('idle')
   // A quién estás zarandeando. Puede ser tu muñeco o el de otra persona.
   const throwTargetRef = useRef<string | null>(null)
+  const lastFlightSentRef = useRef(0)
   // Physics body (absolute px from room top-left, velocity in px/frame)
   const phys          = useRef({ x: 0, y: 0, vx: 0, vy: 0 })
   // Anchor: React-managed desk position (xPct, yPct) captured at grab start
@@ -530,25 +536,32 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
   }
 
   /** Publica dónde está el muñeco que llevas en la mano. */
-  function publishGrabbedPose(xPct: number, yPct: number, state: AvatarState) {
+  function publishGrabbedPose(xPct: number, yPct: number, state: AvatarState, force = false) {
     if (!shared || !room.connected) return
     const id = throwTargetRef.current
     if (!id) return
+    const now = throwNow()
+    if (!force && now - lastFlightSentRef.current < FLIGHT_THROTTLE_MS) return
+    lastFlightSentRef.current = now
     const target = avatars.find((a) => a.id === id)
     const netId = target ? netIdOf(target) : id
     // `flying` le dice al receptor que quite la transición larga: sin esto el
     // lanzamiento se ve como si el muñeco caminase hasta donde cae.
     const pose = { xPct, yPct, state, flying: true }
-    if (netId === room.myId) room.publishPose(pose)
+    if (netId === room.myId) room.publishPose(pose, true)
     else room.publishPoseFor(netId, pose)
   }
 
-  /** Al aterrizar hay que avisar de que ya no vuela, o se queda sin transición. */
-  function publishLanded(avatarId: string) {
-    if (!shared || !room.connected) return
+  /**
+   * Anuncia la vuelta al pupitre al ARRANCAR el regreso, no al terminarlo: con
+   * `flying: false` el receptor recupera su transición de 3,8 s y camina de
+   * vuelta a la vez que el muñeco local, en lugar de salir con 4 s de retraso.
+   */
+  function publishLanded(avatarId: string, xPct: number, yPct: number) {
+    if (!shared || !room.connected || !avatarId) return
     const target = avatars.find((a) => a.id === avatarId)
     const netId = target ? netIdOf(target) : avatarId
-    const pose = { xPct: throwAnchor.current.xPct, yPct: throwAnchor.current.yPct, state: 'idle' as AvatarState, flying: false }
+    const pose = { xPct, yPct, state: 'walking' as AvatarState, flying: false }
     if (netId === room.myId) room.publishPose(pose, true)
     else room.publishPoseFor(netId, pose)
   }
@@ -1109,6 +1122,7 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
         if (Math.abs(p.vy) < 1.5 && Math.abs(p.vx) < 0.8) {
           // ── Settled ─────────────────────────────────────────────────────
           throwPhaseRef.current = 'fallen'
+          publishGrabbedPose((p.x / rW) * 100, (p.y / rH) * 100, 'idle', true)
           const anchorXpx = (throwAnchor.current.xPct / 100) * rW
           const anchorYpx = (throwAnchor.current.yPct / 100) * rH
           setPhysVars(el, p.x - anchorXpx, p.y - anchorYpx)
@@ -1158,6 +1172,8 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
                     : a,
                 ))
               })
+              publishLanded(throwTargetRef.current ?? '', deskXPct, deskYPct)
+
               // Override the left/top transition React just painted in
               el.style.transition = 'none'
               el.style.setProperty('--phys-ox', `${startOx}px`)
@@ -1183,10 +1199,7 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
                   throwPhaseRef.current = 'idle'
                   const doneId = throwTargetRef.current
                   throwTargetRef.current = null
-                  if (doneId) {
-                    publishLanded(doneId)
-                    releaseGrab(doneId)
-                  }
+                  if (doneId) releaseGrab(doneId)
                   setAvatars(prev => prev.map(a =>
                     a.id === doneId ? { ...a, state: 'idle' as AvatarState } : a,
                   ))
@@ -1326,6 +1339,10 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
       className="relative min-h-screen overflow-x-hidden"
       style={{ backgroundColor: pageBg, transition: 'background-color 2s ease' }}
     >
+
+      {/* El post-it vive fuera del chat para que siga a la vista en pantalla
+          completa y con el panel cerrado. */}
+      {shared ? <ZenPinnedNote pinned={room.pinned} onUnpin={room.unpin} /> : null}
 
       {/* ── Chat efímero de la sala compartida ── */}
       {shared ? (

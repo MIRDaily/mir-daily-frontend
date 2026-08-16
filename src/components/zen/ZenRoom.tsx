@@ -415,6 +415,9 @@ function CoffeeMachine({ xPct, yPct }: { xPct: number; yPct: number }) {
 const CAT_DESK_RX = 7    // half-width  of exclusion ellipse
 const CAT_DESK_RY = 7    // half-height of exclusion ellipse
 
+/** Sin noticias del anfitrión durante este rato, el seguidor simula por su cuenta. */
+const HOST_QUIET_MS = 3000
+
 export type ZenCatSync = {
   /** Quién simula al gato. En sala compartida, solo el anfitrión. */
   drive: boolean
@@ -434,19 +437,53 @@ function WalkingCat({ sync }: { sync?: ZenCatSync }) {
     syncRef.current = sync
   }, [sync])
 
-  // ── Seguidor: no simula nada, solo reproduce lo que llega del anfitrión ──
-  const following = Boolean(sync && !sync.drive)
+  // ── Seguidor: reproduce lo que emite el anfitrión ──
+  //
+  // Si el anfitrión enmudece (se fue, se le cayó la conexión, o el relevo aún
+  // no ha ocurrido) el seguidor deja de recibir poses. Sin la marcha atrás de
+  // abajo el gato se quedaría clavado en el sitio para siempre.
+  const wantsToFollow = Boolean(sync && !sync.drive)
+  const [hostWentQuiet, setHostWentQuiet] = useState(false)
+  const following = wantsToFollow && !hostWentQuiet
+
   useEffect(() => {
-    if (!following) return
+    if (!wantsToFollow) {
+      setHostWentQuiet(false)
+      return
+    }
     let rafId: number
     let lastSleeping: boolean | null = null
+    let lastSeen: string | null = null
+    let quietSince = performance.now()
+    // Interpolación: llegan ~5 poses por segundo, así que se camina hacia la
+    // última en vez de dar saltos de una a otra.
+    let cx: number | null = null
+    let cy: number | null = null
 
-    function follow() {
+    function follow(now: number) {
       const pose = syncRef.current?.getPose?.() ?? null
       const el = catRef.current
+
+      if (pose) {
+        const stamp = `${pose.x}|${pose.y}|${pose.sleeping}`
+        if (stamp !== lastSeen) {
+          lastSeen = stamp
+          quietSince = now
+        }
+      }
+
+      if (now - quietSince > HOST_QUIET_MS) {
+        // El anfitrión lleva demasiado callado: mejor un gato que se mueve por
+        // su cuenta que uno congelado.
+        setHostWentQuiet(true)
+        return
+      }
+
       if (pose && el) {
-        el.style.left = `${pose.x}%`
-        el.style.top = `${pose.y}%`
+        cx = cx === null ? pose.x : cx + (pose.x - cx) * 0.18
+        cy = cy === null ? pose.y : cy + (pose.y - cy) * 0.18
+        el.style.left = `${cx}%`
+        el.style.top = `${cy}%`
         el.style.transform = pose.flip ? 'scaleX(-1)' : 'scaleX(1)'
         if (pose.sleeping !== lastSleeping) {
           lastSleeping = pose.sleeping
@@ -458,7 +495,7 @@ function WalkingCat({ sync }: { sync?: ZenCatSync }) {
 
     rafId = requestAnimationFrame(follow)
     return () => cancelAnimationFrame(rafId)
-  }, [following])
+  }, [wantsToFollow])
 
   useEffect(() => {
     // En sala compartida solo simula el anfitrión: si simulara cada uno, cada
@@ -596,7 +633,7 @@ function WalkingCat({ sync }: { sync?: ZenCatSync }) {
         // Se emite ~7 veces por segundo: suficiente para que el gato ajeno se
         // mueva con naturalidad sin saturar el canal.
         const emit = syncRef.current
-        if (emit?.drive && emit.onPose && frameCount % 9 === 0) {
+        if (emit?.drive && emit.onPose && frameCount % 12 === 0) {
           emit.onPose({ x, y: y + bob, flip, sleeping: sleepFrames > 0 })
         }
       }

@@ -296,7 +296,15 @@ export function useZenRoom({
       const p = payload as { id?: string } & Partial<ZenPose>
       if (!p?.id) return
       if (typeof p.xPct !== 'number' || typeof p.yPct !== 'number') return
-      const pose: ZenPose = { xPct: p.xPct, yPct: p.yPct, state: (p.state ?? 'idle') as AvatarState }
+      // `flying` tiene que sobrevivir al viaje: si se pierde aquí, el receptor
+      // mantiene la transición larga de posición y un lanzamiento se ve como si
+      // el muñeco se fuera caminando hasta donde cae.
+      const pose: ZenPose = {
+        xPct: p.xPct,
+        yPct: p.yPct,
+        state: (p.state ?? 'idle') as AvatarState,
+        flying: Boolean(p.flying),
+      }
 
       // El canal va con `self: false`, así que una pose con mi propio id solo
       // puede venir de alguien que me tiene agarrado y me está zarandeando.
