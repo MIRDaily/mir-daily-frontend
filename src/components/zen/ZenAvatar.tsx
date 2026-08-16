@@ -36,6 +36,13 @@ type ZenAvatarProps = Pick<ZenAvatarData, 'username' | 'color' | 'xPct' | 'yPct'
   onPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void
   /** When set, overrides the internal random mood for this avatar's face */
   forceMood?: UserMood
+  /** Va por los aires: sin transición de posición, para que el lanzamiento se
+   *  vea como un lanzamiento y no como un paseo tranquilo. */
+  flying?: boolean
+  /** Su dueño acaba de irse de la sala: estalla y desaparece. */
+  popping?: boolean
+  /** Lo último que ha dicho, en un bocadillo sobre su cabeza. */
+  bubble?: string
 }
 
 /** Map avatar state → CSS animation class on the inner wrapper */
@@ -63,6 +70,9 @@ export default function ZenAvatar({
   animDelay    = 0,
   onPointerDown,
   forceMood,
+  flying       = false,
+  popping      = false,
+  bubble,
 }: ZenAvatarProps) {
   // True when the avatar is in a conversation (sofa or standing chat)
   const isInConversation = state === 'chatting' || state === 'sitting'
@@ -192,15 +202,27 @@ export default function ZenAvatar({
         transform:     `translate(calc(-50% + var(--phys-ox, 0px)), calc(-50% + var(--phys-oy, 0px))) scale(${isUser ? 1.1 : 1})`,
         width:         '5.5%',
         zIndex:        isUser ? 25 : 20,
-        pointerEvents: onPointerDown ? 'auto' : 'none',
-        cursor:        onPointerDown ? 'grab' : undefined,
-        transition:    'left 3.8s cubic-bezier(0.45, 0, 0.55, 1), top 3.8s cubic-bezier(0.45, 0, 0.55, 1)',
+        pointerEvents: onPointerDown && !popping ? 'auto' : 'none',
+        cursor:        onPointerDown && !popping ? 'grab' : undefined,
+        // Durante un vuelo la posición llega ya interpolada por la física de
+        // quien lanza: si además la suavizamos aquí, se arrastra y parece que
+        // el muñeco camina en vez de salir volando.
+        transition:    flying
+          ? 'none'
+          : 'left 3.8s cubic-bezier(0.45, 0, 0.55, 1), top 3.8s cubic-bezier(0.45, 0, 0.55, 1)',
       }}
       aria-label={isUser ? `Tu avatar: ${label}` : label}
     >
+      {/* Bocadillo de lo último que ha dicho, encima de la cabeza */}
+      {bubble ? (
+        <div className="zen-speech-bubble" role="status">
+          {bubble}
+        </div>
+      ) : null}
+
       {/* Inner div — CSS keyframe animation only */}
       <div
-        className={stateClass(state)}
+        className={`${stateClass(state)}${popping ? ' zen-avatar-pop' : ''}${flying ? ' zen-avatar-tumble' : ''}`}
         style={{
           position:      'relative',
           display:       'flex',

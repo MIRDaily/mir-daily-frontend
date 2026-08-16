@@ -48,10 +48,13 @@ const BOOK_COLORS = [
 
 type ZenRoomProps = {
   children?: ReactNode
+  /** Sincronización del gato en sala compartida. Sin esto, cada cliente
+   *  simula el suyo y nadie ve al mismo gato en el mismo sitio. */
+  catSync?: ZenCatSync
   occupiedDesks?: ReadonlyArray<number>
 }
 
-export default function ZenRoom({ children, occupiedDesks = [] }: ZenRoomProps) {
+export default function ZenRoom({ children, occupiedDesks = [], catSync }: ZenRoomProps) {
   const occupiedSet = new Set(occupiedDesks)
 
   return (
@@ -143,7 +146,7 @@ export default function ZenRoom({ children, occupiedDesks = [] }: ZenRoomProps) 
       ))}
 
       {/* ── Walking cat ── */}
-      <WalkingCat />
+      <WalkingCat sync={catSync} />
 
       {/* ── Overlays (avatars etc.) ── */}
       {children}
@@ -412,11 +415,55 @@ function CoffeeMachine({ xPct, yPct }: { xPct: number; yPct: number }) {
 const CAT_DESK_RX = 7    // half-width  of exclusion ellipse
 const CAT_DESK_RY = 7    // half-height of exclusion ellipse
 
-function WalkingCat() {
+export type ZenCatSync = {
+  /** Quién simula al gato. En sala compartida, solo el anfitrión. */
+  drive: boolean
+  /** El anfitrión emite aquí cada paso. */
+  onPose?: (pose: { x: number; y: number; flip: boolean; sleeping: boolean }) => void
+  /** Los demás leen de aquí lo que emite el anfitrión. */
+  getPose?: () => { x: number; y: number; flip: boolean; sleeping: boolean } | null
+}
+
+function WalkingCat({ sync }: { sync?: ZenCatSync }) {
   const catRef                    = useRef<HTMLDivElement>(null)
   const [isSleeping, setIsSleeping] = useState(false)
 
+  // Los espejos evitan volver a montar el bucle cuando cambia el anfitrión.
+  const syncRef = useRef(sync)
   useEffect(() => {
+    syncRef.current = sync
+  }, [sync])
+
+  // ── Seguidor: no simula nada, solo reproduce lo que llega del anfitrión ──
+  const following = Boolean(sync && !sync.drive)
+  useEffect(() => {
+    if (!following) return
+    let rafId: number
+    let lastSleeping: boolean | null = null
+
+    function follow() {
+      const pose = syncRef.current?.getPose?.() ?? null
+      const el = catRef.current
+      if (pose && el) {
+        el.style.left = `${pose.x}%`
+        el.style.top = `${pose.y}%`
+        el.style.transform = pose.flip ? 'scaleX(-1)' : 'scaleX(1)'
+        if (pose.sleeping !== lastSleeping) {
+          lastSleeping = pose.sleeping
+          setIsSleeping(pose.sleeping)
+        }
+      }
+      rafId = requestAnimationFrame(follow)
+    }
+
+    rafId = requestAnimationFrame(follow)
+    return () => cancelAnimationFrame(rafId)
+  }, [following])
+
+  useEffect(() => {
+    // En sala compartida solo simula el anfitrión: si simulara cada uno, cada
+    // cual vería un gato distinto haciendo lo suyo.
+    if (following) return
     let x = 85, y = 75          // start in lounge — open space, no desks
     let tx = 80, ty = 80
     const speed     = 0.025
@@ -541,9 +588,17 @@ function WalkingCat() {
 
       if (catRef.current) {
         const bob = Math.sin(frameCount * 0.18) * 0.5
+        const flip = vx >= 0
         catRef.current.style.left      = `${x}%`
         catRef.current.style.top       = `${y + bob}%`
-        catRef.current.style.transform = vx >= 0 ? 'scaleX(-1)' : 'scaleX(1)'
+        catRef.current.style.transform = flip ? 'scaleX(-1)' : 'scaleX(1)'
+
+        // Se emite ~7 veces por segundo: suficiente para que el gato ajeno se
+        // mueva con naturalidad sin saturar el canal.
+        const emit = syncRef.current
+        if (emit?.drive && emit.onPose && frameCount % 9 === 0) {
+          emit.onPose({ x, y: y + bob, flip, sleeping: sleepFrames > 0 })
+        }
       }
 
       rafId = requestAnimationFrame(step)
@@ -551,7 +606,7 @@ function WalkingCat() {
 
     rafId = requestAnimationFrame(step)
     return () => cancelAnimationFrame(rafId)
-  }, [])
+  }, [following])
 
   return (
     <div

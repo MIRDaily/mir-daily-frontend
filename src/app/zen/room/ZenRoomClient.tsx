@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ZenTimerProvider, useZenTimer, type ZenPreset } from '@/state/zenTimerStore'
@@ -167,7 +167,14 @@ const throwNow = () => Date.now()
 /** Augments ZenAvatarData with a stable floor position for desk-less bots. */
 type ExtAvatarData = ZenAvatarData & {
   floorPos?: { xPct: number; yPct: number }
+  /** Va por los aires ahora mismo (lanzado por alguien). */
+  flying?: boolean
+  /** Su dueño se acaba de ir: estalla y desaparece. */
+  popping?: boolean
 }
+
+/** Cuánto aguanta en pantalla el bocadillo de un mensaje. */
+const BUBBLE_MS = 5200
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -479,6 +486,13 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   // ── Sala compartida ───────────────────────────────────────────────────────
+  // A quien ya estaba dentro se le coloca en su sitio desde el primer frame:
+  // su pupitre sale del mismo hash de id en todos los clientes.
+  const initialPose = useCallback((peerId: string) => {
+    const slot = DESK_SLOTS[slotFromId(peerId, DESK_SLOTS.length)]
+    return { xPct: slot.xPct, yPct: slot.yPct + AVATAR_Y_OFFSET, state: 'studying' as AvatarState }
+  }, [])
+
   const room = useZenRoom({
     mode,
     code,
@@ -486,6 +500,7 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
     name: effectiveUsername,
     color: userColor,
     mood: userMood,
+    initialPose,
   })
   const [chatOpen, setChatOpen] = useState(false)
   // Al entrar a una sala compartida el reloj lo marca el anfitrión, pero
@@ -521,8 +536,21 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
     if (!id) return
     const target = avatars.find((a) => a.id === id)
     const netId = target ? netIdOf(target) : id
-    if (netId === room.myId) room.publishPose({ xPct, yPct, state })
-    else room.publishPoseFor(netId, { xPct, yPct, state })
+    // `flying` le dice al receptor que quite la transición larga: sin esto el
+    // lanzamiento se ve como si el muñeco caminase hasta donde cae.
+    const pose = { xPct, yPct, state, flying: true }
+    if (netId === room.myId) room.publishPose(pose)
+    else room.publishPoseFor(netId, pose)
+  }
+
+  /** Al aterrizar hay que avisar de que ya no vuela, o se queda sin transición. */
+  function publishLanded(avatarId: string) {
+    if (!shared || !room.connected) return
+    const target = avatars.find((a) => a.id === avatarId)
+    const netId = target ? netIdOf(target) : avatarId
+    const pose = { xPct: throwAnchor.current.xPct, yPct: throwAnchor.current.yPct, state: 'idle' as AvatarState, flying: false }
+    if (netId === room.myId) room.publishPose(pose, true)
+    else room.publishPoseFor(netId, pose)
   }
 
   // ── Client-only init: random values + localStorage (runs once after mount) ─
@@ -535,8 +563,9 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
     const userSlot   = shared
       ? slotFromId(room.myId, DESK_SLOTS.length)
       : Math.floor(Math.random() * DESK_SLOTS.length)
-    // Character editor persistence
-    const savedColor = localStorage.getItem(ZEN_USER_COLOR_KEY) ?? USER_COLORS[0]
+    // El color se sortea en cada entrada para que la sala salga variada; el
+    // editor de personaje sigue permitiendo cambiarlo a mano después.
+    const savedColor = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)]
     const savedMood  = (localStorage.getItem(ZEN_USER_MOOD_KEY) as UserMood | null) ?? 'neutral'
     setBotCount(count)
     setRoomName(name)
@@ -908,11 +937,11 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
       if (!a.isUser || !room.foreignPoseOnMe) return a
       // Te tienen agarrado: mandan ellos sobre tu muñeco.
       const p = room.foreignPoseOnMe
-      return { ...a, xPct: p.xPct, yPct: p.yPct, state: p.state }
+      return { ...a, xPct: p.xPct, yPct: p.yPct, state: p.state, flying: p.flying }
     })
     if (!shared) return mine
 
-    const remotes: ExtAvatarData[] = room.peers.map((p) => ({
+    const toAvatar = (p: (typeof room.peers)[number], popping: boolean): ExtAvatarData => ({
       id: p.id,
       username: p.name,
       color: p.color,
@@ -921,9 +950,47 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
       deskIndex: slotFromId(p.id, DESK_SLOTS.length),
       state: p.state,
       isUser: false,
-    }))
-    return [...mine, ...remotes]
-  }, [avatars, shared, room.peers, room.foreignPoseOnMe])
+      flying: p.flying,
+      popping,
+    })
+
+    return [
+      ...mine,
+      ...room.peers.map((p) => toAvatar(p, false)),
+      // Los que acaban de irse siguen un instante para estallar.
+      ...room.leaving.map((p) => toAvatar(p, true)),
+    ]
+  }, [avatars, shared, room.peers, room.leaving, room.foreignPoseOnMe])
+
+  // El gato lo simula el anfitrión y lo reproduce el resto, para que todos vean
+  // al mismo gato en el mismo sitio haciendo lo mismo.
+  const publishCat = room.publishCat
+  const catDrives = !shared || !connectedToRoom || room.isHost
+  const getCatPose = room.getCatPose
+  const catSync = useMemo(
+    () => ({ drive: catDrives, onPose: publishCat, getPose: getCatPose }),
+    [catDrives, publishCat, getCatPose],
+  )
+
+  // ── Bocadillos: lo último que ha dicho cada uno, sobre su cabeza ───────────
+  // El corte se guarda en estado y lo mueve un temporizador, en vez de leer el
+  // reloj al renderizar: así el render sigue siendo una función pura.
+  const [bubbleCutoff, setBubbleCutoff] = useState(0)
+  const messages = room.messages
+  useEffect(() => {
+    if (!messages.length) return
+    const t = setTimeout(() => setBubbleCutoff(Date.now()), BUBBLE_MS + 60)
+    return () => clearTimeout(t)
+  }, [messages])
+
+  const bubbles = useMemo(() => {
+    const byAuthor: Record<string, string> = {}
+    for (const m of messages) {
+      if (m.at <= bubbleCutoff) continue
+      byAuthor[m.authorId] = m.text
+    }
+    return byAuthor
+  }, [messages, bubbleCutoff])
 
   // Publica tu posición cuando tu muñeco se mueve por las rutinas locales.
   const myAvatar = avatars.find((a) => a.isUser)
@@ -1116,7 +1183,10 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
                   throwPhaseRef.current = 'idle'
                   const doneId = throwTargetRef.current
                   throwTargetRef.current = null
-                  if (doneId) releaseGrab(doneId)
+                  if (doneId) {
+                    publishLanded(doneId)
+                    releaseGrab(doneId)
+                  }
                   setAvatars(prev => prev.map(a =>
                     a.id === doneId ? { ...a, state: 'idle' as AvatarState } : a,
                   ))
@@ -1258,7 +1328,7 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
     >
 
       {/* ── Chat efímero de la sala compartida ── */}
-      {shared && !isFullscreen ? (
+      {shared ? (
         <ZenChat
           open={chatOpen}
           onToggle={() => setChatOpen((v) => !v)}
@@ -1269,6 +1339,9 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
           mutedIds={room.mutedIds}
           onSend={room.sendChat}
           onToggleMute={room.toggleMute}
+          pinned={room.pinned}
+          onPin={room.pin}
+          onUnpin={room.unpin}
         />
       ) : null}
 
@@ -1356,8 +1429,9 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
         <div className={isFullscreen ? 'flex h-screen w-full items-center' : 'mb-4'}>
           <ZenRoom
             occupiedDesks={
-              avatars.filter((a) => a.deskIndex >= 0).map((a) => a.deskIndex)
+              renderAvatars.filter((a) => a.deskIndex >= 0).map((a) => a.deskIndex)
             }
+            catSync={catSync}
           >
             {/* Room name watermark */}
             <div
@@ -1415,6 +1489,9 @@ function ZenRoomView({ mode, code }: { mode: ZenMode; code: string }) {
                 // Ahora se puede agarrar a cualquiera, no solo a uno mismo.
                 onPointerDown={(e) => handleAvatarPointerDown(e, avatar.id)}
                 forceMood={avatar.isUser ? userMood : undefined}
+                flying={avatar.flying}
+                popping={avatar.popping}
+                bubble={bubbles[avatar.isUser ? room.myId : avatar.id]}
               />
             ))}
 

@@ -13,7 +13,19 @@ import type { ZenPreset, TimerPhase } from '@/state/zenTimerStore'
 
 export type ZenMode = 'solo' | 'public' | 'private'
 
-export type ZenPose = { xPct: number; yPct: number; state: AvatarState }
+export type ZenPose = {
+  xPct: number
+  yPct: number
+  state: AvatarState
+  /** Va por los aires: el receptor debe seguir la posición al instante, sin la
+   *  transición larga que hace que un lanzamiento parezca un paseo. */
+  flying?: boolean
+}
+
+/** El gato lo simula el anfitrión y el resto solo lo reproduce. */
+export type ZenCatPose = { x: number; y: number; flip: boolean; sleeping: boolean }
+
+export type ZenPinned = { text: string; byName: string; at: number } | null
 
 export type ZenPeer = ZenPose & {
   id: string
@@ -52,6 +64,9 @@ const CHAT_HISTORY_LIMIT = 60
  *  a media faena, su muñeco no se queda secuestrado para siempre. */
 const CLAIM_TTL_MS = 8000
 const POSE_THROTTLE_MS = 100
+/** Lo que tarda el muñeco en estallar al marcharse su dueño. */
+export const POP_DURATION_MS = 650
+export const PIN_MAX_LENGTH = 90
 
 type PresenceRow = {
   id: string
@@ -111,6 +126,7 @@ export function useZenRoom({
   name,
   color,
   mood,
+  initialPose,
 }: {
   mode: ZenMode
   code: string
@@ -118,6 +134,10 @@ export function useZenRoom({
   name: string
   color: string
   mood: UserMood
+  /** Dónde colocar a alguien de quien aún no ha llegado ninguna posición. Sin
+   *  esto los recién llegados verían a los presentes aparecer en el centro y
+   *  saltar después a su sitio. */
+  initialPose: (peerId: string) => ZenPose
 }) {
   const topic = useMemo(() => zenChannelTopic(mode, code, preset), [mode, code, preset])
 
@@ -135,6 +155,12 @@ export function useZenRoom({
   const [mutedIds, setMutedIds] = useState<string[]>([])
   /** Dónde me lleva quien me tenga agarrado. Null si mando yo sobre mi muñeco. */
   const [foreignPoseOnMe, setForeignPoseOnMe] = useState<ZenPose | null>(null)
+  /** Quien acaba de irse, aún en pantalla el tiempo justo para estallar. */
+  const [leaving, setLeaving] = useState<ZenPeer[]>([])
+  const [pinned, setPinned] = useState<ZenPinned>(null)
+  /** El gato va por ref: se mueve muchas veces por segundo y no debe provocar
+   *  un render por cada paso. */
+  const catPoseRef = useRef<ZenCatPose | null>(null)
 
   const channelRef = useRef<RealtimeChannel | null>(null)
   const claimsRef = useRef<Record<string, ZenClaim>>({})
@@ -146,6 +172,17 @@ export function useZenRoom({
   // El perfil viaja en presencia; guardarlo en una ref evita re-suscribir el
   // canal cada vez que el usuario cambia de color o de humor.
   const profileRef = useRef({ name, color, mood })
+  const initialPoseRef = useRef(initialPose)
+  const popTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([])
+  const pinnedRef = useRef<ZenPinned>(null)
+
+  useEffect(() => {
+    initialPoseRef.current = initialPose
+  }, [initialPose])
+
+  useEffect(() => {
+    pinnedRef.current = pinned
+  }, [pinned])
 
   // Estos dos espejos se refrescan tras cada commit (no en render) porque los
   // manejadores de puntero necesitan leer el valor vigente de forma síncrona.
@@ -180,7 +217,9 @@ export function useZenRoom({
       for (const key of Object.keys(raw)) {
         const row = raw[key]?.[0]
         if (!row?.id || row.id === myId) continue
-        const pose = posesRef.current[row.id] ?? { xPct: 50, yPct: 50, state: 'idle' as AvatarState }
+        // Quien ya estaba en la sala aparece directamente en su sitio, no en el
+        // centro para luego desplazarse: eso era el "refresh" al unirse.
+        const pose = posesRef.current[row.id] ?? initialPoseRef.current(row.id)
         next.push({
           id: row.id,
           name: String(row.name ?? 'Alguien').slice(0, 24),
@@ -207,9 +246,36 @@ export function useZenRoom({
       // Quien acaba de entrar no sabe dónde está nadie: todos reanuncian su
       // posición para que la sala le aparezca poblada de inmediato.
       send('pose', { id: myId, ...myPoseRef.current })
+      // Y si hay un mensaje fijado, que lo vea también. Que respondan varios no
+      // importa: fijar lo mismo dos veces deja el mismo resultado.
+      const pin = pinnedRef.current
+      if (pin) send('pin', pin)
     })
 
-    channel.on('presence', { event: 'leave' }, () => {
+    channel.on('presence', { event: 'leave' }, ({ leftPresences }) => {
+      // Antes de borrarlos del todo se quedan un instante para que estallen.
+      const gone = (leftPresences ?? []) as unknown as PresenceRow[]
+      const popping = gone
+        .filter((row) => row?.id && row.id !== myId)
+        .map((row) => ({
+          id: row.id,
+          name: String(row.name ?? 'Alguien').slice(0, 24),
+          color: row.color,
+          mood: row.mood,
+          joinedAt: Number(row.joinedAt) || 0,
+          ...(posesRef.current[row.id] ?? initialPoseRef.current(row.id)),
+        }))
+
+      if (popping.length) {
+        setLeaving((prev) => [...prev, ...popping])
+        const ids = popping.map((p) => p.id)
+        const timer = setTimeout(() => {
+          setLeaving((prev) => prev.filter((p) => !ids.includes(p.id)))
+          for (const id of ids) delete posesRef.current[id]
+        }, POP_DURATION_MS)
+        popTimersRef.current.push(timer)
+      }
+
       readPresence()
       // Al irse alguien, se sueltan los muñecos que tuviera agarrados.
       const left = Object.keys(channel.presenceState<PresenceRow>())
@@ -293,6 +359,27 @@ export function useZenRoom({
       })
     })
 
+    channel.on('broadcast', { event: 'cat' }, ({ payload }) => {
+      const c = payload as Partial<ZenCatPose>
+      if (typeof c?.x !== 'number' || typeof c?.y !== 'number') return
+      catPoseRef.current = {
+        x: c.x,
+        y: c.y,
+        flip: Boolean(c.flip),
+        sleeping: Boolean(c.sleeping),
+      }
+    })
+
+    channel.on('broadcast', { event: 'pin' }, ({ payload }) => {
+      const p = payload as { text?: string; byName?: string; at?: number }
+      const text = sanitizeChat(String(p?.text ?? '')).slice(0, PIN_MAX_LENGTH)
+      setPinned(
+        text
+          ? { text, byName: String(p?.byName ?? 'Alguien').slice(0, 24), at: Number(p?.at) || Date.now() }
+          : null,
+      )
+    })
+
     channel.on('broadcast', { event: 'timer' }, ({ payload }) => {
       const t = payload as Partial<ZenTimerSnapshot>
       if (typeof t?.timeRemaining !== 'number' || !t.phase) return
@@ -335,9 +422,14 @@ export function useZenRoom({
       setConnected(false)
       setIsHost(true)
       setPeers([])
+      setLeaving([])
+      setPinned(null)
       setMessages([])
       setClaims({})
       setRemoteTimer(null)
+      catPoseRef.current = null
+      for (const t of popTimersRef.current) clearTimeout(t)
+      popTimersRef.current = []
       void supabase.removeChannel(channel)
     }
   }, [topic, myId, send])
@@ -443,6 +535,33 @@ export function useZenRoom({
     [send],
   )
 
+  /** El anfitrión emite dónde anda el gato; el resto solo lo reproduce. */
+  const getCatPose = useCallback(() => catPoseRef.current, [])
+
+  const publishCat = useCallback(
+    (pose: ZenCatPose) => {
+      send('cat', pose)
+    },
+    [send],
+  )
+
+  const pin = useCallback(
+    (raw: string) => {
+      const text = sanitizeChat(raw).slice(0, PIN_MAX_LENGTH)
+      const next: ZenPinned = text
+        ? { text, byName: profileRef.current.name, at: Date.now() }
+        : null
+      setPinned(next)
+      send('pin', next ?? { text: '' })
+    },
+    [send],
+  )
+
+  const unpin = useCallback(() => {
+    setPinned(null)
+    send('pin', { text: '' })
+  }, [send])
+
   const toggleMute = useCallback((peerId: string) => {
     setMutedIds((prev) =>
       prev.includes(peerId) ? prev.filter((x) => x !== peerId) : [...prev, peerId],
@@ -454,45 +573,33 @@ export function useZenRoom({
     [messages, mutedIds],
   )
 
-  // Memoizado a propósito: si este objeto cambiara de identidad en cada render,
-  // cualquier efecto del consumidor que lo tenga en sus dependencias se
-  // reejecutaría sin parar y acabaría inundando el canal de broadcasts.
-  return useMemo(
-    () => ({
-      myId,
-      connected,
-      peers,
-      messages: visibleMessages,
-      claims,
-      isHost,
-      remoteTimer,
-      mutedIds,
-      foreignPoseOnMe,
-      publishPose,
-      publishPoseFor,
-      sendChat,
-      claim,
-      releaseClaim,
-      publishTimer,
-      toggleMute,
-    }),
-    [
-      myId,
-      connected,
-      peers,
-      visibleMessages,
-      claims,
-      isHost,
-      remoteTimer,
-      mutedIds,
-      foreignPoseOnMe,
-      publishPose,
-      publishPoseFor,
-      sendChat,
-      claim,
-      releaseClaim,
-      publishTimer,
-      toggleMute,
-    ],
-  )
+  // OJO al consumir esto: este objeto cambia de identidad en cada render. NO lo
+  // metas entero en las dependencias de un efecto — depende de campos concretos
+  // (`room.isHost`, `room.connected`) o de los callbacks, que sí son estables.
+  // Ponerlo entero hacía que el anfitrión reemitiera en cada render hasta
+  // inundar el canal y tumbar la presencia de la sala.
+  return {
+    myId,
+    connected,
+    peers,
+    leaving,
+    pinned,
+    getCatPose,
+    messages: visibleMessages,
+    claims,
+    isHost,
+    remoteTimer,
+    mutedIds,
+    foreignPoseOnMe,
+    publishPose,
+    publishPoseFor,
+    publishCat,
+    pin,
+    unpin,
+    sendChat,
+    claim,
+    releaseClaim,
+    publishTimer,
+    toggleMute,
+  }
 }

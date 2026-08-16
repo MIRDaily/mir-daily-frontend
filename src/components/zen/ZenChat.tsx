@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { CHAT_MAX_LENGTH, type ZenChatMessage, type ZenPeer } from '@/hooks/useZenRoom'
+import { CHAT_MAX_LENGTH, type ZenChatMessage, type ZenPeer, type ZenPinned } from '@/hooks/useZenRoom'
 
 type ZenChatProps = {
   open: boolean
@@ -13,6 +13,9 @@ type ZenChatProps = {
   mutedIds: ReadonlyArray<string>
   onSend: (text: string) => boolean
   onToggleMute: (peerId: string) => void
+  pinned: ZenPinned
+  onPin: (text: string) => void
+  onUnpin: () => void
 }
 
 function timeLabel(at: number): string {
@@ -30,6 +33,9 @@ export default function ZenChat({
   mutedIds,
   onSend,
   onToggleMute,
+  pinned,
+  onPin,
+  onUnpin,
 }: ZenChatProps) {
   const [draft, setDraft] = useState('')
   const [rejected, setRejected] = useState(false)
@@ -124,6 +130,26 @@ export default function ZenChat({
         </div>
       </header>
 
+      {pinned ? (
+        <div className="flex items-start gap-2 border-b border-[#E8A598]/30 bg-[#E8A598]/10 px-3 py-2">
+          <span className="material-symbols-outlined mt-px text-[15px] text-[#d18d80]">push_pin</span>
+          <span className="min-w-0 flex-1">
+            <span className="block break-words text-xs font-semibold leading-snug text-[#2c3e50]">
+              {pinned.text}
+            </span>
+            <span className="block text-[10px] text-[#7D8A96]">Fijado por {pinned.byName}</span>
+          </span>
+          <button
+            type="button"
+            onClick={onUnpin}
+            title="Quitar el mensaje fijado"
+            className="rounded p-0.5 text-[#7D8A96] transition-colors hover:bg-[#E8A598]/20"
+          >
+            <span className="material-symbols-outlined text-[15px]">close</span>
+          </button>
+        </div>
+      ) : null}
+
       {showPeople ? (
         <div className="max-h-32 shrink-0 overflow-y-auto border-b border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2">
           <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-[#7D8A96]/70">
@@ -188,14 +214,24 @@ export default function ZenChat({
                     <span className="font-semibold">{mine ? 'Tú' : m.name}</span>
                     <span>{timeLabel(m.at)}</span>
                   </span>
-                  <span
-                    className={`max-w-[85%] break-words rounded-2xl px-3 py-1.5 text-xs leading-relaxed ${
-                      mine
-                        ? 'bg-[#E8A598] text-white'
-                        : 'bg-[#F2EFED] text-[#2c3e50]'
-                    }`}
-                  >
-                    {m.text}
+                  <span className={`flex max-w-[92%] items-center gap-1 ${mine ? 'flex-row' : 'flex-row-reverse'}`}>
+                    <button
+                      type="button"
+                      onClick={() => onPin(m.text)}
+                      title="Fijar este mensaje para toda la sala"
+                      className="shrink-0 rounded p-0.5 text-[#7D8A96]/50 transition-colors hover:bg-[#F2EFED] hover:text-[#d18d80]"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">push_pin</span>
+                    </button>
+                    <span
+                      className={`min-w-0 break-words rounded-2xl px-3 py-1.5 text-xs leading-relaxed ${
+                        mine
+                          ? 'bg-[#E8A598] text-white'
+                          : 'bg-[#F2EFED] text-[#2c3e50]'
+                      }`}
+                    >
+                      {m.text}
+                    </span>
                   </span>
                 </li>
               )
