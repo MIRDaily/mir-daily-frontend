@@ -18,11 +18,11 @@ const RING_C = 2 * Math.PI * RING_R
 type Phase = 'focus' | 'break'
 
 /**
- * Un pomodoro comprimido: el bloque de estudio dura el doble que la pausa,
- * igual que el 25/5 real pero en segundos para que quepa en un hover.
+ * Un pomodoro comprimido: el bloque de estudio sigue siendo el largo, como en
+ * el 25/5 real, pero en segundos para que la tanda entera quepa en un hover.
  */
 const phaseConfig: Record<Phase, { label: string; color: string; ink: string; ms: number }> = {
-  focus: { label: 'ESTUDIO', color: '#E8A598', ink: '#d18d80', ms: 3600 },
+  focus: { label: 'ESTUDIO', color: '#E8A598', ink: '#d18d80', ms: 3000 },
   break: { label: 'PAUSA', color: '#8BA888', ink: '#6a8a67', ms: 1800 },
 }
 
