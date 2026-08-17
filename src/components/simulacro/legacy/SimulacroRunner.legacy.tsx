@@ -1,5 +1,19 @@
 'use client'
 
+/* ════════════════════════════════════════════════════════════════════════
+   COPIA DE SEGURIDAD — versión anterior al rediseño (18-08-2026).
+
+   No se importa desde ningún sitio: se conserva solo por si hay que revertir.
+   Para volver atrás, sobrescribe el componente activo con este fichero:
+
+     cp legacy/SimulacroRunner.legacy.tsx ../SimulacroRunner.tsx
+
+   Si el rediseño se da por bueno, esta carpeta se puede borrar entera.
+═══════════════════════════════════════════════════════════════════════════ */
+/* eslint-disable */
+// @ts-nocheck
+
+
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import QuestionImage from '@/components/simulacro/QuestionImage'
@@ -113,37 +127,37 @@ export default function SimulacroRunner({
   return (
     <div className="mx-auto w-full max-w-4xl">
       {/* Barra superior */}
-      {/* Barra de sesión: salir, modo y progreso en una pieza que acompaña */}
-      <div
-        className="sticky top-4 z-30 mb-8 rounded-2xl border-2 border-[#2c3e50] bg-white px-4 py-3"
-        style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={onExit}
-            className="flex items-center justify-center rounded-lg p-1.5 text-[#7D8A96] transition-colors hover:bg-[#F2EFED] hover:text-[#C4655A]"
-            aria-label="Salir del simulacro"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8A598]/15 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#d18d80]">
-            <span className="material-symbols-outlined text-sm">
-              {mode === 'immediate' ? 'bolt' : 'flag'}
-            </span>
-            {mode === 'immediate' ? 'Inmediata' : 'Al final'}
+      <div className="mb-6 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onExit}
+          className="flex items-center gap-2 rounded-xl border border-[#E9E4E1] px-4 py-2 text-sm font-semibold text-[#7D8A96] transition-all hover:border-[#E8A598]/40 hover:text-[#2D3748]"
+        >
+          <span className="material-symbols-outlined text-lg">close</span>
+          Salir
+        </button>
+        <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-[#7D8A96] shadow-sm">
+          <span className="material-symbols-outlined text-base text-[#E8A598]">
+            {mode === 'immediate' ? 'bolt' : 'flag'}
           </span>
-          <span className="ml-auto text-sm font-black tabular-nums text-[#2c3e50]">
-            {index + 1}
-            <span className="text-[#7D8A96]/60"> / {total}</span>
+          {mode === 'immediate' ? 'Corrección inmediata' : 'Corrección al final'}
+        </span>
+      </div>
+
+      {/* Progreso */}
+      <div className="mb-10 w-full">
+        <div className="mb-3 flex items-end justify-between">
+          <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#7D8A96]">
+            Progreso del simulacro
+          </span>
+          <span className="text-sm font-bold text-[#7D8A96]">
+            Pregunta <span className="text-[#C45B4B]">{index + 1}</span> de {total}
           </span>
         </div>
-        <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full border border-[#EAE4E2] bg-[#F2EFED]">
-          <motion.div
-            className="h-full rounded-full bg-[#E8A598]"
-            initial={false}
-            animate={{ width: `${Math.round(((index + 1) / total) * 100)}%` }}
-            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        <div className="h-2 w-full overflow-hidden rounded-full bg-[#E9E4E1]">
+          <div
+            className="h-full rounded-full bg-[#E8A598] transition-all duration-500 ease-out"
+            style={{ width: `${Math.round(((index + 1) / total) * 100)}%` }}
           />
         </div>
       </div>
@@ -156,11 +170,11 @@ export default function SimulacroRunner({
             </div>
           ) : null}
           {current?.subject ? (
-            <span className="mb-6 inline-block rounded-full border-2 border-[#EAE4E2] bg-white px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#7D8A96]">
+            <span className="mb-6 inline-block rounded-full border border-[#E9E4E1] bg-white px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-[#7D8A96]">
               {current.subject}
             </span>
           ) : null}
-          <h1 className="text-[28px] font-black leading-tight tracking-tight text-[#2C3E50] sm:text-[32px]">
+          <h1 className="text-[28px] font-bold leading-tight tracking-tight text-[#2D3748] sm:text-[32px]">
             {current?.statement}
           </h1>
           {current?.has_image && current?.image_url ? (
@@ -200,23 +214,18 @@ export default function SimulacroRunner({
             const isCorrect = optionIndex === correctIndex
 
             // Colores en estado revelado (modo inmediato tras responder).
-            // Estado -> borde de tinta + sombra del color que toca, para que
-            // acierto y fallo se lean sin depender solo del matiz de fondo.
-            let containerClass = 'bg-white border-[#EAE4E2] hover:-translate-y-0.5 hover:border-[#2c3e50]'
-            let shadow: string | undefined
+            let containerClass =
+              'bg-white border-transparent hover:border-[#E8A598]/30'
             if (revealed) {
               if (isCorrect) {
-                containerClass = 'bg-[#F1F5F0] border-[#2c3e50]'
-                shadow = '4px 4px 0 0 #8BA888'
+                containerClass = 'bg-[#8BA888]/10 border-[#8BA888]/60'
               } else if (isSelected) {
-                containerClass = 'bg-[#FDF2F0] border-[#2c3e50]'
-                shadow = '4px 4px 0 0 #C4655A'
+                containerClass = 'bg-[#FFF1EC] border-[#C4655A]/50'
               } else {
-                containerClass = 'bg-white border-[#EAE4E2] opacity-60'
+                containerClass = 'bg-white border-transparent opacity-70'
               }
             } else if (isSelected) {
-              containerClass = 'bg-[#FFF9F7] border-[#2c3e50]'
-              shadow = '4px 4px 0 0 #2c3e50'
+              containerClass = 'bg-white border-[#E8A598]/60'
             }
 
             return (
@@ -225,8 +234,7 @@ export default function SimulacroRunner({
                 type="button"
                 disabled={locked}
                 onClick={() => onSelect(index, optionIndex, secondsOnQuestion())}
-                className={`group flex items-center rounded-2xl border-2 p-5 text-left transition-all duration-200 disabled:cursor-default disabled:hover:translate-y-0 ${containerClass}`}
-                style={shadow ? { boxShadow: shadow } : undefined}
+                className={`group flex items-center rounded-2xl border-2 p-5 text-left shadow-sm transition-all duration-200 hover:shadow-md disabled:cursor-default ${containerClass}`}
               >
                 <div
                   className={`mr-4 flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
@@ -251,18 +259,18 @@ export default function SimulacroRunner({
                     />
                   )}
                 </div>
-                <span className="text-lg font-medium text-[#2C3E50]">
-                  <span className="mr-2 font-black">
+                <span className="text-lg font-medium text-[#4B5563]">
+                  <span className="mr-2 font-bold">
                     {String.fromCharCode(65 + optionIndex)})
                   </span>
                   {option}
                 </span>
                 {revealed && isCorrect ? (
-                  <span className="ml-auto shrink-0 rounded-full bg-[#8BA888] px-3 py-1 text-[10px] font-black uppercase tracking-wide text-white">
+                  <span className="ml-auto rounded-full bg-[#8BA888]/15 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[#5f7d5c]">
                     Correcta
                   </span>
                 ) : revealed && isSelected ? (
-                  <span className="ml-auto shrink-0 rounded-full bg-[#C4655A] px-3 py-1 text-[10px] font-black uppercase tracking-wide text-white">
+                  <span className="ml-auto rounded-full bg-[#C4655A]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[#C4655A]">
                     Tu respuesta
                   </span>
                 ) : null}
@@ -277,12 +285,11 @@ export default function SimulacroRunner({
             type="button"
             onClick={handleBlankClick}
             disabled={locked}
-            className={`flex items-center gap-2 rounded-2xl border-2 px-5 py-3 text-sm font-bold transition-all disabled:cursor-default ${
+            className={`flex items-center gap-2 rounded-2xl border-2 px-5 py-3 text-sm font-semibold transition-all disabled:cursor-default ${
               blanked
-                ? 'border-[#2c3e50] bg-[#7D8A96] text-white'
-                : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:-translate-y-0.5 hover:border-[#2c3e50] hover:text-[#2C3E50]'
+                ? 'border-[#7D8A96]/50 bg-[#7D8A96]/10 text-[#4B5563]'
+                : 'border-[#E9E4E1] bg-white text-[#7D8A96] hover:border-[#7D8A96]/40 hover:text-[#2D3748]'
             }`}
-            style={blanked ? { boxShadow: '4px 4px 0 0 #2c3e50' } : undefined}
           >
             <span className="material-symbols-outlined text-lg">
               {blanked ? 'check_circle' : 'block'}
@@ -299,7 +306,7 @@ export default function SimulacroRunner({
 
         {/* Comprobando (modo inmediato, esperando corrección del servidor) */}
         {checking ? (
-          <div className="flex items-center gap-2 rounded-2xl border-2 border-[#EAE4E2] bg-[#FAF7F4] px-5 py-4 text-sm font-bold text-[#7D8A96]">
+          <div className="flex items-center gap-2 rounded-2xl border border-[#F0EAE6] bg-[#FAF7F4] px-5 py-4 text-sm font-medium text-[#7D8A96]">
             <span className="material-symbols-outlined animate-spin text-base text-[#E8A598]">
               progress_activity
             </span>
@@ -315,16 +322,15 @@ export default function SimulacroRunner({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25 }}
-              className="rounded-2xl border-2 border-[#2c3e50] bg-[#FFFBFA] px-5 py-4"
-              style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
+              className="rounded-2xl border border-[#F0EAE6] bg-[#FAF7F4] px-5 py-4"
             >
-              <p className="mb-1.5 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-[#d18d80]">
+              <p className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#7D8A96]">
                 <span className="material-symbols-outlined text-base text-[#E8A598]">
                   lightbulb
                 </span>
                 Explicación
               </p>
-              <p className="text-[15px] leading-relaxed text-[#2C3E50]">
+              <p className="text-sm leading-relaxed text-[#4B5563]">
                 {result?.explanation?.trim() ||
                   'No hay explicación disponible para esta pregunta.'}
               </p>
@@ -338,7 +344,7 @@ export default function SimulacroRunner({
             type="button"
             onClick={goPrev}
             disabled={index === 0}
-            className="flex items-center gap-2 rounded-2xl border-2 border-[#EAE4E2] bg-white px-5 py-3 text-sm font-bold text-[#7D8A96] transition-all hover:-translate-y-0.5 hover:border-[#2c3e50] hover:text-[#2C3E50] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+            className="flex items-center gap-2 rounded-2xl border border-[#E9E4E1] px-5 py-3 text-sm font-semibold text-[#7D8A96] transition-all hover:border-[#E8A598]/40 hover:text-[#2D3748] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <span className="material-symbols-outlined text-lg">arrow_back</span>
             Anterior
@@ -347,8 +353,7 @@ export default function SimulacroRunner({
             type="button"
             onClick={goNext}
             disabled={checking || finishing}
-            className="flex items-center gap-3 rounded-2xl border-2 border-[#2c3e50] bg-[#E8A598] px-8 py-4 font-black text-white transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
-            style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
+            className="flex items-center gap-3 rounded-2xl bg-[#E8A598] px-8 py-4 font-bold text-white shadow-lg shadow-[#E8A598]/20 transition-all hover:bg-[#d18d80] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isLast && finishing ? (
               <>

@@ -1,5 +1,19 @@
 'use client'
 
+/* ════════════════════════════════════════════════════════════════════════
+   COPIA DE SEGURIDAD — versión anterior al rediseño (18-08-2026).
+
+   No se importa desde ningún sitio: se conserva solo por si hay que revertir.
+   Para volver atrás, sobrescribe el componente activo con este fichero:
+
+     cp legacy/SimulacroResultsGrid.legacy.tsx ../SimulacroResultsGrid.tsx
+
+   Si el rediseño se da por bueno, esta carpeta se puede borrar entera.
+═══════════════════════════════════════════════════════════════════════════ */
+/* eslint-disable */
+// @ts-nocheck
+
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -172,61 +186,44 @@ export default function SimulacroResultsGrid({
 
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <motion.header
-        className="relative mb-6 overflow-hidden rounded-3xl border-2 border-[#2c3e50] bg-gradient-to-br from-white via-[#FFFBFA] to-[#FFF2ED] px-6 py-7 sm:px-9"
-        style={{ boxShadow: '7px 7px 0 0 #2c3e50' }}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8">
-          <ScoreRing pct={stats.pct} />
-          <div className="min-w-0 text-center sm:text-left">
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#E8A598]/20 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#d18d80]">
-              <span className="material-symbols-outlined text-sm">task_alt</span>
-              Simulacro completado
-            </span>
-            <h1 className="mt-3 text-3xl font-black leading-none tracking-tight text-[#2c3e50] sm:text-4xl">
-              {stats.correct} / {stats.total}
-            </h1>
-            <p className="mt-2 text-base font-light text-[#7D8A96]">
-              {scoreMessage(stats.pct)}
-            </p>
-          </div>
-        </div>
-      </motion.header>
+      <header className="mb-8 text-center">
+        <span className="inline-flex items-center gap-2 rounded-full border border-[#E8A598]/30 bg-[#E8A598]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[#d18d80]">
+          <span className="material-symbols-outlined text-base">task_alt</span>
+          Simulacro completado
+        </span>
+        <h1 className="mt-4 text-4xl font-black tracking-tight text-[#2c3e50]">
+          {stats.correct} / {stats.total} aciertos
+        </h1>
+        <p className="mt-2 text-base font-light text-[#7D8A96]">
+          Has acertado el {stats.pct}% del simulacro.
+        </p>
+      </header>
 
       {/* Resumen */}
       <div className="mb-6 grid grid-cols-3 gap-3">
-        {[
-          { v: stats.correct, label: 'Aciertos', color: '#8BA888', text: '#5f7d5c' },
-          { v: stats.incorrect, label: 'Fallos', color: '#C4655A', text: '#C4655A' },
-          { v: stats.empty, label: 'En blanco', color: '#7D8A96', text: '#7D8A96' },
-        ].map((box, i) => (
-          <motion.div
-            key={box.label}
-            className="rounded-2xl border-2 border-[#2c3e50] bg-white p-4 text-center"
-            style={{ boxShadow: `4px 4px 0 0 ${box.color}` }}
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 + i * 0.07, duration: 0.35, ease: 'easeOut' }}
-          >
-            <p className="text-3xl font-black tabular-nums" style={{ color: box.text }}>
-              {box.v}
-            </p>
-            <p className="text-[11px] font-black uppercase tracking-wide text-[#7D8A96]">
-              {box.label}
-            </p>
-          </motion.div>
-        ))}
+        <div className="rounded-xl border border-[#8BA888]/30 bg-white p-4 text-center shadow-sm">
+          <p className="text-2xl font-black text-[#5f7d5c]">{stats.correct}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#7D8A96]">
+            Aciertos
+          </p>
+        </div>
+        <div className="rounded-xl border border-[#C4655A]/30 bg-white p-4 text-center shadow-sm">
+          <p className="text-2xl font-black text-[#C4655A]">{stats.incorrect}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#7D8A96]">
+            Fallos
+          </p>
+        </div>
+        <div className="rounded-xl border border-[#EAE4E2] bg-white p-4 text-center shadow-sm">
+          <p className="text-2xl font-black text-[#7D8A96]">{stats.empty}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#7D8A96]">
+            En blanco
+          </p>
+        </div>
       </div>
 
       {/* Grid de preguntas */}
-      <div
-        className="rounded-3xl border-2 border-[#2c3e50] bg-white p-6"
-        style={{ boxShadow: '5px 5px 0 0 #2c3e50' }}
-      >
-        <h3 className="mb-1 text-lg font-black text-[#2c3e50]">Repaso de preguntas</h3>
+      <div className="rounded-2xl border border-[#F0EBE8] bg-white p-6 shadow-sm">
+        <h3 className="mb-1 text-lg font-bold text-[#374151]">Repaso de preguntas</h3>
         <p className="mb-4 text-xs text-[#7D8A96]">
           Toca una pregunta para ver la respuesta correcta y su explicación.
         </p>
@@ -238,11 +235,11 @@ export default function SimulacroResultsGrid({
                 key={question.id}
                 type="button"
                 onClick={() => openAt(i)}
-                className={`group relative flex h-10 items-center justify-center rounded-lg border-2 border-[#2c3e50] text-xs font-black transition-transform hover:-translate-y-0.5 ${CELL_STYLE[status]}`}
+                className={`group relative flex h-9 items-center justify-center rounded-md text-xs font-bold transition-transform hover:scale-[1.06] ${CELL_STYLE[status]}`}
                 aria-label={`Pregunta ${i + 1}`}
               >
                 {i + 1}
-                <span className="pointer-events-none absolute -top-2 left-1/2 z-20 w-max -translate-x-1/2 -translate-y-full rounded-lg bg-[#2c3e50] px-2 py-1 text-[10px] font-bold text-white opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                <span className="pointer-events-none absolute -top-2 left-1/2 z-20 w-max -translate-x-1/2 -translate-y-full rounded bg-[#374151] px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100">
                   Pregunta {i + 1} ·{' '}
                   {status === 'correct'
                     ? 'Acierto'
@@ -256,15 +253,15 @@ export default function SimulacroResultsGrid({
         </div>
 
         {/* Leyenda */}
-        <div className="mt-5 flex flex-wrap gap-4 text-xs font-bold text-[#7D8A96]">
+        <div className="mt-5 flex flex-wrap gap-4 text-xs text-[#7D8A96]">
           <span className="flex items-center gap-1.5">
-            <span className="h-3.5 w-3.5 rounded border-2 border-[#2c3e50] bg-[#8BA888]" /> Acierto
+            <span className="h-3 w-3 rounded bg-[#8BA888]" /> Acierto
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-3.5 w-3.5 rounded border-2 border-[#2c3e50] bg-[#C4655A]" /> Fallo
+            <span className="h-3 w-3 rounded bg-[#C4655A]" /> Fallo
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-3.5 w-3.5 rounded border-2 border-[#2c3e50] bg-[#EDE8E5]" /> En blanco
+            <span className="h-3 w-3 rounded bg-[#EDE8E5]" /> En blanco
           </span>
         </div>
       </div>
@@ -274,15 +271,14 @@ export default function SimulacroResultsGrid({
         <button
           type="button"
           onClick={onRestart}
-          className="flex flex-1 items-center justify-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-[#E8A598] px-6 py-3.5 text-base font-black text-white transition-transform hover:-translate-y-0.5"
-          style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#E8A598] px-6 py-3 text-base font-bold text-white shadow-md shadow-[#E8A598]/20 transition-colors hover:bg-[#d18d80]"
         >
           <span className="material-symbols-outlined">replay</span>
           Crear otro simulacro
         </button>
         <Link
           href="/studio"
-          className="flex flex-1 items-center justify-center gap-2 rounded-2xl border-2 border-[#EAE4E2] bg-white px-6 py-3.5 text-base font-bold text-[#7D8A96] transition-all hover:-translate-y-0.5 hover:border-[#2c3e50] hover:text-[#2C3E50]"
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#7D8A96]/30 bg-white px-6 py-3 text-base font-medium text-[#7D8A96] transition-colors hover:border-[#7D8A96]/50 hover:bg-[#F2EFED]"
         >
           Volver a Studio
         </Link>
@@ -329,8 +325,7 @@ export default function SimulacroResultsGrid({
             <div className="flex items-center justify-center gap-4">
             <motion.div
               layout
-              className="relative z-10 flex max-h-[85vh] w-[42rem] max-w-[92vw] flex-col overflow-hidden rounded-3xl border-2 border-[#2c3e50] bg-white"
-              style={{ boxShadow: '7px 7px 0 0 #2c3e50' }}
+              className="relative z-10 flex max-h-[85vh] w-[42rem] max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-[#F0EBE8] bg-white shadow-xl"
               initial={{ opacity: 0, y: 24, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 24, scale: 0.98 }}
@@ -382,7 +377,7 @@ export default function SimulacroResultsGrid({
                         {activeQuestion.subject}
                       </p>
                     ) : null}
-                    <h2 className="mb-4 text-xl font-black leading-snug text-[#2C3E50]">
+                    <h2 className="mb-4 text-xl font-bold leading-snug text-[#2D3748]">
                       {activeQuestion.statement}
                     </h2>
 
@@ -448,7 +443,7 @@ export default function SimulacroResultsGrid({
                             >
                               {String.fromCharCode(65 + optionIndex)}
                             </span>
-                            <span className="text-[#2C3E50]">{option}</span>
+                            <span className="text-[#4B5563]">{option}</span>
                             {isCorrect ? (
                               <span className="ml-auto rounded-full bg-[#8BA888]/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#5f7d5c]">
                                 Correcta
@@ -463,14 +458,14 @@ export default function SimulacroResultsGrid({
                       })}
                     </div>
 
-                    <div className="mt-5 rounded-2xl border-2 border-[#2c3e50] bg-[#FFFBFA] px-4 py-4" style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}>
+                    <div className="mt-5 rounded-xl border border-[#F0EAE6] bg-[#FAF7F4] px-4 py-4">
                       <p className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#7D8A96]">
                         <span className="material-symbols-outlined text-base text-[#E8A598]">
                           lightbulb
                         </span>
                         Explicación
                       </p>
-                      <p className="text-[15px] leading-relaxed text-[#2C3E50]">
+                      <p className="text-sm leading-relaxed text-[#4B5563]">
                         {activeResult?.explanation?.trim() ||
                           'No hay explicación disponible para esta pregunta.'}
                       </p>
@@ -549,43 +544,4 @@ export default function SimulacroResultsGrid({
       </AnimatePresence>
     </div>
   )
-}
-
-/** Anillo de puntuación: el remate visual del simulacro. */
-function ScoreRing({ pct }: { pct: number }) {
-  const circumference = 2 * Math.PI * 44
-  const color = pct >= 70 ? '#8BA888' : pct >= 40 ? '#C9A24A' : '#C4655A'
-
-  return (
-    <div className="relative h-28 w-28 shrink-0">
-      <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
-        <circle cx="50" cy="50" r="44" fill="none" stroke="#EDE9E4" strokeWidth="9" />
-        <motion.circle
-          cx="50"
-          cy="50"
-          r="44"
-          fill="none"
-          stroke={color}
-          strokeWidth="9"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          initial={{ strokeDashoffset: circumference }}
-          animate={{ strokeDashoffset: circumference * (1 - pct / 100) }}
-          transition={{ duration: 0.9, delay: 0.2, ease: 'easeOut' }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-2xl font-black tabular-nums" style={{ color }}>
-          {pct}%
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function scoreMessage(pct: number): string {
-  if (pct === 100) return 'Pleno. No has fallado ni una.'
-  if (pct >= 70) return 'Buen resultado. Repasa los fallos y a por el siguiente.'
-  if (pct >= 40) return 'Vas por buen camino: revisa las que fallaste.'
-  return 'Toca repasar. Mira la explicación de cada fallo antes de repetir.'
 }
