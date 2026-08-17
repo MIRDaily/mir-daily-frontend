@@ -57,6 +57,28 @@ export default function AcademiaClient() {
   )
 }
 
+/**
+ * El corazón de la portada, con su propio estado.
+ *
+ * Va aparte a propósito: el bucle de animación actualiza estado 60 veces por
+ * segundo y, si viviera en `ModuleMap`, repintaría las nueve tarjetas de la
+ * ruta en cada fotograma.
+ */
+function BeatingHeart() {
+  const [f, setF] = useState(0)
+  useAnimationLoop((t) => setF((t / 3.6) % 1), true)
+
+  return (
+    <motion.div
+      className="hidden h-44 w-36 shrink-0 md:block lg:h-52 lg:w-44"
+      animate={{ y: [0, -10, 0] }}
+      transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+    >
+      <HeartConduction f={f} />
+    </motion.div>
+  )
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    MAPA DE LA RUTA
 ═══════════════════════════════════════════════════════════════════════════ */
@@ -68,8 +90,6 @@ function ModuleMap({
   onOpen: (moduleIndex: number, startStep: number) => void
 }) {
   const done = countDone(progress)
-  const [f, setF] = useState(0)
-  useAnimationLoop((t) => setF((t / 3.6) % 1), true)
 
   // El primer módulo sin terminar es por donde se retoma la ruta.
   const nextIndex = MODULES.findIndex((m) => !progress[m.id]?.done)
@@ -114,13 +134,7 @@ function ModuleMap({
             </div>
           </div>
 
-          <motion.div
-            className="hidden h-44 w-36 shrink-0 md:block lg:h-52 lg:w-44"
-            animate={{ y: [0, -10, 0] }}
-            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            <HeartConduction f={f} />
-          </motion.div>
+          <BeatingHeart />
         </div>
       </motion.header>
 
@@ -174,29 +188,32 @@ function ModuleMap({
                     transition={{ duration: 0.7, delay: 0.1 + 0.05 * i, ease: 'easeOut' }}
                   />
                 </svg>
-                <span
-                  className="material-symbols-outlined absolute inset-0 flex items-center justify-center text-2xl"
-                  style={{ color: unlocked ? m.color : '#B5ADA8' }}
-                >
-                  {unlocked ? m.icon : 'lock'}
-                </span>
-                {isDone ? (
-                  <motion.span
-                    className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#8BA888] text-white"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 16, delay: 0.3 }}
+                {/* El centrado va en un envoltorio, no en el propio icono: la
+                    hoja de Material Symbols llega sin capa de cascada y su
+                    `display` gana a las utilidades de Tailwind v4. */}
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span
+                    className="material-symbols-outlined text-2xl"
+                    style={{ color: unlocked ? m.color : '#B5ADA8' }}
                   >
-                    <span className="material-symbols-outlined text-sm">check</span>
-                  </motion.span>
-                ) : null}
+                    {unlocked ? m.icon : 'lock'}
+                  </span>
+                </span>
               </div>
 
               <div className="relative min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#7D8A96]/60">
                     Módulo {i + 1}
                   </span>
+                  {/* La marca de completado va aquí y no sobre el anillo: encima
+                      le comía un trozo y parecía que el progreso no llegaba al final. */}
+                  {isDone ? (
+                    <span className="flex items-center gap-1 rounded-full bg-[#8BA888]/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#6a8a67]">
+                      <span className="material-symbols-outlined text-[11px]">check</span>
+                      Completado
+                    </span>
+                  ) : null}
                   {isNext && unlocked ? (
                     <span className="rounded-full bg-[#E8A598] px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white">
                       Continuar
@@ -285,7 +302,7 @@ function LessonPlayer({
         <button
           type="button"
           onClick={goBack}
-          className="rounded-lg p-1.5 text-[#7D8A96] transition-colors hover:bg-[#F2EFED] hover:text-[#2C3E50]"
+          className="flex items-center justify-center rounded-lg p-1.5 text-[#7D8A96] transition-colors hover:bg-[#F2EFED] hover:text-[#2C3E50]"
           aria-label={stepIndex === 0 ? 'Volver al mapa' : 'Paso anterior'}
         >
           <span className="material-symbols-outlined">arrow_back</span>
@@ -427,7 +444,7 @@ function ModuleDone({
       ))}
 
       <motion.div
-        className="relative rounded-full border-2 border-[#2c3e50] p-5 text-white"
+        className="relative flex items-center justify-center rounded-full border-2 border-[#2c3e50] p-5 text-white"
         style={{ backgroundColor: lesson.color }}
         initial={{ scale: 0.5, rotate: -20 }}
         animate={{ scale: 1, rotate: 0 }}

@@ -178,7 +178,7 @@ function ExplorerMode() {
                 onClick={() => setSoundOn((s) => !s)}
                 aria-pressed={soundOn}
                 title={soundOn ? 'Silenciar' : 'Activar sonido'}
-                className={`rounded-lg p-1.5 transition-colors ${
+                className={`flex items-center justify-center rounded-lg p-1.5 transition-colors ${
                   soundOn ? 'bg-[#E8A598] text-[#241c1a]' : 'bg-white/10 text-white/60 hover:bg-white/20'
                 }`}
               >
@@ -200,7 +200,7 @@ function ExplorerMode() {
             <button
               type="button"
               onClick={() => setRunning((r) => !r)}
-              className="rounded-lg bg-white/10 p-1.5 text-white transition-colors hover:bg-white/20"
+              className="flex items-center justify-center rounded-lg bg-white/10 p-1.5 text-white transition-colors hover:bg-white/20"
               title={running ? 'Pausa' : 'Reanudar'}
             >
               <span className="material-symbols-outlined text-lg">{running ? 'pause' : 'play_arrow'}</span>
@@ -568,7 +568,7 @@ function DiagnosisTypeahead({ onSubmit }: { onSubmit: (p: SearchablePattern) => 
                 setHighlight(-1)
               }}
               title="Borrar"
-              className="rounded p-0.5 text-[#7D8A96] transition-colors hover:text-[#2C3E50]"
+              className="flex items-center justify-center rounded p-0.5 text-[#7D8A96] transition-colors hover:text-[#2C3E50]"
             >
               <span className="material-symbols-outlined text-lg">close</span>
             </button>

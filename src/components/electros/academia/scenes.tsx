@@ -106,6 +106,57 @@ export function Stage({
   )
 }
 
+/**
+ * Papel milimetrado dibujado DENTRO del SVG.
+ *
+ * La textura del `Stage` es decorativa: vive en píxeles CSS, así que nunca
+ * puede cuadrar con una geometría medida en unidades del viewBox. Cuando la
+ * cuadrícula es parte de la lección (medir el QRS, contar cuadros para la
+ * frecuencia), tiene que ir aquí para que "un cuadro" sea exactamente un
+ * cuadro. En esos casos el escenario va con `tone="plain"`.
+ */
+export function PaperGrid({ w, h, mm, bold = 5 }: { w: number; h: number; mm: number; bold?: number }) {
+  const lines: React.ReactNode[] = []
+
+  for (let i = 0; i * mm <= w + 0.001; i++) {
+    const x = i * mm
+    const isBold = i % bold === 0
+    lines.push(
+      <line
+        key={`v${i}`}
+        x1={x}
+        y1={0}
+        x2={x}
+        y2={h}
+        stroke={isBold ? 'rgba(212,151,140,0.52)' : 'rgba(212,151,140,0.24)'}
+        strokeWidth={isBold ? 1.3 : 0.7}
+      />,
+    )
+  }
+  for (let i = 0; i * mm <= h + 0.001; i++) {
+    const y = i * mm
+    const isBold = i % bold === 0
+    lines.push(
+      <line
+        key={`h${i}`}
+        x1={0}
+        y1={y}
+        x2={w}
+        y2={y}
+        stroke={isBold ? 'rgba(212,151,140,0.52)' : 'rgba(212,151,140,0.24)'}
+        strokeWidth={isBold ? 1.3 : 0.7}
+      />,
+    )
+  }
+
+  return (
+    <g aria-hidden>
+      <rect width={w} height={h} fill={PAPER} />
+      {lines}
+    </g>
+  )
+}
+
 /** Latido de fondo, muy tenue, que da vida a la pantalla del mapa. */
 export function AmbientTrace({ color = '#E8A598' }: { color?: string }) {
   return (

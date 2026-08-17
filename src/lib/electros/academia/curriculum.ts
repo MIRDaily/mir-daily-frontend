@@ -207,7 +207,11 @@ export const MODULES: readonly Module[] = [
         prompt:
           'Desliza el compás para abarcar el QRS de principio a fin. Un QRS normal mide menos de 0,12 s (3 cuadraditos).',
         trueMs: 100,
-        tolMs: 22,
+        // La barra avanza de 0,5 en 0,5 cuadraditos (20 ms), así que una
+        // tolerancia menor de 20 obliga a clavar los 100 ms. Con la anterior
+        // (22 ms) también valía 120 ms, que es justo el umbral del QRS ancho:
+        // aceptar como buena una medida patológica enseñaba lo contrario.
+        tolMs: 12,
         normalMax: 120,
       },
       {

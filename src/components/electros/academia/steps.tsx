@@ -24,7 +24,7 @@ import {
   ConductionLadder,
   HeartConduction,
   HeartScene,
-  PAPER_STYLE,
+  PaperGrid,
   RhythmStrip,
   SEV_COLOR,
   Stage,
@@ -115,15 +115,23 @@ function Slider(props: React.InputHTMLAttributes<HTMLInputElement> & { label: st
 }
 
 /** Cifra grande de lectura, el "display" del instrumento. */
-function Readout({ value, tag, ok }: { value: ReactNode; tag: string; ok: boolean }) {
+type ReadoutTone = 'ok' | 'warn' | 'bad' | 'neutral'
+
+const READOUT_TONE: Record<ReadoutTone, string> = {
+  ok: 'bg-[#8BA888]/15 text-[#6a8a67]',
+  warn: 'bg-[#C9A24A]/15 text-[#8a6f2a]',
+  // Lo patológico nunca se pinta de verde: rojo, aunque la medida sea correcta.
+  bad: 'bg-[#C4655A]/12 text-[#C4655A]',
+  neutral: 'bg-[#F2EFED] text-[#7D8A96]',
+}
+
+function Readout({ value, tag, tone }: { value: ReactNode; tag: string; tone: ReadoutTone }) {
   return (
     <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#EAE4E2] bg-white px-4 py-3">
       <span className="text-2xl font-black text-[#2C3E50] tabular-nums">{value}</span>
       <motion.span
         key={tag}
-        className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
-          ok ? 'bg-[#8BA888]/15 text-[#6a8a67]' : 'bg-[#F2EFED] text-[#7D8A96]'
-        }`}
+        className={`rounded-lg px-3 py-1.5 text-xs font-bold ${READOUT_TONE[tone]}`}
         initial={{ opacity: 0, y: -4 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
@@ -162,29 +170,61 @@ function InfoVisual({ kind }: { kind: NonNullable<Extract<Step, { type: 'info' }
   }
 
   if (kind === 'grid') {
+    // Cuadrícula propia: el cuadro resaltado cae exactamente sobre un cuadro
+    // grande (5 × 5 cuadraditos), que es justo lo que enseña este paso.
+    const mm = 12
+    const bigCell = mm * 5
+    const x0 = bigCell * 2
+    const y0 = bigCell
     return (
       <div className="w-full max-w-lg">
-        <svg viewBox="0 0 320 140" className="h-full w-full">
-          <rect x="0" y="30" width="60" height="60" fill="rgba(212,151,140,0.22)" rx="3" />
-          <rect
-            x="0"
-            y="30"
-            width="60"
-            height="60"
-            fill="none"
+        <svg viewBox="0 0 300 180" className="h-full w-full">
+          <PaperGrid w={300} h={180} mm={mm} />
+
+          <rect x={x0} y={y0} width={bigCell} height={bigCell} fill="rgba(212,151,140,0.28)" />
+          <rect x={x0} y={y0} width={bigCell} height={bigCell} fill="none" stroke="#B87A6F" strokeWidth="2.4" />
+
+          {/* Un cuadradito, para tenerlo al lado y comparar */}
+          <rect x={x0} y={y0} width={mm} height={mm} fill="rgba(139,168,136,0.4)" />
+          <rect x={x0} y={y0} width={mm} height={mm} fill="none" stroke="#6a8a67" strokeWidth="1.6" />
+
+          {/* Cotas del cuadro grande */}
+          <path
+            d={`M${x0} ${y0 + bigCell + 9} L${x0 + bigCell} ${y0 + bigCell + 9}`}
             stroke="#B87A6F"
-            strokeWidth="2"
-            strokeDasharray="5 3"
-            rx="3"
+            strokeWidth="1.8"
           />
-          <text x="4" y="112" fontSize="12" fontWeight="800" fill="#2C3E50" fontFamily="inherit">
+          <text
+            x={x0 + bigCell / 2}
+            y={y0 + bigCell + 24}
+            textAnchor="middle"
+            fontSize="11"
+            fontWeight="800"
+            fill="#B87A6F"
+            fontFamily="inherit"
+          >
+            0,20 s
+          </text>
+          <path d={`M${x0 - 9} ${y0} L${x0 - 9} ${y0 + bigCell}`} stroke="#B87A6F" strokeWidth="1.8" />
+          <text
+            x={x0 - 14}
+            y={y0 + bigCell / 2 + 4}
+            textAnchor="end"
+            fontSize="11"
+            fontWeight="800"
+            fill="#B87A6F"
+            fontFamily="inherit"
+          >
+            0,5 mV
+          </text>
+
+          <text x={x0 + bigCell + 14} y={y0 + 14} fontSize="11" fontWeight="800" fill="#2C3E50" fontFamily="inherit">
             1 cuadro grande
           </text>
-          <text x="4" y="128" fontSize="11" fontWeight="600" fill="#B87A6F" fontFamily="inherit">
-            = 0,20 s y 0,5 mV
+          <text x={x0 + bigCell + 14} y={y0 + 30} fontSize="10" fontWeight="700" fill="#6a8a67" fontFamily="inherit">
+            = 5 × 5 cuadraditos
           </text>
-          <path d="M120 60 L300 60" stroke="#241c1a" strokeWidth="2" strokeDasharray="4 4" />
-          <text x="120" y="52" fontSize="11" fontWeight="700" fill="#B87A6F" fontFamily="inherit">
+          <text x={8} y={172} fontSize="10" fontWeight="700" fill="#B87A6F" fontFamily="inherit">
             25 mm/s · 10 mm/mV
           </text>
         </svg>
@@ -267,8 +307,12 @@ function InfoStep({ step, color }: StepProps<'info'>) {
 
   if (!step.visual) return <div className="mx-auto max-w-2xl">{body}</div>
 
+  // El paso del papel trae su propia cuadrícula: el escenario va liso para no
+  // superponer dos rejillas que no cuadran entre sí.
+  const tone = step.visual === 'grid' ? 'plain' : 'paper'
+
   return (
-    <StepLayout visual={<InfoVisual kind={step.visual} />} accent={color} label="La idea">
+    <StepLayout visual={<InfoVisual kind={step.visual} />} accent={color} label="La idea" tone={tone}>
       {body}
     </StepLayout>
   )
@@ -356,7 +400,7 @@ function ConductionStep({ step, color }: StepProps<'conduction'>) {
         <button
           type="button"
           onClick={togglePlay}
-          className="rounded-full bg-[#E8A598] p-3 text-white shadow-md shadow-[#E8A598]/30 transition-transform hover:scale-105 active:scale-95"
+          className="flex items-center justify-center rounded-full bg-[#E8A598] p-3 text-white shadow-md shadow-[#E8A598]/30 transition-transform hover:scale-105 active:scale-95"
           title={playing ? 'Pausa' : 'Reproducir'}
         >
           <span className="material-symbols-outlined">{playing ? 'pause' : 'play_arrow'}</span>
@@ -572,14 +616,20 @@ function CaliperStep({ step, onSolved, color }: StepProps<'caliper'>) {
   const [solved, setSolved] = useState(false)
 
   const ms = Math.round(squares * MS_PER_SQUARE)
-  const W = 320
-  const H = 150
+  // 1 cuadradito = 40 ms a esta escala ampliada, y en papel de ECG el
+  // cuadradito es la celda FINA: la gruesa son 5 (0,20 s).
   const sq = 30
-  const x0 = 60
-  const base = H * 0.62
+  const W = 360
+  const H = 180
+  const base = 114
   const qw = (step.trueMs / MS_PER_SQUARE) * sq
-  const left = x0 - qw / 2
+  // El QRS arranca en una línea gruesa, para que contar cuadraditos sea directo.
+  const left = sq * 5
   const rightX = left + squares * sq
+  const apex = left + qw / 2
+
+  const delta = ms - step.trueMs
+  const withinTolerance = Math.abs(delta) <= step.tolMs
 
   // El acierto se comprueba al mover el compás, no en un efecto: así el
   // desbloqueo es consecuencia directa del gesto del alumno.
@@ -593,40 +643,61 @@ function CaliperStep({ step, onSolved, color }: StepProps<'caliper'>) {
   }
 
   const visual = (
-    <div className="w-full max-w-lg">
+    <div className="w-full max-w-xl">
       <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
-        <path d={`M10 ${base} L${left} ${base}`} fill="none" stroke="#241c1a" strokeWidth="2.2" />
+        <PaperGrid w={W} h={H} mm={sq} />
+
         <path
-          d={`M${left} ${base} L${left + qw * 0.2} ${base + 14} L${x0} ${base - 70} L${x0 + qw * 0.3} ${base + 22} L${left + qw} ${base} L${W - 10} ${base}`}
+          d={[
+            `M0 ${base}`,
+            `L${left} ${base}`,
+            `L${left + qw * 0.18} ${base + 15}`,
+            `L${apex} ${base - 74}`,
+            `L${left + qw * 0.82} ${base + 24}`,
+            `L${left + qw} ${base}`,
+            `L${W} ${base}`,
+          ].join(' ')}
           fill="none"
           stroke="#241c1a"
           strokeWidth="2.6"
           strokeLinejoin="round"
         />
-        <line x1={left} y1="8" x2={left} y2={H - 8} stroke="#B87A6F" strokeWidth="1.8" strokeDasharray="4 3" />
-        <motion.line
+
+        {/* Pata fija del compás y pata que mueve el alumno */}
+        <line x1={left} y1="14" x2={left} y2={H - 14} stroke="#B87A6F" strokeWidth="1.8" strokeDasharray="5 4" />
+        <line
           x1={rightX}
-          y1="8"
+          y1="14"
           x2={rightX}
-          y2={H - 8}
-          stroke={solved ? '#8BA888' : '#E8A598'}
+          y2={H - 14}
+          stroke={withinTolerance ? '#6a8a67' : '#C4655A'}
           strokeWidth="3"
-          animate={{ x: 0 }}
         />
-        <motion.rect
+        <rect
           x={left}
-          y={base - 84}
+          y={base - 92}
           width={Math.max(0, rightX - left)}
-          height="7"
-          fill={solved ? 'rgba(139,168,136,0.65)' : 'rgba(232,165,152,0.6)'}
-          rx="3.5"
+          height="8"
+          fill={withinTolerance ? 'rgba(139,168,136,0.7)' : 'rgba(196,101,90,0.5)'}
+          rx="4"
         />
+        <text
+          x={(left + rightX) / 2}
+          y={base - 98}
+          textAnchor="middle"
+          fontSize="12"
+          fontWeight="800"
+          fill={withinTolerance ? '#6a8a67' : '#C4655A'}
+          fontFamily="inherit"
+        >
+          {squares} {squares === 1 ? 'cuadradito' : 'cuadraditos'}
+        </text>
       </svg>
     </div>
   )
 
   return (
-    <StepLayout visual={visual} accent={color} label="Compás">
+    <StepLayout visual={visual} accent={color} label="Compás" tone="plain">
       <Prompt>{step.prompt}</Prompt>
 
       <Readout
@@ -635,8 +706,16 @@ function CaliperStep({ step, onSolved, color }: StepProps<'caliper'>) {
             {(ms / 1000).toFixed(2)} s <span className="text-base font-medium text-[#7D8A96]">({ms} ms)</span>
           </>
         }
-        tag={solved ? (ms < step.normalMax ? 'QRS normal ✓' : 'QRS ancho') : 'Ajusta el compás'}
-        ok={solved}
+        // El QRS dibujado mide siempre lo mismo: el rótulo juzga la MEDIDA,
+        // no al paciente. Pasarse no es "QRS ancho", es medir mal.
+        tag={
+          withinTolerance
+            ? 'Justo en el QRS ✓'
+            : delta > 0
+              ? 'Te has pasado del final'
+              : 'Te quedas corto'
+        }
+        tone={withinTolerance ? 'ok' : 'warn'}
       />
 
       <Slider
@@ -650,7 +729,9 @@ function CaliperStep({ step, onSolved, color }: StepProps<'caliper'>) {
 
       {solved ? (
         <Feedback ok>
-          Bien medido: el QRS mide ≈ {step.trueMs} ms. Al ser &lt; 0,12 s es un QRS estrecho (normal).
+          Bien medido: el QRS mide ≈ {step.trueMs} ms (
+          {(step.trueMs / MS_PER_SQUARE).toString().replace('.', ',')} cuadraditos). Al ser &lt; 0,12 s es un QRS
+          estrecho, lo normal. Por encima de 0,12 s sería un QRS ancho, y eso ya es patológico.
         </Feedback>
       ) : null}
     </StepLayout>
@@ -662,73 +743,97 @@ function CaliperStep({ step, onSolved, color }: StepProps<'caliper'>) {
 ═══════════════════════════════════════════════════════════════════════════ */
 function RateStep({ step, onSolved, color }: StepProps<'rate'>) {
   const [bigSquares, setBigSquares] = useState(6)
-  const [solved, setSolved] = useState(false)
+  // Se guarda la medida con la que se acertó (cuadros y lpm): si el alumno
+  // sigue moviendo la barra después, el texto del acierto no puede contradecir
+  // al rótulo. Se guardan los cuadros, no solo los lpm, porque reconstruirlos
+  // dividiendo 300 entre una frecuencia ya redondeada da valores falsos.
+  const [solvedAt, setSolvedAt] = useState<{ squares: number; bpm: number } | null>(null)
 
   const bpm = Math.round(300 / bigSquares)
   const inRange = bpm >= step.targetMin && bpm <= step.targetMax
 
-  const W = 320
-  const H = 150
+  // 1 cuadro grande = 30 unidades = 0,20 s. Las líneas finas cada 6 (5 por cuadro).
   const big = 30
-  const base = H * 0.55
-  const x1 = 40
-  const x2 = x1 + bigSquares * big
+  const W = 360
+  const H = 180
+  const base = 100
+  const x1 = big * 2
   const spike = (x: number) =>
-    `L${x - 6} ${base} L${x - 3} ${base + 10} L${x} ${base - 60} L${x + 3} ${base + 16} L${x + 6} ${base}`
+    `M${x - 7} ${base} L${x - 4} ${base + 11} L${x} ${base - 62} L${x + 4} ${base + 17} L${x + 7} ${base}`
+
+  // Se dibuja el ritmo completo, no dos latidos: así la frecuencia se ve
+  // (más latidos en pantalla = más rápido), no solo se calcula.
+  const gap = bigSquares * big
+  const beats: number[] = []
+  for (let x = x1; x <= W - 10; x += gap) beats.push(x)
 
   const handleChange = (value: number) => {
     setBigSquares(value)
-    if (solved) return
+    if (solvedAt !== null) return
     const next = Math.round(300 / value)
     if (next >= step.targetMin && next <= step.targetMax) {
-      setSolved(true)
+      setSolvedAt({ squares: value, bpm: next })
       onSolved()
     }
   }
 
   const visual = (
-    <div className="w-full max-w-lg">
+    <div className="w-full max-w-xl">
       <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
+        <PaperGrid w={W} h={H} mm={big / 5} />
+
+        <path d={`M0 ${base} L${W} ${base}`} fill="none" stroke="#241c1a" strokeWidth="2.4" />
+        {beats.map((x) => (
+          <path
+            key={x}
+            d={spike(x)}
+            fill="none"
+            stroke="#241c1a"
+            strokeWidth="2.6"
+            strokeLinejoin="round"
+          />
+        ))}
+
+        {/* Cota del primer intervalo R-R, el que se está midiendo */}
         <path
-          d={`M10 ${base} ${spike(x1)} ${spike(x2)} L${W - 10} ${base}`}
-          fill="none"
-          stroke="#241c1a"
+          d={`M${x1} ${base + 30} L${x1 + gap} ${base + 30}`}
+          stroke={inRange ? '#6a8a67' : '#C4655A'}
           strokeWidth="2.5"
-          strokeLinejoin="round"
+          fill="none"
         />
         <path
-          d={`M${x1} ${base + 24} L${x2} ${base + 24}`}
-          stroke={inRange ? '#8BA888' : '#E8A598'}
+          d={`M${x1} ${base + 24} L${x1} ${base + 36} M${x1 + gap} ${base + 24} L${x1 + gap} ${base + 36}`}
+          stroke={inRange ? '#6a8a67' : '#C4655A'}
           strokeWidth="2.5"
-          fill="none"
         />
         <text
-          x={(x1 + x2) / 2}
-          y={base + 40}
+          x={x1 + gap / 2}
+          y={base + 52}
           textAnchor="middle"
           fontSize="12"
           fontWeight="800"
-          fill={inRange ? '#6a8a67' : '#B87A6F'}
+          fill={inRange ? '#6a8a67' : '#C4655A'}
           fontFamily="inherit"
         >
-          {bigSquares} cuadros
+          {bigSquares} {bigSquares === 1 ? 'cuadro grande' : 'cuadros grandes'}
         </text>
       </svg>
     </div>
   )
 
   return (
-    <StepLayout visual={visual} accent={color} label="Regla del 300">
+    <StepLayout visual={visual} accent={color} label="Regla del 300" tone="plain">
       <Prompt>{step.prompt}</Prompt>
 
       <Readout
         value={
           <>
-            300 ÷ {bigSquares} = <span className="text-[#E8A598]">{bpm}</span> lpm
+            300 ÷ {bigSquares} = <span style={{ color: inRange ? '#6a8a67' : '#C4655A' }}>{bpm}</span> lpm
           </>
         }
         tag={inRange ? 'Frecuencia normal ✓' : bpm < step.targetMin ? 'Bradicardia' : 'Taquicardia'}
-        ok={inRange}
+        // Bradicardia y taquicardia son hallazgos anormales: en rojo, no en gris.
+        tone={inRange ? 'ok' : 'bad'}
       />
 
       <Slider
@@ -740,9 +845,11 @@ function RateStep({ step, onSolved, color }: StepProps<'rate'>) {
         onChange={(e) => handleChange(Number(e.target.value))}
       />
 
-      {solved ? (
+      {solvedAt ? (
         <Feedback ok>
-          {bpm} lpm está en el rango normal (60–100). Recuerda la regla: 300, 150, 100, 75, 60, 50 para 1–6 cuadros.
+          Con {solvedAt.squares.toString().replace('.', ',')} cuadros grandes salen {solvedAt.bpm} lpm, dentro del
+          rango normal ({step.targetMin}–{step.targetMax}). Apréndete la escala: 300, 150, 100, 75, 60, 50 para 1–6
+          cuadros.
         </Feedback>
       ) : null}
     </StepLayout>
@@ -796,18 +903,10 @@ function AxisStep({ step, onSolved, color }: StepProps<'axis'>) {
         <text x={cx + 6} y={cy + R - 6} fontSize="10" fontWeight="800" fill="#A8988F" fontFamily="inherit">
           aVF+ (+90°)
         </text>
-        <motion.line
-          x1={cx}
-          y1={cy}
-          x2={ex}
-          y2={ey}
-          stroke={q.color}
-          strokeWidth="5"
-          strokeLinecap="round"
-          animate={{ x2: ex, y2: ey }}
-          transition={{ type: 'spring', stiffness: 260, damping: 24 }}
-        />
-        <motion.circle cx={ex} cy={ey} r="8" fill={q.color} animate={{ cx: ex, cy: ey }} />
+        {/* El vector sigue a la barra directamente: animarlo además con framer
+            solo introducía retardo sobre un control que ya es continuo. */}
+        <line x1={cx} y1={cy} x2={ex} y2={ey} stroke={q.color} strokeWidth="5" strokeLinecap="round" />
+        <circle cx={ex} cy={ey} r="8" fill={q.color} />
         <text
           x={cx}
           y={cy - 12}
@@ -1028,7 +1127,7 @@ function AlgorithmStep({ step, onSolved, color }: StepProps<'algorithm'>) {
         <button
           type="button"
           onClick={() => (playing && progress < 1 ? setPlaying(false) : play())}
-          className="rounded-full bg-[#E8A598] p-2 text-white transition-transform hover:scale-105 active:scale-95"
+          className="flex items-center justify-center rounded-full bg-[#E8A598] p-2 text-white transition-transform hover:scale-105 active:scale-95"
           title={playing && progress < 1 ? 'Pausa' : 'Reproducir'}
         >
           <span className="material-symbols-outlined text-lg">
@@ -1255,8 +1354,6 @@ export const AUTO_UNLOCK: ReadonlySet<Step['type']> = new Set<Step['type']>([
   'ladder',
   'summary',
 ])
-
-export { PAPER_STYLE }
 
 export function StepRenderer({ step, onSolved, color }: { step: Step; onSolved: () => void; color: string }) {
   switch (step.type) {
