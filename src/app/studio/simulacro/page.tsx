@@ -7,9 +7,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { AnimatePresence, motion } from 'framer-motion'
 import SimulacroBuilder from '@/components/simulacro/SimulacroBuilder'
 import SimulacroRunner from '@/components/simulacro/SimulacroRunner'
 import SimulacroResultsGrid from '@/components/simulacro/SimulacroResultsGrid'
+import SimulacroTransition from '@/components/simulacro/SimulacroTransition'
 import {
   checkSimulacroAnswers,
   fetchSimulacroQuestions,
@@ -31,6 +33,18 @@ import type {
 const EXIT_WARNING =
   'Si sales ahora no podrás continuar este simulacro ni se guardará en tu historial. ¿Seguro que quieres salir?'
 
+/** Tiempo mínimo que se ve el pase: lo justo para que se marquen los tres
+ *  pasos (el último termina en 1500 ms) sin que se haga largo. */
+const TRANSITION_MIN_MS = 1650
+/** Debe coincidir con la animación de salida del creador (ver el render). */
+const BUILDER_EXIT_MS = 300
+
+/** Espera lo que falte para completar `min` desde `startedAt`. */
+function waitRemaining(startedAt: number, min: number): Promise<void> {
+  const left = min - (Date.now() - startedAt)
+  return left > 0 ? new Promise((resolve) => setTimeout(resolve, left)) : Promise.resolve()
+}
+
 export default function SimulacroPage() {
   const router = useRouter()
   const [phase, setPhase] = useState<SimulacroPhase>('builder')
@@ -47,6 +61,9 @@ export default function SimulacroPage() {
   const [results, setResults] = useState<(SimulacroResult | null)[]>([])
   const [generating, setGenerating] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
+  // Config del simulacro que se está generando, para que el pase pueda contar
+  // qué se está preparando (nº de preguntas y modo).
+  const [pendingConfig, setPendingConfig] = useState<SimulacroConfig | null>(null)
   const [finishing, setFinishing] = useState(false)
   // Identificador de la sesión de simulacro: el backend lo usa para persistir
   // cada respuesta (analítica) de forma idempotente.
@@ -66,14 +83,17 @@ export default function SimulacroPage() {
   }
 
   const handleSubmit = async (config: SimulacroConfig) => {
+    setPendingConfig(config)
     setGenerating(true)
     setGenerationError(null)
+    const startedAt = Date.now()
     try {
       const fetched = await fetchSimulacroQuestions(config)
       if (fetched.length === 0) {
         setGenerationError(
           'No se encontraron preguntas con esa selección. Prueba con otras asignaturas o temas.',
         )
+        setGenerating(false)
         return
       }
       setQuestions(fetched)
@@ -81,14 +101,24 @@ export default function SimulacroPage() {
       setResults(fetched.map(() => null))
       setMode(config.mode)
       sessionIdRef.current = crypto.randomUUID()
+
+      // La transición tapa el cambio de fase, pero solo si llega a verse: si el
+      // backend responde en 80 ms un pase de 300 ms es un parpadeo peor que el
+      // salto que venimos a arreglar. Se espera a lo que falte del mínimo.
+      await waitRemaining(startedAt, TRANSITION_MIN_MS)
+
+      // El orden importa. `AnimatePresence mode="wait"` no monta el simulacro
+      // hasta que el formulario termina de salir, así que si el pase se
+      // retirase a la vez se levantaría sobre una pantalla todavía vacía.
       setPhase('running')
+      await new Promise((resolve) => setTimeout(resolve, BUILDER_EXIT_MS + 40))
+      setGenerating(false)
     } catch (err: unknown) {
       setGenerationError(
         err instanceof Error
           ? `No se pudieron cargar las preguntas: ${err.message}`
           : 'No se pudieron cargar las preguntas.',
       )
-    } finally {
       setGenerating(false)
     }
   }
@@ -186,6 +216,7 @@ export default function SimulacroPage() {
     updateAnswers(() => [])
     setResults([])
     setGenerationError(null)
+    setPendingConfig(null)
     sessionIdRef.current = null
     setPhase('builder')
   }
@@ -287,33 +318,68 @@ export default function SimulacroPage() {
       <div className="pointer-events-none fixed -bottom-[10%] -left-[5%] z-0 h-96 w-96 rounded-full bg-[#8BA888]/15 blur-3xl" />
 
       <main className="relative z-10 mx-auto w-full max-w-7xl px-6 py-10">
-        {phase === 'builder' ? (
-          <SimulacroBuilder
-            onSubmit={handleSubmit}
-            generating={generating}
-            generationError={generationError}
-          />
-        ) : phase === 'running' ? (
-          <SimulacroRunner
-            questions={questions}
-            mode={mode}
-            answers={answers}
-            results={results}
-            finishing={finishing}
-            onSelect={handleSelect}
-            onBlank={handleBlank}
-            onFinish={handleFinish}
-            onExit={handleExitClick}
-          />
-        ) : (
-          <SimulacroResultsGrid
-            questions={questions}
-            answers={answers}
-            results={results}
-            onRestart={handleRestart}
-          />
-        )}
+        {/* Cada fase entra y sale con su propio pase; `mode="wait"` evita que
+            se solapen dos pantallas completas a la vez. */}
+        <AnimatePresence mode="wait">
+          {phase === 'builder' ? (
+            <motion.div
+              key="builder"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12, filter: 'blur(4px)' }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <SimulacroBuilder
+                onSubmit={handleSubmit}
+                generating={generating}
+                generationError={generationError}
+              />
+            </motion.div>
+          ) : phase === 'running' ? (
+            <motion.div
+              key="running"
+              initial={{ opacity: 0, y: 18, scale: 0.985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <SimulacroRunner
+                questions={questions}
+                mode={mode}
+                answers={answers}
+                results={results}
+                finishing={finishing}
+                onSelect={handleSelect}
+                onBlank={handleBlank}
+                onFinish={handleFinish}
+                onExit={handleExitClick}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="results"
+              initial={{ opacity: 0, y: 18, scale: 0.985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <SimulacroResultsGrid
+                questions={questions}
+                answers={answers}
+                results={results}
+                onRestart={handleRestart}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
+
+      {/* Pase entre el creador y el simulacro */}
+      <AnimatePresence>
+        {generating && pendingConfig ? (
+          <SimulacroTransition count={pendingConfig.count} mode={pendingConfig.mode} />
+        ) : null}
+      </AnimatePresence>
 
       {showExitModal ? (
         <div
