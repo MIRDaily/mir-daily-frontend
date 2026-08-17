@@ -111,6 +111,13 @@ export default function SimulacroPage() {
       // hasta que el formulario termina de salir, así que si el pase se
       // retirase a la vez se levantaría sobre una pantalla todavía vacía.
       setPhase('running')
+
+      // El creador es largo y se suele pulsar "Generar" con la página bajada.
+      // Sin esto el simulacro aparece con el scroll heredado, a media altura:
+      // el salto que se ve al final no era solo la animación. Se hace con el
+      // pase todavía puesto, así que no se ve mover nada.
+      window.scrollTo({ top: 0, behavior: 'auto' })
+
       await new Promise((resolve) => setTimeout(resolve, BUILDER_EXIT_MS + 40))
       setGenerating(false)
     } catch (err: unknown) {
@@ -336,12 +343,15 @@ export default function SimulacroPage() {
               />
             </motion.div>
           ) : phase === 'running' ? (
+            // Sin animación de entrada a propósito: el simulacro se monta
+            // detrás del pase y debe estar ya quieto cuando este se levanta.
+            // Si además se moviera, se verían dos cosas a la vez y es justo
+            // lo que se leía como un tirón.
             <motion.div
               key="running"
-              initial={{ opacity: 0, y: 18, scale: 0.985 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
+              initial={false}
               exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             >
               <SimulacroRunner
                 questions={questions}

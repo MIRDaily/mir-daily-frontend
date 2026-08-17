@@ -42,12 +42,14 @@ export default function SimulacroTransition({
   }, [])
 
   return (
+    // La salida es un fundido puro: al escalar el telón mientras se va, el
+    // contenido de debajo parecía moverse con él y se leía como un tirón.
     <motion.div
       className="fixed inset-0 z-[60] flex items-center justify-center px-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: 1.04 }}
-      transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
+      exit={{ opacity: 0, transition: { duration: 0.5, ease: 'easeInOut' } }}
+      transition={{ duration: 0.3, ease: 'easeOut' }}
     >
       {/* Fondo opaco: tapa por completo el formulario que hay debajo */}
       <div className="absolute inset-0 bg-[#FAF7F4]" />
@@ -59,6 +61,9 @@ export default function SimulacroTransition({
         style={{ boxShadow: '7px 7px 0 0 #2c3e50' }}
         initial={{ opacity: 0, y: 22, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
+        // Se va antes que el fondo: primero se deshace la tarjeta y después se
+        // levanta el telón, en vez de que todo desaparezca de golpe.
+        exit={{ opacity: 0, y: -10, transition: { duration: 0.22, ease: 'easeIn' } }}
         transition={{ type: 'spring', stiffness: 260, damping: 24 }}
       >
         <ShufflingCards />
