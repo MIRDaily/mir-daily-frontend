@@ -317,30 +317,32 @@ export default function SimulacroPage() {
 
       {showExitModal ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#2D3748]/40 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#2c3e50]/45 p-4 backdrop-blur-sm"
           onClick={() => resolveExit(false)}
         >
           <div
-            className="w-full max-w-sm rounded-2xl border border-[#F0EBE8] bg-white p-6 shadow-xl"
+            className="w-full max-w-sm rounded-3xl border-2 border-[#2c3e50] bg-white p-6"
+            style={{ boxShadow: '7px 7px 0 0 #2c3e50' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-2 flex items-center gap-2">
               <span className="material-symbols-outlined text-2xl text-[#C4655A]">warning</span>
-              <p className="text-base font-bold text-[#2D3748]">Salir del simulacro</p>
+              <p className="text-base font-black text-[#2C3E50]">Salir del simulacro</p>
             </div>
             <p className="text-sm leading-relaxed text-[#7D8A96]">{EXIT_WARNING}</p>
             <div className="mt-5 flex gap-3">
               <button
                 type="button"
                 onClick={() => resolveExit(false)}
-                className="flex-1 rounded-xl border border-[#7D8A96]/30 bg-white px-4 py-2.5 text-sm font-semibold text-[#7D8A96] transition-colors hover:bg-[#F2EFED]"
+                className="flex-1 rounded-2xl border-2 border-[#EAE4E2] bg-white px-4 py-3 text-sm font-bold text-[#7D8A96] transition-colors hover:border-[#2c3e50] hover:text-[#2C3E50]"
               >
                 Quedarme
               </button>
               <button
                 type="button"
                 onClick={() => resolveExit(true)}
-                className="flex-1 rounded-xl bg-[#C4655A] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#a8493f]"
+                className="flex-1 rounded-2xl border-2 border-[#2c3e50] bg-[#C4655A] px-4 py-3 text-sm font-black text-white transition-transform hover:-translate-y-0.5"
+                style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
               >
                 Salir
               </button>

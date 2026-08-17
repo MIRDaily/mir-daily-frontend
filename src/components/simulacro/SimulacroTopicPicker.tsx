@@ -115,7 +115,7 @@ export default function SimulacroTopicPicker({
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-[100] flex items-end justify-center bg-[#2D3748]/55 p-0 backdrop-blur-md sm:items-center sm:p-4"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-[#2c3e50]/55 p-0 backdrop-blur-md sm:items-center sm:p-4"
           initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
           animate={{ opacity: 1, backdropFilter: 'blur(8px)' }}
           exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
@@ -123,7 +123,8 @@ export default function SimulacroTopicPicker({
           onClick={onClose}
         >
           <motion.div
-            className="flex h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl ring-1 ring-black/5 sm:h-[85vh] sm:rounded-2xl"
+            className="flex h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl border-2 border-[#2c3e50] bg-white sm:h-[85vh] sm:rounded-3xl"
+            style={{ boxShadow: '7px 7px 0 0 #2c3e50' }}
             initial={{ opacity: 0, y: 40, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.97 }}
@@ -247,7 +248,7 @@ export default function SimulacroTopicPicker({
                                   onClick={() =>
                                     onSetAllForSubject(activeGroup.items, !allSelected)
                                   }
-                                  className="shrink-0 rounded-lg border border-[#EAE4E2] bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-[#7D8A96] transition-colors hover:border-[#8BA888]/40 hover:text-[#5f7d5c]"
+                                  className="shrink-0 rounded-lg border-2 border-[#EAE4E2] bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-[#7D8A96] transition-colors hover:border-[#2c3e50] hover:text-[#2c3e50]"
                                 >
                                   {allSelected ? 'Ninguno' : 'Todos'}
                                 </button>
@@ -286,7 +287,8 @@ export default function SimulacroTopicPicker({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex items-center gap-2 rounded-xl bg-[#E8A598] px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-[#E8A598]/20 transition-colors hover:bg-[#d18d80]"
+                className="flex items-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-[#E8A598] px-6 py-3 text-sm font-black text-white transition-transform hover:-translate-y-0.5"
+                style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
               >
                 Hecho
                 {selectedTopicIds.length > 0 ? (

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { fetchSubjects, fetchTopics } from '@/lib/simulacro/queries'
 import SimulacroTopicPicker from '@/components/simulacro/SimulacroTopicPicker'
+import { GhostButton, Hero, StepBadge, StickerCard } from '@/components/ui/sticker'
 import type {
   SimulacroConfig,
   SimulacroMode,
@@ -175,28 +176,27 @@ export default function SimulacroBuilder({
   }
 
   return (
-    <motion.div className="mx-auto w-full max-w-3xl" {...fadeIn}>
-      <header className="mb-8">
-        <span className="inline-flex items-center gap-2 rounded-full border border-[#E8A598]/30 bg-[#E8A598]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[#d18d80]">
-          <span className="material-symbols-outlined text-base">quiz</span>
-          Crear Simulacro
-        </span>
-        <h1 className="mt-4 text-4xl font-black tracking-tight text-[#2c3e50]">
-          Diseña tu simulacro
-        </h1>
-        <p className="mt-2 text-base font-light text-[#7D8A96]">
-          Elige asignaturas y temas, cuántas preguntas quieres y cómo corregirlo.
-        </p>
-      </header>
+    <motion.div className="mx-auto w-full max-w-6xl" {...fadeIn}>
+      <Hero
+        badge="Crear simulacro"
+        badgeIcon="quiz"
+        title="Diseña tu simulacro"
+        subtitle="Elige asignaturas y temas, cuántas preguntas quieres y cómo corregirlo."
+        aside={<ExamPadArt />}
+      />
 
-      <div className="flex flex-col gap-6">
+      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-8">
+        <div className="flex min-w-0 flex-col gap-5">
         {/* Paso 1 — Asignaturas */}
-        <section className="rounded-2xl border border-[#EAE4E2] bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F2EFED] text-sm font-black text-[#2c3e50]">
-              1
-            </span>
-            <h2 className="text-lg font-bold text-[#2c3e50]">Asignaturas</h2>
+        <StickerCard as="section" className="p-6" depth={4}>
+          <div className="mb-4 flex items-center gap-3">
+            <StepBadge n={1} active={selectedSubjectIds.length > 0} />
+            <h2 className="text-lg font-black text-[#2c3e50]">Asignaturas</h2>
+            {selectedSubjectIds.length > 0 ? (
+              <span className="ml-auto rounded-full bg-[#E8A598]/15 px-2.5 py-1 text-[11px] font-black text-[#d18d80]">
+                {selectedSubjectIds.length}
+              </span>
+            ) : null}
           </div>
 
           {loadingSubjects ? (
@@ -204,54 +204,61 @@ export default function SimulacroBuilder({
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={`subject-skeleton-${i}`}
-                  className="h-9 w-36 animate-pulse rounded-full bg-[#F2EEEB]"
+                  className="h-10 w-36 animate-pulse rounded-full bg-[#F2EEEB]"
                 />
               ))}
             </div>
           ) : subjectsError ? (
-            <p className="text-sm text-[#C4655A]">{subjectsError}</p>
+            <p className="text-sm font-semibold text-[#C4655A]">{subjectsError}</p>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {subjects.map((subject) => {
+              {subjects.map((subject, i) => {
                 const active = selectedSubjectIds.includes(subject.id)
                 return (
-                  <button
+                  <motion.button
                     key={subject.id}
                     type="button"
                     onClick={() => toggleSubject(subject.id)}
-                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition-all ${
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(0.3, 0.02 * i), duration: 0.28, ease: 'easeOut' }}
+                    className={`rounded-full border-2 px-4 py-2 text-sm font-bold transition-all ${
                       active
-                        ? 'border-[#E8A598] bg-[#E8A598] text-white shadow-sm'
-                        : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#E8A598]/40 hover:text-[#2c3e50]'
+                        ? 'border-[#2c3e50] bg-[#E8A598] text-white'
+                        : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:-translate-y-0.5 hover:border-[#2c3e50] hover:text-[#2c3e50]'
                     }`}
+                    style={active ? { boxShadow: '3px 3px 0 0 #2c3e50' } : undefined}
                   >
                     {subject.name}
-                  </button>
+                  </motion.button>
                 )
               })}
             </div>
           )}
-        </section>
+        </StickerCard>
 
         {/* Paso 2 — Temas */}
-        <section className="rounded-2xl border border-[#EAE4E2] bg-white p-6 shadow-sm">
-          <div className="mb-1 flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F2EFED] text-sm font-black text-[#2c3e50]">
-              2
-            </span>
-            <h2 className="text-lg font-bold text-[#2c3e50]">Temas</h2>
+        <StickerCard as="section" className="p-6" depth={4}>
+          <div className="mb-1 flex items-center gap-3">
+            <StepBadge n={2} active={selectedTopicIds.length > 0} />
+            <h2 className="text-lg font-black text-[#2c3e50]">Temas</h2>
+            {selectedTopicIds.length > 0 ? (
+              <span className="ml-auto rounded-full bg-[#8BA888]/15 px-2.5 py-1 text-[11px] font-black text-[#5f7d5c]">
+                {selectedTopicIds.length}
+              </span>
+            ) : null}
           </div>
-          <p className="mb-4 ml-9 text-xs text-[#7D8A96]">
+          <p className="mb-4 ml-11 text-xs text-[#7D8A96]">
             Opcional. Si no eliges ninguno, se incluyen todos los temas de las
             asignaturas seleccionadas.
           </p>
 
           {selectedSubjectIds.length === 0 ? (
-            <p className="ml-9 text-sm text-[#7D8A96]/70">
+            <p className="ml-11 text-sm text-[#7D8A96]/70">
               Selecciona una asignatura para ver sus temas.
             </p>
           ) : loadingTopics ? (
-            <div className="ml-9 flex flex-col gap-3">
+            <div className="ml-11 flex flex-col gap-3">
               {Array.from({ length: 2 }).map((_, i) => (
                 <div
                   key={`topic-skeleton-${i}`}
@@ -260,11 +267,11 @@ export default function SimulacroBuilder({
               ))}
             </div>
           ) : (
-            <div className="ml-9 flex flex-col gap-3">
+            <div className="ml-11 flex flex-col gap-3">
               {selectedTopicChips.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-[#EAE4E2] bg-[#FAF7F4] px-4 py-3 text-sm text-[#7D8A96]">
+                <p className="rounded-xl border-2 border-dashed border-[#EAE4E2] bg-[#FAF7F4] px-4 py-3 text-sm text-[#7D8A96]">
                   Ahora mismo se incluirán{' '}
-                  <span className="font-semibold text-[#2c3e50]">todos los temas</span> de las
+                  <span className="font-black text-[#2c3e50]">todos los temas</span> de las
                   asignaturas elegidas.
                 </p>
               ) : (
@@ -272,38 +279,37 @@ export default function SimulacroBuilder({
                   {selectedTopicChips.slice(0, 8).map((topic) => (
                     <span
                       key={topic.id}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-[#8BA888]/40 bg-[#8BA888]/10 py-1.5 pl-3 pr-2 text-sm font-medium text-[#5f7d5c]"
+                      className="inline-flex items-center gap-1.5 rounded-full border-2 border-[#8BA888]/50 bg-[#8BA888]/10 py-1.5 pl-3 pr-2 text-sm font-bold text-[#5f7d5c]"
                     >
                       {topic.name}
                       <button
                         type="button"
                         onClick={() => toggleTopic(topic.id)}
                         aria-label={`Quitar ${topic.name}`}
-                        className="text-[#5f7d5c]/70 transition-colors hover:text-[#C4655A]"
+                        className="flex items-center justify-center text-[#5f7d5c]/70 transition-colors hover:text-[#C4655A]"
                       >
                         <span className="material-symbols-outlined text-base">close</span>
                       </button>
                     </span>
                   ))}
                   {selectedTopicChips.length > 8 ? (
-                    <span className="inline-flex items-center rounded-full bg-[#F2EFED] px-3 py-1.5 text-sm font-semibold text-[#7D8A96]">
+                    <span className="inline-flex items-center rounded-full bg-[#F2EFED] px-3 py-1.5 text-sm font-bold text-[#7D8A96]">
                       +{selectedTopicChips.length - 8} más
                     </span>
                   ) : null}
                 </div>
               )}
 
-              <button
-                type="button"
+              <GhostButton
+                icon="tune"
                 onClick={() => setTopicPickerOpen(true)}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#E8A598]/40 bg-white px-4 py-3 text-sm font-bold text-[#d18d80] transition-colors hover:bg-[#fff0ec] sm:w-auto"
+                className="w-full sm:w-auto"
               >
-                <span className="material-symbols-outlined text-lg">tune</span>
                 {selectedTopicChips.length > 0 ? 'Editar temas' : 'Elegir temas concretos'}
-              </button>
+              </GhostButton>
             </div>
           )}
-        </section>
+        </StickerCard>
 
         <SimulacroTopicPicker
           open={topicPickerOpen}
@@ -316,16 +322,14 @@ export default function SimulacroBuilder({
         />
 
         {/* Paso 3 — Nº de preguntas */}
-        <section className="rounded-2xl border border-[#EAE4E2] bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F2EFED] text-sm font-black text-[#2c3e50]">
-              3
-            </span>
-            <h2 className="text-lg font-bold text-[#2c3e50]">Nº de preguntas</h2>
+        <StickerCard as="section" className="p-6" depth={4}>
+          <div className="mb-4 flex items-center gap-3">
+            <StepBadge n={3} active />
+            <h2 className="text-lg font-black text-[#2c3e50]">Nº de preguntas</h2>
           </div>
 
-          <div className="ml-9 flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] p-1">
+          <div className="ml-11 flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-[#FAF7F4] p-1">
               <button
                 type="button"
                 onClick={() => setCount((c) => Math.max(1, c - 1))}
@@ -342,7 +346,7 @@ export default function SimulacroBuilder({
                   const value = Number(e.target.value)
                   setCount(Number.isFinite(value) && value >= 1 ? Math.floor(value) : 1)
                 }}
-                className="w-16 bg-transparent text-center text-xl font-black text-[#2c3e50] outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="w-16 bg-transparent text-center text-2xl font-black text-[#2c3e50] outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <button
                 type="button"
@@ -359,32 +363,31 @@ export default function SimulacroBuilder({
                   key={preset}
                   type="button"
                   onClick={() => setCount(preset)}
-                  className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-all ${
+                  className={`rounded-xl border-2 px-3.5 py-2 text-sm font-black transition-all ${
                     count === preset
-                      ? 'border-[#E8A598] bg-[#E8A598]/10 text-[#d18d80]'
-                      : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#E8A598]/40'
+                      ? 'border-[#2c3e50] bg-[#E8A598] text-white'
+                      : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:-translate-y-0.5 hover:border-[#2c3e50]'
                   }`}
+                  style={count === preset ? { boxShadow: '3px 3px 0 0 #2c3e50' } : undefined}
                 >
                   {preset}
                 </button>
               ))}
             </div>
           </div>
-          <p className="ml-9 mt-3 text-xs text-[#7D8A96]/80">
+          <p className="ml-11 mt-3 text-xs text-[#7D8A96]/80">
             Si hay menos preguntas disponibles que las pedidas, se usarán las que haya.
           </p>
-        </section>
+        </StickerCard>
 
         {/* Paso 4 — Modo */}
-        <section className="rounded-2xl border border-[#EAE4E2] bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F2EFED] text-sm font-black text-[#2c3e50]">
-              4
-            </span>
-            <h2 className="text-lg font-bold text-[#2c3e50]">Modo de corrección</h2>
+        <StickerCard as="section" className="p-6" depth={4}>
+          <div className="mb-4 flex items-center gap-3">
+            <StepBadge n={4} active />
+            <h2 className="text-lg font-black text-[#2c3e50]">Modo de corrección</h2>
           </div>
 
-          <div className="ml-9 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="ml-11 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {MODE_OPTIONS.map((option) => {
               const active = mode === option.value
               return (
@@ -392,60 +395,160 @@ export default function SimulacroBuilder({
                   key={option.value}
                   type="button"
                   onClick={() => setMode(option.value)}
-                  className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-all ${
+                  className={`flex items-start gap-3 rounded-2xl border-2 p-4 text-left transition-all ${
                     active
-                      ? 'border-[#E8A598] bg-[#fff0ec] shadow-sm'
-                      : 'border-[#EAE4E2] bg-white hover:border-[#E8A598]/40'
+                      ? 'border-[#2c3e50] bg-[#fff0ec]'
+                      : 'border-[#EAE4E2] bg-white hover:-translate-y-0.5 hover:border-[#2c3e50]'
                   }`}
+                  style={active ? { boxShadow: '4px 4px 0 0 #2c3e50' } : undefined}
                 >
                   <span
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
                       active ? 'bg-[#E8A598] text-white' : 'bg-[#F2EFED] text-[#7D8A96]'
                     }`}
                   >
                     <span className="material-symbols-outlined text-xl">{option.icon}</span>
                   </span>
                   <span>
-                    <span className="block text-sm font-bold text-[#2c3e50]">
-                      {option.title}
-                    </span>
-                    <span className="mt-0.5 block text-xs text-[#7D8A96]">
-                      {option.description}
-                    </span>
+                    <span className="block text-sm font-black text-[#2c3e50]">{option.title}</span>
+                    <span className="mt-0.5 block text-xs text-[#7D8A96]">{option.description}</span>
                   </span>
                 </button>
               )
             })}
           </div>
-        </section>
+        </StickerCard>
+        </div>
 
-        {generationError ? (
-          <p className="rounded-xl border border-[#E8A598]/30 bg-[#FFF8F6] px-4 py-3 text-sm font-semibold text-[#C4655A]">
-            {generationError}
-          </p>
-        ) : null}
+        {/* Resumen: lo que vas a generar, siempre a la vista */}
+        <aside className="lg:sticky lg:top-6">
+          <StickerCard className="overflow-hidden" depth={6}>
+            <div className="border-b-2 border-[#2c3e50] bg-[#FFF5F2] px-5 py-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d18d80]">
+                Tu simulacro
+              </p>
+            </div>
 
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={!canSubmit}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#E8A598] px-6 py-4 text-base font-bold text-white shadow-md shadow-[#E8A598]/20 transition-all hover:bg-[#d18d80] disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {generating ? (
-            <>
-              Generando simulacro
-              <span className="material-symbols-outlined animate-spin text-xl">
-                progress_activity
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="material-symbols-outlined">play_arrow</span>
-              Generar simulacro
-            </>
-          )}
-        </button>
+            <div className="flex flex-col gap-4 p-5">
+              <div className="text-center">
+                <p className="text-5xl font-black leading-none text-[#2c3e50] tabular-nums">{count}</p>
+                <p className="mt-1 text-xs font-bold uppercase tracking-wider text-[#7D8A96]/70">
+                  {count === 1 ? 'pregunta' : 'preguntas'}
+                </p>
+              </div>
+
+              <dl className="flex flex-col gap-2 text-sm">
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[#7D8A96]">Asignaturas</dt>
+                  <dd className="font-black text-[#2c3e50]">
+                    {selectedSubjectIds.length || <span className="text-[#C4655A]">—</span>}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[#7D8A96]">Temas</dt>
+                  <dd className="font-black text-[#2c3e50]">
+                    {selectedTopicIds.length > 0 ? selectedTopicIds.length : 'Todos'}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[#7D8A96]">Corrección</dt>
+                  <dd className="text-right font-black text-[#2c3e50]">
+                    {mode === 'immediate' ? 'Inmediata' : 'Al final'}
+                  </dd>
+                </div>
+              </dl>
+
+              {generationError ? (
+                <p className="rounded-xl border-2 border-[#E8A598]/40 bg-[#FFF8F6] px-3 py-2.5 text-xs font-semibold text-[#C4655A]">
+                  {generationError}
+                </p>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={!canSubmit}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-[#E8A598] px-6 py-4 text-base font-black text-white transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+                style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
+              >
+                {generating ? (
+                  <>
+                    Generando
+                    <span className="material-symbols-outlined animate-spin text-xl">
+                      progress_activity
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined">play_arrow</span>
+                    Generar simulacro
+                  </>
+                )}
+              </button>
+
+              {selectedSubjectIds.length === 0 ? (
+                <p className="text-center text-xs text-[#7D8A96]/70">
+                  Elige al menos una asignatura para empezar.
+                </p>
+              ) : null}
+            </div>
+          </StickerCard>
+        </aside>
       </div>
     </motion.div>
+  )
+}
+
+/** Arte de la portada: un cuadernillo de examen con su lápiz. */
+function ExamPadArt() {
+  return (
+    <motion.svg
+      viewBox="0 0 200 150"
+      className="h-32 w-40 lg:h-40 lg:w-52"
+      aria-hidden
+      animate={{ y: [0, -7, 0] }}
+      transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+    >
+      <rect x="30" y="14" width="122" height="120" rx="12" fill="#fff" stroke="#2c3e50" strokeWidth="4" />
+      <rect x="66" y="6" width="50" height="16" rx="8" fill="#E8A598" stroke="#2c3e50" strokeWidth="4" />
+      {[46, 70, 94].map((y, i) => (
+        <g key={y}>
+          <circle
+            cx="50"
+            cy={y}
+            r="7"
+            fill={i === 1 ? '#8BA888' : '#fff'}
+            stroke="#2c3e50"
+            strokeWidth="3.5"
+          />
+          <line
+            x1="66"
+            y1={y}
+            x2={i === 2 ? 118 : 136}
+            y2={y}
+            stroke="#D9D2CE"
+            strokeWidth="4"
+            strokeLinecap="round"
+          />
+        </g>
+      ))}
+      <motion.g
+        animate={{ rotate: [0, -6, 0], y: [0, -3, 0] }}
+        transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
+        style={{ transformBox: 'fill-box', transformOrigin: '50% 50%' }}
+      >
+        <rect
+          x="140"
+          y="70"
+          width="14"
+          height="62"
+          rx="4"
+          fill="#E0B15A"
+          stroke="#2c3e50"
+          strokeWidth="3.5"
+          transform="rotate(18 147 101)"
+        />
+      </motion.g>
+    </motion.svg>
   )
 }
