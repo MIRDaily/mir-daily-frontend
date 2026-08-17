@@ -17,6 +17,14 @@ import DropdownMenu from '@/components/studio/DropdownMenu'
 import { DEFAULT_COLOR_KEY, MAX_FLASHCARD_CHARS, SUBJECT_COLORS, resolveColor, resolveIcon } from '@/lib/flashcardTheme'
 import CharCounter from '@/components/studio/CharCounter'
 import {
+  CardStackArt,
+  GhostButton,
+  Hero,
+  StatChip,
+  StickerButton,
+  tintedPaper,
+} from '@/components/flashcards/ui'
+import {
   bulkDeleteFlashcards,
   copyFlashcards,
   createFlashcardDeck,
@@ -331,14 +339,18 @@ export default function FlashcardsMindMap() {
       <button
         type="button"
         onClick={isRoot ? undefined : goUp}
-        style={{ left: center.x, top: center.y, background: bg }}
-        className={`absolute z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-full text-white shadow-xl transition-transform ${
+        style={{ left: center.x, top: center.y, background: bg, boxShadow: '5px 5px 0 0 #2c3e50' }}
+        className={`absolute z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-0.5 rounded-full border-[3px] border-[#2c3e50] text-white transition-transform ${
           isRoot ? 'h-32 w-32 cursor-default' : 'h-28 w-28 cursor-pointer hover:scale-105'
         }`}
       >
-        <span className="material-symbols-outlined text-3xl">{icon}</span>
-        <span className="max-w-[7rem] truncate px-2 text-center text-xs font-bold">{label}</span>
-        {!isRoot ? <span className="text-[10px] opacity-70">volver ↑</span> : null}
+        <span className="flex items-center justify-center">
+          <span className="material-symbols-outlined" style={{ fontSize: 30 }}>
+            {icon}
+          </span>
+        </span>
+        <span className="max-w-[7rem] truncate px-2 text-center text-xs font-black">{label}</span>
+        {!isRoot ? <span className="text-[10px] font-bold opacity-75">volver ↑</span> : null}
       </button>
     )
   }
@@ -354,8 +366,9 @@ export default function FlashcardsMindMap() {
             y1={center.y}
             x2={p.x}
             y2={p.y}
-            stroke="#D8CFC9"
+            stroke="#CFC5BF"
             strokeWidth={2}
+            strokeDasharray="6 6"
             strokeLinecap="round"
           />
         )
@@ -363,92 +376,141 @@ export default function FlashcardsMindMap() {
     </svg>
   )
 
+  const totalCards = subjects.reduce((n, s) => n + s.totalCards, 0)
+  const totalDue = subjects.reduce((n, s) => n + s.dueCards, 0)
+  const heroAccent = currentSubject ? resolveColor(currentSubject.color).bg : '#E8A598'
+
   return (
-    <div className="min-h-screen bg-[#FAF7F4] text-slate-800">
-      <main className="mx-auto w-full max-w-6xl px-5 py-6">
-        {/* Barra superior: breadcrumb + acciones */}
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
-            <Link href="/studio" className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#8BA888] text-white transition hover:opacity-90" aria-label="Volver a studio">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M19 12H5" /><path d="M11 18l-6-6 6-6" /></svg>
+    <div className="relative min-h-screen overflow-x-hidden bg-[#FAF7F4] text-[#7D8A96]">
+      {/* Ambiente: renglones muy tenues y halos de marca, como en la Academia */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-0 opacity-60"
+        style={{
+          backgroundImage:
+            'repeating-linear-gradient(to bottom, transparent 0 31px, rgba(125,138,150,0.06) 31px 32px)',
+        }}
+      />
+      <div className="pointer-events-none fixed top-[-12%] right-[-8%] z-0 h-[26rem] w-[26rem] rounded-full bg-[#E8A598]/12 blur-3xl" />
+      <div className="pointer-events-none fixed bottom-[-12%] left-[-8%] z-0 h-[26rem] w-[26rem] rounded-full bg-[#8BA888]/12 blur-3xl" />
+
+      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-6 px-5 py-8">
+        <Hero
+          badge={level === 0 ? 'Repaso espaciado' : level === 1 ? 'Asignatura' : 'Tema'}
+          badgeIcon={level === 0 ? 'style' : level === 1 ? resolveIcon(currentSubject?.icon) : 'sell'}
+          accent={heroAccent}
+          title={level === 0 ? 'Mis flashcards' : level === 1 ? currentSubject?.name ?? '' : humanizeTopic(path[1])}
+          subtitle={
+            level === 0
+              ? 'Tus propias tarjetas, organizadas por asignatura y tema. Cada repaso las reprograma para que vuelvan justo cuando toca.'
+              : undefined
+          }
+          aside={level === 0 ? <CardStackArt accent={heroAccent} /> : undefined}
+          actions={
+            <>
+              {level === 0 ? (
+                <StickerButton icon="add" onClick={() => setSubjectModal({})}>
+                  Nueva asignatura
+                </StickerButton>
+              ) : currentSubject ? (
+                <>
+                  <StickerButton
+                    icon="bolt"
+                    color={resolveColor(currentSubject.color).bg}
+                    onClick={() =>
+                      setCreateCtx({
+                        deckId: currentSubject.id,
+                        topic: level === 2 && path[1] !== NO_TOPIC ? path[1] : undefined,
+                      })
+                    }
+                  >
+                    Crear tarjetas
+                  </StickerButton>
+                  <GhostButton
+                    icon="play_arrow"
+                    onClick={() => router.push(`/flashcards/${currentSubject.id}?study=1`)}
+                  >
+                    Estudiar
+                  </GhostButton>
+                </>
+              ) : null}
+            </>
+          }
+        >
+          {/* Migas: chips en vez de texto suelto, para poder volver de un toque */}
+          <nav className="mt-4 flex flex-wrap items-center gap-1.5 text-xs font-bold" aria-label="Ruta">
+            <Link
+              href="/studio"
+              className="flex items-center gap-1 rounded-full border-2 border-[#EAE4E2] bg-white px-2.5 py-1 text-[#7D8A96] transition-colors hover:border-[#2c3e50] hover:text-[#2C3E50]"
+            >
+              <span className="material-symbols-outlined text-sm">arrow_back</span>
+              Estudio
             </Link>
-            <button type="button" onClick={goRoot} className={level === 0 ? 'text-slate-800' : 'hover:text-slate-800'}>
+            <span className="text-[#D9D2CE]">/</span>
+            <button
+              type="button"
+              onClick={goRoot}
+              className={`rounded-full px-2.5 py-1 transition-colors ${
+                level === 0 ? 'bg-[#2c3e50] text-white' : 'text-[#7D8A96] hover:text-[#2C3E50]'
+              }`}
+            >
               Mis flashcards
             </button>
             {currentSubject ? (
               <>
-                <span className="text-slate-300">/</span>
-                <button type="button" onClick={goUp} className={level === 1 ? 'text-slate-800' : 'hover:text-slate-800'}>
+                <span className="text-[#D9D2CE]">/</span>
+                <button
+                  type="button"
+                  onClick={goUp}
+                  className={`max-w-[12rem] truncate rounded-full px-2.5 py-1 transition-colors ${
+                    level === 1 ? 'bg-[#2c3e50] text-white' : 'text-[#7D8A96] hover:text-[#2C3E50]'
+                  }`}
+                >
                   {currentSubject.name}
                 </button>
               </>
             ) : null}
             {level === 2 ? (
               <>
-                <span className="text-slate-300">/</span>
-                <span className="text-slate-800">{humanizeTopic(path[1])}</span>
+                <span className="text-[#D9D2CE]">/</span>
+                <span className="max-w-[12rem] truncate rounded-full bg-[#2c3e50] px-2.5 py-1 text-white">
+                  {humanizeTopic(path[1])}
+                </span>
               </>
             ) : null}
-          </div>
+          </nav>
 
-          <div className="flex items-center gap-2">
-            {level === 0 ? (
-              <button
-                type="button"
-                onClick={() => setSubjectModal({})}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#E8A598] px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-[#E8A598]/25 transition-opacity hover:opacity-90"
-              >
-                <span className="material-symbols-outlined text-lg">add</span>
-                Nueva asignatura
-              </button>
-            ) : currentSubject ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => router.push(`/flashcards/${currentSubject.id}?study=1`)}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#EAE4E2] bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                >
-                  <span className="material-symbols-outlined text-lg">play_arrow</span>
-                  Estudiar
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCreateCtx({
-                      deckId: currentSubject.id,
-                      topic: level === 2 && path[1] !== NO_TOPIC ? path[1] : undefined,
-                    })
-                  }
-                  className="fc-pulse inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-md transition-opacity hover:opacity-90"
-                  style={{
-                    background: resolveColor(currentSubject.color).bg,
-                    boxShadow: `0 8px 22px -8px ${resolveColor(currentSubject.color).bg}`,
-                  }}
-                >
-                  <span className="material-symbols-outlined text-lg">bolt</span>
-                  Crear tarjetas
-                </button>
-              </>
-            ) : null}
-          </div>
-        </div>
+          {level === 0 && subjects.length > 0 ? (
+            <div className="mt-5 flex flex-wrap gap-2">
+              <StatChip value={subjects.length} label={subjects.length === 1 ? 'asignatura' : 'asignaturas'} />
+              <StatChip value={totalCards} label="tarjetas" color="#7BA7C4" />
+              <StatChip value={totalDue} label="para hoy" color="#8BA888" />
+            </div>
+          ) : null}
+        </Hero>
 
         {error ? (
-          <p className="mb-4 rounded-xl border border-[#E8A598]/30 bg-[#FFF8F6] px-4 py-3 text-sm text-[#C4655A]">{error}</p>
+          <p className="rounded-2xl border-2 border-[#E8A598]/40 bg-[#FFF8F6] px-4 py-3 text-sm font-semibold text-[#C4655A]">
+            {error}
+          </p>
         ) : null}
 
         {status === 'loading' ? (
-          <div className="flex h-[60vh] items-center justify-center text-slate-400">Cargando…</div>
+          <div className="flex h-[60vh] items-center justify-center gap-3 text-[#7D8A96]">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#E8A598] border-t-transparent" />
+            Cargando…
+          </div>
         ) : status === 'no-session' ? (
-          <p className="rounded-xl border border-[#E8A598]/30 bg-[#FFF8F6] px-4 py-3 text-sm text-[#C4655A]">
+          <p className="rounded-2xl border-2 border-[#E8A598]/40 bg-[#FFF8F6] px-4 py-3 text-sm font-semibold text-[#C4655A]">
             No hay sesión activa. Inicia sesión para ver tus flashcards.
           </p>
         ) : (
           <div
             ref={canvasRef}
-            className="relative h-[68vh] min-h-[520px] w-full overflow-hidden rounded-3xl border border-[#EDE6E1]"
+            className="relative h-[64vh] min-h-[520px] w-full overflow-hidden rounded-3xl border-2 border-[#2c3e50]"
             style={{
-              background: 'radial-gradient(circle at 50% 42%, #ffffff 0%, #F7F1EC 100%)',
+              background: 'radial-gradient(circle at 50% 42%, #ffffff 0%, #F8F3EF 100%)',
+              boxShadow: '6px 6px 0 0 #2c3e50',
             }}
           >
             <AnimatePresence mode="wait">
@@ -619,7 +681,7 @@ export default function FlashcardsMindMap() {
             className="fixed inset-x-0 bottom-5 z-[250] flex justify-center px-4"
           >
             <div className="flex items-center gap-2 rounded-2xl border border-[#EAE4E2] bg-white/95 px-3 py-2 shadow-2xl shadow-black/10 backdrop-blur">
-              <span className="px-2 text-sm font-bold text-slate-700">
+              <span className="px-2 text-sm font-bold text-[#2C3E50]">
                 {selectedIds.size} seleccionada{selectedIds.size === 1 ? '' : 's'}
               </span>
               <button
@@ -650,7 +712,7 @@ export default function FlashcardsMindMap() {
                 type="button"
                 onClick={clearSelection}
                 aria-label="Cancelar selección"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-[#7D8A96] transition hover:bg-slate-100"
               >
                 <span className="material-symbols-outlined">close</span>
               </button>
@@ -684,7 +746,7 @@ export default function FlashcardsMindMap() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setNotice(null)} />
+            <div className="absolute inset-0 bg-[#2c3e50]/45 backdrop-blur-sm" onClick={() => setNotice(null)} />
             <motion.div
               initial={{ opacity: 0, y: 18, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -692,8 +754,8 @@ export default function FlashcardsMindMap() {
               className="relative z-10 w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl"
             >
               <span className="material-symbols-outlined text-4xl text-[#E0B15A]">info</span>
-              <h3 className="mt-2 text-lg font-bold text-slate-800">{notice.title}</h3>
-              <p className="mt-1 text-sm text-slate-500">{notice.message}</p>
+              <h3 className="mt-2 text-lg font-bold text-[#2C3E50]">{notice.title}</h3>
+              <p className="mt-1 text-sm text-[#7D8A96]">{notice.message}</p>
               <button
                 type="button"
                 onClick={() => setNotice(null)}
@@ -743,14 +805,18 @@ function SubjectNode({
       <button
         type="button"
         onClick={onOpen}
-        className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-3xl text-white shadow-lg transition-transform hover:scale-105"
-        style={{ background: color.bg, boxShadow: `0 12px 26px -12px ${color.bg}` }}
+        className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-3xl border-[3px] border-[#2c3e50] text-white transition-transform hover:-translate-y-1"
+        style={{ background: color.bg, boxShadow: '4px 4px 0 0 #2c3e50' }}
       >
-        <span className="material-symbols-outlined text-3xl">{resolveIcon(subject.icon)}</span>
-        <span className="rounded-full bg-white/25 px-2 text-[11px] font-bold">{subject.totalCards}</span>
+        <span className="flex items-center justify-center">
+          <span className="material-symbols-outlined" style={{ fontSize: 30 }}>
+            {resolveIcon(subject.icon)}
+          </span>
+        </span>
+        <span className="rounded-full bg-white/30 px-2 text-[11px] font-black">{subject.totalCards}</span>
       </button>
-      <div className="mt-1.5 flex items-center gap-1">
-        <span className="max-w-[7rem] truncate text-center text-xs font-bold text-slate-700">{subject.name}</span>
+      <div className="mt-2 flex items-center gap-1">
+        <span className="max-w-[7rem] truncate text-center text-xs font-black text-[#2C3E50]">{subject.name}</span>
       </div>
       <div className="absolute -right-1 -top-1 opacity-0 transition-opacity group-hover:opacity-100">
         <DropdownMenu
@@ -785,23 +851,25 @@ function TopicNode({
         type="button"
         onClick={onOpen}
         aria-label={`${label}: ${count} tarjetas`}
-        className="flex flex-col items-center justify-center rounded-full border-2 text-center shadow-md transition-transform hover:scale-105"
+        className="flex flex-col items-center justify-center rounded-full border-[3px] border-[#2c3e50] text-center transition-transform hover:-translate-y-1"
         style={{
           width: size,
           height: size,
           background: color.soft,
-          borderColor: color.ring,
           color: color.text,
+          boxShadow: '4px 4px 0 0 #2c3e50',
         }}
       >
-        <span className="material-symbols-outlined" style={{ fontSize: Math.max(16, size * 0.24) }}>
-          sell
+        <span className="flex items-center justify-center">
+          <span className="material-symbols-outlined" style={{ fontSize: Math.max(16, size * 0.24) }}>
+            sell
+          </span>
         </span>
         <span className="font-black leading-none" style={{ fontSize: Math.max(15, size * 0.26) }}>
           {count}
         </span>
       </button>
-      <span className="mt-1.5 line-clamp-2 max-w-[8rem] text-center text-xs font-bold text-slate-700">{label}</span>
+      <span className="mt-2 line-clamp-2 max-w-[8rem] text-center text-xs font-black text-[#2C3E50]">{label}</span>
     </div>
   )
 }
@@ -838,16 +906,16 @@ function LeafGrid({
   const allSelected = cards.length > 0 && cards.every((c) => selectedIds.has(c.itemId))
   return (
     <div className="absolute inset-0 flex flex-col p-5">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-1 rounded-lg border border-[#EAE4E2] bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+          className="flex items-center gap-1 rounded-full border-2 border-[#EAE4E2] bg-white px-3 py-1.5 text-xs font-bold text-[#7D8A96] transition-colors hover:border-[#2c3e50] hover:text-[#2C3E50]"
         >
           <span className="material-symbols-outlined text-base">arrow_back</span>
           {backLabel}
         </button>
-        <span className="text-sm font-semibold text-slate-400">
+        <span className="text-xs font-black uppercase tracking-wider text-[#7D8A96]/60">
           {cards.length} {cards.length === 1 ? 'tarjeta' : 'tarjetas'}
         </span>
         <div className="ml-auto flex items-center gap-2">
@@ -855,7 +923,7 @@ function LeafGrid({
             <button
               type="button"
               onClick={onEnterSelect}
-              className="inline-flex items-center gap-1 rounded-lg border border-[#EAE4E2] bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              className="flex items-center gap-1 rounded-full border-2 border-[#EAE4E2] bg-white px-3 py-1.5 text-xs font-bold text-[#7D8A96] transition-colors hover:border-[#2c3e50] hover:text-[#2C3E50]"
             >
               <span className="material-symbols-outlined text-base">check_box</span>
               Seleccionar
@@ -866,14 +934,14 @@ function LeafGrid({
               <button
                 type="button"
                 onClick={allSelected ? onClearSelect : onSelectAll}
-                className="rounded-lg border border-[#EAE4E2] bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                className="rounded-full border-2 border-[#EAE4E2] bg-white px-3 py-1.5 text-xs font-bold text-[#7D8A96] transition-colors hover:border-[#2c3e50] hover:text-[#2C3E50]"
               >
                 {allSelected ? 'Ninguna' : 'Todo'}
               </button>
               <button
                 type="button"
                 onClick={onClearSelect}
-                className="rounded-lg border border-[#EAE4E2] bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                className="rounded-full border-2 border-[#EAE4E2] bg-white px-3 py-1.5 text-xs font-bold text-[#7D8A96] transition-colors hover:border-[#2c3e50] hover:text-[#2C3E50]"
               >
                 Cancelar
               </button>
@@ -882,58 +950,69 @@ function LeafGrid({
         </div>
       </div>
       {loading ? (
-        <div className="flex flex-1 items-center justify-center text-slate-400">Cargando tarjetas…</div>
+        <div className="flex flex-1 items-center justify-center gap-3 text-[#7D8A96]">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#E8A598] border-t-transparent" />
+          Cargando tarjetas…
+        </div>
       ) : cards.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-slate-400">
-          <span className="material-symbols-outlined text-4xl">style</span>
-          <p>No hay tarjetas aquí todavía.</p>
-          <button
-            type="button"
-            onClick={onCreate}
-            className="rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:opacity-90"
-            style={{ background: color.bg }}
-          >
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+          <CardStackArt accent={color.bg} />
+          <p className="font-bold text-[#2C3E50]">No hay tarjetas aquí todavía.</p>
+          <StickerButton icon="bolt" color={color.bg} onClick={onCreate}>
             Crear tarjetas
-          </button>
+          </StickerButton>
         </div>
       ) : (
-        <div className="grid flex-1 auto-rows-min grid-cols-2 gap-3 overflow-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">
-          {cards.map((c) => {
+        <div className="grid flex-1 auto-rows-min grid-cols-2 gap-4 overflow-auto p-1 sm:grid-cols-3 lg:grid-cols-4">
+          {cards.map((c, i) => {
             const checked = selectedIds.has(c.itemId)
             return (
-              <button
+              <motion.button
                 key={c.itemId}
                 type="button"
                 onClick={() => (selectMode ? onToggleSelect(c.itemId) : onSelect(c))}
-                className={`relative flex h-28 flex-col rounded-2xl border p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
-                  checked ? 'border-transparent ring-2' : 'border-[#EAE4E2]'
-                }`}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(0.25, 0.02 * i), duration: 0.3, ease: 'easeOut' }}
+                className="relative flex h-32 flex-col overflow-hidden rounded-2xl border-2 border-[#2c3e50] p-3 text-left transition-transform hover:-translate-y-1"
                 style={{
-                  background: checked ? color.soft : '#fff',
-                  ...(checked ? ({ ['--tw-ring-color' as string]: color.ring } as React.CSSProperties) : {}),
+                  ...tintedPaper(color.bg),
+                  boxShadow: checked ? `3px 3px 0 0 ${color.bg}` : '3px 3px 0 0 #2c3e50',
                 }}
               >
+                {/* Margen de la ficha, el detalle que la hace reconocible */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-0 left-2.5 w-px"
+                  style={{ backgroundColor: `${color.bg}66` }}
+                />
                 {selectMode ? (
                   <span
                     className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full border-2 text-white"
                     style={{
-                      background: checked ? color.bg : 'rgba(255,255,255,0.85)',
+                      background: checked ? color.bg : 'rgba(255,255,255,0.9)',
                       borderColor: checked ? color.bg : '#CBBFB8',
                     }}
                   >
-                    {checked ? <span className="material-symbols-outlined text-[15px]">check</span> : null}
+                    {checked ? (
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                        check
+                      </span>
+                    ) : null}
                   </span>
                 ) : null}
                 {c.topic ? (
                   <span
-                    className="mb-1 w-fit max-w-full truncate rounded-full px-2 py-0.5 text-[10px] font-bold"
-                    style={{ background: checked ? '#fff' : color.soft, color: color.text }}
+                    className="mb-1 ml-2 w-fit max-w-[calc(100%-1.5rem)] truncate rounded-full px-2 py-0.5 text-[10px] font-black"
+                    style={{ background: color.soft, color: color.text }}
                   >
                     {c.topic}
                   </span>
                 ) : null}
-                <span className="line-clamp-3 flex-1 pr-6 text-sm font-semibold text-slate-800">{c.front}</span>
-              </button>
+                <span className="ml-2 line-clamp-4 flex-1 pr-5 text-sm font-bold leading-snug text-[#2C3E50]">
+                  {c.front}
+                </span>
+              </motion.button>
             )
           })}
         </div>
@@ -988,18 +1067,19 @@ function CardDetail({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-[#2c3e50]/45 backdrop-blur-sm" onClick={onClose} />
       <motion.div
         initial={{ opacity: 0, y: 20, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 14, scale: 0.97 }}
-        className="relative z-10 w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl"
+        className="relative z-10 w-full max-w-lg overflow-hidden rounded-3xl border-2 border-[#2c3e50] bg-white"
+        style={{ boxShadow: '7px 7px 0 0 #2c3e50' }}
       >
         <div className="flex items-center justify-between px-5 py-3" style={{ background: color.soft }}>
           <span className="text-xs font-bold uppercase tracking-wider" style={{ color: color.text }}>
             {topic.trim() ? topic : 'Tarjeta'}
           </span>
-          <button type="button" onClick={onClose} aria-label="Cerrar" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-white/60">
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#7D8A96] hover:bg-white/60">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -1010,7 +1090,7 @@ function CardDetail({
               <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Tema (opcional)" className="rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2 text-sm outline-none focus:bg-white" />
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-400">Anverso</span>
+                  <span className="text-xs font-semibold text-[#7D8A96]/70">Anverso</span>
                   <CharCounter length={front.length} />
                 </div>
                 <textarea
@@ -1022,7 +1102,7 @@ function CardDetail({
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-400">Reverso</span>
+                  <span className="text-xs font-semibold text-[#7D8A96]/70">Reverso</span>
                   <CharCounter length={back.length} />
                 </div>
                 <textarea
@@ -1033,7 +1113,7 @@ function CardDetail({
                 />
               </div>
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-[#EAE4E2] px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
+                <button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-[#EAE4E2] px-4 py-2 text-sm font-semibold text-[#7D8A96] hover:bg-[#F7F4F2]">Cancelar</button>
                 <button type="button" onClick={() => void save()} disabled={saving || !front.trim() || !back.trim() || frontOver || backOver} className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-40" style={{ background: color.bg }}>
                   {saving ? 'Guardando…' : 'Guardar'}
                 </button>
@@ -1046,10 +1126,10 @@ function CardDetail({
                 onClick={() => setFlipped((v) => !v)}
                 className="min-h-[160px] w-full rounded-2xl border border-[#EFE7E3] bg-[#FBF8F6] p-5 text-left transition hover:bg-white"
               >
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#7D8A96]/70">
                   {flipped ? 'Reverso' : 'Anverso'} · toca para girar
                 </span>
-                <p className="mt-2 whitespace-pre-wrap text-base font-semibold text-slate-800">
+                <p className="mt-2 whitespace-pre-wrap text-base font-semibold text-[#2C3E50]">
                   {flipped ? card.back : card.front}
                 </p>
               </button>
@@ -1116,7 +1196,7 @@ function MoveCardsModal({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-[#2c3e50]/45 backdrop-blur-sm" onClick={onClose} />
       <motion.div
         initial={{ opacity: 0, y: 20, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1124,10 +1204,10 @@ function MoveCardsModal({
         className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl"
       >
         <div className="flex items-center justify-between px-5 py-4">
-          <h2 className="text-base font-black text-slate-800">
+          <h2 className="text-base font-black text-[#2C3E50]">
             {verb} {count} tarjeta{count === 1 ? '' : 's'}
           </h2>
-          <button type="button" onClick={onClose} aria-label="Cerrar" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#7D8A96] hover:bg-slate-100">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -1162,7 +1242,7 @@ function MoveCardsModal({
               </div>
               {error ? <p className="text-sm font-medium text-[#C4655A]">{error}</p> : null}
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setCreating(false)} className="rounded-lg border border-[#EAE4E2] px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                <button type="button" onClick={() => setCreating(false)} className="rounded-lg border border-[#EAE4E2] px-4 py-2 text-sm font-semibold text-[#7D8A96] hover:bg-[#F7F4F2]">
                   Atrás
                 </button>
                 <button
@@ -1181,13 +1261,13 @@ function MoveCardsModal({
               <button
                 type="button"
                 onClick={() => setCreating(true)}
-                className="flex items-center gap-2 rounded-xl border-2 border-dashed border-[#D8CDC7] px-4 py-3 text-sm font-bold text-slate-600 transition hover:border-[#8BA888] hover:bg-[#F6F8F5]"
+                className="flex items-center gap-2 rounded-xl border-2 border-dashed border-[#D8CDC7] px-4 py-3 text-sm font-bold text-[#7D8A96] transition hover:border-[#8BA888] hover:bg-[#F6F8F5]"
               >
                 <span className="material-symbols-outlined text-[#8BA888]">add</span>
                 Crear grupo nuevo
               </button>
               {subjects.length === 0 ? (
-                <p className="px-1 py-3 text-center text-sm text-slate-400">No hay otras asignaturas. Crea un grupo nuevo.</p>
+                <p className="px-1 py-3 text-center text-sm text-[#7D8A96]/70">No hay otras asignaturas. Crea un grupo nuevo.</p>
               ) : (
                 subjects.map((s) => {
                   const c = resolveColor(s.color)
@@ -1196,13 +1276,13 @@ function MoveCardsModal({
                       key={s.id}
                       type="button"
                       onClick={() => onPick(s)}
-                      className="flex items-center gap-3 rounded-xl border border-[#EAE4E2] bg-white px-3 py-2.5 text-left transition hover:bg-slate-50"
+                      className="flex items-center gap-3 rounded-xl border border-[#EAE4E2] bg-white px-3 py-2.5 text-left transition hover:bg-[#F7F4F2]"
                     >
                       <span className="flex h-9 w-9 items-center justify-center rounded-xl text-white" style={{ background: c.bg }}>
                         <span className="material-symbols-outlined text-lg">{resolveIcon(s.icon)}</span>
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-800">{s.name}</span>
-                      <span className="text-xs font-semibold text-slate-400">{s.totalCards}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-bold text-[#2C3E50]">{s.name}</span>
+                      <span className="text-xs font-semibold text-[#7D8A96]/70">{s.totalCards}</span>
                     </button>
                   )
                 })

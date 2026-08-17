@@ -12,7 +12,16 @@ import { supabase } from '@/lib/supabaseBrowser'
 import DropdownMenu from '@/components/studio/DropdownMenu'
 import FlashcardCreateModal from '@/components/studio/FlashcardCreateModal'
 import CharCounter from '@/components/studio/CharCounter'
-import { MAX_FLASHCARD_CHARS, resolveColor } from '@/lib/flashcardTheme'
+import { MAX_FLASHCARD_CHARS, resolveColor, resolveIcon } from '@/lib/flashcardTheme'
+import {
+  CardStackArt,
+  GhostButton,
+  Hero,
+  SectionLabel,
+  StatChip,
+  StickerButton,
+  tintedPaper,
+} from '@/components/flashcards/ui'
 import {
   deleteFlashcard,
   endFlashcardSession,
@@ -34,6 +43,7 @@ export default function FlashcardDeckPage() {
   const [token, setToken] = useState('')
   const [deckName, setDeckName] = useState('')
   const [deckColor, setDeckColor] = useState<string | null>(null)
+  const [deckIcon, setDeckIcon] = useState<string | null>(null)
   const [cards, setCards] = useState<Flashcard[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -67,6 +77,7 @@ export default function FlashcardDeckPage() {
         const { deck, cards: list } = await fetchFlashcards(authToken, deckId)
         setDeckName(deck.name || 'Grupo de flashcards')
         setDeckColor(deck.color ?? null)
+        setDeckIcon(deck.icon ?? null)
         setCards(list)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'No se pudo cargar el grupo.')
@@ -299,18 +310,13 @@ export default function FlashcardDeckPage() {
   if (autoStudy && mode === 'manage') {
     const c = resolveColor(deckColor)
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-gradient-to-b from-[#FAF7F4] to-[#F3ECE8] px-6 text-center">
-        <span
-          className="flex h-20 w-20 items-center justify-center rounded-3xl text-white shadow-lg"
-          style={{ background: c.bg, boxShadow: `0 16px 34px -14px ${c.bg}` }}
-        >
-          <span className="material-symbols-outlined text-4xl">style</span>
-        </span>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-[#FAF7F4] px-6 text-center">
+        <CardStackArt accent={c.bg} />
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Flashcards</p>
-          <h1 className="text-2xl font-black text-slate-800">{deckName || 'Preparando…'}</h1>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#7D8A96]/60">Flashcards</p>
+          <h1 className="text-2xl font-black text-[#2C3E50]">{deckName || 'Preparando…'}</h1>
         </div>
-        <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
+        <div className="flex items-center gap-2 text-sm font-bold text-[#7D8A96]">
           <span
             className="h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
             style={{ borderColor: c.bg, borderTopColor: 'transparent' }}
@@ -323,10 +329,10 @@ export default function FlashcardDeckPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center bg-[#FAF7F4] text-slate-500">
-        <div className="flex items-center gap-3">
+      <div className="flex min-h-[60vh] items-center justify-center bg-[#FAF7F4] text-[#7D8A96]">
+        <div className="flex items-center gap-3 font-bold">
           <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#E8A598] border-t-transparent" />
-          Cargando grupo...
+          Cargando grupo…
         </div>
       </div>
     )
@@ -334,64 +340,83 @@ export default function FlashcardDeckPage() {
 
   if (mode === 'study') {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#FAF7F4] to-[#F3ECE8] text-slate-800">
-        <main className="mx-auto flex w-full max-w-3xl flex-col px-5 py-8">
-          <div className="mb-6 flex items-center justify-between gap-4">
+      <div className="relative min-h-screen overflow-x-hidden bg-[#FAF7F4] text-[#7D8A96]">
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-0 opacity-60"
+          style={{
+            backgroundImage:
+              'repeating-linear-gradient(to bottom, transparent 0 31px, rgba(125,138,150,0.06) 31px 32px)',
+          }}
+        />
+        <div className="pointer-events-none fixed top-[-12%] right-[-8%] z-0 h-[26rem] w-[26rem] rounded-full bg-[#E8A598]/12 blur-3xl" />
+
+        <main className="relative z-10 mx-auto flex w-full max-w-3xl flex-col px-5 py-8">
+          {/* Barra de sesión: salir, grupo y cuántas llevas */}
+          <div
+            className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-[#2c3e50] bg-white px-4 py-3"
+            style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
+          >
             <button
               type="button"
               onClick={() => void exitStudy()}
-              className="inline-flex items-center gap-2 rounded-xl border border-[#EAE4E2] bg-white px-3.5 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50"
+              className="flex items-center justify-center rounded-lg p-1.5 text-[#7D8A96] transition-colors hover:bg-[#F2EFED] hover:text-[#2C3E50]"
+              aria-label="Salir del repaso"
             >
-              <span className="material-symbols-outlined text-lg">close</span>
-              Salir
+              <span className="material-symbols-outlined">close</span>
             </button>
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
-              <span className="material-symbols-outlined text-lg text-[#8BA888]">style</span>
-              {deckName}
-              <span className="ml-1 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-[#8BA888] shadow-sm">
-                {studied} repasadas
-              </span>
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white"
+              style={{ backgroundColor: resolveColor(deckColor).bg }}
+            >
+              <span className="material-symbols-outlined text-lg">{resolveIcon(deckIcon)}</span>
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-black leading-tight text-[#2C3E50]">{deckName}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#7D8A96]/60">Repaso</p>
             </div>
+            <span
+              className="rounded-full px-3 py-1.5 text-xs font-black text-white"
+              style={{ backgroundColor: resolveColor(deckColor).bg }}
+            >
+              {studied} repasadas
+            </span>
           </div>
 
           {error ? (
-            <p className="mb-6 rounded-xl border border-[#E8A598]/30 bg-[#FFF8F6] px-4 py-3 text-sm text-[#C4655A]">
+            <p className="mb-6 rounded-2xl border-2 border-[#E8A598]/40 bg-[#FFF8F6] px-4 py-3 text-sm font-semibold text-[#C4655A]">
               {error}
             </p>
           ) : null}
 
           {finishState ? (
-            <div className="flex flex-col items-center gap-5 rounded-[28px] border border-[#EAE4E2] bg-white p-10 text-center shadow-xl shadow-black/5">
-              <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[#8BA888]/12 text-[#8BA888]">
-                <span className="material-symbols-outlined text-5xl">
+            <div
+              className="flex flex-col items-center gap-5 rounded-3xl border-2 border-[#2c3e50] bg-white p-10 text-center"
+              style={{ boxShadow: '7px 7px 0 0 #2c3e50' }}
+            >
+              <span
+                className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-[#2c3e50] text-white"
+                style={{ backgroundColor: '#8BA888', boxShadow: '4px 4px 0 0 #2c3e50' }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 40 }}>
                   {finishState === 'done' ? 'task_alt' : 'timer'}
                 </span>
               </span>
-              <h2 className="text-2xl font-black text-slate-800">
+              <h2 className="text-2xl font-black text-[#2C3E50]">
                 {finishState === 'done'
                   ? '¡Sesión completada!'
                   : finishState === 'limit'
                     ? 'Límite de la sesión alcanzado'
                     : 'La sesión expiró'}
               </h2>
-              <p className="text-slate-500">
-                Has repasado <span className="font-bold text-slate-700">{studied}</span> tarjetas.
+              <p>
+                Has repasado <span className="font-black text-[#2C3E50]">{studied}</span> tarjetas.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => void handleStartStudy()}
-                  className="rounded-xl bg-[#8BA888] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#8BA888]/25 transition-opacity hover:opacity-90"
-                >
+                <StickerButton icon="replay" color="#8BA888" onClick={() => void handleStartStudy()}>
                   Repasar de nuevo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void exitStudy()}
-                  className="rounded-xl border border-[#EAE4E2] bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  Volver al grupo
-                </button>
+                </StickerButton>
+                <GhostButton onClick={() => void exitStudy()}>Volver al grupo</GhostButton>
               </div>
             </div>
           ) : current ? (
@@ -416,15 +441,15 @@ export default function FlashcardDeckPage() {
                       onScroll={() => checkOverflow(frontScrollRef.current, setFrontHasMore)}
                       className="flip-scroll"
                     >
-                      <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#C99A8D]">
+                      <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#C99A8D]">
                         Anverso
                       </span>
                       <div className="flex flex-1 items-center justify-center">
-                        <p className="whitespace-pre-wrap text-center text-2xl font-semibold leading-relaxed text-slate-800">
+                        <p className="whitespace-pre-wrap text-center text-2xl font-bold leading-relaxed text-[#2C3E50]">
                           {current.flashcard.front}
                         </p>
                       </div>
-                      <span className="text-center text-xs font-medium text-slate-400">
+                      <span className="text-center text-xs font-semibold text-[#7D8A96]/70">
                         Toca la tarjeta o pulsa <kbd className="kbd">Espacio</kbd> para girar
                       </span>
                     </div>
@@ -440,17 +465,15 @@ export default function FlashcardDeckPage() {
                       onScroll={() => checkOverflow(backScrollRef.current, setBackHasMore)}
                       className="flip-scroll"
                     >
-                      <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#7FA07B]">
+                      <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7FA07B]">
                         Reverso
                       </span>
                       <div className="flex flex-1 items-center justify-center">
-                        <p className="whitespace-pre-wrap text-center text-xl leading-relaxed text-slate-700">
+                        <p className="whitespace-pre-wrap text-center text-xl leading-relaxed text-[#2C3E50]">
                           {current.flashcard.back}
                         </p>
                       </div>
-                      <span className="text-center text-xs font-medium text-slate-400">
-                        ¿La sabías?
-                      </span>
+                      <span className="text-center text-xs font-semibold text-[#7D8A96]/70">¿La sabías?</span>
                     </div>
                     {backHasMore ? (
                       <div className="flip-fade flip-fade-back" aria-hidden>
@@ -466,7 +489,8 @@ export default function FlashcardDeckPage() {
                   type="button"
                   onClick={() => setRevealed(true)}
                   disabled={busy}
-                  className="rounded-2xl bg-[#7D8A96] px-6 py-4 text-base font-bold text-white shadow-md shadow-[#7D8A96]/25 transition-opacity hover:opacity-90 disabled:opacity-50"
+                  className="rounded-2xl border-2 border-[#2c3e50] bg-[#7D8A96] px-6 py-4 text-base font-black text-white transition-transform hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+                  style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
                 >
                   Mostrar respuesta
                 </button>
@@ -476,7 +500,8 @@ export default function FlashcardDeckPage() {
                     type="button"
                     onClick={() => void handleRate(false)}
                     disabled={busy}
-                    className="group flex items-center justify-center gap-2 rounded-2xl border-2 border-[#E8A598] bg-white px-6 py-4 text-base font-bold text-[#C4655A] shadow-sm transition-all hover:bg-[#FFF8F6] disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-white px-6 py-4 text-base font-black text-[#C4655A] transition-transform hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+                    style={{ boxShadow: '4px 4px 0 0 #C4655A' }}
                   >
                     <span className="material-symbols-outlined">close</span>
                     No la sabía
@@ -486,7 +511,8 @@ export default function FlashcardDeckPage() {
                     type="button"
                     onClick={() => void handleRate(true)}
                     disabled={busy}
-                    className="group flex items-center justify-center gap-2 rounded-2xl bg-[#8BA888] px-6 py-4 text-base font-bold text-white shadow-md shadow-[#8BA888]/25 transition-all hover:opacity-90 disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-[#8BA888] px-6 py-4 text-base font-black text-white transition-transform hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+                    style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
                   >
                     <span className="material-symbols-outlined">check</span>
                     La sabía
@@ -496,7 +522,7 @@ export default function FlashcardDeckPage() {
               )}
             </div>
           ) : (
-            <div className="py-16 text-center text-slate-500">Cargando tarjeta...</div>
+            <div className="py-16 text-center text-[#7D8A96]">Cargando tarjeta...</div>
           )}
         </main>
 
@@ -525,9 +551,12 @@ export default function FlashcardDeckPage() {
             inset: 0;
             -webkit-backface-visibility: hidden;
             backface-visibility: hidden;
-            border-radius: 28px;
+            border-radius: 24px;
             overflow: hidden;
-            box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.25), 0 4px 12px -6px rgba(0, 0, 0, 0.1);
+            /* Ficha de cartulina: borde de tinta y sombra dura, como el resto
+               de la web, con los renglones pintados por gradiente. */
+            border: 2px solid #2c3e50;
+            box-shadow: 6px 6px 0 0 #2c3e50;
           }
           .flip-scroll {
             height: 100%;
@@ -538,13 +567,19 @@ export default function FlashcardDeckPage() {
             padding: 2rem;
           }
           .flip-front {
-            background: linear-gradient(150deg, #ffffff 0%, #fdf6f3 100%);
-            border: 1px solid #efe4df;
+            background-color: #ffffff;
+            background-image:
+              repeating-linear-gradient(to bottom, transparent 0 31px, rgba(125, 138, 150, 0.13) 31px 32px),
+              linear-gradient(150deg, rgba(232, 165, 152, 0.14) 0%, transparent 55%);
+            background-position: 0 10px, 0 0;
           }
           .flip-back {
             transform: rotateY(180deg);
-            background: linear-gradient(150deg, #ffffff 0%, #f1f6f0 100%);
-            border: 1px solid #e0eadd;
+            background-color: #ffffff;
+            background-image:
+              repeating-linear-gradient(to bottom, transparent 0 31px, rgba(125, 138, 150, 0.13) 31px 32px),
+              linear-gradient(150deg, rgba(139, 168, 136, 0.16) 0%, transparent 55%);
+            background-position: 0 10px, 0 0;
           }
           /* Indicador de que hay más contenido por debajo (hace falta scroll) */
           .flip-fade {
@@ -600,100 +635,94 @@ export default function FlashcardDeckPage() {
   }
 
   // ---- Modo gestión --------------------------------------------------------
+  const deckHue = resolveColor(deckColor)
+
   return (
-    <div className="min-h-screen bg-[#FAF7F4] text-slate-800">
-      <main className="mx-auto w-full max-w-4xl px-6 py-8">
-        <section className="mb-7 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+    <div className="relative min-h-screen overflow-x-hidden bg-[#FAF7F4] text-[#7D8A96]">
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-0 opacity-60"
+        style={{
+          backgroundImage:
+            'repeating-linear-gradient(to bottom, transparent 0 31px, rgba(125,138,150,0.06) 31px 32px)',
+        }}
+      />
+      <div className="pointer-events-none fixed top-[-12%] right-[-8%] z-0 h-[26rem] w-[26rem] rounded-full bg-[#E8A598]/12 blur-3xl" />
+
+      <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 py-8">
+        <Hero
+          badge="Grupo de flashcards"
+          badgeIcon={resolveIcon(deckIcon)}
+          accent={deckHue.bg}
+          title={deckName}
+          aside={<CardStackArt accent={deckHue.bg} />}
+          actions={
+            <>
+              <StickerButton icon="bolt" color={deckHue.bg} onClick={() => setShowCreate(true)}>
+                Crear tarjetas
+              </StickerButton>
+              <GhostButton
+                icon="play_arrow"
+                onClick={() => void handleStartStudy()}
+                disabled={cards.length === 0 || busy}
+              >
+                Estudiar
+              </GhostButton>
+            </>
+          }
+        >
+          <nav className="mt-4 flex flex-wrap items-center gap-1.5 text-xs font-bold" aria-label="Ruta">
             <Link
               href="/flashcards"
-              aria-label="Volver a flashcards"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#8BA888] text-white shadow-sm transition hover:opacity-90"
+              className="flex items-center gap-1 rounded-full border-2 border-[#EAE4E2] bg-white px-2.5 py-1 text-[#7D8A96] transition-colors hover:border-[#2c3e50] hover:text-[#2C3E50]"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <path d="M19 12H5" />
-                <path d="M11 18l-6-6 6-6" />
-              </svg>
+              <span className="material-symbols-outlined text-sm">arrow_back</span>
+              Mis flashcards
             </Link>
-            <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#8BA888]/12 text-[#8BA888]">
-                <span className="material-symbols-outlined text-2xl">style</span>
-              </span>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Flashcards</p>
-                <h1 className="text-2xl font-black tracking-tight text-slate-800 sm:text-3xl">
-                  {deckName}
-                </h1>
-              </div>
+          </nav>
+
+          {cards.length > 0 ? (
+            <div className="mt-5 flex flex-wrap gap-2">
+              <StatChip value={cards.length} label={cards.length === 1 ? 'tarjeta' : 'tarjetas'} color={deckHue.bg} />
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowCreate(true)}
-              className="fc-create-btn inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white shadow-md transition-opacity hover:opacity-90"
-              style={{
-                background: resolveColor(deckColor).bg,
-                boxShadow: `0 10px 24px -10px ${resolveColor(deckColor).bg}`,
-              }}
-            >
-              <span className="material-symbols-outlined text-lg">bolt</span>
-              Crear tarjetas
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleStartStudy()}
-              disabled={cards.length === 0 || busy}
-              className="inline-flex items-center gap-2 rounded-xl border border-[#EAE4E2] bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition-opacity hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <span className="material-symbols-outlined text-lg">play_arrow</span>
-              Estudiar
-            </button>
-          </div>
-        </section>
+          ) : null}
+        </Hero>
 
         {error ? (
-          <p className="mb-6 rounded-xl border border-[#E8A598]/30 bg-[#FFF8F6] px-4 py-3 text-sm text-[#C4655A]">
+          <p className="rounded-2xl border-2 border-[#E8A598]/40 bg-[#FFF8F6] px-4 py-3 text-sm font-semibold text-[#C4655A]">
             {error}
           </p>
         ) : null}
 
         {/* Lista de tarjetas */}
         <section>
-          <div className="mb-3 flex items-center gap-3">
-            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
-              {cards.length} {cards.length === 1 ? 'tarjeta' : 'tarjetas'}
-            </span>
-            <div className="h-px flex-1 bg-[#E6DEDA]" />
-          </div>
+          <SectionLabel>
+            {cards.length} {cards.length === 1 ? 'tarjeta' : 'tarjetas'}
+          </SectionLabel>
 
           {cards.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-[#D8CDC7] bg-white/50 p-12 text-center">
-              <span className="material-symbols-outlined text-4xl text-[#CBBFB8]">style</span>
-              <p className="font-semibold text-slate-600">Aún no hay tarjetas</p>
-              <p className="text-sm text-slate-400">Pulsa «Crear tarjetas» para empezar.</p>
-              <button
-                type="button"
-                onClick={() => setShowCreate(true)}
-                className="mt-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:opacity-90"
-                style={{ background: resolveColor(deckColor).bg }}
-              >
+            <div className="flex flex-col items-center gap-4 rounded-3xl border-2 border-dashed border-[#D8CDC7] bg-white/60 p-12 text-center">
+              <CardStackArt accent={deckHue.bg} />
+              <p className="text-lg font-black text-[#2C3E50]">Aún no hay tarjetas</p>
+              <p className="text-sm">Pulsa «Crear tarjetas» para empezar.</p>
+              <StickerButton icon="bolt" color={deckHue.bg} onClick={() => setShowCreate(true)}>
                 Crear tarjetas
-              </button>
+              </StickerButton>
             </div>
           ) : (
             <ul className="space-y-3">
               {cards.map((card) => (
                 <li
                   key={card.itemId}
-                  className="rounded-2xl border border-[#EAE4E2] bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
+                  className="relative overflow-hidden rounded-2xl border-2 border-[#2c3e50] p-4 transition-transform hover:-translate-y-0.5"
+                  style={{ ...tintedPaper(deckHue.bg), boxShadow: '4px 4px 0 0 #2c3e50' }}
                 >
                   {editingId === card.flashcardId ? (
                     <div className="flex flex-col gap-3">
                       <div className="grid gap-3 md:grid-cols-2">
                         <div>
                           <div className="mb-1 flex items-center justify-between">
-                            <span className="text-xs font-semibold text-slate-400">Anverso</span>
+                            <span className="text-xs font-semibold text-[#7D8A96]/70">Anverso</span>
                             <CharCounter length={editFront.length} />
                           </div>
                           <textarea
@@ -707,7 +736,7 @@ export default function FlashcardDeckPage() {
                         </div>
                         <div>
                           <div className="mb-1 flex items-center justify-between">
-                            <span className="text-xs font-semibold text-slate-400">Reverso</span>
+                            <span className="text-xs font-semibold text-[#7D8A96]/70">Reverso</span>
                             <CharCounter length={editBack.length} />
                           </div>
                           <textarea
@@ -732,7 +761,7 @@ export default function FlashcardDeckPage() {
                         <button
                           type="button"
                           onClick={() => setEditingId(null)}
-                          className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:border-slate-300"
+                          className="rounded-lg border border-[#EAE4E2] px-4 py-2 text-sm font-semibold text-[#7D8A96] hover:border-slate-300"
                         >
                           Cancelar
                         </button>
@@ -751,7 +780,7 @@ export default function FlashcardDeckPage() {
                             <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#C99A8D]">
                               Anverso
                             </span>
-                            <p className="whitespace-pre-wrap break-words text-sm font-semibold text-slate-800">
+                            <p className="whitespace-pre-wrap break-words text-sm font-semibold text-[#2C3E50]">
                               {card.front}
                             </p>
                           </div>
@@ -759,7 +788,7 @@ export default function FlashcardDeckPage() {
                             <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#7FA07B]">
                               Reverso
                             </span>
-                            <p className="whitespace-pre-wrap break-words text-sm text-slate-600">
+                            <p className="whitespace-pre-wrap break-words text-sm text-[#7D8A96]">
                               {card.back}
                             </p>
                           </div>

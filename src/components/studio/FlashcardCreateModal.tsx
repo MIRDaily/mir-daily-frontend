@@ -138,7 +138,7 @@ export default function FlashcardCreateModal({
       exit={{ opacity: 0 }}
     >
       <div
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-[#2c3e50]/45 backdrop-blur-sm"
         onClick={attemptClose}
       />
       <motion.div
@@ -148,7 +148,8 @@ export default function FlashcardCreateModal({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 16, scale: 0.97 }}
         transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-        className="relative z-10 flex w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+        className="relative z-10 flex w-full max-w-xl flex-col overflow-hidden rounded-3xl border-2 border-[#2c3e50] bg-white"
+        style={{ boxShadow: '7px 7px 0 0 #2c3e50' }}
       >
         {/* Cabecera */}
         <div className="flex items-center justify-between gap-3 px-6 py-4" style={{ background: color.soft }}>
@@ -164,7 +165,7 @@ export default function FlashcardCreateModal({
                 Crear tarjetas
               </h2>
               {subjectName ? (
-                <p className="text-xs font-semibold text-slate-500">{subjectName}</p>
+                <p className="text-xs font-semibold text-[#7D8A96]">{subjectName}</p>
               ) : null}
             </div>
           </div>
@@ -172,7 +173,7 @@ export default function FlashcardCreateModal({
             type="button"
             onClick={attemptClose}
             aria-label="Cerrar"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white/60 hover:text-slate-800"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#7D8A96] transition hover:bg-white/60 hover:text-[#2C3E50]"
           >
             <span className="material-symbols-outlined">close</span>
           </button>
@@ -181,7 +182,7 @@ export default function FlashcardCreateModal({
         <div className="flex flex-col gap-4 p-6">
           {/* Tema opcional */}
           <div>
-            <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-400">
+            <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-[#7D8A96]/70">
               <span className="material-symbols-outlined text-[16px]">sell</span>
               Tema (opcional · se aplica a las que crees ahora)
             </label>
@@ -203,7 +204,7 @@ export default function FlashcardCreateModal({
             <>
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-400">Anverso</label>
+                  <label className="text-xs font-semibold text-[#7D8A96]/70">Anverso</label>
                   <CharCounter length={front.length} />
                 </div>
                 <textarea
@@ -220,7 +221,7 @@ export default function FlashcardCreateModal({
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-400">Reverso</label>
+                  <label className="text-xs font-semibold text-[#7D8A96]/70">Reverso</label>
                   <CharCounter length={back.length} />
                 </div>
                 <textarea
@@ -241,9 +242,9 @@ export default function FlashcardCreateModal({
           {error ? <p className="text-sm font-medium text-[#C4655A]">{error}</p> : null}
 
           <div className="flex items-center justify-between gap-3 pt-1">
-            <p className="text-xs text-slate-400">
-              <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-bold text-slate-500">Enter</kbd>{' '}
-              avanza · <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-bold text-slate-500">Shift+Enter</kbd> salto de línea
+            <p className="text-xs text-[#7D8A96]/70">
+              <kbd className="rounded border border-[#EAE4E2] bg-[#F7F4F2] px-1.5 py-0.5 font-bold text-[#7D8A96]">Enter</kbd>{' '}
+              avanza · <kbd className="rounded border border-[#EAE4E2] bg-[#F7F4F2] px-1.5 py-0.5 font-bold text-[#7D8A96]">Shift+Enter</kbd> salto de línea
             </p>
             <div className="flex items-center gap-2">
               {createdHere > 0 ? (
@@ -266,7 +267,7 @@ export default function FlashcardCreateModal({
               </button>
             </div>
           </div>
-          <p className="text-right text-[11px] text-slate-400">
+          <p className="text-right text-[11px] text-[#7D8A96]/70">
             {count}/{max} tarjetas
           </p>
         </div>
@@ -282,15 +283,15 @@ export default function FlashcardCreateModal({
             >
               <div className="mx-6 max-w-sm rounded-2xl border border-[#EAE4E2] bg-white p-6 text-center shadow-xl">
                 <span className="material-symbols-outlined text-4xl text-[#E0B15A]">warning</span>
-                <h3 className="mt-2 text-lg font-bold text-slate-800">Tarjeta sin guardar</h3>
-                <p className="mt-1 text-sm text-slate-500">
+                <h3 className="mt-2 text-lg font-bold text-[#2C3E50]">Tarjeta sin guardar</h3>
+                <p className="mt-1 text-sm text-[#7D8A96]">
                   Si sales ahora, esta tarjeta no se guardará. ¿Seguro que quieres salir?
                 </p>
                 <div className="mt-5 flex justify-center gap-2">
                   <button
                     type="button"
                     onClick={() => setConfirmClose(false)}
-                    className="rounded-xl border border-[#EAE4E2] bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    className="rounded-xl border border-[#EAE4E2] bg-white px-4 py-2.5 text-sm font-semibold text-[#2C3E50] transition hover:bg-[#F7F4F2]"
                   >
                     Seguir editando
                   </button>

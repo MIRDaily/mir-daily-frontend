@@ -61,7 +61,7 @@ export default function SubjectModal({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-[#2c3e50]/45 backdrop-blur-sm" onClick={onClose} />
       <motion.div
         role="dialog"
         aria-modal="true"
@@ -69,7 +69,8 @@ export default function SubjectModal({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 16, scale: 0.97 }}
         transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-        className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl"
+        className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border-2 border-[#2c3e50] bg-white"
+        style={{ boxShadow: '7px 7px 0 0 #2c3e50' }}
       >
         {/* Previsualización */}
         <div className="flex items-center gap-3 px-6 py-5" style={{ background: color.soft }}>
@@ -83,7 +84,7 @@ export default function SubjectModal({
             <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: color.text }}>
               {isEdit ? 'Editar asignatura' : 'Nueva asignatura'}
             </p>
-            <p className="truncate text-lg font-black text-slate-800">
+            <p className="truncate text-lg font-black text-[#2C3E50]">
               {name.trim() || 'Sin nombre'}
             </p>
           </div>
@@ -91,7 +92,7 @@ export default function SubjectModal({
 
         <div className="flex flex-col gap-5 p-6">
           <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-400">Nombre</label>
+            <label className="mb-1.5 block text-xs font-semibold text-[#7D8A96]/70">Nombre</label>
             <input
               type="text"
               autoFocus
@@ -109,7 +110,7 @@ export default function SubjectModal({
           </div>
 
           <div>
-            <label className="mb-2 block text-xs font-semibold text-slate-400">Color</label>
+            <label className="mb-2 block text-xs font-semibold text-[#7D8A96]/70">Color</label>
             <div className="flex flex-wrap gap-2.5">
               {SUBJECT_COLORS.map((c) => (
                 <button
@@ -127,7 +128,7 @@ export default function SubjectModal({
           </div>
 
           <div>
-            <label className="mb-2 block text-xs font-semibold text-slate-400">Icono</label>
+            <label className="mb-2 block text-xs font-semibold text-[#7D8A96]/70">Icono</label>
             <div className="grid grid-cols-8 gap-2">
               {SUBJECT_ICONS.map((ic) => (
                 <button
@@ -135,7 +136,7 @@ export default function SubjectModal({
                   type="button"
                   onClick={() => setIcon(ic)}
                   className={`flex h-9 items-center justify-center rounded-lg border transition ${
-                    icon === ic ? 'border-transparent text-white' : 'border-[#EAE4E2] text-slate-500 hover:bg-slate-50'
+                    icon === ic ? 'border-transparent text-white' : 'border-[#EAE4E2] text-[#7D8A96] hover:bg-[#F7F4F2]'
                   }`}
                   style={icon === ic ? { background: color.bg } : undefined}
                 >
@@ -151,7 +152,7 @@ export default function SubjectModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-[#EAE4E2] bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="rounded-xl border border-[#EAE4E2] bg-white px-4 py-2.5 text-sm font-semibold text-[#2C3E50] transition hover:bg-[#F7F4F2]"
             >
               Cancelar
             </button>
