@@ -15,6 +15,7 @@ import {
   withModuleDone,
   withStepReached,
 } from '@/lib/electros/academia/progress'
+import { AmbientTrace, HeartConduction, useAnimationLoop } from './academia/scenes'
 import { AUTO_UNLOCK, StepRenderer } from './academia/steps'
 
 type View = { screen: 'map' } | { screen: 'lesson'; moduleIndex: number } | { screen: 'done'; moduleIndex: number }
@@ -67,91 +68,154 @@ function ModuleMap({
   onOpen: (moduleIndex: number, startStep: number) => void
 }) {
   const done = countDone(progress)
+  const [f, setF] = useState(0)
+  useAnimationLoop((t) => setF((t / 3.6) % 1), true)
+
+  // El primer módulo sin terminar es por donde se retoma la ruta.
+  const nextIndex = MODULES.findIndex((m) => !progress[m.id]?.done)
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <header className="flex flex-col items-center gap-3 text-center">
-        <div className="rounded-2xl bg-[#E8A598] p-3 text-white shadow-md shadow-[#E8A598]/25">
-          <span className="material-symbols-outlined text-3xl">cardiology</span>
-        </div>
-        <h1 className="text-3xl font-black tracking-tight text-[#2C3E50] sm:text-4xl">Academia ECG</h1>
-        <p className="max-w-md text-base font-light text-[#7D8A96]">
-          Aprende a leer un electro paso a paso: de la chispa eléctrica del corazón al diagnóstico.
-        </p>
-        <div className="flex w-full max-w-sm items-center gap-3">
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#EAE4E2]">
-            <motion.div
-              className="h-full rounded-full bg-[#E8A598]"
-              initial={false}
-              animate={{ width: `${(done / MODULES.length) * 100}%` }}
-              transition={{ duration: 0.5, ease: 'easeOut' }}
-            />
-          </div>
-          <span className="shrink-0 text-xs font-bold text-[#7D8A96] tabular-nums">
-            {done}/{MODULES.length} módulos
-          </span>
-        </div>
-      </header>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-10">
+      {/* ─── Portada ─────────────────────────────────────────────────── */}
+      <motion.header
+        className="relative overflow-hidden rounded-3xl border-2 border-[#2c3e50] bg-gradient-to-br from-white via-[#FFF9F7] to-[#FFEFEA] px-6 py-8 shadow-[7px_7px_0_0_#2c3e50] sm:px-10 sm:py-10"
+        initial={{ opacity: 0, y: 22 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <AmbientTrace />
 
-      <nav className="flex flex-col gap-2.5" aria-label="Ruta de aprendizaje">
+        <div className="relative z-10 flex flex-col items-start gap-7 md:flex-row md:items-center md:justify-between">
+          <div className="max-w-xl">
+            <span className="inline-flex items-center gap-2 rounded-full bg-[#E8A598]/15 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#d18d80]">
+              <span className="material-symbols-outlined text-sm">school</span>
+              Ruta guiada
+            </span>
+            <h1 className="mt-3 text-4xl font-black leading-[1.05] tracking-tight text-[#2C3E50] sm:text-5xl">
+              Academia ECG
+            </h1>
+            <p className="mt-3 text-lg font-light leading-relaxed text-[#7D8A96]">
+              De la chispa del nodo sinusal al diagnóstico razonado. {MODULES.length} módulos que se desbloquean a
+              medida que avanzas.
+            </p>
+
+            <div className="mt-6 flex items-center gap-4">
+              <div className="h-2.5 w-48 overflow-hidden rounded-full bg-white/80 ring-1 ring-[#EAE4E2]">
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-r from-[#E8A598] to-[#d18d80]"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(done / MODULES.length) * 100}%` }}
+                  transition={{ duration: 0.8, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                />
+              </div>
+              <span className="text-sm font-black text-[#2C3E50] tabular-nums">
+                {done}/{MODULES.length}
+              </span>
+            </div>
+          </div>
+
+          <motion.div
+            className="hidden h-44 w-36 shrink-0 md:block lg:h-52 lg:w-44"
+            animate={{ y: [0, -10, 0] }}
+            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <HeartConduction f={f} />
+          </motion.div>
+        </div>
+      </motion.header>
+
+      {/* ─── Ruta ────────────────────────────────────────────────────── */}
+      <nav className="grid gap-5 md:grid-cols-2" aria-label="Ruta de aprendizaje">
         {MODULES.map((m, i) => {
           const unlocked = isUnlocked(progress, i)
           const isDone = Boolean(progress[m.id]?.done)
           const fraction = moduleProgress(progress, i)
-          const circumference = 2 * Math.PI * 19
+          const circumference = 2 * Math.PI * 26
+          const isNext = i === nextIndex
 
           return (
-            <button
+            <motion.button
               key={m.id}
               type="button"
               disabled={!unlocked}
               onClick={() => onOpen(i, isDone ? 0 : (progress[m.id]?.step ?? 0))}
-              className={`flex items-center gap-4 rounded-2xl border p-4 text-left transition-all ${
+              initial={{ opacity: 0, y: 26 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.06 * i, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+              className={`group relative flex items-center gap-5 overflow-hidden rounded-3xl border-2 p-5 text-left transition-all sm:p-6 ${
                 unlocked
-                  ? 'border-[#EAE4E2] bg-white shadow-sm hover:-translate-y-0.5 hover:border-[#2c3e50] hover:shadow-[3px_3px_0_0_#2c3e50]'
-                  : 'cursor-not-allowed border-[#EAE4E2]/60 bg-[#F7F4F2] opacity-60'
+                  ? 'border-[#2c3e50] bg-white shadow-[5px_5px_0_0_#2c3e50] hover:-translate-y-1 hover:shadow-[8px_8px_0_0_#2c3e50]'
+                  : 'cursor-not-allowed border-[#EAE4E2] bg-[#F7F4F2]'
               }`}
             >
-              <div className="relative h-11 w-11 shrink-0">
-                <svg viewBox="0 0 44 44" className="h-full w-full -rotate-90">
-                  <circle cx="22" cy="22" r="19" fill="none" stroke="#EFE9E6" strokeWidth="4" />
-                  <circle
-                    cx="22"
-                    cy="22"
-                    r="19"
+              {/* Tinte del módulo, que asoma al pasar el ratón */}
+              {unlocked ? (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full opacity-[0.09] transition-opacity duration-300 group-hover:opacity-20"
+                  style={{ backgroundColor: m.color }}
+                />
+              ) : null}
+
+              <div className="relative h-16 w-16 shrink-0">
+                <svg viewBox="0 0 60 60" className="h-full w-full -rotate-90">
+                  <circle cx="30" cy="30" r="26" fill="none" stroke="#EFE9E6" strokeWidth="5" />
+                  <motion.circle
+                    cx="30"
+                    cy="30"
+                    r="26"
                     fill="none"
-                    stroke={m.color}
-                    strokeWidth="4"
+                    stroke={unlocked ? m.color : '#D9D2CE'}
+                    strokeWidth="5"
                     strokeLinecap="round"
                     strokeDasharray={circumference}
-                    strokeDashoffset={circumference * (1 - fraction)}
+                    initial={{ strokeDashoffset: circumference }}
+                    animate={{ strokeDashoffset: circumference * (1 - fraction) }}
+                    transition={{ duration: 0.7, delay: 0.1 + 0.05 * i, ease: 'easeOut' }}
                   />
                 </svg>
                 <span
-                  className="material-symbols-outlined absolute inset-0 flex items-center justify-center text-lg"
+                  className="material-symbols-outlined absolute inset-0 flex items-center justify-center text-2xl"
                   style={{ color: unlocked ? m.color : '#B5ADA8' }}
                 >
                   {unlocked ? m.icon : 'lock'}
                 </span>
                 {isDone ? (
-                  <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#8BA888] text-white">
-                    <span className="material-symbols-outlined text-[10px]">check</span>
-                  </span>
+                  <motion.span
+                    className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#8BA888] text-white"
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 16, delay: 0.3 }}
+                  >
+                    <span className="material-symbols-outlined text-sm">check</span>
+                  </motion.span>
                 ) : null}
               </div>
 
-              <div className="min-w-0 flex-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#7D8A96]/60">
-                  Módulo {i + 1}
-                </span>
-                <p className="text-sm font-bold text-[#2C3E50]">{m.title}</p>
-                <p className="truncate text-xs text-[#7D8A96]">{m.subtitle}</p>
+              <div className="relative min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#7D8A96]/60">
+                    Módulo {i + 1}
+                  </span>
+                  {isNext && unlocked ? (
+                    <span className="rounded-full bg-[#E8A598] px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white">
+                      Continuar
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-0.5 text-lg font-black leading-tight text-[#2C3E50]">{m.title}</p>
+                <p className="mt-1 text-sm leading-snug text-[#7D8A96]">{m.subtitle}</p>
+                <p className="mt-2 text-[11px] font-bold uppercase tracking-wider text-[#7D8A96]/50">
+                  {m.steps.length} pasos
+                </p>
               </div>
 
               {unlocked ? (
-                <span className="material-symbols-outlined shrink-0 text-lg text-[#7D8A96]/50">arrow_forward</span>
+                <span className="material-symbols-outlined shrink-0 text-2xl text-[#7D8A96]/40 transition-transform group-hover:translate-x-1 group-hover:text-[#E8A598]">
+                  arrow_forward
+                </span>
               ) : null}
-            </button>
+            </motion.button>
           )
         })}
       </nav>
@@ -204,63 +268,117 @@ function LessonPlayer({
       onExit()
       return
     }
-    const prev = stepIndex - 1
-    setStepIndex(prev)
+    setStepIndex(stepIndex - 1)
     // Volver atrás no vuelve a exigir resolver lo ya resuelto.
     setSolved(true)
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
-      <header className="flex items-center gap-3">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+      {/* ─── Barra del módulo ───────────────────────────────────────── */}
+      <motion.header
+        className="flex items-center gap-4 rounded-2xl border-2 border-[#2c3e50] bg-white px-4 py-3 shadow-[4px_4px_0_0_#2c3e50]"
+        initial={{ opacity: 0, y: -14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: 'easeOut' }}
+      >
         <button
           type="button"
           onClick={goBack}
           className="rounded-lg p-1.5 text-[#7D8A96] transition-colors hover:bg-[#F2EFED] hover:text-[#2C3E50]"
-          aria-label="Paso anterior"
+          aria-label={stepIndex === 0 ? 'Volver al mapa' : 'Paso anterior'}
         >
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
 
-        <div className="flex flex-1 gap-1" aria-label={`Paso ${stepIndex + 1} de ${lesson.steps.length}`}>
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white"
+          style={{ backgroundColor: lesson.color }}
+        >
+          <span className="material-symbols-outlined text-lg">{lesson.icon}</span>
+        </span>
+
+        <div className="hidden min-w-0 sm:block">
+          <p className="truncate text-sm font-black leading-tight text-[#2C3E50]">{lesson.title}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#7D8A96]/60">
+            Módulo {moduleIndex + 1}
+          </p>
+        </div>
+
+        <div className="flex flex-1 items-center gap-1.5" aria-label={`Paso ${stepIndex + 1} de ${lesson.steps.length}`}>
           {lesson.steps.map((_, i) => (
-            <span
+            <motion.span
               key={i}
-              className={`h-1 flex-1 rounded-full transition-colors ${
-                i === stepIndex ? 'bg-[#E8A598]' : i < stepIndex ? 'bg-[#E8A598]/40' : 'bg-[#EAE4E2]'
-              }`}
+              className="h-1.5 flex-1 rounded-full"
+              animate={{
+                backgroundColor: i === stepIndex ? lesson.color : i < stepIndex ? `${lesson.color}66` : '#EAE4E2',
+              }}
+              transition={{ duration: 0.3 }}
             />
           ))}
         </div>
 
-        <span className="shrink-0 text-xs font-semibold text-[#7D8A96]">{lesson.title}</span>
-      </header>
+        <span className="shrink-0 text-xs font-black text-[#7D8A96] tabular-nums">
+          {stepIndex + 1}/{lesson.steps.length}
+        </span>
+      </motion.header>
 
+      {/* ─── Escena del paso ────────────────────────────────────────── */}
       <AnimatePresence mode="wait">
         <motion.section
           key={stepIndex}
-          className="rounded-2xl border border-[#EAE4E2] bg-white p-5 shadow-sm sm:p-6"
-          initial={{ opacity: 0, x: 24 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -24 }}
-          transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+          className="rounded-3xl border-2 border-[#EAE4E2] bg-white/70 p-5 backdrop-blur-sm sm:p-8"
+          initial={{ opacity: 0, x: 40, filter: 'blur(6px)' }}
+          animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+          exit={{ opacity: 0, x: -40, filter: 'blur(6px)' }}
+          transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
         >
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-wider" style={{ color: lesson.color }}>
-            {step.kicker}
-          </p>
-          <h2 className="mb-4 text-xl font-bold text-[#2C3E50] sm:text-2xl">{step.title}</h2>
+          <div className="mb-6">
+            <motion.p
+              className="text-[11px] font-black uppercase tracking-[0.16em]"
+              style={{ color: lesson.color }}
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.06 }}
+            >
+              {step.kicker}
+            </motion.p>
+            <motion.h2
+              className="mt-1.5 text-3xl font-black leading-[1.1] tracking-tight text-[#2C3E50] sm:text-4xl"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1, ease: 'easeOut' }}
+            >
+              {step.title}
+            </motion.h2>
+          </div>
+
           <StepRenderer step={step} onSolved={handleSolved} color={lesson.color} />
         </motion.section>
       </AnimatePresence>
 
-      <button
-        type="button"
-        disabled={!solved}
-        onClick={goNext}
-        className="w-full rounded-xl bg-[#E8A598] px-6 py-3.5 text-base font-semibold text-white shadow-md shadow-[#E8A598]/20 transition-colors hover:bg-[#d18d80] disabled:cursor-not-allowed disabled:bg-[#E8A598]/35 disabled:shadow-none"
-      >
-        {isLast ? 'Terminar módulo' : 'Continuar'}
-      </button>
+      {/* ─── Pie fijo ───────────────────────────────────────────────── */}
+      <div className="sticky bottom-4 z-20">
+        <motion.button
+          type="button"
+          disabled={!solved}
+          onClick={goNext}
+          animate={
+            solved
+              ? { opacity: 1, y: 0, boxShadow: '5px 5px 0 0 #2c3e50' }
+              : { opacity: 0.55, y: 0, boxShadow: '0px 0px 0 0 #2c3e50' }
+          }
+          transition={{ type: 'spring', stiffness: 300, damping: 24 }}
+          className={`flex w-full items-center justify-center gap-2 rounded-2xl border-2 px-6 py-4 text-base font-black transition-colors ${
+            solved
+              ? 'border-[#2c3e50] bg-[#E8A598] text-white hover:bg-[#d18d80]'
+              : 'cursor-not-allowed border-[#EAE4E2] bg-white text-[#7D8A96]'
+          }`}
+        >
+          {solved ? (isLast ? 'Terminar módulo' : 'Continuar') : 'Completa la actividad para seguir'}
+          {solved ? <span className="material-symbols-outlined">arrow_forward</span> : null}
+        </motion.button>
+      </div>
     </div>
   )
 }
@@ -268,6 +386,12 @@ function LessonPlayer({
 /* ════════════════════════════════════════════════════════════════════════
    MÓDULO COMPLETADO
 ═══════════════════════════════════════════════════════════════════════════ */
+const CONFETTI = Array.from({ length: 14 }, (_, i) => ({
+  x: (i % 7) * 60 - 180,
+  delay: i * 0.045,
+  color: ['#E8A598', '#8BA888', '#C9A24A', '#7CA3C9'][i % 4],
+}))
+
 function ModuleDone({
   moduleIndex,
   canContinue,
@@ -284,30 +408,45 @@ function ModuleDone({
 
   return (
     <motion.section
-      className="mx-auto flex w-full max-w-md flex-col items-center gap-4 rounded-2xl border border-[#EAE4E2] bg-white px-6 py-10 text-center shadow-sm"
-      initial={{ opacity: 0, scale: 0.97 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.32, ease: 'easeOut' }}
+      className="relative mx-auto flex w-full max-w-xl flex-col items-center gap-5 overflow-hidden rounded-3xl border-2 border-[#2c3e50] bg-white px-6 py-12 text-center shadow-[7px_7px_0_0_#2c3e50]"
+      initial={{ opacity: 0, scale: 0.95, y: 20 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
     >
+      {/* Confeti: cae una vez, sin bucle, para no distraer del texto */}
+      {CONFETTI.map((c, i) => (
+        <motion.span
+          key={i}
+          aria-hidden
+          className="absolute left-1/2 top-0 h-2.5 w-2.5 rounded-sm"
+          style={{ backgroundColor: c.color }}
+          initial={{ y: -30, x: c.x, opacity: 0, rotate: 0 }}
+          animate={{ y: 420, opacity: [0, 1, 1, 0], rotate: 420 }}
+          transition={{ duration: 2.1, delay: 0.25 + c.delay, ease: 'easeIn' }}
+        />
+      ))}
+
       <motion.div
-        className="rounded-full p-4 text-white"
+        className="relative rounded-full border-2 border-[#2c3e50] p-5 text-white"
         style={{ backgroundColor: lesson.color }}
-        initial={{ scale: 0.6, rotate: -12 }}
+        initial={{ scale: 0.5, rotate: -20 }}
         animate={{ scale: 1, rotate: 0 }}
-        transition={{ type: 'spring', stiffness: 320, damping: 16 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 15, delay: 0.1 }}
       >
-        <span className="material-symbols-outlined text-4xl">verified</span>
+        <span className="material-symbols-outlined text-5xl">verified</span>
       </motion.div>
 
-      <h2 className="text-2xl font-bold text-[#2C3E50]">Módulo completado</h2>
-      <p className="text-sm text-[#7D8A96]">{lesson.title}</p>
+      <div className="relative">
+        <h2 className="text-3xl font-black tracking-tight text-[#2C3E50]">Módulo completado</h2>
+        <p className="mt-1 text-base text-[#7D8A96]">{lesson.title}</p>
+      </div>
 
-      <div className="mt-2 flex w-full flex-col gap-3">
+      <div className="relative mt-2 flex w-full flex-col gap-3">
         {next && canContinue ? (
           <button
             type="button"
             onClick={onNext}
-            className="rounded-xl bg-[#E8A598] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#d18d80]"
+            className="rounded-2xl border-2 border-[#2c3e50] bg-[#E8A598] px-6 py-3.5 text-base font-black text-white shadow-[4px_4px_0_0_#2c3e50] transition-transform hover:-translate-y-0.5"
           >
             Módulo {moduleIndex + 2}: {next.title}
           </button>
@@ -315,14 +454,14 @@ function ModuleDone({
         <button
           type="button"
           onClick={onHome}
-          className="rounded-xl border border-[#7D8A96]/30 bg-white px-6 py-3 text-sm font-semibold text-[#7D8A96] transition-colors hover:bg-[#F2EFED]"
+          className="rounded-2xl border-2 border-[#EAE4E2] bg-white px-6 py-3 text-sm font-bold text-[#7D8A96] transition-colors hover:border-[#2c3e50] hover:text-[#2C3E50]"
         >
           Volver al mapa
         </button>
         {!next ? (
           <Link
             href="/studio/electros/explorador"
-            className="text-xs font-semibold text-[#d18d80] hover:underline"
+            className="text-sm font-bold text-[#d18d80] hover:underline"
           >
             Practicar en el explorador de 12 derivaciones →
           </Link>

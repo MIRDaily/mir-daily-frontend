@@ -9,6 +9,7 @@
    reproducir figuras de ninguna fuente con copyright.
 ═══════════════════════════════════════════════════════════════════════════ */
 import { useEffect, useRef } from 'react'
+import { motion } from 'framer-motion'
 import { beatPath, phaseAt } from '@/lib/electros/academia/ecgmini'
 import { stripGeometry, type StripKind } from '@/lib/electros/academia/strips'
 import type { LadderKind } from '@/lib/electros/academia/curriculum'
@@ -20,6 +21,115 @@ export const SEV_COLOR: Record<'normal' | 'warn' | 'crit', string> = {
   normal: '#8BA888',
   warn: '#C9A24A',
   crit: '#C4655A',
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   TEXTURA Y ESCENARIO
+
+   El papel milimetrado del ECG es la textura de la casa aquí: se pinta con
+   gradientes repetidos (nada de imágenes) para que escale a cualquier tamaño
+   y se pueda teñir con el color del módulo.
+═══════════════════════════════════════════════════════════════════════════ */
+const ecgPaper = (fine: string, bold: string, step = 13) => ({
+  backgroundColor: PAPER,
+  backgroundImage: [
+    `repeating-linear-gradient(to right, ${fine} 0 1px, transparent 1px ${step}px)`,
+    `repeating-linear-gradient(to bottom, ${fine} 0 1px, transparent 1px ${step}px)`,
+    `repeating-linear-gradient(to right, ${bold} 0 1.5px, transparent 1.5px ${step * 5}px)`,
+    `repeating-linear-gradient(to bottom, ${bold} 0 1.5px, transparent 1.5px ${step * 5}px)`,
+  ].join(','),
+})
+
+export const PAPER_STYLE = ecgPaper('rgba(212,151,140,0.20)', 'rgba(212,151,140,0.38)')
+const INK_PAPER_STYLE = {
+  backgroundColor: '#241c1a',
+  backgroundImage: [
+    'repeating-linear-gradient(to right, rgba(232,165,152,0.13) 0 1px, transparent 1px 13px)',
+    'repeating-linear-gradient(to bottom, rgba(232,165,152,0.13) 0 1px, transparent 1px 13px)',
+    'repeating-linear-gradient(to right, rgba(232,165,152,0.26) 0 1.5px, transparent 1.5px 65px)',
+    'repeating-linear-gradient(to bottom, rgba(232,165,152,0.26) 0 1.5px, transparent 1.5px 65px)',
+  ].join(','),
+}
+
+export type StageTone = 'paper' | 'ink' | 'plain'
+
+/**
+ * El panel grande donde vive la ilustración de cada paso. Es la pieza que da
+ * el aire "de mesa de trabajo": papel milimetrado, borde de tinta y sombra
+ * dura, el mismo lenguaje de las tarjetas del Studio.
+ */
+export function Stage({
+  tone = 'paper',
+  accent,
+  children,
+  className = '',
+  label,
+}: {
+  tone?: StageTone
+  accent?: string
+  children: React.ReactNode
+  className?: string
+  label?: string
+}) {
+  const style =
+    tone === 'paper' ? PAPER_STYLE : tone === 'ink' ? INK_PAPER_STYLE : { backgroundColor: '#fff' }
+
+  return (
+    <motion.div
+      className={`relative overflow-hidden rounded-3xl border-2 border-[#2c3e50] shadow-[6px_6px_0_0_#2c3e50] ${className}`}
+      style={style}
+      initial={{ opacity: 0, y: 18, rotate: -0.6 }}
+      animate={{ opacity: 1, y: 0, rotate: 0 }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+    >
+      {/* Viñeta suave para que el contenido no se pelee con la cuadrícula */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            tone === 'ink'
+              ? 'radial-gradient(ellipse at center, rgba(36,28,26,0) 35%, rgba(36,28,26,0.75) 100%)'
+              : 'radial-gradient(ellipse at center, rgba(255,247,244,0) 40%, rgba(255,247,244,0.9) 100%)',
+        }}
+      />
+      {label ? (
+        <span
+          className="absolute left-4 top-3 z-10 text-[10px] font-bold uppercase tracking-[0.14em]"
+          style={{ color: accent ?? (tone === 'ink' ? 'rgba(255,255,255,0.5)' : '#B87A6F') }}
+        >
+          {label}
+        </span>
+      ) : null}
+      <div className="relative z-10 flex h-full w-full items-center justify-center p-5 sm:p-7">{children}</div>
+    </motion.div>
+  )
+}
+
+/** Latido de fondo, muy tenue, que da vida a la pantalla del mapa. */
+export function AmbientTrace({ color = '#E8A598' }: { color?: string }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 1200 200"
+      preserveAspectRatio="none"
+      className="pointer-events-none absolute inset-x-0 top-1/2 h-40 w-full -translate-y-1/2 opacity-[0.07]"
+    >
+      <motion.path
+        d="M0 100 H150 l14 -8 12 16 10 -70 12 96 10 -34 H420 l14 -8 12 16 10 -70 12 96 10 -34 H690 l14 -8 12 16 10 -70 12 96 10 -34 H960 l14 -8 12 16 10 -70 12 96 10 -34 H1200"
+        fill="none"
+        stroke={color}
+        strokeWidth="3"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        pathLength={1}
+        strokeDasharray={1}
+        initial={{ strokeDashoffset: 1 }}
+        animate={{ strokeDashoffset: [1, 0, 0] }}
+        transition={{ duration: 7, times: [0, 0.75, 1], repeat: Infinity, ease: 'linear' }}
+      />
+    </svg>
+  )
 }
 
 /** Bucle de animación que se detiene solo al desmontar o al pausarse. */

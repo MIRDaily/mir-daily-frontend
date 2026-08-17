@@ -7,8 +7,12 @@
 
    Los pasos que solo hay que mirar (info, conduction, ladder, summary) los
    desbloquea el reproductor directamente, así que aquí no llaman a onSolved.
+
+   Presentación: cada paso con ilustración usa `StepLayout`, que la coloca en
+   un escenario grande a la izquierda y deja el texto y los controles a la
+   derecha. En móvil se apila, pero el punto de partida es el escritorio.
 ═══════════════════════════════════════════════════════════════════════════ */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { EcgTracer, phaseAt } from '@/lib/electros/academia/ecgmini'
@@ -20,10 +24,13 @@ import {
   ConductionLadder,
   HeartConduction,
   HeartScene,
+  PAPER_STYLE,
   RhythmStrip,
   SEV_COLOR,
+  Stage,
   useAnimationLoop,
   WavesScene,
+  type StageTone,
 } from './scenes'
 
 type StepProps<T extends Step['type']> = {
@@ -32,39 +39,97 @@ type StepProps<T extends Step['type']> = {
   color: string
 }
 
-/* ─── Piezas compartidas ────────────────────────────────────────────────── */
-function Feedback({ ok, children }: { ok: boolean; children: React.ReactNode }) {
+/* ─── Andamiaje compartido ──────────────────────────────────────────────── */
+
+/** Escenario grande + columna de lectura. Sin `visual` queda una sola columna. */
+function StepLayout({
+  visual,
+  children,
+  tone,
+  accent,
+  label,
+  stageClass = 'min-h-[300px] lg:min-h-[420px]',
+}: {
+  visual?: ReactNode
+  children: ReactNode
+  tone?: StageTone
+  accent?: string
+  label?: string
+  stageClass?: string
+}) {
+  if (!visual) return <div className="mx-auto max-w-2xl">{children}</div>
+
+  return (
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] lg:gap-10">
+      <Stage tone={tone} accent={accent} label={label} className={stageClass}>
+        {visual}
+      </Stage>
+      <motion.div
+        className="flex flex-col"
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+      >
+        {children}
+      </motion.div>
+    </div>
+  )
+}
+
+function Feedback({ ok, children }: { ok: boolean; children: ReactNode }) {
   return (
     <motion.div
-      className={`mt-4 flex items-start gap-2.5 rounded-xl border p-3.5 ${
-        ok ? 'border-[#8BA888]/30 bg-[#F1F5F0]' : 'border-[#C9A24A]/30 bg-[#FDF8EC]'
+      className={`mt-5 flex items-start gap-3 rounded-2xl border-2 p-4 ${
+        ok ? 'border-[#8BA888]/45 bg-[#F1F5F0]' : 'border-[#C9A24A]/45 bg-[#FDF8EC]'
       }`}
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
+      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 280, damping: 22 }}
     >
-      <span className={`material-symbols-outlined text-lg ${ok ? 'text-[#8BA888]' : 'text-[#C9A24A]'}`}>
+      <span className={`material-symbols-outlined ${ok ? 'text-[#8BA888]' : 'text-[#C9A24A]'}`}>
         {ok ? 'check_circle' : 'info'}
       </span>
-      <p className="text-sm text-[#2C3E50]">{children}</p>
+      <p className="text-[15px] leading-relaxed text-[#2C3E50]">{children}</p>
     </motion.div>
   )
 }
 
-function Prompt({ children }: { children: React.ReactNode }) {
-  return <p className="mb-4 text-base font-medium text-[#2C3E50]">{children}</p>
+function Prompt({ children }: { children: ReactNode }) {
+  return <p className="mb-5 text-lg font-medium leading-snug text-[#2C3E50]">{children}</p>
 }
 
 function Slider(props: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
   const { label, ...rest } = props
   return (
-    <div className="mt-4 flex items-center gap-3">
-      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-[#7D8A96]/60">{label}</span>
+    <div className="mt-5">
+      <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-[#7D8A96]/60">
+        {label}
+      </span>
       <input
         type="range"
         {...rest}
-        className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-[#EAE4E2] accent-[#E8A598]"
+        className="h-2.5 w-full cursor-pointer appearance-none rounded-full bg-[#EAE4E2] accent-[#E8A598]"
       />
+    </div>
+  )
+}
+
+/** Cifra grande de lectura, el "display" del instrumento. */
+function Readout({ value, tag, ok }: { value: ReactNode; tag: string; ok: boolean }) {
+  return (
+    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#EAE4E2] bg-white px-4 py-3">
+      <span className="text-2xl font-black text-[#2C3E50] tabular-nums">{value}</span>
+      <motion.span
+        key={tag}
+        className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
+          ok ? 'bg-[#8BA888]/15 text-[#6a8a67]' : 'bg-[#F2EFED] text-[#7D8A96]'
+        }`}
+        initial={{ opacity: 0, y: -4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        {tag}
+      </motion.span>
     </div>
   )
 }
@@ -78,15 +143,19 @@ function InfoVisual({ kind }: { kind: NonNullable<Extract<Step, { type: 'info' }
 
   if (kind === 'heart-static') {
     return (
-      <div className="mx-auto mb-5 h-44 w-36">
+      <motion.div
+        className="h-64 w-52 lg:h-80 lg:w-64"
+        animate={{ y: [0, -8, 0] }}
+        transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut' }}
+      >
         <HeartConduction f={f} />
-      </div>
+      </motion.div>
     )
   }
 
   if (kind === 'wave-labeled') {
     return (
-      <div className="mb-5 h-32 w-full overflow-hidden rounded-xl border border-[#EAE4E2]">
+      <div className="w-full max-w-lg">
         <WavesScene labelled />
       </div>
     )
@@ -94,25 +163,29 @@ function InfoVisual({ kind }: { kind: NonNullable<Extract<Step, { type: 'info' }
 
   if (kind === 'grid') {
     return (
-      <div className="mb-5 overflow-hidden rounded-xl border border-[#EAE4E2]">
-        <svg viewBox="0 0 320 120" className="h-full w-full">
-          <defs>
-            <pattern id="ig-fine" width="12" height="12" patternUnits="userSpaceOnUse">
-              <path d="M12 0 L0 0 0 12" fill="none" stroke="rgba(212,151,140,0.25)" strokeWidth="1" />
-            </pattern>
-            <pattern id="ig-bold" width="60" height="60" patternUnits="userSpaceOnUse">
-              <rect width="60" height="60" fill="url(#ig-fine)" />
-              <path d="M60 0 L0 0 0 60" fill="none" stroke="rgba(212,151,140,0.55)" strokeWidth="1.3" />
-            </pattern>
-          </defs>
-          <rect width="320" height="120" fill="#FFF7F4" />
-          <rect width="320" height="120" fill="url(#ig-bold)" />
-          <rect x="0" y="30" width="60" height="60" fill="rgba(212,151,140,0.16)" />
-          <text x="8" y="108" fontSize="11" fontWeight="700" fill="#B87A6F" fontFamily="inherit">
-            1 grande = 0,20 s
+      <div className="w-full max-w-lg">
+        <svg viewBox="0 0 320 140" className="h-full w-full">
+          <rect x="0" y="30" width="60" height="60" fill="rgba(212,151,140,0.22)" rx="3" />
+          <rect
+            x="0"
+            y="30"
+            width="60"
+            height="60"
+            fill="none"
+            stroke="#B87A6F"
+            strokeWidth="2"
+            strokeDasharray="5 3"
+            rx="3"
+          />
+          <text x="4" y="112" fontSize="12" fontWeight="800" fill="#2C3E50" fontFamily="inherit">
+            1 cuadro grande
           </text>
-          <text x="200" y="108" fontSize="11" fontWeight="700" fill="#B87A6F" fontFamily="inherit">
-            y 0,5 mV
+          <text x="4" y="128" fontSize="11" fontWeight="600" fill="#B87A6F" fontFamily="inherit">
+            = 0,20 s y 0,5 mV
+          </text>
+          <path d="M120 60 L300 60" stroke="#241c1a" strokeWidth="2" strokeDasharray="4 4" />
+          <text x="120" y="52" fontSize="11" fontWeight="700" fill="#B87A6F" fontFamily="inherit">
+            25 mm/s · 10 mm/mV
           </text>
         </svg>
       </div>
@@ -121,14 +194,17 @@ function InfoVisual({ kind }: { kind: NonNullable<Extract<Step, { type: 'info' }
 
   if (kind === 'leads') {
     return (
-      <div className="mb-5 flex flex-wrap justify-center gap-1.5">
-        {LEAD_ORDER.map((name) => (
-          <span
+      <div className="grid w-full max-w-md grid-cols-3 gap-2.5 sm:grid-cols-4">
+        {LEAD_ORDER.map((name, i) => (
+          <motion.span
             key={name}
-            className="rounded-lg border border-[#EAE4E2] bg-white px-2.5 py-1 text-xs font-bold text-[#7D8A96]"
+            className="flex items-center justify-center rounded-xl border-2 border-[#2c3e50] bg-white py-2.5 text-sm font-black text-[#2C3E50] shadow-[2px_2px_0_0_#2c3e50]"
+            initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.05 * i, type: 'spring', stiffness: 320, damping: 20 }}
           >
             {name}
-          </span>
+          </motion.span>
         ))}
       </div>
     )
@@ -136,45 +212,65 @@ function InfoVisual({ kind }: { kind: NonNullable<Extract<Step, { type: 'info' }
 
   if (kind === 'order') {
     return (
-      <div className="mb-5 flex flex-wrap justify-center gap-1.5">
+      <div className="flex w-full max-w-sm flex-col gap-2.5">
         {['Ritmo', 'Frecuencia', 'Eje', 'Intervalos', 'Morfología'].map((s, i) => (
-          <span
+          <motion.span
             key={s}
-            className="flex items-center gap-1.5 rounded-full bg-[#FFF5F3] px-3 py-1.5 text-xs font-semibold text-[#d18d80]"
+            className="flex items-center gap-3 rounded-xl border-2 border-[#2c3e50] bg-white px-4 py-2.5 text-sm font-bold text-[#2C3E50] shadow-[2px_2px_0_0_#2c3e50]"
+            initial={{ opacity: 0, x: -18 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.09 * i, type: 'spring', stiffness: 300, damping: 22 }}
           >
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#E8A598] text-[9px] font-bold text-white">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#E8A598] text-xs font-black text-white">
               {i + 1}
             </span>
             {s}
-          </span>
+          </motion.span>
         ))}
       </div>
     )
   }
 
   return (
-    <div className="mb-5 flex justify-center">
-      <span className="material-symbols-outlined text-6xl text-[#E8A598]/60">account_tree</span>
-    </div>
+    <motion.span
+      className="material-symbols-outlined text-[9rem] text-[#E8A598]"
+      animate={{ scale: [1, 1.05, 1], rotate: [0, 1.5, 0] }}
+      transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+    >
+      account_tree
+    </motion.span>
   )
 }
 
-function InfoStep({ step }: StepProps<'info'>) {
-  return (
-    <div>
-      {step.visual ? <InfoVisual kind={step.visual} /> : null}
-      <p className="text-base leading-relaxed text-[#7D8A96]">{step.body}</p>
+function InfoStep({ step, color }: StepProps<'info'>) {
+  const body = (
+    <>
+      <p className="text-lg leading-relaxed text-[#7D8A96]">{step.body}</p>
       {step.points ? (
-        <ul className="mt-4 flex flex-col gap-2">
-          {step.points.map((p) => (
-            <li key={p} className="flex items-start gap-2 text-sm text-[#2C3E50]">
-              <span className="material-symbols-outlined text-base text-[#8BA888]">check</span>
+        <ul className="mt-6 flex flex-col gap-3">
+          {step.points.map((p, i) => (
+            <motion.li
+              key={p}
+              className="flex items-start gap-3 rounded-xl bg-white/70 p-3 text-[15px] text-[#2C3E50]"
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.16 + i * 0.09, ease: 'easeOut' }}
+            >
+              <span className="material-symbols-outlined text-[#8BA888]">check_circle</span>
               {p}
-            </li>
+            </motion.li>
           ))}
         </ul>
       ) : null}
-    </div>
+    </>
+  )
+
+  if (!step.visual) return <div className="mx-auto max-w-2xl">{body}</div>
+
+  return (
+    <StepLayout visual={<InfoVisual kind={step.visual} />} accent={color} label="La idea">
+      {body}
+    </StepLayout>
   )
 }
 
@@ -183,7 +279,7 @@ function InfoStep({ step }: StepProps<'info'>) {
 ═══════════════════════════════════════════════════════════════════════════ */
 const CYCLE_SECONDS = 3.6
 
-function ConductionStep({ step }: StepProps<'conduction'>) {
+function ConductionStep({ step, color }: StepProps<'conduction'>) {
   const gridRef = useRef<HTMLCanvasElement>(null)
   const traceRef = useRef<HTMLCanvasElement>(null)
   const tracerRef = useRef<EcgTracer | null>(null)
@@ -217,46 +313,53 @@ function ConductionStep({ step }: StepProps<'conduction'>) {
   const focusWave = step.focus === 'wave'
 
   const togglePlay = () => {
-    if (playing) {
-      baseRef.current = f
-      setPlaying(false)
-    } else {
-      baseRef.current = f
-      setPlaying(true)
-    }
+    baseRef.current = f
+    setPlaying((p) => !p)
   }
 
-  return (
-    <div>
-      <p className="mb-4 text-base leading-relaxed text-[#7D8A96]">{step.body}</p>
-
-      <div className="mb-3 flex items-center gap-4 rounded-xl border border-[#EAE4E2] bg-white p-3">
-        <div className="h-36 w-28 shrink-0">
-          <HeartConduction f={f} />
-        </div>
-        <div className="min-w-0 flex-1 text-sm">
-          {focusWave && phase.wave !== '—' ? (
-            <b style={{ color: phase.color }}>Onda {phase.wave} · </b>
-          ) : (
-            <b style={{ color: phase.color }}>{phase.title} · </b>
-          )}
-          <span className="text-[#7D8A96]">{phase.text}</span>
-        </div>
-      </div>
-
-      <div className="relative h-28 overflow-hidden rounded-xl border border-[#EAE4E2]">
+  const visual = (
+    <div className="flex w-full flex-col items-center gap-4">
+      <motion.div
+        className="h-52 w-40 lg:h-64 lg:w-52"
+        animate={{ scale: [1, 1.02, 1] }}
+        transition={{ duration: CYCLE_SECONDS, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <HeartConduction f={f} />
+      </motion.div>
+      <div className="relative h-28 w-full overflow-hidden rounded-2xl border-2 border-[#2c3e50] lg:h-32">
         <canvas ref={gridRef} className="absolute inset-0 h-full w-full" />
         <canvas ref={traceRef} className="absolute inset-0 h-full w-full" />
       </div>
+    </div>
+  )
 
-      <div className="mt-3 flex items-center gap-3">
+  return (
+    <StepLayout visual={visual} accent={color} label="En directo" stageClass="min-h-[360px] lg:min-h-[480px]">
+      <p className="text-lg leading-relaxed text-[#7D8A96]">{step.body}</p>
+
+      {/* Rótulo de la fase: es el hilo que une el corazón con la onda */}
+      <motion.div
+        key={phase.id}
+        className="mt-6 rounded-2xl border-l-4 bg-white p-4 shadow-sm"
+        style={{ borderLeftColor: phase.color }}
+        initial={{ opacity: 0, x: 12 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+      >
+        <p className="text-base font-black" style={{ color: phase.color }}>
+          {focusWave && phase.wave !== '—' ? `Onda ${phase.wave}` : phase.title}
+        </p>
+        <p className="mt-1 text-[15px] leading-relaxed text-[#7D8A96]">{phase.text}</p>
+      </motion.div>
+
+      <div className="mt-6 flex items-center gap-4">
         <button
           type="button"
           onClick={togglePlay}
-          className="rounded-full bg-[#E8A598] p-2 text-white transition-colors hover:bg-[#d18d80]"
+          className="rounded-full bg-[#E8A598] p-3 text-white shadow-md shadow-[#E8A598]/30 transition-transform hover:scale-105 active:scale-95"
           title={playing ? 'Pausa' : 'Reproducir'}
         >
-          <span className="material-symbols-outlined text-lg">{playing ? 'pause' : 'play_arrow'}</span>
+          <span className="material-symbols-outlined">{playing ? 'pause' : 'play_arrow'}</span>
         </button>
         <input
           type="range"
@@ -270,17 +373,17 @@ function ConductionStep({ step }: StepProps<'conduction'>) {
             setF(v)
           }}
           aria-label="Avance del ciclo"
-          className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-[#EAE4E2] accent-[#E8A598]"
+          className="h-2.5 flex-1 cursor-pointer appearance-none rounded-full bg-[#EAE4E2] accent-[#E8A598]"
         />
       </div>
-    </div>
+    </StepLayout>
   )
 }
 
 /* ════════════════════════════════════════════════════════════════════════
    HOTSPOT
 ═══════════════════════════════════════════════════════════════════════════ */
-function HotspotStep({ step, onSolved }: StepProps<'hotspot'>) {
+function HotspotStep({ step, onSolved, color }: StepProps<'hotspot'>) {
   const [solved, setSolved] = useState<string | null>(null)
   const [wrong, setWrong] = useState<string | null>(null)
   const [showHint, setShowHint] = useState(false)
@@ -298,27 +401,39 @@ function HotspotStep({ step, onSolved }: StepProps<'hotspot'>) {
     }
   }
 
+  const visual = (
+    <motion.div
+      className={step.scene === 'heart' ? 'h-72 w-56 lg:h-96 lg:w-72' : 'w-full max-w-lg'}
+      animate={wrong ? { x: [0, -7, 7, -5, 0] } : { x: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      {step.scene === 'heart' ? (
+        <HeartScene onHit={handleHit} solvedId={solved} wrongId={wrong} />
+      ) : (
+        <WavesScene onHit={handleHit} solvedId={solved} wrongId={wrong} />
+      )}
+    </motion.div>
+  )
+
   return (
-    <div>
+    <StepLayout visual={visual} accent={color} label="Toca en el esquema">
       <Prompt>{step.prompt}</Prompt>
-      <div
-        className={`mx-auto overflow-hidden rounded-xl border border-[#EAE4E2] ${
-          step.scene === 'heart' ? 'h-56 w-44' : 'h-40 w-full'
-        }`}
-      >
-        {step.scene === 'heart' ? (
-          <HeartScene onHit={handleHit} solvedId={solved} wrongId={wrong} />
-        ) : (
-          <WavesScene onHit={handleHit} solvedId={solved} wrongId={wrong} />
-        )}
-      </div>
 
       {solved ? (
         <Feedback ok>{step.ok}</Feedback>
       ) : showHint ? (
-        <p className="mt-3 text-center text-sm text-[#C9A24A]">Pista: {step.hint}</p>
-      ) : null}
-    </div>
+        <motion.p
+          className="flex items-start gap-2 rounded-2xl border-2 border-[#C9A24A]/40 bg-[#FDF8EC] p-4 text-[15px] text-[#8a6f2a]"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <span className="material-symbols-outlined text-[#C9A24A]">lightbulb</span>
+          Pista: {step.hint}
+        </motion.p>
+      ) : (
+        <p className="text-[15px] text-[#7D8A96]/70">Elige una estructura en el esquema para continuar.</p>
+      )}
+    </StepLayout>
   )
 }
 
@@ -340,35 +455,40 @@ function ChoiceStep({ step, onSolved }: StepProps<'choice'>) {
   }
 
   return (
-    <div>
+    <div className="mx-auto max-w-3xl">
       <Prompt>{step.prompt}</Prompt>
-      <div className="flex flex-col gap-2">
-        {step.options.map((option) => {
+      <div className="flex flex-col gap-3">
+        {step.options.map((option, i) => {
           const isWrong = failed.includes(option.text)
           const isRight = solved && option.correct
           return (
-            <button
+            <motion.button
               key={option.text}
               type="button"
               disabled={solved || isWrong}
               onClick={() => pick(option)}
-              className={`flex items-start gap-3 rounded-xl border p-3.5 text-left text-sm transition-colors ${
+              initial={{ opacity: 0, y: 12 }}
+              animate={
+                isWrong ? { opacity: 1, y: 0, x: [0, -6, 6, -4, 0] } : { opacity: 1, y: 0, x: 0 }
+              }
+              transition={{ delay: solved || isWrong ? 0 : 0.06 * i, ease: 'easeOut' }}
+              className={`flex items-start gap-3.5 rounded-2xl border-2 p-4 text-left text-[15px] transition-colors ${
                 isRight
-                  ? 'border-[#8BA888] bg-[#F1F5F0] text-[#2C3E50]'
+                  ? 'border-[#8BA888] bg-[#F1F5F0] text-[#2C3E50] shadow-[3px_3px_0_0_#8BA888]'
                   : isWrong
-                    ? 'border-[#C4655A]/40 bg-[#FDF2F0] text-[#7D8A96] line-through opacity-70'
-                    : 'border-[#EAE4E2] bg-white text-[#2C3E50] hover:border-[#E8A598] hover:bg-[#FFF9F7]'
+                    ? 'border-[#C4655A]/40 bg-[#FDF2F0] text-[#7D8A96] line-through opacity-65'
+                    : 'border-[#EAE4E2] bg-white text-[#2C3E50] hover:-translate-y-0.5 hover:border-[#2c3e50] hover:shadow-[3px_3px_0_0_#2c3e50]'
               } disabled:cursor-not-allowed`}
             >
               <span
-                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
                   isRight ? 'border-[#8BA888] bg-[#8BA888]' : isWrong ? 'border-[#C4655A]' : 'border-[#D9D2CE]'
                 }`}
               >
-                {isRight ? <span className="material-symbols-outlined text-[10px] text-white">check</span> : null}
+                {isRight ? <span className="material-symbols-outlined text-[11px] text-white">check</span> : null}
               </span>
               {option.text}
-            </button>
+            </motion.button>
           )
         })}
       </div>
@@ -394,42 +514,47 @@ function RevealStep({ step, onSolved }: StepProps<'reveal'>) {
   }
 
   return (
-    <div>
+    <div className="mx-auto max-w-3xl">
       <Prompt>{step.prompt}</Prompt>
-      <div className="flex flex-col gap-2">
-        {step.items.map((item) => {
+      <div className="grid gap-3 sm:grid-cols-2">
+        {step.items.map((item, i) => {
           const isOpen = opened.includes(item.k)
           return (
-            <button
+            <motion.button
               key={item.k}
               type="button"
               onClick={() => open(item.k)}
-              className={`flex items-start gap-3 rounded-xl border p-3.5 text-left transition-colors ${
-                isOpen ? 'border-[#E8A598]/40 bg-[#FFF9F7]' : 'border-[#EAE4E2] bg-white hover:border-[#E8A598]'
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.06 * i, ease: 'easeOut' }}
+              className={`flex items-start gap-3.5 rounded-2xl border-2 p-4 text-left transition-all ${
+                isOpen
+                  ? 'border-[#E8A598] bg-[#FFF9F7] shadow-[3px_3px_0_0_#E8A598] sm:col-span-2'
+                  : 'border-[#EAE4E2] bg-white hover:-translate-y-0.5 hover:border-[#2c3e50] hover:shadow-[3px_3px_0_0_#2c3e50]'
               }`}
             >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#E8A598] text-xs font-bold text-white">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E8A598] text-sm font-black text-white">
                 {item.k}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1 text-sm font-bold text-[#2C3E50]">
+                <span className="flex items-center gap-1 text-base font-bold text-[#2C3E50]">
                   {item.label}
                   {!isOpen ? (
-                    <span className="material-symbols-outlined text-base text-[#7D8A96]/60">expand_more</span>
+                    <span className="material-symbols-outlined text-lg text-[#7D8A96]/60">expand_more</span>
                   ) : null}
                 </span>
                 {isOpen ? (
                   <motion.span
-                    className="mt-1 block text-sm text-[#7D8A96]"
+                    className="mt-1.5 block text-[15px] leading-relaxed text-[#7D8A96]"
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
-                    transition={{ duration: 0.22, ease: 'easeOut' }}
+                    transition={{ duration: 0.24, ease: 'easeOut' }}
                   >
                     {item.text}
                   </motion.span>
                 ) : null}
               </span>
-            </button>
+            </motion.button>
           )
         })}
       </div>
@@ -442,7 +567,7 @@ function RevealStep({ step, onSolved }: StepProps<'reveal'>) {
 ═══════════════════════════════════════════════════════════════════════════ */
 const MS_PER_SQUARE = 40
 
-function CaliperStep({ step, onSolved }: StepProps<'caliper'>) {
+function CaliperStep({ step, onSolved, color }: StepProps<'caliper'>) {
   const [squares, setSquares] = useState(1)
   const [solved, setSolved] = useState(false)
 
@@ -467,56 +592,52 @@ function CaliperStep({ step, onSolved }: StepProps<'caliper'>) {
     }
   }
 
+  const visual = (
+    <div className="w-full max-w-lg">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
+        <path d={`M10 ${base} L${left} ${base}`} fill="none" stroke="#241c1a" strokeWidth="2.2" />
+        <path
+          d={`M${left} ${base} L${left + qw * 0.2} ${base + 14} L${x0} ${base - 70} L${x0 + qw * 0.3} ${base + 22} L${left + qw} ${base} L${W - 10} ${base}`}
+          fill="none"
+          stroke="#241c1a"
+          strokeWidth="2.6"
+          strokeLinejoin="round"
+        />
+        <line x1={left} y1="8" x2={left} y2={H - 8} stroke="#B87A6F" strokeWidth="1.8" strokeDasharray="4 3" />
+        <motion.line
+          x1={rightX}
+          y1="8"
+          x2={rightX}
+          y2={H - 8}
+          stroke={solved ? '#8BA888' : '#E8A598'}
+          strokeWidth="3"
+          animate={{ x: 0 }}
+        />
+        <motion.rect
+          x={left}
+          y={base - 84}
+          width={Math.max(0, rightX - left)}
+          height="7"
+          fill={solved ? 'rgba(139,168,136,0.65)' : 'rgba(232,165,152,0.6)'}
+          rx="3.5"
+        />
+      </svg>
+    </div>
+  )
+
   return (
-    <div>
+    <StepLayout visual={visual} accent={color} label="Compás">
       <Prompt>{step.prompt}</Prompt>
 
-      <div className="overflow-hidden rounded-xl border border-[#EAE4E2]">
-        <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
-          <defs>
-            <pattern id="cal-grid" width={sq} height={sq} patternUnits="userSpaceOnUse">
-              <path d={`M${sq} 0 L0 0 0 ${sq}`} fill="none" stroke="rgba(212,151,140,0.28)" strokeWidth="1" />
-            </pattern>
-          </defs>
-          <rect width={W} height={H} fill="#FFF7F4" />
-          <rect width={W} height={H} fill="url(#cal-grid)" />
-          <path d={`M10 ${base} L${left} ${base}`} fill="none" stroke="#241c1a" strokeWidth="2.2" />
-          <path
-            d={`M${left} ${base} L${left + qw * 0.2} ${base + 14} L${x0} ${base - 70} L${x0 + qw * 0.3} ${base + 22} L${left + qw} ${base} L${W - 10} ${base}`}
-            fill="none"
-            stroke="#241c1a"
-            strokeWidth="2.4"
-            strokeLinejoin="round"
-          />
-          <line x1={left} y1="8" x2={left} y2={H - 8} stroke="#B87A6F" strokeWidth="1.6" strokeDasharray="4 3" />
-          <line x1={rightX} y1="8" x2={rightX} y2={H - 8} stroke="#E8A598" strokeWidth="2.4" />
-          <rect
-            x={left}
-            y={base - 82}
-            width={Math.max(0, rightX - left)}
-            height="6"
-            fill="rgba(232,165,152,0.55)"
-            rx="3"
-          />
-        </svg>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-lg font-bold text-[#2C3E50] tabular-nums">
-          {(ms / 1000).toFixed(2)} s <span className="text-sm font-medium text-[#7D8A96]">({ms} ms)</span>
-        </span>
-        <span
-          className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
-            solved ? 'bg-[#8BA888]/15 text-[#6a8a67]' : 'bg-[#F2EFED] text-[#7D8A96]'
-          }`}
-        >
-          {solved
-            ? ms < step.normalMax
-              ? 'QRS normal (< 0,12 s) ✓'
-              : 'QRS ancho'
-            : 'Ajusta el compás al final del QRS'}
-        </span>
-      </div>
+      <Readout
+        value={
+          <>
+            {(ms / 1000).toFixed(2)} s <span className="text-base font-medium text-[#7D8A96]">({ms} ms)</span>
+          </>
+        }
+        tag={solved ? (ms < step.normalMax ? 'QRS normal ✓' : 'QRS ancho') : 'Ajusta el compás'}
+        ok={solved}
+      />
 
       <Slider
         label="Compás"
@@ -532,14 +653,14 @@ function CaliperStep({ step, onSolved }: StepProps<'caliper'>) {
           Bien medido: el QRS mide ≈ {step.trueMs} ms. Al ser &lt; 0,12 s es un QRS estrecho (normal).
         </Feedback>
       ) : null}
-    </div>
+    </StepLayout>
   )
 }
 
 /* ════════════════════════════════════════════════════════════════════════
    RATE — regla del 300
 ═══════════════════════════════════════════════════════════════════════════ */
-function RateStep({ step, onSolved }: StepProps<'rate'>) {
+function RateStep({ step, onSolved, color }: StepProps<'rate'>) {
   const [bigSquares, setBigSquares] = useState(6)
   const [solved, setSolved] = useState(false)
 
@@ -552,7 +673,8 @@ function RateStep({ step, onSolved }: StepProps<'rate'>) {
   const base = H * 0.55
   const x1 = 40
   const x2 = x1 + bigSquares * big
-  const spike = (x: number) => `L${x - 6} ${base} L${x - 3} ${base + 10} L${x} ${base - 60} L${x + 3} ${base + 16} L${x + 6} ${base}`
+  const spike = (x: number) =>
+    `L${x - 6} ${base} L${x - 3} ${base + 10} L${x} ${base - 60} L${x + 3} ${base + 16} L${x + 6} ${base}`
 
   const handleChange = (value: number) => {
     setBigSquares(value)
@@ -564,53 +686,50 @@ function RateStep({ step, onSolved }: StepProps<'rate'>) {
     }
   }
 
+  const visual = (
+    <div className="w-full max-w-lg">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
+        <path
+          d={`M10 ${base} ${spike(x1)} ${spike(x2)} L${W - 10} ${base}`}
+          fill="none"
+          stroke="#241c1a"
+          strokeWidth="2.5"
+          strokeLinejoin="round"
+        />
+        <path
+          d={`M${x1} ${base + 24} L${x2} ${base + 24}`}
+          stroke={inRange ? '#8BA888' : '#E8A598'}
+          strokeWidth="2.5"
+          fill="none"
+        />
+        <text
+          x={(x1 + x2) / 2}
+          y={base + 40}
+          textAnchor="middle"
+          fontSize="12"
+          fontWeight="800"
+          fill={inRange ? '#6a8a67' : '#B87A6F'}
+          fontFamily="inherit"
+        >
+          {bigSquares} cuadros
+        </text>
+      </svg>
+    </div>
+  )
+
   return (
-    <div>
+    <StepLayout visual={visual} accent={color} label="Regla del 300">
       <Prompt>{step.prompt}</Prompt>
 
-      <div className="overflow-hidden rounded-xl border border-[#EAE4E2]">
-        <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
-          <defs>
-            <pattern id="rate-grid" width={big} height={big} patternUnits="userSpaceOnUse">
-              <path d={`M${big} 0 L0 0 0 ${big}`} fill="none" stroke="rgba(212,151,140,0.4)" strokeWidth="1.1" />
-            </pattern>
-          </defs>
-          <rect width={W} height={H} fill="#FFF7F4" />
-          <rect width={W} height={H} fill="url(#rate-grid)" />
-          <path
-            d={`M10 ${base} ${spike(x1)} ${spike(x2)} L${W - 10} ${base}`}
-            fill="none"
-            stroke="#241c1a"
-            strokeWidth="2.3"
-            strokeLinejoin="round"
-          />
-          <path d={`M${x1} ${base + 22} L${x2} ${base + 22}`} stroke="#E8A598" strokeWidth="2" fill="none" />
-          <text
-            x={(x1 + x2) / 2}
-            y={base + 38}
-            textAnchor="middle"
-            fontSize="11"
-            fontWeight="700"
-            fill="#B87A6F"
-            fontFamily="inherit"
-          >
-            {bigSquares} cuadros
-          </text>
-        </svg>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-lg text-[#7D8A96]">
-          300 ÷ {bigSquares} = <b className="text-[#2C3E50]">{bpm}</b> lpm
-        </span>
-        <span
-          className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
-            inRange ? 'bg-[#8BA888]/15 text-[#6a8a67]' : 'bg-[#F2EFED] text-[#7D8A96]'
-          }`}
-        >
-          {inRange ? 'Frecuencia normal ✓' : bpm < step.targetMin ? 'Bradicardia' : 'Taquicardia'}
-        </span>
-      </div>
+      <Readout
+        value={
+          <>
+            300 ÷ {bigSquares} = <span className="text-[#E8A598]">{bpm}</span> lpm
+          </>
+        }
+        tag={inRange ? 'Frecuencia normal ✓' : bpm < step.targetMin ? 'Bradicardia' : 'Taquicardia'}
+        ok={inRange}
+      />
 
       <Slider
         label="Distancia R-R"
@@ -626,7 +745,7 @@ function RateStep({ step, onSolved }: StepProps<'rate'>) {
           {bpm} lpm está en el rango normal (60–100). Recuerda la regla: 300, 150, 100, 75, 60, 50 para 1–6 cuadros.
         </Feedback>
       ) : null}
-    </div>
+    </StepLayout>
   )
 }
 
@@ -642,7 +761,7 @@ function quadrant(angle: number): { name: string; color: string } {
   return { name: 'Eje extremo', color: '#C4655A' }
 }
 
-function AxisStep({ step, onSolved }: StepProps<'axis'>) {
+function AxisStep({ step, onSolved, color }: StepProps<'axis'>) {
   const [angle, setAngle] = useState(60)
   const [solved, setSolved] = useState(false)
 
@@ -655,6 +774,7 @@ function AxisStep({ step, onSolved }: StepProps<'axis'>) {
   const q = quadrant(angle)
   const iPos = Math.cos(rad) >= 0
   const fPos = Math.sin(rad) >= 0
+
   const handleChange = (value: number) => {
     setAngle(value)
     if (solved) return
@@ -664,47 +784,66 @@ function AxisStep({ step, onSolved }: StepProps<'axis'>) {
     }
   }
 
+  const visual = (
+    <div className="h-72 w-72 lg:h-80 lg:w-80">
+      <svg viewBox="0 0 220 220" className="h-full w-full">
+        <circle cx={cx} cy={cy} r={R} fill="rgba(255,255,255,0.6)" stroke="#EAE4E2" strokeWidth="2" />
+        <line x1={cx - R} y1={cy} x2={cx + R} y2={cy} stroke="#D9D2CE" strokeWidth="1.5" />
+        <line x1={cx} y1={cy - R} x2={cx} y2={cy + R} stroke="#D9D2CE" strokeWidth="1.5" />
+        <text x={cx + R - 36} y={cy - 8} fontSize="10" fontWeight="800" fill="#A8988F" fontFamily="inherit">
+          I+ (0°)
+        </text>
+        <text x={cx + 6} y={cy + R - 6} fontSize="10" fontWeight="800" fill="#A8988F" fontFamily="inherit">
+          aVF+ (+90°)
+        </text>
+        <motion.line
+          x1={cx}
+          y1={cy}
+          x2={ex}
+          y2={ey}
+          stroke={q.color}
+          strokeWidth="5"
+          strokeLinecap="round"
+          animate={{ x2: ex, y2: ey }}
+          transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+        />
+        <motion.circle cx={ex} cy={ey} r="8" fill={q.color} animate={{ cx: ex, cy: ey }} />
+        <text
+          x={cx}
+          y={cy - 12}
+          textAnchor="middle"
+          fontSize="22"
+          fontWeight="900"
+          fill={q.color}
+          fontFamily="inherit"
+        >
+          {angle}°
+        </text>
+      </svg>
+    </div>
+  )
+
   return (
-    <div>
+    <StepLayout visual={visual} accent={color} label="Eje eléctrico">
       <Prompt>{step.prompt}</Prompt>
 
-      <div className="mx-auto h-56 w-56">
-        <svg viewBox="0 0 220 220" className="h-full w-full">
-          <circle cx={cx} cy={cy} r={R} fill="#FFF7F4" stroke="#EAE4E2" strokeWidth="2" />
-          <line x1={cx - R} y1={cy} x2={cx + R} y2={cy} stroke="#D9D2CE" strokeWidth="1.5" />
-          <line x1={cx} y1={cy - R} x2={cx} y2={cy + R} stroke="#D9D2CE" strokeWidth="1.5" />
-          <text x={cx + R - 34} y={cy - 8} fontSize="9" fontWeight="700" fill="#A8988F" fontFamily="inherit">
-            I+ (0°)
-          </text>
-          <text x={cx + 6} y={cy + R - 6} fontSize="9" fontWeight="700" fill="#A8988F" fontFamily="inherit">
-            aVF+ (+90°)
-          </text>
-          <line x1={cx} y1={cy} x2={ex} y2={ey} stroke={q.color} strokeWidth="4" strokeLinecap="round" />
-          <circle cx={ex} cy={ey} r="6" fill={q.color} />
-          <text x={cx} y={cy - 8} textAnchor="middle" fontSize="18" fontWeight="800" fill={q.color} fontFamily="inherit">
-            {angle}°
-          </text>
-        </svg>
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
-        <span
-          className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
-            iPos ? 'bg-[#8BA888]/15 text-[#6a8a67]' : 'bg-[#C4655A]/12 text-[#C4655A]'
-          }`}
-        >
-          I {iPos ? '▲' : '▼'}
-        </span>
-        <span
-          className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
-            fPos ? 'bg-[#8BA888]/15 text-[#6a8a67]' : 'bg-[#C4655A]/12 text-[#C4655A]'
-          }`}
-        >
-          aVF {fPos ? '▲' : '▼'}
-        </span>
-        <span className="text-sm font-bold" style={{ color: q.color }}>
+      <div className="flex flex-wrap items-center gap-2.5">
+        {[
+          { lead: 'I', pos: iPos },
+          { lead: 'aVF', pos: fPos },
+        ].map((b) => (
+          <span
+            key={b.lead}
+            className={`rounded-xl px-3.5 py-2 text-sm font-black ${
+              b.pos ? 'bg-[#8BA888]/15 text-[#6a8a67]' : 'bg-[#C4655A]/12 text-[#C4655A]'
+            }`}
+          >
+            {b.lead} {b.pos ? '▲' : '▼'}
+          </span>
+        ))}
+        <motion.span key={q.name} className="text-base font-black" style={{ color: q.color }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           {q.name}
-        </span>
+        </motion.span>
       </div>
 
       <Slider
@@ -722,7 +861,7 @@ function AxisStep({ step, onSolved }: StepProps<'axis'>) {
           {step.targetMax}°).
         </Feedback>
       ) : null}
-    </div>
+    </StepLayout>
   )
 }
 
@@ -797,7 +936,7 @@ function AlgorithmStep({ step, onSolved, color }: StepProps<'algorithm'>) {
     setPlaying(true)
   }
 
-  const renderNode = (nodeId: string, path: string): React.ReactNode => {
+  const renderNode = (nodeId: string, path: string): ReactNode => {
     const node = tree.nodes[nodeId]
     if (!node) return null
 
@@ -806,61 +945,65 @@ function AlgorithmStep({ step, onSolved, color }: StepProps<'algorithm'>) {
       const visible = isVisible(key)
       const active = selected?.path === path
       return (
-        <button
+        <motion.button
           type="button"
           disabled={!visible}
           onClick={() => {
             setSelected({ path, node })
             solve()
           }}
-          className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-all ${
-            visible ? 'opacity-100' : 'pointer-events-none opacity-0'
+          animate={visible ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.94 }}
+          transition={{ duration: 0.28, ease: 'easeOut' }}
+          className={`flex w-full items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 text-left transition-colors ${
+            visible ? '' : 'pointer-events-none'
           } ${
             active
-              ? 'border-[#2C3E50] bg-[#FFF5F3] shadow-sm'
-              : 'border-[#EAE4E2] bg-white hover:border-[#E8A598]'
+              ? 'border-[#2C3E50] bg-white shadow-[3px_3px_0_0_#2c3e50]'
+              : 'border-[#EAE4E2] bg-white/90 hover:border-[#E8A598]'
           }`}
         >
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: SEV_COLOR[node.sev] }} />
-          <span className="min-w-0 flex-1 text-xs font-semibold text-[#2C3E50]">{node.dx}</span>
-          <span className="material-symbols-outlined text-sm text-[#7D8A96]/60">chevron_right</span>
-        </button>
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: SEV_COLOR[node.sev] }} />
+          <span className="min-w-0 flex-1 text-[13px] font-bold text-[#2C3E50]">{node.dx}</span>
+          <span className="material-symbols-outlined text-base text-[#7D8A96]/60">chevron_right</span>
+        </motion.button>
       )
     }
 
     const qKey = `q:${path}`
     return (
-      <div className="flex flex-col gap-2">
-        <div
-          className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 transition-opacity ${
-            isVisible(qKey) ? 'opacity-100' : 'opacity-0'
-          }`}
-          style={{ borderColor: `${color}55`, backgroundColor: `${color}12` }}
+      <div className="flex flex-col gap-2.5">
+        <motion.div
+          className="flex items-start gap-2.5 rounded-xl border-2 px-3 py-2.5"
+          style={{ borderColor: `${color}66`, backgroundColor: `${color}14` }}
+          animate={isVisible(qKey) ? { opacity: 1, y: 0 } : { opacity: 0, y: -6 }}
+          transition={{ duration: 0.28, ease: 'easeOut' }}
         >
           <span
-            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-black text-white"
             style={{ backgroundColor: color }}
           >
             ?
           </span>
-          <span className="text-xs font-bold text-[#2C3E50]">{node.q.replace(/^\d\)\s*/, '')}</span>
-        </div>
+          <span className="text-[13px] font-black text-[#2C3E50]">{node.q.replace(/^\d\)\s*/, '')}</span>
+        </motion.div>
 
-        <div className="flex flex-col gap-2 border-l-2 border-dashed border-[#EAE4E2] pl-3">
+        <div className="flex flex-col gap-2.5 border-l-2 border-dashed border-[#D9D2CE] pl-3.5">
           {node.options.map((option, i) => {
             const bKey = `b:${path}/${i}`
             const childPath = `${path}/${i}`
             // Una rama se ilumina si el diagnóstico elegido cuelga de ella.
             const onPath = selected ? selected.path.startsWith(childPath) : false
             return (
-              <div key={bKey} className="flex flex-col gap-1.5">
-                <span
-                  className={`self-start rounded-full px-2.5 py-1 text-[11px] font-semibold transition-all ${
-                    isVisible(bKey) ? 'opacity-100' : 'opacity-0'
-                  } ${onPath ? 'bg-[#2C3E50] text-white' : 'bg-[#F2EFED] text-[#7D8A96]'}`}
+              <div key={bKey} className="flex flex-col gap-2">
+                <motion.span
+                  className={`self-start rounded-full px-3 py-1 text-[11px] font-bold transition-colors ${
+                    onPath ? 'bg-[#2C3E50] text-white' : 'bg-white/80 text-[#7D8A96]'
+                  }`}
+                  animate={isVisible(bKey) ? { opacity: 1, x: 0 } : { opacity: 0, x: -8 }}
+                  transition={{ duration: 0.28, ease: 'easeOut' }}
                 >
                   {option.label}
-                </span>
+                </motion.span>
                 <div className="pl-2">{renderNode(option.go, childPath)}</div>
               </div>
             )
@@ -870,15 +1013,22 @@ function AlgorithmStep({ step, onSolved, color }: StepProps<'algorithm'>) {
     )
   }
 
-  return (
-    <div>
-      <p className="mb-3 text-sm leading-relaxed text-[#7D8A96]">{tree.intro}</p>
+  const visual = <div className="w-full self-start">{renderNode(tree.root, '')}</div>
 
-      <div className="mb-3 flex items-center gap-3 rounded-xl border border-[#EAE4E2] bg-white p-2.5">
+  return (
+    <StepLayout
+      visual={visual}
+      accent={color}
+      label="Árbol de decisión"
+      stageClass="min-h-[420px] lg:min-h-[560px]"
+    >
+      <p className="text-[15px] leading-relaxed text-[#7D8A96]">{tree.intro}</p>
+
+      <div className="mt-5 flex items-center gap-3 rounded-2xl border border-[#EAE4E2] bg-white p-3">
         <button
           type="button"
           onClick={() => (playing && progress < 1 ? setPlaying(false) : play())}
-          className="rounded-full bg-[#E8A598] p-1.5 text-white transition-colors hover:bg-[#d18d80]"
+          className="rounded-full bg-[#E8A598] p-2 text-white transition-transform hover:scale-105 active:scale-95"
           title={playing && progress < 1 ? 'Pausa' : 'Reproducir'}
         >
           <span className="material-symbols-outlined text-lg">
@@ -898,53 +1048,47 @@ function AlgorithmStep({ step, onSolved, color }: StepProps<'algorithm'>) {
             if (v >= 1) solve()
           }}
           aria-label="Avance del algoritmo"
-          className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-[#EAE4E2] accent-[#E8A598]"
+          className="h-2.5 flex-1 cursor-pointer appearance-none rounded-full bg-[#EAE4E2] accent-[#E8A598]"
         />
       </div>
 
-      <div className="rounded-xl border border-[#EAE4E2] bg-[#FCFAF9] p-3">{renderNode(tree.root, '')}</div>
-
       {selected ? (
         <motion.div
-          className="mt-3 rounded-xl border border-[#EAE4E2] bg-white p-4"
-          initial={{ opacity: 0, y: 8 }}
+          key={selected.path}
+          className="mt-5 rounded-2xl border-2 border-[#2c3e50] bg-white p-4 shadow-[4px_4px_0_0_#2c3e50]"
+          initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: 'easeOut' }}
+          transition={{ type: 'spring', stiffness: 260, damping: 24 }}
         >
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span
-              className="h-2.5 w-2.5 rounded-full"
-              style={{ backgroundColor: SEV_COLOR[selected.node.sev] }}
-            />
-            <h3 className="text-base font-bold text-[#2C3E50]">{selected.node.dx}</h3>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: SEV_COLOR[selected.node.sev] }} />
+            <h3 className="text-lg font-black text-[#2C3E50]">{selected.node.dx}</h3>
             <span className="rounded bg-[#F2EFED] px-2 py-0.5 text-[10px] font-bold text-[#7D8A96]">
               {selected.node.badge}
             </span>
           </div>
-          {/* La caja copia la proporción del viewBox para que el papel llegue
-              a los bordes en vez de dejar márgenes blancos a los lados. */}
-          <div className="mb-3 aspect-[320/104] w-full overflow-hidden rounded-lg border border-[#EAE4E2]">
+          <div className="mb-3 aspect-[320/104] w-full overflow-hidden rounded-xl border border-[#EAE4E2]">
             <RhythmStrip kind={selected.node.strip} label={selected.node.badge} />
           </div>
-          <p className="mb-1.5 text-sm text-[#2C3E50]">
+          <p className="mb-2 text-[15px] leading-relaxed text-[#2C3E50]">
             <b>En el ECG:</b> {selected.node.clue}
           </p>
-          <p className="text-sm text-[#7D8A96]">{selected.node.why}</p>
+          <p className="text-[15px] leading-relaxed text-[#7D8A96]">{selected.node.why}</p>
         </motion.div>
       ) : (
-        <p className="mt-3 flex items-center gap-1.5 text-xs text-[#7D8A96]/70">
-          <span className="material-symbols-outlined text-sm">touch_app</span>
-          Toca un diagnóstico para iluminar su camino y ver el detalle.
+        <p className="mt-5 flex items-center gap-2 rounded-2xl border border-dashed border-[#D9D2CE] p-4 text-sm text-[#7D8A96]/80">
+          <span className="material-symbols-outlined">touch_app</span>
+          Toca un diagnóstico del árbol para iluminar su camino y ver el detalle.
         </p>
       )}
-    </div>
+    </StepLayout>
   )
 }
 
 /* ════════════════════════════════════════════════════════════════════════
    TERRITORY
 ═══════════════════════════════════════════════════════════════════════════ */
-function TerritoryStep({ step, onSolved }: StepProps<'territory'>) {
+function TerritoryStep({ step, onSolved, color }: StepProps<'territory'>) {
   const [solved, setSolved] = useState<string | null>(null)
   const [wrong, setWrong] = useState<string | null>(null)
   const [showHint, setShowHint] = useState(false)
@@ -963,31 +1107,50 @@ function TerritoryStep({ step, onSolved }: StepProps<'territory'>) {
 
   const wall = solved ? WALLS[step.target] : null
 
+  const visual = (
+    <motion.div
+      className="h-72 w-72 lg:h-96 lg:w-96"
+      animate={wrong ? { x: [0, -7, 7, -5, 0] } : { x: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      <Bullseye onPick={pick} solvedId={solved} wrongId={wrong} />
+    </motion.div>
+  )
+
   return (
-    <div>
+    <StepLayout visual={visual} accent={color} label="Paredes del VI">
       <Prompt>{step.prompt}</Prompt>
-      <div className="mx-auto h-56 w-56">
-        <Bullseye onPick={pick} solvedId={solved} wrongId={wrong} />
-      </div>
 
       {wall ? (
-        <div className="mt-3 rounded-xl border border-[#EAE4E2] bg-white p-3.5 text-sm">
-          <b className="text-[#2C3E50]">Cara {wall.name.toLowerCase()}</b>
-          <p className="mt-1 text-[#7D8A96]">
-            <i>Derivaciones:</i> {wall.leads}
+        <motion.div
+          className="rounded-2xl border-2 border-[#2c3e50] bg-white p-4 shadow-[4px_4px_0_0_#2c3e50]"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+        >
+          <b className="text-lg text-[#2C3E50]">Cara {wall.name.toLowerCase()}</b>
+          <p className="mt-2 text-[15px] text-[#7D8A96]">
+            <i>Derivaciones:</i> <b className="text-[#2C3E50]">{wall.leads}</b>
           </p>
-          <p className="text-[#7D8A96]">
-            <i>Arteria:</i> {wall.artery}
+          <p className="text-[15px] text-[#7D8A96]">
+            <i>Arteria:</i> <b className="text-[#2C3E50]">{wall.artery}</b>
           </p>
-        </div>
+        </motion.div>
       ) : showHint ? (
-        <p className="mt-3 text-center text-sm text-[#C9A24A]">
+        <motion.p
+          className="flex items-start gap-2 rounded-2xl border-2 border-[#C9A24A]/40 bg-[#FDF8EC] p-4 text-[15px] text-[#8a6f2a]"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <span className="material-symbols-outlined text-[#C9A24A]">lightbulb</span>
           Pista: relaciona el grupo de derivaciones con su pared.
-        </p>
-      ) : null}
+        </motion.p>
+      ) : (
+        <p className="text-[15px] text-[#7D8A96]/70">Toca la pared correspondiente en la diana.</p>
+      )}
 
       {solved ? <Feedback ok>{step.ok}</Feedback> : null}
-    </div>
+    </StepLayout>
   )
 }
 
@@ -1008,7 +1171,7 @@ const LADDER_CAPTIONS: Record<string, string> = {
   av3: 'Disociación completa: ninguna P conduce; un marcapasos de escape mueve los ventrículos por su cuenta.',
 }
 
-function LadderStep({ step }: StepProps<'ladder'>) {
+function LadderStep({ step, color }: StepProps<'ladder'>) {
   const [kind, setKind] = useState(step.kinds[0])
   const [head, setHead] = useState(0)
 
@@ -1016,18 +1179,26 @@ function LadderStep({ step }: StepProps<'ladder'>) {
   // se repite continuamente y cortarlo a media pasada se ve peor.
   useAnimationLoop((t) => setHead((t * 82) % 360), true)
 
+  const visual = (
+    <div className="w-full max-w-xl">
+      <ConductionLadder kind={kind} head={head} />
+    </div>
+  )
+
   return (
-    <div>
+    <StepLayout visual={visual} accent={color} label="Escalera de Lewis">
       <Prompt>{step.prompt}</Prompt>
 
-      <div className="mb-3 flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-2">
         {step.kinds.map((k) => (
           <button
             key={k}
             type="button"
             onClick={() => setKind(k)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
-              kind === k ? 'bg-[#E8A598] text-white' : 'bg-[#F2EFED] text-[#7D8A96] hover:bg-[#EAE4E2]'
+            className={`rounded-xl border-2 px-4 py-2 text-sm font-bold transition-all ${
+              kind === k
+                ? 'border-[#2c3e50] bg-[#E8A598] text-white shadow-[3px_3px_0_0_#2c3e50]'
+                : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50]'
             }`}
           >
             {LADDER_NAMES[k]}
@@ -1035,12 +1206,16 @@ function LadderStep({ step }: StepProps<'ladder'>) {
         ))}
       </div>
 
-      <div className="h-40 overflow-hidden rounded-xl border border-[#EAE4E2]">
-        <ConductionLadder kind={kind} head={head} />
-      </div>
-
-      <p className="mt-3 text-sm text-[#7D8A96]">{LADDER_CAPTIONS[kind]}</p>
-    </div>
+      <motion.p
+        key={kind}
+        className="mt-5 rounded-2xl border-l-4 border-l-[#8BA888] bg-white p-4 text-[15px] leading-relaxed text-[#2C3E50]"
+        initial={{ opacity: 0, x: 12 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.28, ease: 'easeOut' }}
+      >
+        {LADDER_CAPTIONS[kind]}
+      </motion.p>
+    </StepLayout>
   )
 }
 
@@ -1049,15 +1224,22 @@ function LadderStep({ step }: StepProps<'ladder'>) {
 ═══════════════════════════════════════════════════════════════════════════ */
 function SummaryStep({ step }: StepProps<'summary'>) {
   return (
-    <div className="text-center">
-      <span className="material-symbols-outlined mb-3 text-6xl text-[#E8A598]">workspace_premium</span>
-      <p className="mb-5 text-base leading-relaxed text-[#7D8A96]">{step.body}</p>
+    <div className="mx-auto max-w-2xl py-6 text-center">
+      <motion.div
+        className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full border-2 border-[#2c3e50] bg-[#E8A598] shadow-[5px_5px_0_0_#2c3e50]"
+        initial={{ scale: 0.5, rotate: -18 }}
+        animate={{ scale: 1, rotate: 0 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 15 }}
+      >
+        <span className="material-symbols-outlined text-5xl text-white">workspace_premium</span>
+      </motion.div>
+      <p className="mb-7 text-lg leading-relaxed text-[#7D8A96]">{step.body}</p>
       <Link
         href="/studio/electros/explorador"
-        className="inline-flex items-center gap-2 rounded-xl bg-[#E8A598] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#d18d80]"
+        className="inline-flex items-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-[#E8A598] px-6 py-3.5 text-base font-bold text-white shadow-[4px_4px_0_0_#2c3e50] transition-transform hover:-translate-y-0.5"
       >
         {step.cta}
-        <span className="material-symbols-outlined text-lg">arrow_forward</span>
+        <span className="material-symbols-outlined">arrow_forward</span>
       </Link>
     </div>
   )
@@ -1073,6 +1255,8 @@ export const AUTO_UNLOCK: ReadonlySet<Step['type']> = new Set<Step['type']>([
   'ladder',
   'summary',
 ])
+
+export { PAPER_STYLE }
 
 export function StepRenderer({ step, onSolved, color }: { step: Step; onSolved: () => void; color: string }) {
   switch (step.type) {
