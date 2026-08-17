@@ -12,6 +12,7 @@ import { DeckArt } from '@/components/studio/MazosHoverArt'
 import { FlipCardArt } from '@/components/studio/FlashcardsHoverArt'
 import { WaveCta } from '@/components/studio/SimulacroWaveArt'
 import { ZenTimerArt } from '@/components/studio/ZenHoverArt'
+import { EcgMonitorArt, EcgTraceCta } from '@/components/studio/ElectrosHoverArt'
 
 type QuickStat = {
   label: string
@@ -157,6 +158,17 @@ const studioCards: ReadonlyArray<StudioCard> = [
     secondaryAction: 'Unirme',
     type: 'zen',
   },
+  {
+    id: 'electros',
+    icon: 'cardiology',
+    title: 'Electros',
+    description:
+      'Aprende a leer un ECG desde cero en la Academia y practica con trazos realistas de 12 derivaciones: eje, territorios del infarto y arritmias, latiendo en tiempo real.',
+    cta: 'Entrar en Electros',
+    badge: 'NUEVO',
+    href: '/studio/electros',
+    type: 'featured',
+  },
 ] as const
 
 const studioGreetingTemplates: ReadonlyArray<string> = [
@@ -214,6 +226,7 @@ export default function StudioPage() {
   const [flashcardsHovered, setFlashcardsHovered] = useState(false)
   const [featuredHovered, setFeaturedHovered] = useState(false)
   const [zenHovered, setZenHovered] = useState(false)
+  const [electrosHovered, setElectrosHovered] = useState(false)
   const monthlyProgress = useMonthlyProgress(Boolean(user))
 
   const overviewCards = useMemo<ReadonlyArray<OverviewCard>>(
@@ -446,7 +459,12 @@ export default function StudioPage() {
                               onMouseEnter: () => setZenHovered(true),
                               onMouseLeave: () => setZenHovered(false),
                             }
-                          : {})}
+                          : card.id === 'electros'
+                            ? {
+                                onMouseEnter: () => setElectrosHovered(true),
+                                onMouseLeave: () => setElectrosHovered(false),
+                              }
+                            : {})}
               >
                 {card.id === 'preguntas-simulacros' ? (
                   <AnimatePresence initial={false}>
@@ -460,11 +478,27 @@ export default function StudioPage() {
                 {card.id === 'mazos' ? <DeckArt hovered={mazosHovered} /> : null}
                 {card.id === 'flashcards' ? <FlipCardArt hovered={flashcardsHovered} /> : null}
                 {card.id === 'sala-zen' ? <ZenTimerArt hovered={zenHovered} /> : null}
+                {card.id === 'electros' ? <EcgMonitorArt hovered={electrosHovered} /> : null}
                 {card.id === 'simulacros' ? (
                   <WaveCta hovered={featuredHovered}>
                     <span className="material-symbols-outlined">play_arrow</span>
                     {card.cta}
                   </WaveCta>
+                ) : null}
+                {card.id === 'electros' ? (
+                  <EcgTraceCta hovered={electrosHovered}>
+                    <span className="material-symbols-outlined">monitor_heart</span>
+                    {card.cta}
+                  </EcgTraceCta>
+                ) : null}
+                {/* La tarjeta entera navega: el contenido es pointer-events-none
+                    y el CTA queda debajo, así que hace falta una capa propia. */}
+                {card.id === 'electros' && card.href ? (
+                  <Link
+                    href={card.href}
+                    aria-label={`${card.title}: ${card.cta}`}
+                    className="absolute inset-0 z-20 rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E8A598]"
+                  />
                 ) : null}
                 <div
                   className={`relative z-10 flex h-full flex-col justify-between ${
@@ -481,7 +515,9 @@ export default function StudioPage() {
                             ? 'sm:pr-44'
                             : card.id === 'sala-zen'
                               ? 'sm:pr-44'
-                              : undefined
+                              : card.id === 'electros'
+                                ? 'sm:pr-64 lg:pr-80'
+                                : undefined
                     }
                   >
                     <div className="mb-4 flex items-start justify-between gap-2">
