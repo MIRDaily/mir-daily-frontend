@@ -53,9 +53,10 @@ const SWEEP_S = BEAT_MS * 3
 
 const TRACE = ecgPath(SCREEN_X, BEAT_W, 3, BASE_Y, 1)
 
-// Cuadrícula del papel de ECG: fina cada 1 mm, gruesa cada 5 mm.
-const gridX = Array.from({ length: Math.floor(SCREEN_W / 24) + 1 }, (_, i) => SCREEN_X + i * 24)
-const gridY = Array.from({ length: Math.floor(SCREEN_H / 24) + 1 }, (_, i) => SCREEN_Y + i * 24)
+// Cuadrícula del papel de ECG (fina 1 mm, gruesa 5 mm) como `pattern`: antes
+// eran ~40 elementos <line> por tarjeta, y el navegador los recomponía en cada
+// fotograma del barrido. Así son dos rectángulos.
+const GRID_MM = 24
 
 // `fill-box` hace que el 50% 50% que framer fuerza en los SVG caiga en el
 // centro de la propia figura, que es donde debe pivotar el latido del corazón.
@@ -82,6 +83,23 @@ export function EcgMonitorArt({ hovered }: { hovered: boolean }) {
           <clipPath id="electroScreenClip">
             <rect x={SCREEN_X} y={SCREEN_Y} width={SCREEN_W} height={SCREEN_H} rx="20" />
           </clipPath>
+          <pattern id="electroGridFine" width={GRID_MM} height={GRID_MM} patternUnits="userSpaceOnUse">
+            <path
+              d={`M${GRID_MM} 0 L0 0 0 ${GRID_MM}`}
+              fill="none"
+              stroke="#F4D7CF"
+              strokeWidth="1.6"
+            />
+          </pattern>
+          <pattern id="electroGridBold" width={GRID_MM * 5} height={GRID_MM * 5} patternUnits="userSpaceOnUse">
+            <rect width={GRID_MM * 5} height={GRID_MM * 5} fill="url(#electroGridFine)" />
+            <path
+              d={`M${GRID_MM * 5} 0 L0 0 0 ${GRID_MM * 5}`}
+              fill="none"
+              stroke="#E9B7AA"
+              strokeWidth="3"
+            />
+          </pattern>
           {/* El barrido: una ventana que crece de izquierda a derecha y va
               destapando el trazo, igual que el cabezal de un monitor. */}
           <clipPath id="electroSweepClip">
@@ -149,28 +167,13 @@ export function EcgMonitorArt({ hovered }: { hovered: boolean }) {
           strokeWidth="8"
         />
         <g clipPath="url(#electroScreenClip)">
-          {gridX.map((x, i) => (
-            <line
-              key={`vx-${x}`}
-              x1={x}
-              y1={SCREEN_Y}
-              x2={x}
-              y2={SCREEN_Y + SCREEN_H}
-              stroke={i % 5 === 0 ? '#E9B7AA' : '#F4D7CF'}
-              strokeWidth={i % 5 === 0 ? 3 : 1.6}
-            />
-          ))}
-          {gridY.map((y, i) => (
-            <line
-              key={`hz-${y}`}
-              x1={SCREEN_X}
-              y1={y}
-              x2={SCREEN_X + SCREEN_W}
-              y2={y}
-              stroke={i % 5 === 0 ? '#E9B7AA' : '#F4D7CF'}
-              strokeWidth={i % 5 === 0 ? 3 : 1.6}
-            />
-          ))}
+          <rect
+            x={SCREEN_X}
+            y={SCREEN_Y}
+            width={SCREEN_W}
+            height={SCREEN_H}
+            fill="url(#electroGridBold)"
+          />
 
           {/* Trazo, destapado por el barrido */}
           <g clipPath="url(#electroSweepClip)">
@@ -215,33 +218,28 @@ export function EcgMonitorArt({ hovered }: { hovered: boolean }) {
 
 const CTA_W = 1440
 const CTA_H = 120
+const CTA_BEAT_W = 240
+const CTA_BASE_Y = 84
 
-const traceLayers = [
-  { color: '#FFC7B0', stroke: 3.5, fillOpacity: 0.16, duration: 11, reverse: true, beatW: 360, amp: 0.34, baseY: 66 },
-  { color: '#F08D75', stroke: 4, fillOpacity: 0.2, duration: 8, reverse: false, beatW: 288, amp: 0.44, baseY: 74 },
-  { color: '#E8A598', stroke: 5, fillOpacity: 0.3, duration: 6, reverse: true, beatW: 240, amp: 0.54, baseY: 82 },
-] as const
+const CTA_LINE = ecgPath(0, CTA_BEAT_W, CTA_W / CTA_BEAT_W, CTA_BASE_Y, 0.52)
+const CTA_BODY = `${CTA_LINE} L${CTA_W},${CTA_H} L0,${CTA_H} Z`
 
-function TraceLayer({
-  color,
-  stroke,
-  fillOpacity,
-  duration,
-  reverse,
-  beatW,
-  amp,
-  baseY,
-}: (typeof traceLayers)[number]) {
-  const line = ecgPath(0, beatW, CTA_W / beatW, baseY, amp)
-  const body = `${line} L${CTA_W},${CTA_H} L0,${CTA_H} Z`
-
+/**
+ * Una sola tira de ECG desplazándose.
+ *
+ * Antes eran tres capas a distintas velocidades: doce rutas grandes
+ * transformándose a la vez, que es lo que hacía que el hover se notara pesado,
+ * y además el apilado ensuciaba la lectura del trazo. Con una capa el gesto se
+ * entiende igual y cuesta una fracción.
+ */
+function TraceMarquee() {
   return (
     <motion.div
       className="absolute inset-y-0 left-0 flex h-full"
       style={{ width: '200%' }}
       initial={{ x: '0%' }}
-      animate={{ x: reverse ? ['-50%', '0%'] : ['0%', '-50%'] }}
-      transition={{ duration, repeat: Infinity, ease: 'linear' }}
+      animate={{ x: ['0%', '-50%'] }}
+      transition={{ duration: 7, repeat: Infinity, ease: 'linear' }}
     >
       {[0, 1].map((i) => (
         <svg
@@ -250,12 +248,12 @@ function TraceLayer({
           preserveAspectRatio="none"
           className="block h-full w-1/2"
         >
-          <path d={body} fill={color} fillOpacity={fillOpacity} />
+          <path d={CTA_BODY} fill="#E8A598" fillOpacity={0.26} />
           <path
-            d={line}
+            d={CTA_LINE}
             fill="none"
-            stroke={color}
-            strokeWidth={stroke}
+            stroke="#E8A598"
+            strokeWidth="5"
             strokeLinecap="round"
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
@@ -263,25 +261,6 @@ function TraceLayer({
         </svg>
       ))}
     </motion.div>
-  )
-}
-
-const blips = [
-  { x: '14%', delay: 0, duration: 2.8 },
-  { x: '34%', delay: 0.9, duration: 3.4 },
-  { x: '62%', delay: 0.4, duration: 3 },
-  { x: '84%', delay: 1.3, duration: 3.2 },
-] as const
-
-function Blip({ x, delay, duration }: (typeof blips)[number]) {
-  return (
-    <motion.div
-      className="absolute h-1.5 w-1.5 rounded-full bg-white/80"
-      style={{ left: x, bottom: 14 }}
-      initial={{ opacity: 0, y: 0 }}
-      animate={{ opacity: [0, 0.9, 0], y: [0, -52] }}
-      transition={{ duration, repeat: Infinity, delay, ease: 'easeOut' }}
-    />
   )
 }
 
@@ -298,9 +277,10 @@ export function EcgTraceCta({ hovered, children }: { hovered: boolean; children:
         }}
         transition={ctaBounce}
       >
+        {/* Solo existe mientras se ve: al salir el ratón se desmonta y no queda
+            ninguna animación corriendo de fondo. */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 -bottom-4">
-          {hovered ? traceLayers.map((layer, i) => <TraceLayer key={i} {...layer} />) : null}
-          {hovered ? blips.map((b, i) => <Blip key={i} {...b} />) : null}
+          {hovered ? <TraceMarquee /> : null}
         </div>
         <span className="relative z-10 flex items-center gap-2 text-base font-semibold text-[#2c3e50] [text-shadow:0_1px_2px_rgba(255,255,255,0.55)]">
           {children}

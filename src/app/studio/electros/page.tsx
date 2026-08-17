@@ -80,7 +80,7 @@ export default function ElectrosHubPage() {
                 className="pointer-events-none absolute top-0 right-0 p-4 opacity-[0.06] transition-opacity group-hover:opacity-[0.12]"
                 aria-hidden="true"
               >
-                <span className="material-symbols-outlined text-8xl text-[#2C3E50]">{tool.icon}</span>
+                <span className="material-symbols-outlined text-[#2C3E50]" style={{ fontSize: 96 }}>{tool.icon}</span>
               </div>
 
               <div className="relative z-10">
@@ -89,7 +89,7 @@ export default function ElectrosHubPage() {
                     className="rounded-xl p-3 transition-colors"
                     style={{ backgroundColor: tool.soft, color: tool.accent }}
                   >
-                    <span className="material-symbols-outlined text-3xl">{tool.icon}</span>
+                    <span className="material-symbols-outlined" style={{ fontSize: 30 }}>{tool.icon}</span>
                   </div>
                   <span
                     className="rounded border px-2 py-1 text-[10px] font-bold uppercase tracking-wide"

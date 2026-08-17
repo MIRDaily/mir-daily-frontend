@@ -23,6 +23,31 @@ export const SEV_COLOR: Record<'normal' | 'warn' | 'crit', string> = {
   crit: '#C4655A',
 }
 
+/** Qué significa cada color de los puntos de gravedad. */
+export const SEV_LEGEND: ReadonlyArray<{ sev: 'normal' | 'warn' | 'crit'; label: string }> = [
+  { sev: 'normal', label: 'Benigno' },
+  { sev: 'warn', label: 'Requiere manejo' },
+  { sev: 'crit', label: 'Grave / urgente' },
+]
+
+/** Leyenda compacta de los colores; sin ella los puntos no dicen nada. */
+export function SeverityLegend({ className = '' }: { className?: string }) {
+  return (
+    <ul className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${className}`}>
+      {SEV_LEGEND.map((item) => (
+        <li key={item.sev} className="flex items-center gap-1.5 text-[10px] font-semibold text-[#7D8A96]">
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ backgroundColor: SEV_COLOR[item.sev] }}
+            aria-hidden
+          />
+          {item.label}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    TEXTURA Y ESCENARIO
 
@@ -494,10 +519,14 @@ export function Bullseye({
   onPick,
   solvedId,
   wrongId,
+  // Las derivaciones de cada pared son la respuesta: se ocultan hasta que el
+  // alumno acierta, y entonces se revelan todas como recompensa/repaso.
+  revealLeads = false,
 }: {
   onPick: (id: string) => void
   solvedId?: string | null
   wrongId?: string | null
+  revealLeads?: boolean
 }) {
   const cx = 110
   const cy = 112
@@ -506,9 +535,11 @@ export function Bullseye({
   return (
     <svg viewBox="0 0 220 224" className="h-full w-full" role="img" aria-label="Paredes del ventrículo izquierdo">
       <path d="M28 112 A82 82 0 0 1 192 112" fill="none" stroke="#D4978C" strokeWidth="2" strokeDasharray="5 4" />
-      <text x="110" y="18" textAnchor="middle" fontSize="8.5" fontWeight="600" fill="#A8988F" fontFamily="inherit">
-        VD: V3R-V4R · Posterior: espejo en V1-V2
-      </text>
+      {revealLeads ? (
+        <text x="110" y="18" textAnchor="middle" fontSize="8.5" fontWeight="600" fill="#A8988F" fontFamily="inherit">
+          VD: V3R-V4R · Posterior: espejo en V1-V2
+        </text>
+      ) : null}
 
       {SECTORS.map((s) => {
         const solved = solvedId === s.id
@@ -537,12 +568,31 @@ export function Bullseye({
         const lp = polar(cx, cy, r * 0.6, mid)
         return (
           <g key={`lbl-${s.id}`} pointerEvents="none" fontFamily="inherit">
-            <text x={lp.x} y={lp.y - 2} textAnchor="middle" fontSize="10" fontWeight="700" fill="#2C3E50">
+            <text
+              x={lp.x}
+              y={revealLeads ? lp.y - 2 : lp.y + 3}
+              textAnchor="middle"
+              fontSize="10.5"
+              fontWeight="700"
+              fill="#2C3E50"
+            >
               {s.lab}
             </text>
-            <text x={lp.x} y={lp.y + 11} textAnchor="middle" fontSize="8" fontWeight="600" fill="#8A7B75">
-              {s.sub}
-            </text>
+            {revealLeads ? (
+              <motion.text
+                x={lp.x}
+                y={lp.y + 11}
+                textAnchor="middle"
+                fontSize="8"
+                fontWeight="600"
+                fill="#8A7B75"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.35, ease: 'easeOut' }}
+              >
+                {s.sub}
+              </motion.text>
+            ) : null}
           </g>
         )
       })}

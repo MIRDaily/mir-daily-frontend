@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import { MonitorCanvas, TwelveLeadCanvas } from '@/components/electros/EcgCanvases'
+import { SEV_COLOR, SeverityLegend } from '@/components/electros/academia/scenes'
 import { synthesize, type Synth } from '@/lib/electros/ecgCore'
 import { LEAD_ORDER, type LeadName } from '@/lib/electros/leads'
 import {
@@ -11,14 +12,7 @@ import {
   normalizeAnswer,
   PATTERNS,
   type SearchablePattern,
-  type Severity,
 } from '@/lib/electros/patterns'
-
-const SEV_COLOR: Record<Severity, string> = {
-  normal: '#8BA888',
-  warn: '#C9A24A',
-  crit: '#C4655A',
-}
 
 const SPEEDS = [0.5, 1, 2] as const
 const QUIZ_LEN = 10
@@ -302,6 +296,11 @@ function PatternRail({ activeId, onSelect }: { activeId: string; onSelect: (id: 
           )
         })}
       </nav>
+
+      {/* Sin esto los puntos de color de cada diagnóstico no dicen nada. */}
+      <div className="mt-2 rounded-xl border border-[#EAE4E2] bg-white/70 px-3 py-2">
+        <SeverityLegend />
+      </div>
     </aside>
   )
 }

@@ -450,7 +450,7 @@ function ModuleDone({
         animate={{ scale: 1, rotate: 0 }}
         transition={{ type: 'spring', stiffness: 320, damping: 15, delay: 0.1 }}
       >
-        <span className="material-symbols-outlined text-5xl">verified</span>
+        <span className="material-symbols-outlined" style={{ fontSize: 44 }}>verified</span>
       </motion.div>
 
       <div className="relative">

@@ -27,6 +27,7 @@ import {
   PaperGrid,
   RhythmStrip,
   SEV_COLOR,
+  SeverityLegend,
   Stage,
   useAnimationLoop,
   WavesScene,
@@ -271,14 +272,91 @@ function InfoVisual({ kind }: { kind: NonNullable<Extract<Step, { type: 'info' }
     )
   }
 
+  // Árbol de decisión esquemático. Antes era un icono de Material Symbols a
+  // 9rem, pero la hoja de la fuente llega sin capa de cascada y fija
+  // `font-size: 24px`, así que salía diminuto y el escenario parecía vacío.
+  // Un SVG propio es inmune a eso y, además, adelanta lo que viene.
+  return <DecisionTreeSketch />
+}
+
+function DecisionTreeSketch() {
+  const nodes = [
+    { x: 150, y: 26, w: 74, label: '¿QRS?', tone: '#E8A598', delay: 0 },
+    { x: 74, y: 104, w: 88, label: 'Estrecho', tone: '#8BA888', delay: 0.35 },
+    { x: 226, y: 104, w: 78, label: 'Ancho', tone: '#C4655A', delay: 0.5 },
+  ]
+  const leaves = [
+    { x: 40, y: 176, label: 'Regular' },
+    { x: 110, y: 176, label: 'Irregular' },
+    { x: 192, y: 176, label: 'Regular' },
+    { x: 262, y: 176, label: 'Irregular' },
+  ]
+
   return (
-    <motion.span
-      className="material-symbols-outlined text-[9rem] text-[#E8A598]"
-      animate={{ scale: [1, 1.05, 1], rotate: [0, 1.5, 0] }}
-      transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-    >
-      account_tree
-    </motion.span>
+    <svg viewBox="0 0 300 210" className="h-full w-full max-w-md">
+      {/* Conectores */}
+      <g fill="none" stroke="#D9D2CE" strokeWidth="2" strokeLinecap="round">
+        <path d="M150 44 V70 H74 V88" />
+        <path d="M150 44 V70 H226 V88" />
+        <path d="M74 120 V146 H40 V162" />
+        <path d="M74 120 V146 H110 V162" />
+        <path d="M226 120 V146 H192 V162" />
+        <path d="M226 120 V146 H262 V162" />
+      </g>
+
+      {nodes.map((n) => (
+        <motion.g
+          key={n.label}
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: n.delay, duration: 0.45, ease: 'easeOut' }}
+        >
+          <rect
+            x={n.x - n.w / 2}
+            y={n.y - 9}
+            width={n.w}
+            height="28"
+            rx="14"
+            fill="#fff"
+            stroke={n.tone}
+            strokeWidth="2.5"
+          />
+          <text
+            x={n.x}
+            y={n.y + 10}
+            textAnchor="middle"
+            fontSize="13"
+            fontWeight="800"
+            fill={n.tone}
+            fontFamily="inherit"
+          >
+            {n.label}
+          </text>
+        </motion.g>
+      ))}
+
+      {leaves.map((l, i) => (
+        <motion.g
+          key={`${l.label}-${i}`}
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.75 + i * 0.1, duration: 0.4, ease: 'easeOut' }}
+        >
+          <rect x={l.x - 33} y={l.y - 9} width="66" height="24" rx="12" fill="#F7F4F2" />
+          <text
+            x={l.x}
+            y={l.y + 7}
+            textAnchor="middle"
+            fontSize="10.5"
+            fontWeight="700"
+            fill="#7D8A96"
+            fontFamily="inherit"
+          >
+            {l.label}
+          </text>
+        </motion.g>
+      ))}
+    </svg>
   )
 }
 
@@ -484,11 +562,28 @@ function HotspotStep({ step, onSolved, color }: StepProps<'hotspot'>) {
 /* ════════════════════════════════════════════════════════════════════════
    CHOICE
 ═══════════════════════════════════════════════════════════════════════════ */
+type ChoiceOption = { text: string; correct: boolean }
+
+/** Fisher-Yates sobre una copia; el original es `readonly`. */
+function shuffleOptions(options: readonly ChoiceOption[]): ChoiceOption[] {
+  const a = [...options]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
 function ChoiceStep({ step, onSolved }: StepProps<'choice'>) {
+  // En el currículo la correcta va siempre primero (14 de 14), que es cómodo
+  // de escribir pero se aprende a base de pulsar la de arriba. Se baraja una
+  // vez por montaje: el orden se mantiene mientras el alumno responde y cambia
+  // si vuelve a pasar por el módulo.
+  const [options] = useState(() => shuffleOptions(step.options))
   const [solved, setSolved] = useState(false)
   const [failed, setFailed] = useState<string[]>([])
 
-  const pick = (option: { text: string; correct: boolean }) => {
+  const pick = (option: ChoiceOption) => {
     if (solved) return
     if (option.correct) {
       setSolved(true)
@@ -502,7 +597,7 @@ function ChoiceStep({ step, onSolved }: StepProps<'choice'>) {
     <div className="mx-auto max-w-3xl">
       <Prompt>{step.prompt}</Prompt>
       <div className="flex flex-col gap-3">
-        {step.options.map((option, i) => {
+        {options.map((option, i) => {
           const isWrong = failed.includes(option.text)
           const isRight = solved && option.correct
           return (
@@ -1112,7 +1207,12 @@ function AlgorithmStep({ step, onSolved, color }: StepProps<'algorithm'>) {
     )
   }
 
-  const visual = <div className="w-full self-start">{renderNode(tree.root, '')}</div>
+  const visual = (
+    <div className="flex w-full flex-col gap-3 self-start">
+      {renderNode(tree.root, '')}
+      <SeverityLegend className="justify-center border-t border-dashed border-[#D9D2CE] pt-3" />
+    </div>
+  )
 
   return (
     <StepLayout
@@ -1212,7 +1312,7 @@ function TerritoryStep({ step, onSolved, color }: StepProps<'territory'>) {
       animate={wrong ? { x: [0, -7, 7, -5, 0] } : { x: 0 }}
       transition={{ duration: 0.4 }}
     >
-      <Bullseye onPick={pick} solvedId={solved} wrongId={wrong} />
+      <Bullseye onPick={pick} solvedId={solved} wrongId={wrong} revealLeads={Boolean(solved)} />
     </motion.div>
   )
 
@@ -1330,7 +1430,7 @@ function SummaryStep({ step }: StepProps<'summary'>) {
         animate={{ scale: 1, rotate: 0 }}
         transition={{ type: 'spring', stiffness: 260, damping: 15 }}
       >
-        <span className="material-symbols-outlined text-5xl text-white">workspace_premium</span>
+        <span className="material-symbols-outlined text-white" style={{ fontSize: 44 }}>workspace_premium</span>
       </motion.div>
       <p className="mb-7 text-lg leading-relaxed text-[#7D8A96]">{step.body}</p>
       <Link
