@@ -47,7 +47,8 @@ export function Hero({
   aside,
   children,
 }: {
-  badge: string
+  /** Opcional: si la pantalla ya se explica sola, el distintivo sobra. */
+  badge?: string
   badgeIcon?: string
   title: ReactNode
   subtitle?: ReactNode
@@ -66,14 +67,20 @@ export function Hero({
     >
       <div className="relative z-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0 max-w-2xl">
-          <span
-            className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]"
-            style={{ backgroundColor: `${accent}26`, color: accent }}
+          {badge ? (
+            <span
+              className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]"
+              style={{ backgroundColor: `${accent}26`, color: accent }}
+            >
+              {badgeIcon ? <span className="material-symbols-outlined text-sm">{badgeIcon}</span> : null}
+              {badge}
+            </span>
+          ) : null}
+          <h1
+            className={`truncate text-3xl font-black leading-[1.05] tracking-tight text-[#2C3E50] sm:text-4xl ${
+              badge ? 'mt-3' : ''
+            }`}
           >
-            {badgeIcon ? <span className="material-symbols-outlined text-sm">{badgeIcon}</span> : null}
-            {badge}
-          </span>
-          <h1 className="mt-3 truncate text-3xl font-black leading-[1.05] tracking-tight text-[#2C3E50] sm:text-4xl">
             {title}
           </h1>
           {subtitle ? (

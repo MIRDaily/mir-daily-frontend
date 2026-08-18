@@ -18,6 +18,8 @@ type SimulacroBuilderProps = {
   generationError: string | null
 }
 
+// El orden importa: primero la que imita al examen real, que es la opción por
+// defecto y la que conviene la mayoría de las veces.
 const MODE_OPTIONS: ReadonlyArray<{
   value: SimulacroMode
   title: string
@@ -25,18 +27,22 @@ const MODE_OPTIONS: ReadonlyArray<{
   icon: string
 }> = [
   {
-    value: 'immediate',
-    title: 'Corrección inmediata',
-    description: 'Ves si aciertas y la explicación justo al responder.',
-    icon: 'bolt',
-  },
-  {
     value: 'deferred',
     title: 'Corrección al final',
     description: 'Sin pistas durante el test; repasas todo al terminar.',
     icon: 'flag',
   },
+  {
+    value: 'immediate',
+    title: 'Corrección inmediata',
+    description: 'Ves si aciertas y la explicación justo al responder.',
+    icon: 'bolt',
+  },
 ] as const
+
+/** Atajos de tamaño; 210 son las preguntas de un MIR real. */
+const COUNT_PRESETS = [10, 25, 50, 100, 210] as const
+const MAX_COUNT = 210
 
 export default function SimulacroBuilder({
   onSubmit,
@@ -49,13 +55,17 @@ export default function SimulacroBuilder({
   const [loadingSubjects, setLoadingSubjects] = useState(true)
   const [subjectsError, setSubjectsError] = useState<string | null>(null)
 
-  const [topics, setTopics] = useState<Topic[]>([])
-  const [loadingTopics, setLoadingTopics] = useState(false)
+  // Temas cacheados por asignatura. Antes se pedían TODOS cada vez que se
+  // tocaba una asignatura y, mientras llegaban, la sección se sustituía por
+  // esqueletos: de ahí el parpadeo en cada clic. Ahora solo se piden los que
+  // faltan y lo ya cargado no se vuelve a pedir ni se desmonta.
+  const [topicsBySubject, setTopicsBySubject] = useState<Record<number, Topic[]>>({})
 
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<number[]>([])
   const [selectedTopicIds, setSelectedTopicIds] = useState<number[]>([])
   const [count, setCount] = useState(10)
-  const [mode, setMode] = useState<SimulacroMode>('immediate')
+  // Por defecto, corrección al final: es como se hace un simulacro de verdad.
+  const [mode, setMode] = useState<SimulacroMode>('deferred')
 
   useEffect(() => {
     let active = true
@@ -80,39 +90,76 @@ export default function SimulacroBuilder({
     }
   }, [])
 
-  // Cargar temas cada vez que cambian las asignaturas seleccionadas.
+  // Pide solo los temas de las asignaturas que aún no se han cargado nunca.
   useEffect(() => {
-    if (selectedSubjectIds.length === 0) {
-      setTopics([])
-      setSelectedTopicIds([])
-      return
-    }
+    const missing = selectedSubjectIds.filter((id) => !(id in topicsBySubject))
+    if (missing.length === 0) return
 
     let active = true
-    setLoadingTopics(true)
-    fetchTopics(selectedSubjectIds)
+    fetchTopics(missing)
       .then((data) => {
         if (!active) return
-        setTopics(data)
-        // Conservar solo los temas que siguen siendo válidos.
-        const validIds = new Set(data.map((t) => t.id))
-        setSelectedTopicIds((prev) => prev.filter((id) => validIds.has(id)))
+        setTopicsBySubject((prev) => {
+          const next = { ...prev }
+          // Se registran todas las pedidas, incluso las que no traen temas:
+          // así una asignatura sin temas no se vuelve a consultar en bucle.
+          for (const id of missing) next[id] = []
+          for (const topic of data) next[topic.subject_id] = [...(next[topic.subject_id] ?? []), topic]
+          return next
+        })
       })
       .catch(() => {
-        if (active) setTopics([])
-      })
-      .finally(() => {
-        if (active) setLoadingTopics(false)
+        if (!active) return
+        setTopicsBySubject((prev) => {
+          const next = { ...prev }
+          for (const id of missing) next[id] = []
+          return next
+        })
       })
     return () => {
       active = false
     }
-  }, [selectedSubjectIds])
+  }, [selectedSubjectIds, topicsBySubject])
+
+  /** Temas de las asignaturas seleccionadas, ya cacheados. */
+  const topics = useMemo(
+    () => selectedSubjectIds.flatMap((id) => topicsBySubject[id] ?? []),
+    [selectedSubjectIds, topicsBySubject],
+  )
+
+  // Al quitar una asignatura sus temas dejan de contar. Se filtra al leer en
+  // vez de sincronizar el estado con un efecto: así no hay un render con la
+  // selección inconsistente ni una cascada de actualizaciones.
+  const effectiveTopicIds = useMemo(() => {
+    const valid = new Set(topics.map((t) => t.id))
+    return selectedTopicIds.filter((id) => valid.has(id))
+  }, [topics, selectedTopicIds])
+
+  // Solo hay "cargando" si no se puede enseñar nada todavía; si ya hay temas
+  // de otra asignatura, los nuevos se suman sin desmontar lo que se ve.
+  const loadingTopics =
+    selectedSubjectIds.some((id) => !(id in topicsBySubject)) && topics.length === 0
 
   const toggleSubject = (id: number) => {
     setSelectedSubjectIds((prev) =>
       prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
     )
+  }
+
+  const selectAllSubjects = () => setSelectedSubjectIds(subjects.map((s) => s.id))
+  const clearSubjects = () => setSelectedSubjectIds([])
+
+  /** Un puñado de asignaturas al azar, para salir del bloqueo de elegir. */
+  const pickRandomSubjects = () => {
+    if (subjects.length === 0) return
+    const shuffled = [...subjects]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+    // Entre 3 y 5, pero nunca más de las que hay.
+    const howMany = Math.min(subjects.length, 3 + Math.floor(Math.random() * 3))
+    setSelectedSubjectIds(shuffled.slice(0, howMany).map((s) => s.id))
   }
 
   const toggleTopic = (id: number) => {
@@ -136,10 +183,10 @@ export default function SimulacroBuilder({
   // Nombres de los temas seleccionados, para el resumen (chips).
   const selectedTopicChips = useMemo(() => {
     const byId = new Map(topics.map((t) => [t.id, t]))
-    return selectedTopicIds
+    return effectiveTopicIds
       .map((id) => byId.get(id))
       .filter((t): t is Topic => Boolean(t))
-  }, [topics, selectedTopicIds])
+  }, [topics, effectiveTopicIds])
 
   // Marca/desmarca todos los temas de una asignatura de una vez.
   const setAllTopicsForSubject = (items: Topic[], select: boolean) => {
@@ -169,7 +216,7 @@ export default function SimulacroBuilder({
     if (!canSubmit) return
     onSubmit({
       subjectIds: selectedSubjectIds,
-      topicIds: selectedTopicIds,
+      topicIds: effectiveTopicIds,
       count,
       mode,
     })
@@ -178,8 +225,6 @@ export default function SimulacroBuilder({
   return (
     <motion.div className="mx-auto w-full max-w-6xl" {...fadeIn}>
       <Hero
-        badge="Crear simulacro"
-        badgeIcon="quiz"
         title="Diseña tu simulacro"
         subtitle="Elige asignaturas y temas, cuántas preguntas quieres y cómo corregirlo."
         aside={<ExamPadArt />}
@@ -189,14 +234,33 @@ export default function SimulacroBuilder({
         <div className="flex min-w-0 flex-col gap-5">
         {/* Paso 1 — Asignaturas */}
         <StickerCard as="section" className="p-6" depth={4}>
-          <div className="mb-4 flex items-center gap-3">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             <StepBadge n={1} active={selectedSubjectIds.length > 0} />
             <h2 className="text-lg font-black text-[#2c3e50]">Asignaturas</h2>
             {selectedSubjectIds.length > 0 ? (
-              <span className="ml-auto rounded-full bg-[#E8A598]/15 px-2.5 py-1 text-[11px] font-black text-[#d18d80]">
+              <span className="rounded-full bg-[#E8A598]/15 px-2.5 py-1 text-[11px] font-black text-[#d18d80]">
                 {selectedSubjectIds.length}
               </span>
             ) : null}
+
+            {/* Atajos de selección */}
+            <div className="ml-auto flex flex-wrap gap-2">
+              <QuickPick
+                icon="done_all"
+                onClick={selectAllSubjects}
+                disabled={subjects.length === 0 || selectedSubjectIds.length === subjects.length}
+              >
+                Todas
+              </QuickPick>
+              <QuickPick icon="casino" onClick={pickRandomSubjects} disabled={subjects.length === 0}>
+                Aleatorias
+              </QuickPick>
+              {selectedSubjectIds.length > 0 ? (
+                <QuickPick icon="close" onClick={clearSubjects}>
+                  Ninguna
+                </QuickPick>
+              ) : null}
+            </div>
           </div>
 
           {loadingSubjects ? (
@@ -242,9 +306,9 @@ export default function SimulacroBuilder({
           <div className="mb-1 flex items-center gap-3">
             <StepBadge n={2} active={selectedTopicIds.length > 0} />
             <h2 className="text-lg font-black text-[#2c3e50]">Temas</h2>
-            {selectedTopicIds.length > 0 ? (
+            {effectiveTopicIds.length > 0 ? (
               <span className="ml-auto rounded-full bg-[#8BA888]/15 px-2.5 py-1 text-[11px] font-black text-[#5f7d5c]">
-                {selectedTopicIds.length}
+                {effectiveTopicIds.length}
               </span>
             ) : null}
           </div>
@@ -328,56 +392,68 @@ export default function SimulacroBuilder({
             <h2 className="text-lg font-black text-[#2c3e50]">Nº de preguntas</h2>
           </div>
 
-          <div className="ml-11 flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-[#FAF7F4] p-1">
-              <button
-                type="button"
-                onClick={() => setCount((c) => Math.max(1, c - 1))}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-[#7D8A96] transition-colors hover:bg-white hover:text-[#C4655A]"
-                aria-label="Restar una pregunta"
-              >
-                <span className="material-symbols-outlined text-lg">remove</span>
-              </button>
-              <input
-                type="number"
-                min={1}
-                value={count}
-                onChange={(e) => {
-                  const value = Number(e.target.value)
-                  setCount(Number.isFinite(value) && value >= 1 ? Math.floor(value) : 1)
-                }}
-                className="w-16 bg-transparent text-center text-2xl font-black text-[#2c3e50] outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-              />
-              <button
-                type="button"
-                onClick={() => setCount((c) => c + 1)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-[#7D8A96] transition-colors hover:bg-white hover:text-[#8BA888]"
-                aria-label="Sumar una pregunta"
-              >
-                <span className="material-symbols-outlined text-lg">add</span>
-              </button>
-            </div>
-            <div className="flex gap-2">
-              {[5, 10, 20, 50].map((preset) => (
+          <div className="ml-11">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-[#FAF7F4] p-1">
                 <button
-                  key={preset}
                   type="button"
-                  onClick={() => setCount(preset)}
-                  className={`rounded-xl border-2 px-3.5 py-2 text-sm font-black transition-all ${
-                    count === preset
-                      ? 'border-[#2c3e50] bg-[#E8A598] text-white'
-                      : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:-translate-y-0.5 hover:border-[#2c3e50]'
-                  }`}
-                  style={count === preset ? { boxShadow: '3px 3px 0 0 #2c3e50' } : undefined}
+                  onClick={() => setCount((c) => Math.max(1, c - 1))}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-[#7D8A96] transition-colors hover:bg-white hover:text-[#C4655A]"
+                  aria-label="Restar una pregunta"
                 >
-                  {preset}
+                  <span className="material-symbols-outlined text-lg">remove</span>
                 </button>
-              ))}
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_COUNT}
+                  value={count}
+                  onChange={(e) => {
+                    const value = Number(e.target.value)
+                    setCount(
+                      Number.isFinite(value) ? Math.min(MAX_COUNT, Math.max(1, Math.floor(value))) : 1,
+                    )
+                  }}
+                  className="w-20 bg-transparent text-center text-2xl font-black text-[#2c3e50] outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCount((c) => Math.min(MAX_COUNT, c + 1))}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-[#7D8A96] transition-colors hover:bg-white hover:text-[#8BA888]"
+                  aria-label="Sumar una pregunta"
+                >
+                  <span className="material-symbols-outlined text-lg">add</span>
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {COUNT_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setCount(preset)}
+                    className={`rounded-xl border-2 px-3.5 py-2 text-sm font-black transition-all ${
+                      count === preset
+                        ? 'border-[#2c3e50] bg-[#E8A598] text-white'
+                        : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:-translate-y-0.5 hover:border-[#2c3e50]'
+                    }`}
+                    style={count === preset ? { boxShadow: '3px 3px 0 0 #2c3e50' } : undefined}
+                  >
+                    {preset}
+                    {preset === MAX_COUNT ? (
+                      <span className="ml-1 text-[10px] font-bold opacity-70">MIR</span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            <CountSlider value={count} onChange={setCount} />
+
+            <p className="mt-3 text-xs text-[#7D8A96]/80">
+              Si hay menos preguntas disponibles que las pedidas, se usarán las que haya.
+            </p>
           </div>
-          <p className="ml-11 mt-3 text-xs text-[#7D8A96]/80">
-            Si hay menos preguntas disponibles que las pedidas, se usarán las que haya.
-          </p>
         </StickerCard>
 
         {/* Paso 4 — Modo */}
@@ -447,7 +523,7 @@ export default function SimulacroBuilder({
                 <div className="flex items-baseline justify-between gap-3">
                   <dt className="text-[#7D8A96]">Temas</dt>
                   <dd className="font-black text-[#2c3e50]">
-                    {selectedTopicIds.length > 0 ? selectedTopicIds.length : 'Todos'}
+                    {effectiveTopicIds.length > 0 ? effectiveTopicIds.length : 'Todos'}
                   </dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-3">
@@ -496,6 +572,63 @@ export default function SimulacroBuilder({
         </aside>
       </div>
     </motion.div>
+  )
+}
+
+/** Atajo pequeño de la cabecera de un paso ("Todas", "Aleatorias"…). */
+function QuickPick({
+  children,
+  onClick,
+  icon,
+  disabled,
+}: {
+  children: React.ReactNode
+  onClick: () => void
+  icon: string
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex items-center gap-1.5 rounded-full border-2 border-[#EAE4E2] bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-[#7D8A96] transition-all hover:-translate-y-0.5 hover:border-[#2c3e50] hover:text-[#2c3e50] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:border-[#EAE4E2] disabled:hover:text-[#7D8A96]"
+    >
+      <span className="material-symbols-outlined text-sm">{icon}</span>
+      {children}
+    </button>
+  )
+}
+
+/**
+ * Deslizador del número de preguntas.
+ *
+ * El relleno se pinta con un degradado sobre la propia pista, que es la forma
+ * de tener una barra de progreso real en un `input[range]` sin montar un
+ * control a mano (y sin perder el teclado ni la accesibilidad).
+ */
+function CountSlider({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  const pct = ((value - 1) / (MAX_COUNT - 1)) * 100
+
+  return (
+    <div className="mt-5">
+      <input
+        type="range"
+        min={1}
+        max={MAX_COUNT}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        aria-label="Número de preguntas"
+        className="h-3 w-full cursor-pointer appearance-none rounded-full border-2 border-[#2c3e50] outline-none transition-[background] duration-150 [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:cursor-grab [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#2c3e50] [&::-moz-range-thumb]:bg-white [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:cursor-grab [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#2c3e50] [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[2px_2px_0_0_#2c3e50] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:active:scale-90"
+        style={{
+          background: `linear-gradient(to right, #E8A598 0%, #E8A598 ${pct}%, #F2EFED ${pct}%, #F2EFED 100%)`,
+        }}
+      />
+      <div className="mt-1.5 flex justify-between text-[10px] font-bold uppercase tracking-wide text-[#7D8A96]/60">
+        <span>1</span>
+        <span>{MAX_COUNT} · MIR completo</span>
+      </div>
+    </div>
   )
 }
 
