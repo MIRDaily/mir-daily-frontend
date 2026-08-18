@@ -10,7 +10,15 @@
    rotulados y un brillo de laminado que cruza muy de vez en cuando. Todo
    pintado con gradientes: escala a cualquier tamaño y no cuesta una imagen.
 ═══════════════════════════════════════════════════════════════════════════ */
-import { useMemo, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
 // Las primitivas del lenguaje (tarjeta, botones, rótulos…) son compartidas:
@@ -43,29 +51,51 @@ export function laminatedPaper(tint: string = ACCENT): CSSProperties {
   }
 }
 
-/** Brillo del plastificado: una banda diagonal que cruza muy de vez en cuando. */
-export function LaminateSheen() {
+/** Brillo del plastificado: una banda diagonal que cruza muy de vez en cuando.
+ *
+ *  Es la única animación en bucle del perfil, así que se porta bien: se apaga
+ *  con `prefers-reduced-motion`, mientras la tarjeta no está en pantalla y
+ *  mientras hay un diálogo abierto encima (animar debajo de un `backdrop-blur`
+ *  obliga a recomponer el desenfoque en cada fotograma). */
+export function LaminateSheen({ paused = false }: { paused?: boolean }) {
   const reduced = useReducedMotion()
-  if (reduced) return null
+  const hostRef = useRef<HTMLDivElement>(null)
+  const [onScreen, setOnScreen] = useState(true)
+
+  useEffect(() => {
+    const node = hostRef.current
+    if (!node || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      ([entry]) => setOnScreen(entry.isIntersecting),
+      { threshold: 0 },
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  const running = !reduced && onScreen && !paused
 
   return (
-    <motion.div
-      aria-hidden
-      className="pointer-events-none absolute inset-y-[-40%] left-[-45%] w-1/3"
-      style={{
-        // `multiply` sobre una tarjeta clara: el blanco no hace nada y el
-        // coral tiñe, así el destello se ve sin ensuciar el texto. Se mueve
-        // con `x` (transform) y no con `left`, que recalcularía el layout en
-        // cada fotograma. La diagonal la da el ángulo del gradiente: una
-        // utilidad `skew-*` de Tailwind la pisaría framer al animar.
-        background:
-          'linear-gradient(100deg, transparent 0%, rgba(232,165,152,0.26) 42%, rgba(255,255,255,0.9) 56%, transparent 100%)',
-        mixBlendMode: 'multiply',
-      }}
-      initial={{ x: '0%' }}
-      animate={{ x: ['0%', '560%'] }}
-      transition={{ duration: 3.2, repeat: Infinity, repeatDelay: 7, ease: 'easeInOut' }}
-    />
+    <div ref={hostRef} aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      {running ? (
+        <motion.div
+          className="absolute inset-y-[-40%] left-[-45%] w-1/3"
+          style={{
+            // Coral translúcido en vez de `mix-blend-mode`: sobre una tarjeta
+            // clara se ve igual y ahorra recomponer la mezcla en cada
+            // fotograma. Se mueve con `x` (transform) y no con `left`, que
+            // recalcularía el layout. La diagonal la da el ángulo del
+            // gradiente: una utilidad `skew-*` la pisaría framer al animar.
+            background:
+              'linear-gradient(100deg, transparent 0%, rgba(232,165,152,0.20) 42%, rgba(255,255,255,0.75) 56%, transparent 100%)',
+            willChange: 'transform',
+          }}
+          initial={{ x: '0%' }}
+          animate={{ x: ['0%', '560%'] }}
+          transition={{ duration: 3.2, repeat: Infinity, repeatDelay: 7, ease: 'easeInOut' }}
+        />
+      ) : null}
+    </div>
   )
 }
 

@@ -10,6 +10,7 @@
    username.
 ═══════════════════════════════════════════════════════════════════════════ */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import {
   GhostButton,
@@ -105,7 +106,17 @@ export default function AcademicEditor({
       if (event.key === 'Escape') onCancel()
     }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+
+    // Sin esto se desplaza la página de debajo mientras el diálogo está
+    // abierto, que es lo que hacía que pareciera "descolocado" al cerrarlo.
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    dialogRef.current?.focus()
+
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previousOverflow
+    }
   }, [onCancel])
 
   const universitiesByCountry = useMemo(() => {
@@ -134,9 +145,12 @@ export default function AcademicEditor({
     })
   }
 
-  return (
+  // Se monta en el <body>: dentro de la página caería en el contexto de
+  // apilamiento del <main> (que lleva z-10), así que el diálogo quedaba por
+  // debajo de la cabecera pese a su propio z-index.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#2c3e50]/45 p-4 py-10 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#2c3e50]/45 p-4 backdrop-blur-sm"
       onClick={onCancel}
     >
       <motion.div
@@ -144,14 +158,17 @@ export default function AcademicEditor({
         role="dialog"
         aria-modal="true"
         aria-label="Editar datos del carné"
-        className="w-full max-w-2xl rounded-3xl border-2 border-[#2c3e50] bg-white"
+        tabIndex={-1}
+        // El alto lo limita la ventana y el scroll va por dentro: así el
+        // diálogo queda siempre centrado y nunca se sale por arriba.
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border-2 border-[#2c3e50] bg-white"
         style={{ boxShadow: `7px 7px 0 0 ${INK}` }}
         onClick={(event) => event.stopPropagation()}
         initial={{ opacity: 0, y: 18, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="flex items-center justify-between gap-3 border-b-2 border-dashed border-[#2c3e50]/25 px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b-2 border-dashed border-[#2c3e50]/25 px-6 py-4">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg border-2 border-[#2c3e50] bg-[#E8A598]">
               <span className="material-symbols-outlined text-white" style={{ fontSize: 16 }} aria-hidden>
@@ -172,7 +189,7 @@ export default function AcademicEditor({
           </button>
         </div>
 
-        <div className="space-y-6 px-6 py-6">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
           {catalogError ? (
             <p className="rounded-2xl border-2 border-[#F1D3C9] bg-[#FFF4EF] px-4 py-3 text-sm font-bold text-[#C4655A]">
               {catalogError}
@@ -380,7 +397,7 @@ export default function AcademicEditor({
           </div>
         </div>
 
-        <div className="flex flex-wrap justify-end gap-3 border-t-2 border-dashed border-[#2c3e50]/25 px-6 py-4">
+        <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t-2 border-dashed border-[#2c3e50]/25 bg-white px-6 py-4">
           <GhostButton onClick={onCancel} disabled={saving}>
             Cancelar
           </GhostButton>
@@ -389,6 +406,7 @@ export default function AcademicEditor({
           </StickerButton>
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body,
   )
 }

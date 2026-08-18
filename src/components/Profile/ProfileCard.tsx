@@ -148,14 +148,16 @@ export default function ProfileCard() {
     return () => clearTimeout(timeout)
   }, [toast])
 
-  // El bloqueo del username se cuenta en días: basta con refrescar la hora una
-  // vez por minuto para que la cuenta atrás no se quede congelada.
+  // La cuenta atrás del bloqueo se refresca cada minuto, pero solo mientras
+  // hay bloqueo: si no, era un render por minuto de toda la pantalla para no
+  // cambiar nada.
   useEffect(() => {
+    if (!usernameLockedUntil) return
     const interval = setInterval(() => {
       setNowMs(Date.now())
     }, 60000)
     return () => clearInterval(interval)
-  }, [])
+  }, [usernameLockedUntil])
 
   // El <html> se sirve siempre con el cursor activo: aquí se aplica lo que el
   // usuario tenga guardado.
@@ -418,6 +420,7 @@ export default function ProfileCard() {
         onEditAvatar={scrollToAvatars}
         avatarBusy={updatingAvatar}
         onEditDetails={() => setIsEditingDetails(true)}
+        sheenPaused={isEditingDetails}
         goalLabel={goalLabel}
         yearLabel={formatMedicalYear(profile.medical_year)}
         specialtyLabel={specialtyLabel}

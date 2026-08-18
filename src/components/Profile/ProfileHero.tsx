@@ -28,6 +28,8 @@ type ProfileHeroProps = {
   avatarBusy: boolean
   /** Abre el editor de datos académicos y bio. */
   onEditDetails: () => void
+  /** Con el editor abierto, el destello del laminado se para. */
+  sheenPaused?: boolean
   goalLabel: string
   yearLabel: string
   specialtyLabel: string
@@ -41,6 +43,7 @@ export default function ProfileHero({
   onEditAvatar,
   avatarBusy,
   onEditDetails,
+  sheenPaused = false,
   goalLabel,
   yearLabel,
   specialtyLabel,
@@ -58,7 +61,7 @@ export default function ProfileHero({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
-      <LaminateSheen />
+      <LaminateSheen paused={sheenPaused} />
 
       {/* Cabecera del documento */}
       <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 border-b-2 border-dashed border-[#2c3e50]/25 px-5 py-3 sm:px-7">
