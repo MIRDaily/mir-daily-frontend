@@ -75,6 +75,42 @@ export async function submitOnboarding(
   return response
 }
 
+/** Datos que el alta pide una vez y el perfil deja retocar después. */
+export type AcademicPayload = {
+  mainGoal?: MainGoal | null
+  medicalYear?: number | null
+  mirSpecialtyId?: number | null
+  universityId?: number | null
+  customUniversity?: string | null
+  profilePublic?: boolean
+  bio?: string | null
+}
+
+/**
+ * Edición parcial del perfil académico. Endpoint aparte de `/onboarding` a
+ * propósito: aquel reescribe el perfil entero y sella `username_last_changed`,
+ * así que tocar el objetivo desde aquí reiniciaría el bloqueo del username.
+ */
+export async function updateAcademicProfile(
+  apiUrl: string,
+  authenticatedFetch: AuthenticatedFetch,
+  body: AcademicPayload,
+) {
+  const response = await authenticatedFetch(`${apiUrl}/api/profile/academic`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    throw new Error(await parseApiError(response))
+  }
+
+  return response
+}
+
 export async function fetchMirSpecialties(
   apiUrl: string,
   authenticatedFetch: AuthenticatedFetch,

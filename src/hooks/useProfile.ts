@@ -5,6 +5,10 @@ import { useAuth } from '@/hooks/useAuth'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { AVATAR_CATALOG } from '@/lib/avatar'
 import { parseApiError, USERNAME_REGEX } from '@/lib/profile'
+import {
+  updateAcademicProfile,
+  type AcademicPayload,
+} from '@/services/profileOnboardingService'
 import type { AuthUser } from '@/providers/AuthProvider'
 
 export type UserProfile = AuthUser
@@ -30,7 +34,18 @@ export function useProfile() {
   const [updatingDisplayName, setUpdatingDisplayName] = useState(false)
   const [updatingAvatar, setUpdatingAvatar] = useState(false)
   const [updatingUsername, setUpdatingUsername] = useState(false)
-  const [usernameLockedUntil, setUsernameLockedUntil] = useState<string | null>(null)
+  const [updatingAcademic, setUpdatingAcademic] = useState(false)
+  const [localLockUntil, setLocalLockUntil] = useState<string | null>(null)
+
+  // El bloqueo lo decide el servidor (`username_next_change_at`); la copia en
+  // sessionStorage solo cubre el hueco entre el cambio y el siguiente refresco
+  // del perfil. Gana la fecha más tardía de las dos.
+  const usernameLockedUntil = useMemo(() => {
+    const fromServer = user?.username_next_change_at ?? null
+    if (!fromServer) return localLockUntil
+    if (!localLockUntil) return fromServer
+    return new Date(fromServer) > new Date(localLockUntil) ? fromServer : localLockUntil
+  }, [localLockUntil, user])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -41,7 +56,7 @@ export function useProfile() {
       window.sessionStorage.removeItem(USERNAME_LOCK_STORAGE_KEY)
       return
     }
-    setUsernameLockedUntil(stored)
+    setLocalLockUntil(stored)
   }, [])
 
   const refreshProfile = useCallback(async () => {
@@ -150,6 +165,34 @@ export function useProfile() {
     [apiUrl, authenticatedFetch, setUser, user],
   )
 
+  const updateAcademic = useCallback(
+    async (payload: AcademicPayload): Promise<UpdateResult> => {
+      if (!user) {
+        return { ok: false, error: 'Perfil no disponible.' }
+      }
+
+      setUpdatingAcademic(true)
+      setError(null)
+
+      try {
+        await updateAcademicProfile(apiUrl, authenticatedFetch, payload)
+        // Sin optimismo aquí: el objetivo o la universidad se muestran ya
+        // resueltos (nombre de la facultad, de la especialidad…) y el
+        // servidor es quien sabe traducir los ids.
+        await refreshUser()
+        return { ok: true }
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'No se pudieron guardar los datos.'
+        setError(message)
+        return { ok: false, error: message }
+      } finally {
+        setUpdatingAcademic(false)
+      }
+    },
+    [apiUrl, authenticatedFetch, refreshUser, user],
+  )
+
   const updateUsername = useCallback(
     async (username: string): Promise<UsernameUpdateResult> => {
       if (!user) {
@@ -173,9 +216,24 @@ export function useProfile() {
         })
 
         if (response.ok) {
-          setUsernameLockedUntil(null)
+          // El servidor responde con la fecha en que volverá a poder
+          // cambiarse: así el bloqueo se ve al momento y no en la siguiente
+          // visita, cuando ya no se entiende de dónde sale.
+          const payload = (await response.json().catch(() => null)) as
+            | { nextAvailableAt?: unknown }
+            | null
+          const nextAvailableAt =
+            payload && typeof payload.nextAvailableAt === 'string'
+              ? payload.nextAvailableAt
+              : null
+
+          setLocalLockUntil(nextAvailableAt)
           if (typeof window !== 'undefined') {
-            window.sessionStorage.removeItem(USERNAME_LOCK_STORAGE_KEY)
+            if (nextAvailableAt) {
+              window.sessionStorage.setItem(USERNAME_LOCK_STORAGE_KEY, nextAvailableAt)
+            } else {
+              window.sessionStorage.removeItem(USERNAME_LOCK_STORAGE_KEY)
+            }
           }
           await refreshUser()
           return { ok: true }
@@ -194,7 +252,7 @@ export function useProfile() {
               ? payload.nextAvailableAt
               : undefined
           if (nextAvailableAt) {
-            setUsernameLockedUntil(nextAvailableAt)
+            setLocalLockUntil(nextAvailableAt)
             if (typeof window !== 'undefined') {
               window.sessionStorage.setItem(USERNAME_LOCK_STORAGE_KEY, nextAvailableAt)
             }
@@ -224,19 +282,23 @@ export function useProfile() {
       updatingDisplayName,
       updatingAvatar,
       updatingUsername,
+      updatingAcademic,
       usernameLockedUntil,
       updateDisplayName,
       updateAvatar,
       updateUsername,
+      updateAcademic,
       refreshProfile,
     }),
     [
       error,
       loading,
       refreshProfile,
+      updateAcademic,
       updateAvatar,
       updateDisplayName,
       updateUsername,
+      updatingAcademic,
       updatingAvatar,
       updatingDisplayName,
       updatingUsername,

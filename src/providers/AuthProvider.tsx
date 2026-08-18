@@ -29,11 +29,15 @@ export type AuthUser = {
   } | null
   main_goal: 'prepare_mir' | 'reinforce_degree' | 'explore' | null
   university: {
-    id: number
+    // La universidad escrita a mano llega sin id ni país.
+    id: number | null
     name: string
-    country: string
+    country: string | null
   } | null
   profile_public: boolean
+  bio: string | null
+  /** Fecha en la que podrá volver a cambiar el username (null si puede ya). */
+  username_next_change_at: string | null
   onboarding_completed: boolean
   mustUpdateDisplayName: boolean
   created_at: string
@@ -105,15 +109,27 @@ function coerceAuthUser(payload: unknown, fallbackSession: Session): AuthUser | 
   const university =
     source.university &&
     typeof source.university === 'object' &&
-    typeof (source.university as Record<string, unknown>).id === 'number' &&
-    typeof (source.university as Record<string, unknown>).name === 'string' &&
-    typeof (source.university as Record<string, unknown>).country === 'string'
+    typeof (source.university as Record<string, unknown>).name === 'string'
       ? {
-          id: (source.university as Record<string, unknown>).id as number,
+          id:
+            typeof (source.university as Record<string, unknown>).id === 'number'
+              ? ((source.university as Record<string, unknown>).id as number)
+              : null,
           name: (source.university as Record<string, unknown>).name as string,
-          country: (source.university as Record<string, unknown>).country as string,
+          country:
+            typeof (source.university as Record<string, unknown>).country === 'string'
+              ? ((source.university as Record<string, unknown>).country as string)
+              : null,
         }
       : null
+  const bio =
+    typeof source.bio === 'string' && source.bio.trim() ? source.bio : null
+  const usernameNextChangeAt =
+    typeof source.username_next_change_at === 'string'
+      ? source.username_next_change_at
+      : typeof source.usernameNextChangeAt === 'string'
+        ? source.usernameNextChangeAt
+        : null
   const profilePublic =
     typeof source.profile_public === 'boolean'
       ? source.profile_public
@@ -148,6 +164,8 @@ function coerceAuthUser(payload: unknown, fallbackSession: Session): AuthUser | 
     main_goal: mainGoal,
     university,
     profile_public: profilePublic,
+    bio,
+    username_next_change_at: usernameNextChangeAt,
     onboarding_completed: onboardingCompleted,
     mustUpdateDisplayName,
     created_at: createdAt,
