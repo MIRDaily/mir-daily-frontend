@@ -68,6 +68,27 @@ export async function fetchSimulacroQuestions(
   config: SimulacroConfig,
 ): Promise<SimulacroQuestion[]> {
   if (config.subjectIds.length === 0) return []
+
+  // Reparto ponderado (botón "MIR"). El endpoint solo admite un total y una
+  // lista de asignaturas, no cuotas por asignatura, así que la composición se
+  // hace aquí: una petición por asignatura con su cuota, en paralelo.
+  if (config.weights && config.weights.length > 0) {
+    const batches = await Promise.all(
+      config.weights
+        .filter((w) => w.count > 0)
+        .map(({ subjectId, count }) =>
+          apiFetch<{ questions: SimulacroQuestion[] }>('/questions', {
+            method: 'POST',
+            body: JSON.stringify({ subjectIds: [subjectId], topicIds: [], count }),
+          })
+            .then((res) => res.questions ?? [])
+            // Que falle una asignatura no debe tumbar el simulacro entero.
+            .catch(() => [] as SimulacroQuestion[]),
+        ),
+    )
+    return shuffle(batches.flat())
+  }
+
   const { questions } = await apiFetch<{ questions: SimulacroQuestion[] }>(
     '/questions',
     {
@@ -80,6 +101,16 @@ export async function fetchSimulacroQuestions(
     },
   )
   return questions ?? []
+}
+
+/** Baraja una copia: si no, las preguntas saldrían agrupadas por asignatura. */
+function shuffle<T>(input: T[]): T[] {
+  const a = [...input]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
 }
 
 // Corrige en el servidor las respuestas indicadas y devuelve, solo para esas

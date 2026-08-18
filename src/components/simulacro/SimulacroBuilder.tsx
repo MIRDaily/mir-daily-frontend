@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion, useReducedMotion, useSpring, useTransform } from 'framer-motion'
 import { fetchSubjects, fetchTopics } from '@/lib/simulacro/queries'
 import SimulacroTopicPicker from '@/components/simulacro/SimulacroTopicPicker'
 import { GhostButton, Hero, StepBadge, StickerCard } from '@/components/ui/sticker'
+import { allocateByWeight } from '@/lib/simulacro/mirWeights'
 import type {
   SimulacroConfig,
   SimulacroMode,
@@ -66,6 +67,8 @@ export default function SimulacroBuilder({
   const [count, setCount] = useState(10)
   // Por defecto, corrección al final: es como se hace un simulacro de verdad.
   const [mode, setMode] = useState<SimulacroMode>('deferred')
+  // Reparto ponderado por peso en el MIR (botón "MIR").
+  const [weighted, setWeighted] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -146,8 +149,26 @@ export default function SimulacroBuilder({
     )
   }
 
-  const selectAllSubjects = () => setSelectedSubjectIds(subjects.map((s) => s.id))
-  const clearSubjects = () => setSelectedSubjectIds([])
+  const selectAllSubjects = () => {
+    setSelectedSubjectIds(subjects.map((s) => s.id))
+    setWeighted(false)
+  }
+
+  const clearSubjects = () => {
+    setSelectedSubjectIds([])
+    setWeighted(false)
+  }
+
+  /**
+   * Simulacro tipo MIR: todas las asignaturas, pero repartiendo las preguntas
+   * según su peso en el examen real en vez de a partes iguales. Los temas se
+   * limpian porque aquí manda el reparto por asignatura.
+   */
+  const useMirDistribution = () => {
+    setSelectedSubjectIds(subjects.map((s) => s.id))
+    setSelectedTopicIds([])
+    setWeighted(true)
+  }
 
   /** Un puñado de asignaturas al azar, para salir del bloqueo de elegir. */
   const pickRandomSubjects = () => {
@@ -157,9 +178,10 @@ export default function SimulacroBuilder({
       const j = Math.floor(Math.random() * (i + 1))
       ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
-    // Entre 3 y 5, pero nunca más de las que hay.
-    const howMany = Math.min(subjects.length, 3 + Math.floor(Math.random() * 3))
+    // Entre 2 y 7, pero nunca más de las que hay.
+    const howMany = Math.min(subjects.length, 2 + Math.floor(Math.random() * 6))
     setSelectedSubjectIds(shuffled.slice(0, howMany).map((s) => s.id))
+    setWeighted(false)
   }
 
   const toggleTopic = (id: number) => {
@@ -214,11 +236,13 @@ export default function SimulacroBuilder({
 
   const handleSubmit = () => {
     if (!canSubmit) return
+    const chosen = subjects.filter((s) => selectedSubjectIds.includes(s.id))
     onSubmit({
       subjectIds: selectedSubjectIds,
-      topicIds: effectiveTopicIds,
+      topicIds: weighted ? [] : effectiveTopicIds,
       count,
       mode,
+      weights: weighted ? allocateByWeight(count, chosen) : undefined,
     })
   }
 
@@ -254,6 +278,14 @@ export default function SimulacroBuilder({
               </QuickPick>
               <QuickPick icon="casino" onClick={pickRandomSubjects} disabled={subjects.length === 0}>
                 Aleatorias
+              </QuickPick>
+              <QuickPick
+                icon="balance"
+                onClick={useMirDistribution}
+                disabled={subjects.length === 0}
+                active={weighted}
+              >
+                MIR
               </QuickPick>
               {selectedSubjectIds.length > 0 ? (
                 <QuickPick icon="close" onClick={clearSubjects}>
@@ -523,7 +555,17 @@ export default function SimulacroBuilder({
                 <div className="flex items-baseline justify-between gap-3">
                   <dt className="text-[#7D8A96]">Temas</dt>
                   <dd className="font-black text-[#2c3e50]">
-                    {effectiveTopicIds.length > 0 ? effectiveTopicIds.length : 'Todos'}
+                    {weighted ? 'Todos' : effectiveTopicIds.length > 0 ? effectiveTopicIds.length : 'Todos'}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[#7D8A96]">Reparto</dt>
+                  <dd className="text-right font-black text-[#2c3e50]">
+                    {weighted ? (
+                      <span className="text-[#5f7d5c]">Peso MIR</span>
+                    ) : (
+                      'Equilibrado'
+                    )}
                   </dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-3">
@@ -581,18 +623,25 @@ function QuickPick({
   onClick,
   icon,
   disabled,
+  active,
 }: {
   children: React.ReactNode
   onClick: () => void
   icon: string
   disabled?: boolean
+  active?: boolean
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center gap-1.5 rounded-full border-2 border-[#EAE4E2] bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-[#7D8A96] transition-all hover:-translate-y-0.5 hover:border-[#2c3e50] hover:text-[#2c3e50] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:border-[#EAE4E2] disabled:hover:text-[#7D8A96]"
+      className={`flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide transition-all disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 ${
+        active
+          ? 'border-[#2c3e50] bg-[#8BA888] text-white'
+          : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:-translate-y-0.5 hover:border-[#2c3e50] hover:text-[#2c3e50] disabled:hover:border-[#EAE4E2] disabled:hover:text-[#7D8A96]'
+      }`}
+      style={active ? { boxShadow: '3px 3px 0 0 #2c3e50' } : undefined}
     >
       <span className="material-symbols-outlined text-sm">{icon}</span>
       {children}
@@ -603,15 +652,34 @@ function QuickPick({
 /**
  * Deslizador del número de preguntas.
  *
- * El relleno se pinta con un degradado sobre la propia pista, que es la forma
- * de tener una barra de progreso real en un `input[range]` sin montar un
- * control a mano (y sin perder el teclado ni la accesibilidad).
+ * La barra que se ve NO es la del `input`: es una capa propia movida por un
+ * muelle, de modo que al hacer clic en cualquier punto el relleno viaja hasta
+ * ahí con rebote en vez de aparecer de golpe. El `input` nativo se queda
+ * encima, invisible, solo para recoger el gesto: así no se pierden el teclado
+ * ni la accesibilidad, que es lo que se suele romper al hacer esto a mano.
  */
 function CountSlider({ value, onChange }: { value: number; onChange: (n: number) => void }) {
-  const pct = ((value - 1) / (MAX_COUNT - 1)) * 100
+  const progress = useSpring(value, { stiffness: 210, damping: 18, mass: 0.85 })
+
+  useEffect(() => {
+    progress.set(value)
+  }, [value, progress])
+
+  const width = useTransform(progress, (v) => `${((v - 1) / (MAX_COUNT - 1)) * 100}%`)
 
   return (
-    <div className="mt-5">
+    <div className="relative mt-6 h-6 select-none">
+      {/* Pista */}
+      <div className="pointer-events-none absolute inset-x-0 top-1/2 h-3 -translate-y-1/2 overflow-hidden rounded-full border-2 border-[#2c3e50] bg-[#F2EFED]">
+        <motion.div className="h-full rounded-full bg-[#E8A598]" style={{ width }} />
+      </div>
+
+      {/* Mando: viaja con el mismo muelle que el relleno */}
+      <motion.div
+        className="pointer-events-none absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#2c3e50] bg-white"
+        style={{ left: width, boxShadow: '2px 2px 0 0 #2c3e50' }}
+      />
+
       <input
         type="range"
         min={1}
@@ -619,15 +687,8 @@ function CountSlider({ value, onChange }: { value: number; onChange: (n: number)
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         aria-label="Número de preguntas"
-        className="h-3 w-full cursor-pointer appearance-none rounded-full border-2 border-[#2c3e50] outline-none transition-[background] duration-150 [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:cursor-grab [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#2c3e50] [&::-moz-range-thumb]:bg-white [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:cursor-grab [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#2c3e50] [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[2px_2px_0_0_#2c3e50] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:active:scale-90"
-        style={{
-          background: `linear-gradient(to right, #E8A598 0%, #E8A598 ${pct}%, #F2EFED ${pct}%, #F2EFED 100%)`,
-        }}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
       />
-      <div className="mt-1.5 flex justify-between text-[10px] font-bold uppercase tracking-wide text-[#7D8A96]/60">
-        <span>1</span>
-        <span>{MAX_COUNT} · MIR completo</span>
-      </div>
     </div>
   )
 }

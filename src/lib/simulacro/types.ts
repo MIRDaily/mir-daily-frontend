@@ -21,6 +21,12 @@ export interface SimulacroConfig {
   topicIds: number[]
   count: number
   mode: SimulacroMode
+  /**
+   * Cuota de preguntas por asignatura (botón "MIR"). Si viene, manda sobre
+   * `count` y `topicIds`: el simulacro se compone pidiendo cada asignatura por
+   * separado para respetar su peso en el examen real.
+   */
+  weights?: { subjectId: number; count: number }[]
 }
 
 // La pregunta tal y como la entrega el backend: SIN la respuesta correcta ni la
