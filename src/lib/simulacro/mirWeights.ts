@@ -16,28 +16,52 @@
 // proporcional entre las que hay.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Ordenado de mayor a menor. El código AMIR del gráfico va en el comentario
+// para poder cotejarlo de un vistazo con la fuente.
 export const MIR_WEIGHTS: Record<string, number> = {
-  digestivo: 9.8,
-  cardiologia: 7.7,
-  infecciosas: 7.2,
-  neurologia: 6.4,
-  neumologia: 6.3,
-  endocrinologia: 6.1,
-  ginecologia: 5.6,
-  estadistica: 5.4,
-  reumatologia: 4.7,
-  pediatria: 4.5,
-  psiquiatria: 4.3,
-  hematologia: 4.2,
-  nefrologia: 4.3,
-  traumatologia: 3.8,
-  dermatologia: 2.8,
-  urologia: 2.5,
-  inmunologia: 2.4,
-  oftalmologia: 2.1,
-  otorrinolaringologia: 1.6,
-  // Bloque grande del gráfico que agrupa varias materias menores.
-  miscelanea: 8.4,
+  digestivo: 9.8, // DG
+  miscelanea: 8.4, // MC
+  cardiologia: 7.7, // CD
+  infecciosas: 7.2, // IF
+  neurologia: 6.4, // NR
+  neumologia: 6.3, // NM
+  endocrinologia: 6.1, // ED
+  ginecologia: 5.6, // GC
+  estadistica: 5.4, // ET
+  reumatologia: 4.7, // RM
+  traumatologia: 4.5, // TM
+  pediatria: 4.3, // PD
+  nefrologia: 4.3, // NF
+  psiquiatria: 4.2, // PQ
+  hematologia: 3.8, // HM
+  otorrinolaringologia: 2.8, // OR
+  dermatologia: 2.5, // DM
+  urologia: 2.4, // UR
+  inmunologia: 2.1, // IM
+  oftalmologia: 1.6, // OF
+}
+
+/** Nombres alternativos con los que puede venir una asignatura de la base. */
+const ALIASES: Record<string, string> = {
+  otorrino: 'otorrinolaringologia',
+  orl: 'otorrinolaringologia',
+  cot: 'traumatologia',
+  traumato: 'traumatologia',
+  obstetricia: 'ginecologia',
+  ginecologiayobstetricia: 'ginecologia',
+  epidemiologia: 'estadistica',
+  endocrino: 'endocrinologia',
+  neumo: 'neumologia',
+  nefro: 'nefrologia',
+  neuro: 'neurologia',
+  hemato: 'hematologia',
+  derma: 'dermatologia',
+  psiquiatra: 'psiquiatria',
+  uro: 'urologia',
+  oftalmo: 'oftalmologia',
+  inmuno: 'inmunologia',
+  infeccioso: 'infecciosas',
+  microbiologia: 'infecciosas',
 }
 
 /** Peso para una asignatura que no esté en la tabla. */
@@ -50,12 +74,35 @@ const normalize = (s: string) =>
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z]/g, '')
 
-/** Peso de una asignatura por su nombre, tolerante a variantes de escritura. */
+/** Palabras sueltas del nombre, ya normalizadas y sin conectores. */
+const wordsOf = (name: string) =>
+  name
+    .split(/[\s,/&·+-]+/)
+    .map(normalize)
+    .filter((w) => w.length > 2 && w !== 'del' && w !== 'las' && w !== 'los')
+
+/**
+ * Peso de una asignatura por su nombre.
+ *
+ * Se compara PALABRA a palabra, no por subcadenas: "urologia" está dentro de
+ * "neurologia", así que una comparación laxa cruzaría las dos asignaturas y el
+ * reparto saldría mal sin que se note.
+ */
 export function weightForSubject(name: string): number {
-  const key = normalize(name)
-  if (!key) return DEFAULT_WEIGHT
-  for (const [candidate, weight] of Object.entries(MIR_WEIGHTS)) {
-    if (key.startsWith(candidate) || candidate.startsWith(key)) return weight
+  const words = wordsOf(name)
+  if (words.length === 0) return DEFAULT_WEIGHT
+
+  for (const word of words) {
+    // Coincidencia exacta de la palabra con una clave o con un alias.
+    const direct = MIR_WEIGHTS[word] ?? MIR_WEIGHTS[ALIASES[word] ?? '']
+    if (direct !== undefined) return direct
+
+    // Abreviaturas y variantes: "neumo" ~ "neumologia", "traumato" ~ ...
+    for (const [candidate, weight] of Object.entries(MIR_WEIGHTS)) {
+      if (word.length >= 5 && (candidate.startsWith(word) || word.startsWith(candidate))) {
+        return weight
+      }
+    }
   }
   return DEFAULT_WEIGHT
 }
