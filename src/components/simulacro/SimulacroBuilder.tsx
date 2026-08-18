@@ -210,6 +210,24 @@ export default function SimulacroBuilder({
       .filter((t): t is Topic => Boolean(t))
   }, [topics, effectiveTopicIds])
 
+  /**
+   * Reparto que se va a pedir en modo MIR, para enseñarlo antes de generar.
+   *
+   * Si se quita una asignatura, `weighted` NO se desactiva: los pesos se
+   * renormalizan sobre las que quedan, de modo que el reparto sigue siendo
+   * proporcional al MIR entre las elegidas. Enseñarlo aquí evita que ese
+   * recálculo sea invisible.
+   */
+  const mirBreakdown = useMemo(() => {
+    if (!weighted) return []
+    const chosen = subjects.filter((s) => selectedSubjectIds.includes(s.id))
+    const byId = new Map(chosen.map((s) => [s.id, s.name]))
+    return allocateByWeight(count, chosen)
+      .map((a) => ({ name: byId.get(a.subjectId) ?? '', count: a.count }))
+      .filter((x) => x.count > 0)
+      .sort((a, b) => b.count - a.count)
+  }, [weighted, subjects, selectedSubjectIds, count])
+
   // Marca/desmarca todos los temas de una asignatura de una vez.
   const setAllTopicsForSubject = (items: Topic[], select: boolean) => {
     const ids = items.map((t) => t.id)
@@ -344,17 +362,17 @@ export default function SimulacroBuilder({
               </span>
             ) : null}
           </div>
-          <p className="mb-4 ml-11 text-xs text-[#7D8A96]">
+          <p className="mb-4 text-xs text-[#7D8A96]">
             Opcional. Si no eliges ninguno, se incluyen todos los temas de las
             asignaturas seleccionadas.
           </p>
 
           {selectedSubjectIds.length === 0 ? (
-            <p className="ml-11 text-sm text-[#7D8A96]/70">
+            <p className="text-sm text-[#7D8A96]/70">
               Selecciona una asignatura para ver sus temas.
             </p>
           ) : loadingTopics ? (
-            <div className="ml-11 flex flex-col gap-3">
+            <div className="flex flex-col gap-3">
               {Array.from({ length: 2 }).map((_, i) => (
                 <div
                   key={`topic-skeleton-${i}`}
@@ -363,7 +381,7 @@ export default function SimulacroBuilder({
               ))}
             </div>
           ) : (
-            <div className="ml-11 flex flex-col gap-3">
+            <div className="flex flex-col gap-3">
               {selectedTopicChips.length === 0 ? (
                 <p className="rounded-xl border-2 border-dashed border-[#EAE4E2] bg-[#FAF7F4] px-4 py-3 text-sm text-[#7D8A96]">
                   Ahora mismo se incluirán{' '}
@@ -424,7 +442,7 @@ export default function SimulacroBuilder({
             <h2 className="text-lg font-black text-[#2c3e50]">Nº de preguntas</h2>
           </div>
 
-          <div className="ml-11">
+          <div>
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-[#FAF7F4] p-1">
                 <button
@@ -495,7 +513,7 @@ export default function SimulacroBuilder({
             <h2 className="text-lg font-black text-[#2c3e50]">Modo de corrección</h2>
           </div>
 
-          <div className="ml-11 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {MODE_OPTIONS.map((option) => {
               const active = mode === option.value
               return (
@@ -575,6 +593,29 @@ export default function SimulacroBuilder({
                   </dd>
                 </div>
               </dl>
+
+              {/* Reparto real: si se quita una asignatura, los pesos se
+                  reajustan sobre las que quedan y aquí se ve al momento. */}
+              {weighted && mirBreakdown.length > 0 ? (
+                <motion.div
+                  className="rounded-2xl border-2 border-[#EAE4E2] bg-[#FAF7F4] p-3"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                >
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-[#7D8A96]/70">
+                    Preguntas por asignatura
+                  </p>
+                  <ul className="flex max-h-52 flex-col gap-1 overflow-y-auto pr-1">
+                    {mirBreakdown.map((row) => (
+                      <li key={row.name} className="flex items-baseline justify-between gap-2 text-xs">
+                        <span className="min-w-0 truncate text-[#7D8A96]">{row.name}</span>
+                        <span className="shrink-0 font-black tabular-nums text-[#2c3e50]">{row.count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              ) : null}
 
               {generationError ? (
                 <p className="rounded-xl border-2 border-[#E8A598]/40 bg-[#FFF8F6] px-3 py-2.5 text-xs font-semibold text-[#C4655A]">
