@@ -54,6 +54,7 @@ type SessionPayload = {
 type SummaryClientProps = {
   deckId: string
   sessionId: string
+  filterExhausted?: boolean
 }
 
 function toSafeNumber(value: number | null | undefined): number {
@@ -101,7 +102,7 @@ function SummaryErrorState({ deckId, message }: { deckId: string; message: strin
   )
 }
 
-export default function SummaryClient({ deckId, sessionId }: SummaryClientProps) {
+export default function SummaryClient({ deckId, sessionId, filterExhausted }: SummaryClientProps) {
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [finalMetrics, setFinalMetrics] = useState<SessionFinalMetrics | null>(null)
@@ -265,6 +266,17 @@ export default function SummaryClient({ deckId, sessionId }: SummaryClientProps)
           <p className="mt-2 text-sm text-slate-600">Session ID: {sessionId}</p>
           </header>
         </div>
+
+        {filterExhausted ? (
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-semibold">Sesion terminada antes de lo pedido</p>
+            <p className="mt-1">
+              Se agotaron las {toSafeNumber(finalMetrics.items_served)} preguntas que coinciden
+              con el filtro de asignatura o estado que elegiste. No se completo la sesion con
+              preguntas de otras asignaturas o estados.
+            </p>
+          </div>
+        ) : null}
 
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

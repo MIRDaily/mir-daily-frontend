@@ -29,6 +29,7 @@ type Deck = {
   visual_state?: string | null
   texture?: string | null
   samples?: number | null
+  total_reviews?: number | null
   dueToday?: number | null
   deleted_at?: string | null
   system_generated?: boolean
@@ -281,7 +282,7 @@ function DeckCard({
   interactive?: boolean
   showDeleteButton?: boolean
 }) {
-  const samplesCount = Math.max(0, Math.round(toSafeNumber(deck.samples)))
+  const samplesCount = Math.max(0, Math.round(toSafeNumber(deck.total_reviews ?? deck.samples)))
   const hasUnknownMastery = deck.accuracy === null || samplesCount < 25
   const accuracyPercent = hasUnknownMastery
     ? 0

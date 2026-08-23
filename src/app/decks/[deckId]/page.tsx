@@ -98,6 +98,7 @@ type DeckSummaryResponse = {
 
 type DeckSubjectsResponse = {
   subjects?: Array<{
+    subject_id?: number | string | null
     subject?: string | null
     count?: number | null
   }> | null
@@ -884,18 +885,29 @@ export default function StudioDeckDetailPage() {
           .map((entry) => {
             const name =
               typeof entry?.subject === 'string' ? entry.subject.trim() : ''
+            const subjectId =
+              typeof entry?.subject_id === 'number' || typeof entry?.subject_id === 'string'
+                ? String(entry.subject_id).trim()
+                : ''
             const count = Number(entry?.count)
-            if (!name || !Number.isFinite(count) || count <= 0) return null
+            if (!name || !subjectId || !Number.isFinite(count) || count <= 0) return null
             return {
               name,
+              subjectId,
               count: Math.trunc(count),
             }
           })
-          .filter((entry): entry is { name: string; count: number } => entry !== null)
+          .filter(
+            (entry): entry is { name: string; subjectId: string; count: number } => entry !== null,
+          )
 
+        // El valor del filtro es el subject_id (numerico), no el nombre: el
+        // backend lo pasa tal cual a get_next_session_item, que espera un
+        // bigint. Mandar el nombre rompia la RPC y el filtro por asignatura
+        // no filtraba nada.
         const options = entries
           .map((entry) => ({
-            value: entry.name,
+            value: entry.subjectId,
             label: entry.name,
             count: entry.count,
           }))
@@ -1060,7 +1072,10 @@ export default function StudioDeckDetailPage() {
     saveStudySessionId(null)
   }
 
-  const closeStudySessionAndNavigate = async (sessionId: string): Promise<void> => {
+  const closeStudySessionAndNavigate = async (
+    sessionId: string,
+    filterExhausted = false,
+  ): Promise<void> => {
     if (sessionClosedRef.current) return
 
     sessionClosedRef.current = true
@@ -1074,13 +1089,23 @@ export default function StudioDeckDetailPage() {
       }
 
       clearStudySession()
-      router.push(`/session/${sessionId}/summary?deckId=${deckId}`)
+      const summaryParams = new URLSearchParams({ deckId })
+      if (filterExhausted) {
+        summaryParams.set('filterExhausted', '1')
+      }
+      router.push(`/session/${sessionId}/summary?${summaryParams.toString()}`)
     } catch (err) {
       sessionClosedRef.current = false
       setStudyClosing(false)
       throw err
     }
   }
+
+  // La sesión quedó filtrada por asignatura y/o estado: si termina en "done"
+  // (pool agotado) hay que avisar, porque puede haber servido muchas menos
+  // tarjetas que las pedidas.
+  const isFilteredSession = (filters: StudyFilters): boolean =>
+    filters.subjects.length > 0 || filters.status != null
 
   const requestStudyLimit = (): Promise<number | null> =>
     new Promise((resolve) => {
@@ -1182,7 +1207,7 @@ export default function StudioDeckDetailPage() {
       }
 
       if ('done' in response && response.done) {
-        await closeStudySessionAndNavigate(activeSessionId)
+        await closeStudySessionAndNavigate(activeSessionId, isFilteredSession(activeFilters))
         return
       }
 
@@ -1607,7 +1632,10 @@ export default function StudioDeckDetailPage() {
 
         setStudyActionError(null)
         try {
-          await closeStudySessionAndNavigate(activeSessionId)
+          await closeStudySessionAndNavigate(
+            activeSessionId,
+            nextEndReason === 'done' && isFilteredSession(studyFilters),
+          )
         } catch (err) {
           setStudyActionError(
             err instanceof Error ? err.message : 'No se pudo cerrar la sesion de estudio.',
