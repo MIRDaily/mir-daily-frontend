@@ -129,9 +129,17 @@ type SubjectFilterOption = {
   count: number
 }
 
+type ItemsPagination = {
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
 type DeckBootstrapResponse = {
   deck: Deck | null
   items: Item[]
+  itemsPagination?: ItemsPagination | null
   summary: DeckSummary | null
   summaryError?: string | null
 }
@@ -220,10 +228,14 @@ async function readError(res: Response, fallback: string): Promise<string> {
   return text || fallback
 }
 
-async function fetchDeckBootstrap(token: string, deckId: string): Promise<DeckBootstrapResponse> {
+async function fetchDeckBootstrap(
+  token: string,
+  deckId: string,
+  itemsPage = 1,
+): Promise<DeckBootstrapResponse> {
   if (!deckId) throw new Error('deckId no valido.')
 
-  const res = await fetch(`/api/studio/decks/${deckId}/bootstrap`, {
+  const res = await fetch(`/api/studio/decks/${deckId}/bootstrap?page=${itemsPage}&pageSize=20`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -582,6 +594,9 @@ export default function StudioDeckDetailPage() {
 
   const [deck, setDeck] = useState<Deck | null>(null)
   const [items, setItems] = useState<Item[]>([])
+  const [itemsPage, setItemsPage] = useState(1)
+  const [itemsPagination, setItemsPagination] = useState<ItemsPagination | null>(null)
+  const [itemsPageLoading, setItemsPageLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [studyMode, setStudyMode] = useState(false)
@@ -636,6 +651,7 @@ export default function StudioDeckDetailPage() {
   const studyLimitCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const studyLimitPendingValueRef = useRef<number | null>(null)
   const sessionClosedRef = useRef(false)
+  const itemsInitialLoadDoneRef = useRef(false)
   const undoExpireTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const undoToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const undoToastExitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -780,6 +796,8 @@ export default function StudioDeckDetailPage() {
       setError(null)
       setDeck(null)
       setItems([])
+      setItemsPage(1)
+      setItemsPagination(null)
       setStudySessionId(null)
       setStudyItem(null)
       setStudyLoading(false)
@@ -819,6 +837,7 @@ export default function StudioDeckDetailPage() {
       clearUndoToastReplaceTimeout()
       clearUndoToastAnimationFrame()
       pendingDeleteRequestsRef.current.clear()
+      itemsInitialLoadDoneRef.current = false
 
       try {
         if (!deckId) {
@@ -843,6 +862,7 @@ export default function StudioDeckDetailPage() {
 
         setDeck(bootstrap.deck)
         setItems(bootstrap.items)
+        setItemsPagination(bootstrap.itemsPagination ?? null)
         if (bootstrap.summary) {
           setDeckSummary(bootstrap.summary)
           setDeckSummaryError(null)
@@ -856,6 +876,7 @@ export default function StudioDeckDetailPage() {
       } finally {
         if (mounted) setDeckSummaryLoading(false)
         if (mounted) setLoading(false)
+        itemsInitialLoadDoneRef.current = true
       }
     }
 
@@ -865,6 +886,59 @@ export default function StudioDeckDetailPage() {
       mounted = false
     }
   }, [deckId])
+
+  // Cambiar de página no recarga el mazo entero (deck + summary), solo pide
+  // esa página de items al backend, que ya viene paginado (20 por página).
+  useEffect(() => {
+    if (!itemsInitialLoadDoneRef.current || !deckId) return
+
+    let mounted = true
+
+    const loadItemsPage = async () => {
+      setItemsPageLoading(true)
+      setDeckItemsActionError(null)
+
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        const token = session?.access_token ?? ''
+        if (!token) throw new Error('No hay sesion activa.')
+
+        const res = await fetch(
+          `${API_URL}/api/studio/decks/${deckId}/items?page=${itemsPage}&pageSize=20`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+
+        if (!res.ok) {
+          throw new Error(await readError(res, `No se pudieron cargar las preguntas (${res.status})`))
+        }
+
+        const payload = (await res.json().catch(() => null)) as
+          | { items?: Item[]; pagination?: ItemsPagination | null }
+          | null
+
+        if (!mounted) return
+
+        setItems(Array.isArray(payload?.items) ? payload.items : [])
+        setItemsPagination(payload?.pagination ?? null)
+      } catch (err) {
+        if (!mounted) return
+        setDeckItemsActionError(
+          err instanceof Error ? err.message : 'No se pudieron cargar las preguntas.',
+        )
+      } finally {
+        if (mounted) setItemsPageLoading(false)
+      }
+    }
+
+    void loadItemsPage()
+
+    return () => {
+      mounted = false
+    }
+  }, [itemsPage, deckId])
 
   useEffect(() => {
     let mounted = true
@@ -1785,7 +1859,9 @@ export default function StudioDeckDetailPage() {
   }
 
   const deckTitle = deck.name || deck.title || `Mazo ${deckId}`
-  const deckItemEntries = items.map((item, index) => {
+  const itemsPageOffset = ((itemsPagination?.page ?? itemsPage) - 1) * (itemsPagination?.pageSize ?? 20)
+  const deckItemEntries = items.map((item, indexInPage) => {
+    const index = itemsPageOffset + indexInPage
     const itemOptions = getSortedQuestionOptions(item)
     const itemCorrectIndex = getQuestionCorrectIndex(item)
 
@@ -1968,7 +2044,7 @@ export default function StudioDeckDetailPage() {
             </p>
             <span className="text-sm text-slate-500">
               {activeDeckTab === 'items'
-                ? `${items.length} items`
+                ? `${itemsPagination?.total ?? items.length} items`
                 : `${trashCountLoading ? '--' : trashCount} en papelera`}
             </span>
           </div>
@@ -1978,12 +2054,40 @@ export default function StudioDeckDetailPage() {
             </p>
           ) : null}
           {activeDeckTab === 'items' ? (
-            <DeckItemsList
-              entries={deckItemEntries}
-              onDelete={(entryId) => {
-                void handleDeleteDeckItem(entryId)
-              }}
-            />
+            <>
+              <DeckItemsList
+                entries={deckItemEntries}
+                onDelete={(entryId) => {
+                  void handleDeleteDeckItem(entryId)
+                }}
+              />
+              {itemsPagination && itemsPagination.totalPages > 1 ? (
+                <div className="mt-4 flex items-center justify-between text-sm text-slate-600">
+                  <button
+                    type="button"
+                    disabled={itemsPage <= 1 || itemsPageLoading}
+                    onClick={() => setItemsPage((prev) => Math.max(1, prev - 1))}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Anterior
+                  </button>
+                  <span>
+                    Página {itemsPagination.page} de {itemsPagination.totalPages}
+                    {itemsPageLoading ? ' · cargando…' : ''}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={itemsPage >= itemsPagination.totalPages || itemsPageLoading}
+                    onClick={() =>
+                      setItemsPage((prev) => Math.min(itemsPagination.totalPages, prev + 1))
+                    }
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              ) : null}
+            </>
           ) : (
             <>
               {trashItemsError ? (

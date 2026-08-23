@@ -16,6 +16,8 @@ type QuestionOption = {
 
 type ItemQuestion = {
   statement?: string | null
+  correct_answer?: number | string | null
+  explanation?: string | null
   question_options?: QuestionOption[] | null
 }
 
@@ -48,9 +50,17 @@ type DeckSummaryResponse = {
   summary?: Partial<Record<keyof DeckSummary, number | null>> | null
 }
 
+type ItemsPagination = {
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
 type DeckBootstrapResponse = {
   deck: Deck | null
   items: Item[]
+  itemsPagination: ItemsPagination | null
   summary: DeckSummary | null
   summaryError?: string | null
 }
@@ -117,6 +127,12 @@ export async function GET(
       return NextResponse.json({ error: 'No hay sesion activa.' }, { status: 401 })
     }
 
+    const url = new URL(request.url)
+    const pageParam = Number(url.searchParams.get('page'))
+    const pageSizeParam = Number(url.searchParams.get('pageSize'))
+    const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
+    const pageSize = Number.isInteger(pageSizeParam) && pageSizeParam > 0 ? pageSizeParam : 20
+
     const summaryPromise: Promise<{ summary: DeckSummary | null; summaryError?: string | null }> =
       fetchJson<DeckSummaryResponse>(
         `${API_URL}/api/studio/decks/${deckId}/summary`,
@@ -145,8 +161,8 @@ export async function GET(
         token,
         'No se pudieron cargar los mazos.',
       ),
-      fetchJson<Item[] | { items?: Item[] }>(
-        `${API_URL}/api/studio/decks/${deckId}/items`,
+      fetchJson<Item[] | { items?: Item[]; pagination?: ItemsPagination | null }>(
+        `${API_URL}/api/studio/decks/${deckId}/items?page=${page}&pageSize=${pageSize}`,
         token,
         'No se pudieron cargar los items.',
       ),
@@ -165,6 +181,10 @@ export async function GET(
         ? itemsPayload.items
         : []
 
+    const itemsPagination: ItemsPagination | null = Array.isArray(itemsPayload)
+      ? null
+      : (itemsPayload?.pagination ?? null)
+
     // Return only the fields needed by the page to reduce payload size.
     const deck = allDecks
       .map((current) => ({
@@ -182,6 +202,8 @@ export async function GET(
       statement: item.statement ?? null,
       questions: {
         statement: item.questions?.statement ?? null,
+        correct_answer: item.questions?.correct_answer ?? null,
+        explanation: item.questions?.explanation ?? null,
         question_options: Array.isArray(item.questions?.question_options)
           ? item.questions?.question_options.map((option) => ({
               id: option.id ?? null,
@@ -206,6 +228,7 @@ export async function GET(
     const response: DeckBootstrapResponse = {
       deck,
       items: minimalItems,
+      itemsPagination,
       summary: summaryResult.summary,
       summaryError: summaryResult.summaryError ?? null,
     }
