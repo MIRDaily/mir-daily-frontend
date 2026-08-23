@@ -24,6 +24,7 @@ type Deck = {
   name: string
   subject?: string | null
   totalItems?: number | null
+  total_items?: number | null
   masteryPercentage?: number | null
   accuracy?: number | null
   visual_state?: string | null
@@ -474,8 +475,8 @@ function DeckCard({
         </div>
 
         {isFailedQuestions ? (
-          <p className="mt-5 text-xs leading-relaxed text-rose-400/90 sm:text-sm">
-            Se actualiza solo con tus últimas preguntas falladas: no tiene dominio propio.
+          <p className="mt-5 text-xs font-medium leading-relaxed text-rose-400/90 sm:text-sm">
+            Tus fallos recientes, listos para repasar.
           </p>
         ) : (
         <div className="mt-5">
@@ -1161,7 +1162,7 @@ export default function StudioDecksPage() {
       const activeDecks = result.filter((deck) => deck.deleted_at == null)
       const normalizedDecks = activeDecks.map((deck) => ({
         ...deck,
-        totalItems: toSafeNumber(deck.totalItems),
+        totalItems: toSafeNumber(deck.total_items ?? deck.totalItems),
       }))
 
       const changedDeckIds = new Set<string>()
