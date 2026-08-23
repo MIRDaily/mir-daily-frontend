@@ -200,7 +200,6 @@ const EMPTY_DECK_SUMMARY: DeckSummary = {
   learning: 0,
   mastered: 0,
 }
-const SMART_REVIEW_STATUS_PRIORITY: StudyStatus[] = ['failed', 'learning', 'new', 'mastered']
 
 function isAllSubjectValue(value: string): boolean {
   const normalized = value.trim().toLowerCase()
@@ -470,6 +469,11 @@ async function getNextDeckItem(
   if (status) {
     params.set('status', status)
   }
+  // Smart Review se resuelve entero en el backend (una sola llamada). Antes se
+  // simulaba aquí encadenando hasta 4 peticiones, una por estado.
+  if (filters?.mode === 'smart') {
+    params.set('mode', 'smart')
+  }
 
   const url = `${API_URL}/api/studio/decks/${deckId}/next?${params.toString()}`
 
@@ -652,6 +656,15 @@ export default function StudioDeckDetailPage() {
   const studyLimitPendingValueRef = useRef<number | null>(null)
   const sessionClosedRef = useRef(false)
   const itemsInitialLoadDoneRef = useRef(false)
+  // handleStartStudy se queda esperando en `await requestStudyLimit()` mientras
+  // el usuario configura la sesión en el modal. Esa closure capturó los valores
+  // que había al abrirlo, así que leerlos después del await devolvía siempre la
+  // configuración PREVIA a lo que el usuario acababa de elegir (por eso Smart
+  // Review y los filtros del modal no se aplicaban nunca). Estos refs guardan
+  // el valor vigente para poder leerlo al resolver.
+  const studyRequestModeRef = useRef<StudyRequestMode>('normal')
+  const subjectFilterRef = useRef<string[]>([])
+  const statusFilterRef = useRef<StudyStatus | null>(null)
   const undoExpireTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const undoToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const undoToastExitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1091,6 +1104,20 @@ export default function StudioDeckDetailPage() {
     }
   }, [loading, deckId])
 
+  // Mantener los refs al día con lo último que ha elegido el usuario en el
+  // modal de configuración de sesión.
+  useEffect(() => {
+    studyRequestModeRef.current = studyRequestMode
+  }, [studyRequestMode])
+
+  useEffect(() => {
+    subjectFilterRef.current = subjectFilter
+  }, [subjectFilter])
+
+  useEffect(() => {
+    statusFilterRef.current = statusFilter
+  }, [statusFilter])
+
   useEffect(() => {
     return () => {
       if (studyLimitCloseTimeoutRef.current) {
@@ -1228,29 +1255,12 @@ export default function StudioDeckDetailPage() {
     closeStudyLimitModal(Math.trunc(parsed))
   }
 
+  // Los dos modos son ya una sola llamada: el backend decide (Smart Review
+  // puntúa por urgencia; normal respeta la selección manual del usuario).
   const getNextStudyItemWithMode = async (
     sessionId: string,
     filters: StudyFilters,
-  ): Promise<NextDeckItemResponse> => {
-    if (filters.mode !== 'smart') {
-      return getNextDeckItem(deckId, sessionId, filters)
-    }
-
-    for (const status of SMART_REVIEW_STATUS_PRIORITY) {
-      const response = await getNextDeckItem(deckId, sessionId, {
-        ...filters,
-        status,
-      })
-
-      if ('expired' in response && response.expired) return response
-      if ('limitReached' in response && response.limitReached) return response
-      if ('done' in response && response.done) continue
-      if ('item' in response && !response.item) continue
-      return response
-    }
-
-    return { done: true }
-  }
+  ): Promise<NextDeckItemResponse> => getNextDeckItem(deckId, sessionId, filters)
 
   const loadNextStudyItem = async (
     sessionIdOverride?: string,
@@ -1350,10 +1360,12 @@ export default function StudioDeckDetailPage() {
 
     const limit = await requestStudyLimit()
     if (limit == null) return
+    // Desde los refs, no del estado capturado: lo que el usuario acaba de
+    // elegir dentro del modal es posterior a esta closure.
     const selectedFilters: StudyFilters = {
-      subjects: [...subjectFilter],
-      status: statusFilter,
-      mode: studyRequestMode,
+      subjects: [...subjectFilterRef.current],
+      status: statusFilterRef.current,
+      mode: studyRequestModeRef.current,
     }
     setStudyFilters(selectedFilters)
 
