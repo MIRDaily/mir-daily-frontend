@@ -473,6 +473,11 @@ function DeckCard({
           </h3>
         </div>
 
+        {isFailedQuestions ? (
+          <p className="mt-5 text-xs leading-relaxed text-rose-400/90 sm:text-sm">
+            Se actualiza solo con tus últimas preguntas falladas: no tiene dominio propio.
+          </p>
+        ) : (
         <div className="mt-5">
           <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 sm:text-sm">
             <span>Dominio</span>
@@ -514,6 +519,7 @@ function DeckCard({
             />
           </div>
         </div>
+        )}
       </div>
 
       <style jsx>{`
