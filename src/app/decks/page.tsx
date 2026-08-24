@@ -45,6 +45,8 @@ type Deck = {
   auto_type?: string | null
   position?: number | null
   banner_gradient?: string | null
+  description?: string | null
+  subjects?: Array<{ subject: string; percent: number }> | null
 }
 
 type DeckTheme = {
@@ -65,20 +67,6 @@ function toSafeNumber(value: unknown): number {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return 0
   return parsed
-}
-
-function clampPercent(value: unknown): number {
-  const num = toSafeNumber(value)
-  if (num < 0) return 0
-  if (num > 100) return 100
-  return Math.round(num)
-}
-
-function getDomainColor(percent: number): string {
-  if (percent < 40) return 'bg-red-400'
-  if (percent < 70) return 'bg-orange-400'
-  if (percent < 85) return 'bg-yellow-400'
-  return 'bg-emerald-500'
 }
 
 function getDeckTheme(subject?: string | null): DeckTheme {
@@ -310,14 +298,14 @@ function DeckCard({
     WebkitMaskRepeat: 'no-repeat',
     maskRepeat: 'no-repeat',
   }
-  const samplesCount = Math.max(0, Math.round(toSafeNumber(deck.total_reviews ?? deck.samples)))
-  const hasUnknownMastery = deck.accuracy === null || samplesCount < 25
-  const accuracyPercent = hasUnknownMastery
-    ? 0
-    : clampPercent(Math.round(toSafeNumber(deck.accuracy) * 100))
-  const domainColorClass = getDomainColor(accuracyPercent)
-  const totalItems = Math.max(0, Math.round(toSafeNumber(deck.totalItems)))
-  const subject = (deck.subject || 'PERSONAL').toUpperCase()
+  // Mismo contenido que la cabecera de dentro del mazo: una frase corta
+  // (bio del mazo, o el aviso fijo del mazo de fallos) y sus asignaturas
+  // como % de composición — ya no la etiqueta "PERSONAL" ni el conteo de
+  // cartas, que no aparecían ahí.
+  const subtitle = isFailedQuestions
+    ? 'Tus fallos recientes, listos para repasar.'
+    : deck.description?.trim() || null
+  const topSubjects = deck.subjects ?? []
   const [shimmerDirection, setShimmerDirection] = useState<ShimmerDirection>('left')
   const [shimmerActive, setShimmerActive] = useState(false)
   const [isPointerInside, setIsPointerInside] = useState(false)
@@ -476,43 +464,37 @@ function DeckCard({
         className={`pointer-events-none absolute inset-0 z-[2] ${glowBandShapeClass} ${glowAnimationClass}`}
       />
       <div className="absolute left-[3.1%] right-[3.1%] top-[11%] bottom-[8.3%] z-10 flex flex-col px-4 py-3 sm:px-5">
-        <div className="flex items-center justify-between gap-2">
-          <p className={`text-xs font-semibold uppercase tracking-wide sm:text-sm ${theme.subjectClass}`}>{subject}</p>
-          <div className="flex items-center gap-2">
-            <span className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${theme.badgeClass}`}>
-              {totalItems} cards
-            </span>
-            {showDeleteButton ? (
-              <button
-                type="button"
-                aria-label="Enviar mazo a papelera"
-                disabled={deleting}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  event.preventDefault()
-                  onDelete?.()
-                }}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-500 transition hover:bg-red-50/70 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+        <div className="flex items-center justify-end gap-2">
+          {showDeleteButton ? (
+            <button
+              type="button"
+              aria-label="Enviar mazo a papelera"
+              disabled={deleting}
+              onClick={(event) => {
+                event.stopPropagation()
+                event.preventDefault()
+                onDelete?.()
+              }}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-500 transition hover:bg-red-50/70 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-4 w-4"
               >
-                <svg
-                  aria-hidden
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-4 w-4"
-                >
-                  <path d="M3 6h18" />
-                  <path d="M8 6V4h8v2" />
-                  <path d="M19 6l-1 14H6L5 6" />
-                  <path d="M10 11v6" />
-                  <path d="M14 11v6" />
-                </svg>
-              </button>
-            ) : null}
-          </div>
+                <path d="M3 6h18" />
+                <path d="M8 6V4h8v2" />
+                <path d="M19 6l-1 14H6L5 6" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+              </svg>
+            </button>
+          ) : null}
         </div>
 
         <div className="mt-2 flex items-start justify-between gap-3">
@@ -521,53 +503,27 @@ function DeckCard({
           </h3>
         </div>
 
-        {isFailedQuestions ? (
-          <p className="mt-5 text-xs font-medium leading-relaxed text-rose-400/90 sm:text-sm">
-            Tus fallos recientes, listos para repasar.
+        {/* Mismo contenido que la cabecera de dentro del mazo: la bio corta
+            (o el aviso fijo del mazo de fallos) y sus asignaturas como % de
+            composición, en vez del badge "PERSONAL" y la barra de Dominio. */}
+        {subtitle ? (
+          <p className="mt-1.5 line-clamp-2 text-xs font-medium leading-relaxed text-slate-500 sm:text-sm">
+            {subtitle}
           </p>
-        ) : (
-        <div className="mt-5">
-          <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 sm:text-sm">
-            <span>Dominio</span>
-            {hasUnknownMastery ? (
-              <div className="group/mastery relative">
-                <button
-                  type="button"
-                  aria-label="Dominio no disponible aún"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                  }}
-                  onKeyDown={(event) => {
-                    event.stopPropagation()
-                  }}
-                  className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white/80 text-xs font-bold text-slate-600"
-                >
-                  ?
-                </button>
-                <div
-                  role="tooltip"
-                  className="pointer-events-none invisible absolute right-0 top-full z-[100] mt-2 w-72 rounded-xl border border-slate-200 bg-white/95 p-3 text-left opacity-0 shadow-lg transition-opacity duration-200 group-hover/mastery:visible group-hover/mastery:opacity-100 group-focus-within/mastery:visible group-focus-within/mastery:opacity-100"
-                >
-                  <p className="text-xs font-semibold text-slate-800">Dominio del mazo</p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                    El dominio se estima usando tus ultimas 25 respuestas en este mazo. Aun no hay
-                    suficientes datos para calcularlo. Responde al menos 25 preguntas para estimar
-                    tu dominio.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <span className="text-slate-600">{accuracyPercent}%</span>
-            )}
+        ) : null}
+
+        {topSubjects.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {topSubjects.map((entry) => (
+              <span
+                key={entry.subject}
+                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold sm:text-xs ${theme.badgeClass}`}
+              >
+                {entry.subject} · {entry.percent}%
+              </span>
+            ))}
           </div>
-          <div className="h-2.5 rounded-full bg-slate-100">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${domainColorClass}`}
-              style={{ width: `${accuracyPercent}%` }}
-            />
-          </div>
-        </div>
-        )}
+        ) : null}
       </div>
 
       <style jsx>{`
