@@ -469,12 +469,12 @@ function DeckCard({
           está pegado a ese borde, crece desde arriba y ya lo desbordaba, así
           que moverlo no cambiaba nada — comprobado midiendo antes/después);
           hay que subir el punto de partida para que todo el bloque suba. */}
-      {/* pt-6 (antes py-3/pt-3): el badge de conteo y la papelera quedaban a
-          solo ~19-23px del borde superior tras bajar top-X% para ganar
-          margen abajo. Más padding superior específico (no se toca el
-          inferior, para no perder el margen ya ganado) separa la cabecera
-          del borde de la tarjeta sin devolver a Dominio cerca del suyo. */}
-      <div className="absolute left-[3.1%] right-[3.1%] top-[3%] bottom-[8.3%] z-10 flex flex-col px-4 pb-3 pt-6 sm:px-5">
+      {/* El hueco total arriba+abajo (~57-60px) no se puede reducir sin
+          achicar la tarjeta o el contenido — top-X%/padding solo reparten
+          ese hueco entre los dos bordes, no lo bajan (comprobado: mover uno
+          siempre suma lo mismo al otro). pt-5 reparte lo más parecido
+          posible entre arriba y abajo dentro de ese margen fijo. */}
+      <div className="absolute left-[3.1%] right-[3.1%] top-[3%] bottom-[8.3%] z-10 flex flex-col px-4 pb-3 pt-5 sm:px-5">
         <div className="flex items-center justify-end gap-2">
           <span className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${theme.badgeClass}`}>
             {totalItems} cards
