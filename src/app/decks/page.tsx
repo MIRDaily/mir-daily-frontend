@@ -469,7 +469,7 @@ function DeckCard({
           está pegado a ese borde, crece desde arriba y ya lo desbordaba, así
           que moverlo no cambiaba nada — comprobado midiendo antes/después);
           hay que subir el punto de partida para que todo el bloque suba. */}
-      <div className="absolute left-[3.1%] right-[3.1%] top-[7%] bottom-[8.3%] z-10 flex flex-col px-4 py-3 sm:px-5">
+      <div className="absolute left-[3.1%] right-[3.1%] top-[3%] bottom-[8.3%] z-10 flex flex-col px-4 py-3 sm:px-5">
         <div className="flex items-center justify-end gap-2">
           <span className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${theme.badgeClass}`}>
             {totalItems} cards
