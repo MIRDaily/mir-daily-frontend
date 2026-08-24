@@ -510,7 +510,7 @@ function DeckCard({
             pegada al título mientras que uno con bio la empujaba más abajo,
             así que la misma pieza aparecía en una posición distinta según el
             mazo. min-h fuerza el mismo punto de partida siempre. */}
-        <p className="mt-1.5 line-clamp-2 min-h-[39px] text-xs font-medium leading-relaxed text-slate-500 sm:min-h-[46px] sm:text-sm">
+        <p className="mt-1.5 line-clamp-2 min-h-[39px] break-words text-xs font-medium leading-relaxed text-slate-500 sm:min-h-[46px] sm:text-sm">
           {subtitle}
         </p>
 

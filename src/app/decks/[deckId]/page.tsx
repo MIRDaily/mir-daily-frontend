@@ -2110,11 +2110,14 @@ export default function StudioDeckDetailPage() {
                     // generoso de sobra para una explicación normal (crece hasta su alto
                     // real, muy por debajo del tope) y, si alguna la superase, gana scroll
                     // propio en vez de perder el texto silenciosamente.
+                    // Sin scale: combinar un transform de escala con el crecimiento de
+                    // max-height hacía que el texto pareciera "reescalarse" y dar un salto
+                    // justo al mostrar la solución, en vez de una aparición limpia.
                     <div
-                      className={`transform-gpu overflow-hidden transition-[max-height,opacity,transform,margin,padding] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                      className={`overflow-hidden transition-[max-height,opacity,margin,padding] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                         isAnswered
-                          ? 'mt-1 max-h-[70vh] translate-y-0 scale-100 rounded-2xl border-2 border-[#EAE4E2] p-4 opacity-100'
-                          : 'mt-0 max-h-0 -translate-y-1 scale-[0.985] rounded-2xl border-0 p-0 opacity-0'
+                          ? 'mt-1 max-h-[70vh] rounded-2xl border-2 border-[#EAE4E2] p-4 opacity-100'
+                          : 'mt-0 max-h-0 rounded-2xl border-0 p-0 opacity-0'
                       }`}
                       style={isAnswered ? trackerPaper('#7D8A96', 0.1) : undefined}
                       aria-hidden={!isAnswered}
