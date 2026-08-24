@@ -1679,7 +1679,10 @@ export default function StudioDecksPage() {
                         })
                       }}
                       isFailedQuestions={isFailedQuestionsDeck(deck)}
-                      galleryStyle={galleryStyle}
+                      // Los mazos del sistema (no creados por el usuario) conservan
+                      // siempre su textura original, sin importar el ajuste elegido
+                      // para la galería — ese ajuste es solo para los mazos propios.
+                      galleryStyle="default"
                       onOpen={() => router.push(`/decks/${deck.id}`)}
                       deleting={false}
                       showDeleteButton={false}
