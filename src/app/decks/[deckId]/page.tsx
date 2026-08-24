@@ -217,9 +217,6 @@ type NextDeckItemResponse =
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL
 const STUDY_SESSION_STORAGE_KEY_PREFIX = 'studio:deck:study-session:'
-const SHOW_CORRECT_ANSWERS_STORAGE_KEY = 'studio:deck:show-correct-answers'
-const QUESTIONS_EXPANDED_STORAGE_KEY = 'studio:deck:questions-expanded'
-const SHOW_QUESTION_META_STORAGE_KEY = 'studio:deck:show-question-meta'
 // El mazo automático de fallos lleva SIEMPRE el albaricoque: es parte de su
 // identidad y no se puede personalizar.
 const FAILED_GLOBAL_GRADIENT: DeckGradientId = 'apricot'
@@ -988,31 +985,11 @@ export default function StudioDeckDetailPage() {
     }
   }, [deckId])
 
-  // Lee las preferencias de visualización guardadas la primera vez que se
-  // monta la pantalla (si no hay nada guardado, se quedan en su default:
-  // opciones plegadas, correctas ocultas, etiquetas activas).
-  useEffect(() => {
-    const storedShowAnswers = window.localStorage.getItem(SHOW_CORRECT_ANSWERS_STORAGE_KEY)
-    if (storedShowAnswers === '1') setShowCorrectAnswers(true)
-
-    const storedExpanded = window.localStorage.getItem(QUESTIONS_EXPANDED_STORAGE_KEY)
-    if (storedExpanded === '1') setQuestionsExpanded(true)
-
-    const storedMeta = window.localStorage.getItem(SHOW_QUESTION_META_STORAGE_KEY)
-    if (storedMeta === '0') setShowQuestionMeta(false)
-  }, [])
-
-  useEffect(() => {
-    window.localStorage.setItem(SHOW_CORRECT_ANSWERS_STORAGE_KEY, showCorrectAnswers ? '1' : '0')
-  }, [showCorrectAnswers])
-
-  useEffect(() => {
-    window.localStorage.setItem(QUESTIONS_EXPANDED_STORAGE_KEY, questionsExpanded ? '1' : '0')
-  }, [questionsExpanded])
-
-  useEffect(() => {
-    window.localStorage.setItem(SHOW_QUESTION_META_STORAGE_KEY, showQuestionMeta ? '1' : '0')
-  }, [showQuestionMeta])
+  // Antes estas tres preferencias se leían y guardaban en localStorage, así
+  // que el mazo se abría como lo hubiera dejado la última visita. El usuario
+  // pidió que fuera siempre igual al entrar: contraído, respuestas correctas
+  // ocultas, etiquetas visibles — que son ya los valores por defecto de los
+  // useState de arriba. No queda nada que leer ni que guardar.
 
   // Gradiente de la portada: el mazo de fallos tiene el suyo fijo; el resto
   // usan el que el usuario eligió para ESE mazo, guardado en BD (decks.banner_gradient)
