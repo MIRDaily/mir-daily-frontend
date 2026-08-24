@@ -505,11 +505,14 @@ function DeckCard({
           </h3>
         </div>
 
-        {subtitle ? (
-          <p className="mt-1.5 line-clamp-2 text-xs font-medium leading-relaxed text-slate-500 sm:text-sm">
-            {subtitle}
-          </p>
-        ) : null}
+        {/* Hueco de la bio siempre reservado (2 líneas), tenga o no tenga
+            texto el mazo — si no, un mazo sin bio dejaba la barra de Dominio
+            pegada al título mientras que uno con bio la empujaba más abajo,
+            así que la misma pieza aparecía en una posición distinta según el
+            mazo. min-h fuerza el mismo punto de partida siempre. */}
+        <p className="mt-1.5 line-clamp-2 min-h-[39px] text-xs font-medium leading-relaxed text-slate-500 sm:min-h-[46px] sm:text-sm">
+          {subtitle}
+        </p>
 
         {/* El mazo de fallos no tiene Dominio: su contenido cambia solo con
             cada acierto/fallo, un % de largo plazo no significa nada ahí
