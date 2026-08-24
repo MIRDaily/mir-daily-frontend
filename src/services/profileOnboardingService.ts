@@ -84,6 +84,7 @@ export type AcademicPayload = {
   customUniversity?: string | null
   profilePublic?: boolean
   bio?: string | null
+  galleryStyle?: 'default' | 'gradient'
 }
 
 /**

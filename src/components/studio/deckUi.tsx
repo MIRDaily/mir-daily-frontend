@@ -372,6 +372,20 @@ export function DeckBannerGradient({ id }: { id: DeckGradientId }) {
   )
 }
 
+/**
+ * Versión estática (sin blur ni animación) del mismo degradado, para sitios
+ * donde puede haber muchas tarjetas a la vez — la galería general de mazos,
+ * por ejemplo. Un `linear-gradient` de CSS es esencialmente gratis de pintar
+ * incluso multiplicado por decenas de tarjetas; las manchas con `blur()` y
+ * `framer-motion` de `DeckBannerGradient` no lo son.
+ */
+export function getStaticDeckGradientStyle(id: DeckGradientId): CSSProperties {
+  const palette = DECK_GRADIENTS[id] ?? DECK_GRADIENTS[DEFAULT_DECK_GRADIENT]
+  return {
+    backgroundImage: `linear-gradient(135deg, ${palette.light} 0%, ${palette.mid} 55%, ${palette.dark} 100%)`,
+  }
+}
+
 /** Muestra circular de un preset, para el selector. */
 export function DeckGradientSwatch({ id, size = 22 }: { id: DeckGradientId; size?: number }) {
   const palette = DECK_GRADIENTS[id] ?? DECK_GRADIENTS[DEFAULT_DECK_GRADIENT]

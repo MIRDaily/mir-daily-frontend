@@ -35,6 +35,8 @@ export type AuthUser = {
     country: string | null
   } | null
   profile_public: boolean
+  /** Textura de las tarjetas de "Tus mazos": cartas ilustradas o degradado de cada mazo. */
+  deck_gallery_style: 'default' | 'gradient'
   bio: string | null
   /** Fecha en la que podrá volver a cambiar el username (null si puede ya). */
   username_next_change_at: string | null
@@ -136,6 +138,10 @@ function coerceAuthUser(payload: unknown, fallbackSession: Session): AuthUser | 
       : typeof source.profilePublic === 'boolean'
         ? source.profilePublic
         : false
+  const deckGalleryStyle =
+    source.deck_gallery_style === 'gradient' || source.deckGalleryStyle === 'gradient'
+      ? 'gradient'
+      : 'default'
   const onboardingCompleted =
     typeof source.onboarding_completed === 'boolean'
       ? source.onboarding_completed
@@ -164,6 +170,7 @@ function coerceAuthUser(payload: unknown, fallbackSession: Session): AuthUser | 
     main_goal: mainGoal,
     university,
     profile_public: profilePublic,
+    deck_gallery_style: deckGalleryStyle,
     bio,
     username_next_change_at: usernameNextChangeAt,
     onboarding_completed: onboardingCompleted,

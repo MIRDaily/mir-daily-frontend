@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
@@ -16,9 +16,20 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import GooFissionLoader from '@/components/studio/GooFissionLoader'
 import UndoDeleteToast from '@/components/studio/UndoDeleteToast'
+import {
+  DEFAULT_DECK_GRADIENT,
+  getStaticDeckGradientStyle,
+  isDeckGradientId,
+} from '@/components/studio/deckUi'
+import { useProfile } from '@/hooks/useProfile'
 import { restoreDeck, softDeleteDeck } from '@/lib/studio/trash'
 import { supabase } from '@/lib/supabaseBrowser'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
+
+// Silueta neutra de carta (la misma variante "clean" de siempre) usada como
+// máscara para recortar el degradado con la forma de tarjeta — así el modo
+// "Personalizado" sigue pareciendo una carta, no un rectángulo suelto.
+const GRADIENT_CARD_MASK = '/textures/decks/clean_1.svg'
 
 type Deck = {
   id: string | number
@@ -37,6 +48,7 @@ type Deck = {
   system_generated?: boolean
   auto_type?: string | null
   position?: number | null
+  banner_gradient?: string | null
 }
 
 type DeckTheme = {
@@ -267,6 +279,7 @@ function DeckCard({
   textureTransition,
   onTextureTransitionEnd,
   isFailedQuestions,
+  galleryStyle,
   onOpen,
   onDelete,
   deleting,
@@ -278,12 +291,29 @@ function DeckCard({
   textureTransition: boolean
   onTextureTransitionEnd?: () => void
   isFailedQuestions: boolean
+  galleryStyle: 'default' | 'gradient'
   onOpen: () => void
   onDelete?: () => void
   deleting: boolean
   interactive?: boolean
   showDeleteButton?: boolean
 }) {
+  const isGradientStyle = galleryStyle === 'gradient'
+  // "Mis preguntas falladas" no admite elegir gradiente (igual que en su
+  // propia pantalla): banner_gradient nunca se le llega a guardar, así que
+  // cae sola en el valor por defecto (albaricoque) al no ser un id válido.
+  const gradientId = isDeckGradientId(deck.banner_gradient) ? deck.banner_gradient : DEFAULT_DECK_GRADIENT
+  const gradientCardStyle: CSSProperties = isGradientStyle
+    ? {
+        ...getStaticDeckGradientStyle(gradientId),
+        WebkitMaskImage: `url(${GRADIENT_CARD_MASK})`,
+        maskImage: `url(${GRADIENT_CARD_MASK})`,
+        WebkitMaskSize: '100% 100%',
+        maskSize: '100% 100%',
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+      }
+    : { backgroundImage: `url(${deckTexture})` }
   const samplesCount = Math.max(0, Math.round(toSafeNumber(deck.total_reviews ?? deck.samples)))
   const hasUnknownMastery = deck.accuracy === null || samplesCount < 25
   const accuracyPercent = hasUnknownMastery
@@ -405,7 +435,7 @@ function DeckCard({
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0 bg-center bg-no-repeat [background-size:100%_100%] transition-opacity duration-200"
         style={{
-          backgroundImage: `url(${deckTexture})`,
+          ...gradientCardStyle,
           filter:
             'drop-shadow(0 10px 22px rgba(0, 0, 0, 0.08)) drop-shadow(0 20px 48px rgba(0, 0, 0, 0.10))',
           opacity: hoverShadowOpacity,
@@ -419,7 +449,7 @@ function DeckCard({
         className={`pointer-events-none absolute inset-0 z-[1] bg-center bg-no-repeat [background-size:100%_100%] ${
           textureTransition ? 'deck-texture-transition' : ''
         }`}
-        style={{ backgroundImage: `url(${deckTexture})` }}
+        style={gradientCardStyle}
       />
       <span
         aria-hidden
@@ -1071,6 +1101,40 @@ function CreateDeckPlaceholder({ onCreate }: { onCreate: () => void }) {
 export default function StudioDecksPage() {
   const router = useRouter()
   const { setBackAction } = useHeaderUI()
+  const { profile, updateAcademic } = useProfile()
+  const galleryStyle: 'default' | 'gradient' = profile?.deck_gallery_style ?? 'default'
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [savingGalleryStyle, setSavingGalleryStyle] = useState(false)
+  const settingsPopoverRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!isSettingsOpen) return
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!settingsPopoverRef.current?.contains(event.target as Node)) {
+        setIsSettingsOpen(false)
+      }
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsSettingsOpen(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isSettingsOpen])
+
+  const handleSelectGalleryStyle = async (style: 'default' | 'gradient') => {
+    if (style === galleryStyle || savingGalleryStyle) {
+      setIsSettingsOpen(false)
+      return
+    }
+    setSavingGalleryStyle(true)
+    const result = await updateAcademic({ galleryStyle: style })
+    setSavingGalleryStyle(false)
+    if (result.ok) setIsSettingsOpen(false)
+  }
 
   useEffect(() => {
     setBackAction({ label: 'Estudio', href: '/studio' })
@@ -1437,6 +1501,81 @@ export default function StudioDecksPage() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <div ref={settingsPopoverRef} className="relative">
+              <button
+                type="button"
+                aria-label="Ajustes de la galería"
+                aria-expanded={isSettingsOpen}
+                title="Ajustes"
+                onClick={() => setIsSettingsOpen((prev) => !prev)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50"
+              >
+                <svg
+                  aria-hidden
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-4 w-4"
+                >
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </button>
+
+              {isSettingsOpen ? (
+                <div
+                  className="absolute right-0 top-12 z-30 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg"
+                  role="menu"
+                >
+                  <p className="px-2 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                    Textura de las tarjetas
+                  </p>
+                  <button
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={galleryStyle === 'default'}
+                    disabled={savingGalleryStyle}
+                    onClick={() => void handleSelectGalleryStyle('default')}
+                    className={`flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                      galleryStyle === 'default' ? 'bg-slate-100 font-semibold text-slate-800' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className="h-8 w-8 shrink-0 rounded-lg bg-center bg-no-repeat [background-size:100%_100%]"
+                      style={{ backgroundImage: 'url(/textures/decks/clean_1.svg)' }}
+                    />
+                    <span>
+                      <span className="block">Predeterminado</span>
+                      <span className="block text-xs font-normal text-slate-400">Cartas ilustradas de MIRDaily</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={galleryStyle === 'gradient'}
+                    disabled={savingGalleryStyle}
+                    onClick={() => void handleSelectGalleryStyle('gradient')}
+                    className={`flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                      galleryStyle === 'gradient' ? 'bg-slate-100 font-semibold text-slate-800' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className="h-8 w-8 shrink-0 rounded-lg"
+                      style={{ backgroundImage: 'linear-gradient(135deg, #FFDAB9 0%, #E2725B 55%, #4E2C23 100%)' }}
+                    />
+                    <span>
+                      <span className="block">Personalizado</span>
+                      <span className="block text-xs font-normal text-slate-400">El degradado de cada mazo</span>
+                    </span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
             <Link
               href="/decks/trash"
               aria-label="Papelera de mazos"
@@ -1535,6 +1674,7 @@ export default function StudioDecksPage() {
                         })
                       }}
                       isFailedQuestions={isFailedQuestionsDeck(deck)}
+                      galleryStyle={galleryStyle}
                       onOpen={() => router.push(`/decks/${deck.id}`)}
                       deleting={false}
                       showDeleteButton={false}
@@ -1587,6 +1727,7 @@ export default function StudioDecksPage() {
                             })
                           }}
                           isFailedQuestions={isFailedQuestionsDeck(deck)}
+                      galleryStyle={galleryStyle}
                           onOpen={() => router.push(`/decks/${deck.id}`)}
                           deleting={deletingDeckIds.has(String(deck.id))}
                           onDelete={() => {
