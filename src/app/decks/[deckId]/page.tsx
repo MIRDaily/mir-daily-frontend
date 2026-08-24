@@ -1995,7 +1995,16 @@ export default function StudioDeckDetailPage() {
               <p className="text-sm font-bold text-[#2C3E50]">Cerrando sesión…</p>
             </div>
           ) : currentItem ? (
-            <div className={`flex flex-col gap-5 transition-opacity duration-200 ${isLoadingNext ? 'opacity-0' : 'opacity-100'}`}>
+            // `initial` solo cuenta la primera vez que este bloque se monta —
+            // justo cuando llega la primera pregunta de la sesión, que antes
+            // aparecía de golpe sin transición. `animate` seguimos gobernándolo
+            // con isLoadingNext, igual que antes, para las preguntas siguientes.
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: isLoadingNext ? 0 : 1, y: 0 }}
+              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              className="flex flex-col gap-5"
+            >
               <div
                 className="rounded-3xl border-2 border-[#2c3e50] p-6"
                 style={{ ...trackerPaper('#7D8A96', 0.14), boxShadow: '6px 6px 0 0 #2c3e50' }}
@@ -2096,16 +2105,21 @@ export default function StudioDeckDetailPage() {
                   ) : null}
 
                   {currentItem?.questions?.explanation ? (
+                    // El tope anterior (max-h-80, 320px) cortaba cualquier explicación más
+                    // larga que ese hueco, sin aviso ni forma de leer el resto. Este es
+                    // generoso de sobra para una explicación normal (crece hasta su alto
+                    // real, muy por debajo del tope) y, si alguna la superase, gana scroll
+                    // propio en vez de perder el texto silenciosamente.
                     <div
                       className={`transform-gpu overflow-hidden transition-[max-height,opacity,transform,margin,padding] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                         isAnswered
-                          ? 'mt-1 max-h-80 translate-y-0 scale-100 rounded-2xl border-2 border-[#EAE4E2] p-4 opacity-100'
+                          ? 'mt-1 max-h-[70vh] translate-y-0 scale-100 rounded-2xl border-2 border-[#EAE4E2] p-4 opacity-100'
                           : 'mt-0 max-h-0 -translate-y-1 scale-[0.985] rounded-2xl border-0 p-0 opacity-0'
                       }`}
                       style={isAnswered ? trackerPaper('#7D8A96', 0.1) : undefined}
                       aria-hidden={!isAnswered}
                     >
-                      <div className={`transition-opacity duration-500 ${isAnswered ? 'opacity-100 delay-100' : 'opacity-0 delay-0'}`}>
+                      <div className={`overflow-y-auto transition-opacity duration-500 ${isAnswered ? 'opacity-100 delay-100' : 'opacity-0 delay-0'}`}>
                         <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7FA07B]">Explicación</span>
                         <p className="mt-1.5 text-sm leading-relaxed text-[#2C3E50]">
                           {currentItem.questions.explanation}
@@ -2131,15 +2145,24 @@ export default function StudioDeckDetailPage() {
               ) : (
                 <p className="text-sm font-semibold text-[#7D8A96]">Este item no tiene opciones disponibles.</p>
               )}
-            </div>
+            </motion.div>
           ) : null}
         </main>
 
-        {isInitialStudyLoading ? (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#FAF7F4]/80 backdrop-blur-[2px]">
-            <GooFissionLoader label="Cargando pregunta" />
-          </div>
-        ) : null}
+        <AnimatePresence>
+          {isInitialStudyLoading ? (
+            <motion.div
+              key="initial-study-loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="fixed inset-0 z-40 flex items-center justify-center bg-[#FAF7F4]/80 backdrop-blur-[2px]"
+            >
+              <GooFissionLoader label="Cargando pregunta" />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
     )
   }
