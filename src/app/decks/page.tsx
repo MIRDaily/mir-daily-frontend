@@ -16,11 +16,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import GooFissionLoader from '@/components/studio/GooFissionLoader'
 import UndoDeleteToast from '@/components/studio/UndoDeleteToast'
-import {
-  DEFAULT_DECK_GRADIENT,
-  getStaticDeckGradientStyle,
-  isDeckGradientId,
-} from '@/components/studio/deckUi'
+import { DeckBannerGradient, DEFAULT_DECK_GRADIENT, isDeckGradientId } from '@/components/studio/deckUi'
 import { useProfile } from '@/hooks/useProfile'
 import { restoreDeck, softDeleteDeck } from '@/lib/studio/trash'
 import { supabase } from '@/lib/supabaseBrowser'
@@ -303,17 +299,17 @@ function DeckCard({
   // propia pantalla): banner_gradient nunca se le llega a guardar, así que
   // cae sola en el valor por defecto (albaricoque) al no ser un id válido.
   const gradientId = isDeckGradientId(deck.banner_gradient) ? deck.banner_gradient : DEFAULT_DECK_GRADIENT
-  const gradientCardStyle: CSSProperties = isGradientStyle
-    ? {
-        ...getStaticDeckGradientStyle(gradientId),
-        WebkitMaskImage: `url(${GRADIENT_CARD_MASK})`,
-        maskImage: `url(${GRADIENT_CARD_MASK})`,
-        WebkitMaskSize: '100% 100%',
-        maskSize: '100% 100%',
-        WebkitMaskRepeat: 'no-repeat',
-        maskRepeat: 'no-repeat',
-      }
-    : { backgroundImage: `url(${deckTexture})` }
+  // Recorta lo que sea que vaya dentro (el degradado animado del mazo, en
+  // este caso) con la silueta de carta de siempre, para que "Personalizado"
+  // siga pareciendo una carta y no un rectángulo suelto.
+  const gradientMaskStyle: CSSProperties = {
+    WebkitMaskImage: `url(${GRADIENT_CARD_MASK})`,
+    maskImage: `url(${GRADIENT_CARD_MASK})`,
+    WebkitMaskSize: '100% 100%',
+    maskSize: '100% 100%',
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+  }
   const samplesCount = Math.max(0, Math.round(toSafeNumber(deck.total_reviews ?? deck.samples)))
   const hasUnknownMastery = deck.accuracy === null || samplesCount < 25
   const accuracyPercent = hasUnknownMastery
@@ -431,26 +427,46 @@ function DeckCard({
       } : undefined}
       className={`deck-card group relative aspect-[900/336] min-h-[210px] overflow-visible p-0 hover:z-40 focus-within:z-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598] sm:min-h-[230px] [transform-style:preserve-3d] ${theme.cardClass}`}
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-0 bg-center bg-no-repeat [background-size:100%_100%] transition-opacity duration-200"
-        style={{
-          ...gradientCardStyle,
-          filter:
-            'drop-shadow(0 10px 22px rgba(0, 0, 0, 0.08)) drop-shadow(0 20px 48px rgba(0, 0, 0, 0.10))',
-          opacity: hoverShadowOpacity,
-        }}
-      />
-      <span
-        aria-hidden
-        onAnimationEnd={() => {
-          if (textureTransition) onTextureTransitionEnd?.()
-        }}
-        className={`pointer-events-none absolute inset-0 z-[1] bg-center bg-no-repeat [background-size:100%_100%] ${
-          textureTransition ? 'deck-texture-transition' : ''
-        }`}
-        style={gradientCardStyle}
-      />
+      {isGradientStyle ? (
+        // Mismo degradado animado que la cabecera del mazo individual (blur +
+        // framer-motion), no una versión estática — recortado con la silueta
+        // de carta. Una sola capa: no se replica el truco de sombra-al-hover
+        // de las cartas ilustradas, que exigiría animar el blur por duplicado.
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+          style={{
+            ...gradientMaskStyle,
+            filter:
+              'drop-shadow(0 10px 22px rgba(0, 0, 0, 0.08)) drop-shadow(0 20px 48px rgba(0, 0, 0, 0.10))',
+          }}
+        >
+          <DeckBannerGradient id={gradientId} />
+        </div>
+      ) : (
+        <>
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-0 bg-center bg-no-repeat [background-size:100%_100%] transition-opacity duration-200"
+            style={{
+              backgroundImage: `url(${deckTexture})`,
+              filter:
+                'drop-shadow(0 10px 22px rgba(0, 0, 0, 0.08)) drop-shadow(0 20px 48px rgba(0, 0, 0, 0.10))',
+              opacity: hoverShadowOpacity,
+            }}
+          />
+          <span
+            aria-hidden
+            onAnimationEnd={() => {
+              if (textureTransition) onTextureTransitionEnd?.()
+            }}
+            className={`pointer-events-none absolute inset-0 z-[1] bg-center bg-no-repeat [background-size:100%_100%] ${
+              textureTransition ? 'deck-texture-transition' : ''
+            }`}
+            style={{ backgroundImage: `url(${deckTexture})` }}
+          />
+        </>
+      )}
       <span
         aria-hidden
         className={`pointer-events-none absolute inset-0 z-[2] ${coreBandShapeClass} ${coreAnimationClass}`}
