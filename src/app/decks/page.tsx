@@ -69,6 +69,20 @@ function toSafeNumber(value: unknown): number {
   return parsed
 }
 
+function clampPercent(value: unknown): number {
+  const num = toSafeNumber(value)
+  if (num < 0) return 0
+  if (num > 100) return 100
+  return Math.round(num)
+}
+
+function getDomainColor(percent: number): string {
+  if (percent < 40) return 'bg-red-400'
+  if (percent < 70) return 'bg-orange-400'
+  if (percent < 85) return 'bg-yellow-400'
+  return 'bg-emerald-500'
+}
+
 function getDeckTheme(subject?: string | null): DeckTheme {
   const value = String(subject || '').toLowerCase()
 
@@ -298,14 +312,19 @@ function DeckCard({
     WebkitMaskRepeat: 'no-repeat',
     maskRepeat: 'no-repeat',
   }
-  // Mismo contenido que la cabecera de dentro del mazo: una frase corta
-  // (bio del mazo, o el aviso fijo del mazo de fallos) y sus asignaturas
-  // como % de composición — ya no la etiqueta "PERSONAL" ni el conteo de
-  // cartas, que no aparecían ahí.
+  // Bio del mazo (o el aviso fijo del mazo de fallos) en vez de la etiqueta
+  // "PERSONAL", que salía igual para cualquier mazo propio y no aportaba
+  // nada. El resto — nombre, dominio, nº de tarjetas, papelera — se queda.
   const subtitle = isFailedQuestions
     ? 'Tus fallos recientes, listos para repasar.'
     : deck.description?.trim() || null
-  const topSubjects = deck.subjects ?? []
+  const samplesCount = Math.max(0, Math.round(toSafeNumber(deck.total_reviews ?? deck.samples)))
+  const hasUnknownMastery = deck.accuracy === null || samplesCount < 25
+  const accuracyPercent = hasUnknownMastery
+    ? 0
+    : clampPercent(Math.round(toSafeNumber(deck.accuracy) * 100))
+  const domainColorClass = getDomainColor(accuracyPercent)
+  const totalItems = Math.max(0, Math.round(toSafeNumber(deck.totalItems)))
   const [shimmerDirection, setShimmerDirection] = useState<ShimmerDirection>('left')
   const [shimmerActive, setShimmerActive] = useState(false)
   const [isPointerInside, setIsPointerInside] = useState(false)
@@ -429,7 +448,7 @@ function DeckCard({
               'drop-shadow(0 10px 22px rgba(0, 0, 0, 0.08)) drop-shadow(0 20px 48px rgba(0, 0, 0, 0.10))',
           }}
         >
-          <DeckBannerGradient id={gradientId} />
+          <DeckBannerGradient id={gradientId} animated={false} />
         </div>
       ) : (
         <>
@@ -465,6 +484,9 @@ function DeckCard({
       />
       <div className="absolute left-[3.1%] right-[3.1%] top-[11%] bottom-[8.3%] z-10 flex flex-col px-4 py-3 sm:px-5">
         <div className="flex items-center justify-end gap-2">
+          <span className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${theme.badgeClass}`}>
+            {totalItems} cards
+          </span>
           {showDeleteButton ? (
             <button
               type="button"
@@ -503,27 +525,58 @@ function DeckCard({
           </h3>
         </div>
 
-        {/* Mismo contenido que la cabecera de dentro del mazo: la bio corta
-            (o el aviso fijo del mazo de fallos) y sus asignaturas como % de
-            composición, en vez del badge "PERSONAL" y la barra de Dominio. */}
         {subtitle ? (
           <p className="mt-1.5 line-clamp-2 text-xs font-medium leading-relaxed text-slate-500 sm:text-sm">
             {subtitle}
           </p>
         ) : null}
 
-        {topSubjects.length > 0 ? (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {topSubjects.map((entry) => (
-              <span
-                key={entry.subject}
-                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold sm:text-xs ${theme.badgeClass}`}
-              >
-                {entry.subject} · {entry.percent}%
-              </span>
-            ))}
+        {/* El mazo de fallos no tiene Dominio: su contenido cambia solo con
+            cada acierto/fallo, un % de largo plazo no significa nada ahí
+            (mismo criterio que ya se aplica en su cabecera). */}
+        {isFailedQuestions ? null : (
+          <div className="mt-3">
+            <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 sm:text-sm">
+              <span>Dominio</span>
+              {hasUnknownMastery ? (
+                <div className="group/mastery relative">
+                  <button
+                    type="button"
+                    aria-label="Dominio no disponible aún"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                    }}
+                    onKeyDown={(event) => {
+                      event.stopPropagation()
+                    }}
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white/80 text-xs font-bold text-slate-600"
+                  >
+                    ?
+                  </button>
+                  <div
+                    role="tooltip"
+                    className="pointer-events-none invisible absolute right-0 top-full z-[100] mt-2 w-72 rounded-xl border border-slate-200 bg-white/95 p-3 text-left opacity-0 shadow-lg transition-opacity duration-200 group-hover/mastery:visible group-hover/mastery:opacity-100 group-focus-within/mastery:visible group-focus-within/mastery:opacity-100"
+                  >
+                    <p className="text-xs font-semibold text-slate-800">Dominio del mazo</p>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                      El dominio se estima usando tus ultimas 25 respuestas en este mazo. Aun no hay
+                      suficientes datos para calcularlo. Responde al menos 25 preguntas para estimar
+                      tu dominio.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <span className="text-slate-600">{accuracyPercent}%</span>
+              )}
+            </div>
+            <div className="h-2.5 rounded-full bg-slate-100">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${domainColorClass}`}
+                style={{ width: `${accuracyPercent}%` }}
+              />
+            </div>
           </div>
-        ) : null}
+        )}
       </div>
 
       <style jsx>{`

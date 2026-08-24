@@ -326,10 +326,14 @@ const GRAIN_DATA_URI =
   "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.85'/%3E%3C/svg%3E\")"
 
 /**
- * Fondo animado de la portada de un mazo: tres tonos en bandas curvas que van
- * a la deriva muy despacio, más un velo de grano.
+ * Fondo de la portada de un mazo: tres tonos en bandas curvas, más un velo de
+ * grano. `animated` (por defecto true, la cabecera de dentro de un mazo)
+ * las deja a la deriva muy despacio; con `animated={false}` (la galería
+ * general, donde hay muchas tarjetas a la vez) se congelan en su primer
+ * fotograma — mismo aspecto orgánico, pero sin `framer-motion` corriendo:
+ * divs estáticos, sin animación que pintar en cada tarjeta.
  */
-export function DeckBannerGradient({ id }: { id: DeckGradientId }) {
+export function DeckBannerGradient({ id, animated = true }: { id: DeckGradientId; animated?: boolean }) {
   const palette = DECK_GRADIENTS[id] ?? DECK_GRADIENTS[DEFAULT_DECK_GRADIENT]
 
   return (
@@ -339,30 +343,46 @@ export function DeckBannerGradient({ id }: { id: DeckGradientId }) {
       // La base es el tono claro: asoma allí donde no llega ninguna banda.
       style={{ backgroundColor: palette.light, isolation: 'isolate' }}
     >
-      {GRADIENT_BANDS.map((band, index) => (
-        <motion.div
-          key={`${id}-${index}`}
-          className="absolute"
-          style={{
-            left: band.box.left,
-            top: band.box.top,
-            width: band.box.width,
-            height: band.box.height,
-            borderRadius: '48%',
-            backgroundColor: palette[band.tone],
-            filter: 'blur(38px)',
-            willChange: 'transform',
-          }}
-          animate={band.drift}
-          transition={{
-            duration: band.duration,
-            repeat: Infinity,
-            repeatType: 'mirror',
-            ease: 'easeInOut',
-            delay: index * 1.2,
-          }}
-        />
-      ))}
+      {GRADIENT_BANDS.map((band, index) => {
+        const baseStyle: CSSProperties = {
+          left: band.box.left,
+          top: band.box.top,
+          width: band.box.width,
+          height: band.box.height,
+          borderRadius: '48%',
+          backgroundColor: palette[band.tone],
+          filter: 'blur(38px)',
+        }
+
+        if (!animated) {
+          return (
+            <div
+              key={`${id}-${index}`}
+              className="absolute"
+              style={{
+                ...baseStyle,
+                transform: `translate(${band.drift.x[0]}, ${band.drift.y[0]}) rotate(${band.drift.rotate[0]}deg) scale(${band.drift.scale[0]})`,
+              }}
+            />
+          )
+        }
+
+        return (
+          <motion.div
+            key={`${id}-${index}`}
+            className="absolute"
+            style={{ ...baseStyle, willChange: 'transform' }}
+            animate={band.drift}
+            transition={{
+              duration: band.duration,
+              repeat: Infinity,
+              repeatType: 'mirror',
+              ease: 'easeInOut',
+              delay: index * 1.2,
+            }}
+          />
+        )
+      })}
 
       <div
         className="absolute inset-0"
