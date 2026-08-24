@@ -18,6 +18,7 @@ import GooFissionLoader from '@/components/studio/GooFissionLoader'
 import UndoDeleteToast from '@/components/studio/UndoDeleteToast'
 import { restoreDeck, softDeleteDeck } from '@/lib/studio/trash'
 import { supabase } from '@/lib/supabaseBrowser'
+import { useHeaderUI } from '@/providers/HeaderUIProvider'
 
 type Deck = {
   id: string | number
@@ -1069,6 +1070,13 @@ function CreateDeckPlaceholder({ onCreate }: { onCreate: () => void }) {
 
 export default function StudioDecksPage() {
   const router = useRouter()
+  const { setBackAction } = useHeaderUI()
+
+  useEffect(() => {
+    setBackAction({ label: 'Estudio', href: '/studio' })
+    return () => setBackAction(null)
+  }, [setBackAction])
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -1420,26 +1428,6 @@ export default function StudioDecksPage() {
         }`}
       >
         <section className="relative mb-6 flex items-center justify-between gap-4">
-          <Link
-            href="/studio"
-            aria-label="Volver a studio"
-            title="Volver a studio"
-            className="mb-2 inline-flex h-9 min-w-[52px] items-center justify-center rounded-lg bg-[#E8A598] text-white transition hover:bg-[#D98C7D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598]/60 xl:absolute xl:-left-32 xl:top-2 xl:mb-0"
-          >
-            <svg
-              aria-hidden
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-3.5 w-3.5"
-            >
-              <path d="M19 12H5" />
-              <path d="M11 18l-6-6 6-6" />
-            </svg>
-          </Link>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Studio

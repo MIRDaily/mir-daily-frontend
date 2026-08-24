@@ -7,7 +7,13 @@ export type StudioDeck = {
   name: string
   deleted_at?: string | null
   auto_type?: string | null
+  description?: string | null
+  banner_gradient?: string | null
 }
+
+// Límite de producto para la bio corta del mazo (la columna en BD es texto
+// libre): que quepa en dos líneas del banner, no una biografía.
+export const DECK_DESCRIPTION_MAX_LENGTH = 120
 
 // auto_type del mazo automático de fallos. Es de solo lectura para el usuario:
 // se rellena solo con sus últimos fallos, así que NO debe aceptar inserciones
@@ -82,6 +88,52 @@ export async function removeQuestionFromDeck(token: string, deckId: string, item
   })
   if (!res.ok) throw new Error('Error removing question')
   return res.json().catch(() => null)
+}
+
+export async function updateDeckDescription(
+  token: string,
+  deckId: string,
+  description: string,
+): Promise<StudioDeck> {
+  const res = await fetch(`${apiBase()}/api/studio/decks/${deckId}/update`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ description }),
+  })
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new Error(payload?.error || 'Error al guardar la descripción')
+  }
+  const payload = (await res.json().catch(() => null)) as { deck?: StudioDeck } | null
+  if (!payload?.deck) throw new Error('Respuesta inválida del servidor')
+  return payload.deck
+}
+
+// Persiste el preset de gradiente de la cabecera del mazo en BD (antes solo
+// vivía en localStorage, por navegador, sin viajar entre dispositivos).
+export async function updateDeckGradient(
+  token: string,
+  deckId: string,
+  gradient: string,
+): Promise<StudioDeck> {
+  const res = await fetch(`${apiBase()}/api/studio/decks/${deckId}/update`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ gradient }),
+  })
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new Error(payload?.error || 'Error al guardar el fondo del mazo')
+  }
+  const payload = (await res.json().catch(() => null)) as { deck?: StudioDeck } | null
+  if (!payload?.deck) throw new Error('Respuesta inválida del servidor')
+  return payload.deck
 }
 
 export async function createStudioDeck(token: string, name: string) {

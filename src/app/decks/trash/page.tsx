@@ -1,10 +1,10 @@
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import GooFissionLoader from '@/components/studio/GooFissionLoader'
 import TrashTimer from '@/components/studio/TrashTimer'
 import { fetchDeletedDecks, restoreDeck, type TrashedDeck } from '@/lib/studio/trash'
+import { useHeaderUI } from '@/providers/HeaderUIProvider'
 
 function formatDate(value?: string | null): string {
   const date = value ? new Date(value) : null
@@ -24,11 +24,17 @@ type ToastState = {
 } | null
 
 export default function StudioDeckTrashPage() {
+  const { setBackAction } = useHeaderUI()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState>(null)
   const [trashDecks, setTrashDecks] = useState<TrashedDeck[]>([])
   const [restoringDeckIds, setRestoringDeckIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    setBackAction({ label: 'Mis mazos', href: '/decks', current: 'Papelera' })
+    return () => setBackAction(null)
+  }, [setBackAction])
 
   useEffect(() => {
     if (!toast) return
@@ -96,15 +102,6 @@ export default function StudioDeckTrashPage() {
           <p className="mt-2 text-sm text-slate-600">
             {trashCount} mazo{trashCount === 1 ? '' : 's'} eliminado{trashCount === 1 ? '' : 's'}
           </p>
-
-          <div className="mt-4">
-            <Link
-              href="/decks"
-              className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Volver a mazos
-            </Link>
-          </div>
         </header>
 
         {loading ? (

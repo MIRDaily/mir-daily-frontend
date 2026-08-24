@@ -39,9 +39,16 @@ export default function TrashTimer({ purgeAt, onExpire }: TrashTimerProps) {
   }, [isPurgeValid, onExpire, remainingMs])
 
   if (!isPurgeValid) {
-    return <span className="text-xs text-slate-500">Expiracion no disponible</span>
+    return <span className="text-xs font-bold text-[#7D8A96]">Expiracion no disponible</span>
   }
 
-  return <span className="text-xs text-slate-500">{formatRemaining(remainingMs)}</span>
+  const isUrgent = remainingMs > 0 && remainingMs <= 24 * 60 * 60 * 1000
+
+  return (
+    <span className={`flex items-center gap-1 text-xs font-bold ${isUrgent ? 'text-[#C4655A]' : 'text-[#7D8A96]'}`}>
+      <span className="material-symbols-outlined text-sm">schedule</span>
+      {formatRemaining(remainingMs)}
+    </span>
+  )
 }
 

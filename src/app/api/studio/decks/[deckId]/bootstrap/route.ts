@@ -5,6 +5,9 @@ type Deck = {
   name?: string | null
   title?: string | null
   deleted_at?: string | null
+  auto_type?: string | null
+  description?: string | null
+  banner_gradient?: string | null
 }
 
 type QuestionOption = {
@@ -19,6 +22,8 @@ type ItemQuestion = {
   correct_answer?: number | string | null
   explanation?: string | null
   question_options?: QuestionOption[] | null
+  subject?: string | null
+  year?: number | string | null
 }
 
 type ItemProgress = {
@@ -103,6 +108,28 @@ async function fetchJson<T>(url: string, token: string, fallback: string): Promi
   return (await res.json()) as T
 }
 
+// Un solo mazo, una sola consulta — a diferencia de GET /decks (la galería
+// completa), que antes se llamaba aquí solo para sacar el nombre de ESTE
+// mazo y tiraba el resto. Un 404 no es un error de verdad: significa "no es
+// tuyo o no existe", así que se resuelve a null en vez de tumbar el bootstrap.
+async function fetchDeck(deckId: string, token: string): Promise<Deck | null> {
+  const res = await fetch(`${API_URL}/api/studio/decks/${deckId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  })
+
+  if (res.status === 404) return null
+  if (!res.ok) {
+    throw new Error(await readError(res, 'No se pudo cargar el mazo.'))
+  }
+
+  const payload = (await res.json().catch(() => null)) as { deck?: Deck } | null
+  return payload?.deck ?? null
+}
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ deckId: string }> },
@@ -155,12 +182,8 @@ export async function GET(
           summaryError: err instanceof Error ? err.message : 'No se pudo cargar el summary.',
         }))
 
-    const [decksPayload, itemsPayload, summaryResult] = await Promise.all([
-      fetchJson<Deck[] | { decks?: Deck[] }>(
-        `${API_URL}/api/studio/decks`,
-        token,
-        'No se pudieron cargar los mazos.',
-      ),
+    const [deckResult, itemsPayload, summaryResult] = await Promise.all([
+      fetchDeck(deckId, token),
       fetchJson<Item[] | { items?: Item[]; pagination?: ItemsPagination | null }>(
         `${API_URL}/api/studio/decks/${deckId}/items?page=${page}&pageSize=${pageSize}`,
         token,
@@ -168,12 +191,6 @@ export async function GET(
       ),
       summaryPromise,
     ])
-
-    const allDecks = Array.isArray(decksPayload)
-      ? decksPayload
-      : Array.isArray(decksPayload?.decks)
-        ? decksPayload.decks
-        : []
 
     const items = Array.isArray(itemsPayload)
       ? itemsPayload
@@ -186,14 +203,20 @@ export async function GET(
       : (itemsPayload?.pagination ?? null)
 
     // Return only the fields needed by the page to reduce payload size.
-    const deck = allDecks
-      .map((current) => ({
-        id: current.id,
-        name: current.name ?? null,
-        title: current.title ?? null,
-        deleted_at: current.deleted_at ?? null,
-      }))
-      .find((current) => String(current.id) === deckId && current.deleted_at == null) ?? null
+    const deck = deckResult
+      ? {
+          id: deckResult.id,
+          name: deckResult.name ?? null,
+          // `title` nunca existió como columna en `decks` (solo `name`); se
+          // mantiene en el tipo porque el frontend hace `name || title` como
+          // red de seguridad, pero el backend nunca lo rellena.
+          title: null,
+          deleted_at: deckResult.deleted_at ?? null,
+          auto_type: deckResult.auto_type ?? null,
+          description: deckResult.description ?? null,
+          banner_gradient: deckResult.banner_gradient ?? null,
+        }
+      : null
 
     const minimalItems: Item[] = items.map((item) => ({
       id: item.id,
@@ -204,6 +227,8 @@ export async function GET(
         statement: item.questions?.statement ?? null,
         correct_answer: item.questions?.correct_answer ?? null,
         explanation: item.questions?.explanation ?? null,
+        subject: item.questions?.subject ?? null,
+        year: item.questions?.year ?? null,
         question_options: Array.isArray(item.questions?.question_options)
           ? item.questions?.question_options.map((option) => ({
               id: option.id ?? null,

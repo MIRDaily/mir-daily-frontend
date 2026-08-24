@@ -1,11 +1,11 @@
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import GooFissionLoader from '@/components/studio/GooFissionLoader'
 import DeckTrashList from '@/components/studio/DeckTrashList'
 import { fetchDeckTrash, restoreDeckItem, type DeckTrashItem } from '@/lib/studio/trash'
+import { useHeaderUI } from '@/providers/HeaderUIProvider'
 
 type ToastState = {
   type: 'success' | 'error'
@@ -15,11 +15,17 @@ type ToastState = {
 export default function DeckTrashPage() {
   const params = useParams<{ deckId: string }>()
   const deckId = String(params?.deckId ?? '')
+  const { setBackAction } = useHeaderUI()
   const [trashItems, setTrashItems] = useState<DeckTrashItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState>(null)
   const [restoringItemIds, setRestoringItemIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    setBackAction({ label: 'Mazo', href: `/decks/${deckId}`, current: 'Papelera' })
+    return () => setBackAction(null)
+  }, [deckId, setBackAction])
 
   useEffect(() => {
     if (!toast) return
@@ -101,15 +107,6 @@ export default function DeckTrashPage() {
             {trashCount} pregunta{trashCount === 1 ? '' : 's'} eliminada
             {trashCount === 1 ? '' : 's'}
           </p>
-
-          <div className="mt-4">
-            <Link
-              href={`/decks/${deckId}`}
-              className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Volver al mazo
-            </Link>
-          </div>
         </header>
 
         {loading ? (

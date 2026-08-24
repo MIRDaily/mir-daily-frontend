@@ -1,4 +1,5 @@
 import TrashItemCard from '@/components/studio/TrashItemCard'
+import { INK } from '@/components/studio/deckUi'
 import type { DeckTrashItem } from '@/lib/studio/trash'
 
 type DeckTrashListProps = {
@@ -16,7 +17,11 @@ export default function DeckTrashList({
 }: DeckTrashListProps) {
   if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
+      <div
+        className="flex items-center gap-2 rounded-2xl border-2 border-dashed bg-[#FAF7F4] p-5 text-sm font-semibold text-[#7D8A96]"
+        style={{ borderColor: INK }}
+      >
+        <span className="material-symbols-outlined text-base">delete</span>
         No hay preguntas en la papelera.
       </div>
     )

@@ -1,4 +1,5 @@
 import TrashTimer from '@/components/studio/TrashTimer'
+import { INK } from '@/components/studio/deckUi'
 import type { DeckTrashItem } from '@/lib/studio/trash'
 
 type TrashItemCardProps = {
@@ -33,19 +34,31 @@ export default function TrashItemCard({
       : '--'
 
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-sm text-slate-800">{statement}</p>
-      <p className="mt-1 text-xs text-slate-500">{subjectLabel}</p>
-      <p className="mt-1 text-xs text-slate-500">Eliminada: {deletedAtText}</p>
+    <li
+      className="rounded-2xl border-2 bg-white p-4 opacity-90 transition-opacity hover:opacity-100"
+      style={{ borderColor: INK, borderStyle: 'dashed' }}
+    >
+      <p className="text-sm font-semibold leading-snug text-[#2C3E50]">{statement}</p>
+      <p className="mt-1 text-xs font-bold uppercase tracking-wide text-[#C99A8D]">{subjectLabel}</p>
+      <p className="mt-1 text-xs text-[#7D8A96]">Eliminada: {deletedAtText}</p>
       <div className="mt-3 flex items-center justify-between gap-3">
         <TrashTimer purgeAt={item.purge_at} onExpire={onExpire} />
         <button
           type="button"
           onClick={onRestore}
           disabled={restoring}
-          className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-full border-2 px-3.5 py-1.5 text-xs font-black text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+          style={{ borderColor: INK, backgroundColor: '#5C7A59', boxShadow: '2px 2px 0 0 #2c3e50' }}
         >
-          {restoring ? 'Restaurando...' : 'Restaurar'}
+          <span className="material-symbols-outlined text-sm">restart_alt</span>
+          {/* "Restaurando..." es más ancho que "Restaurar": reservamos su
+              hueco con un span invisible y superponemos el texto real, igual
+              que en el botón "Contraer/Desplegar" del propio mazo — si no,
+              el botón cambiaba de ancho justo al pulsarlo. */}
+          <span className="relative inline-block text-left">
+            <span className="invisible">Restaurando...</span>
+            <span className="absolute inset-0">{restoring ? 'Restaurando...' : 'Restaurar'}</span>
+          </span>
         </button>
       </div>
     </li>

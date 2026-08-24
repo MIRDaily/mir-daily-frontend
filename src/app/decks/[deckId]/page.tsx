@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { AnimatePresence, motion } from 'framer-motion'
 import DeckTrashList from '@/components/studio/DeckTrashList'
 import DeckItemsList from '@/components/studio/DeckItemsList'
 import GooFissionLoader from '@/components/studio/GooFissionLoader'
@@ -12,13 +13,43 @@ import {
   softDeleteDeckItem,
   type DeckTrashItem,
 } from '@/lib/studio/trash'
+import {
+  DECK_DESCRIPTION_MAX_LENGTH,
+  isAutoFailedDeck,
+  updateDeckDescription,
+  updateDeckGradient,
+} from '@/lib/studioDecks'
 import { supabase } from '@/lib/supabaseBrowser'
+import { useHeaderUI } from '@/providers/HeaderUIProvider'
+import {
+  DeckBannerGradient,
+  DECK_GRADIENT_IDS,
+  DECK_GRADIENTS,
+  DEFAULT_DECK_GRADIENT,
+  DeckGradientSwatch,
+  DeckMasteryBadge,
+  GhostButton,
+  Hero,
+  INK,
+  isDeckGradientId,
+  PremiumShimmer,
+  SectionLabel,
+  STATUS_TONE,
+  StickerButton,
+  StickerCard,
+  trackerBackdropStyle,
+  trackerPaper,
+  type DeckGradientId,
+} from '@/components/studio/deckUi'
 
 type Deck = {
   id: string | number
   name?: string | null
   title?: string | null
   deleted_at?: string | null
+  auto_type?: string | null
+  description?: string | null
+  banner_gradient?: string | null
 }
 
 type QuestionOption = {
@@ -32,6 +63,8 @@ type ItemQuestion = {
   correct_answer?: number | string | null
   explanation?: string | null
   question_options?: QuestionOption[] | null
+  subject?: string | null
+  year?: number | string | null
 }
 
 type ItemProgress = {
@@ -184,6 +217,12 @@ type NextDeckItemResponse =
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL
 const STUDY_SESSION_STORAGE_KEY_PREFIX = 'studio:deck:study-session:'
+const SHOW_CORRECT_ANSWERS_STORAGE_KEY = 'studio:deck:show-correct-answers'
+const QUESTIONS_EXPANDED_STORAGE_KEY = 'studio:deck:questions-expanded'
+const SHOW_QUESTION_META_STORAGE_KEY = 'studio:deck:show-question-meta'
+// El mazo automático de fallos lleva SIEMPRE el albaricoque: es parte de su
+// identidad y no se puede personalizar.
+const FAILED_GLOBAL_GRADIENT: DeckGradientId = 'apricot'
 const STUDY_STATUS_OPTIONS: Array<{
   value: StudyStatus
   label: string
@@ -595,17 +634,44 @@ export default function StudioDeckDetailPage() {
   const params = useParams<{ deckId: string }>()
   const router = useRouter()
   const deckId = String(params?.deckId ?? '')
+  const { setBackAction } = useHeaderUI()
 
   const [deck, setDeck] = useState<Deck | null>(null)
   const [items, setItems] = useState<Item[]>([])
   const [itemsPage, setItemsPage] = useState(1)
   const [itemsPagination, setItemsPagination] = useState<ItemsPagination | null>(null)
   const [itemsPageLoading, setItemsPageLoading] = useState(false)
+  const [itemsSearchInput, setItemsSearchInput] = useState('')
+  const [itemsSearch, setItemsSearch] = useState('')
+  // Preferencias de visualización de la lista de preguntas: si se ve la
+  // respuesta correcta marcada, y si las tarjetas van desplegadas con sus
+  // opciones o contraídas a solo el enunciado. Persisten en localStorage
+  // porque son gustos del usuario, no estado de una sesión concreta.
+  const [showCorrectAnswers, setShowCorrectAnswers] = useState(false)
+  const [questionsExpanded, setQuestionsExpanded] = useState(false)
+  const [showQuestionMeta, setShowQuestionMeta] = useState(true)
+  // Cuando se hace click en una pregunta suelta, se guarda aquí su estado
+  // individual (anula al de "Contraer/Desplegar todas" solo para esa
+  // tarjeta). El botón de bloque limpia este mapa al pulsarse.
+  const [itemExpandOverrides, setItemExpandOverrides] = useState<Record<string, boolean>>({})
+  // Solo dispara la animación de entrada de la opción correcta al ACTIVAR
+  // "Respuestas"; no participa en ninguna lógica de negocio.
+  const [answerRevealKey, setAnswerRevealKey] = useState(0)
+  const [deckGradient, setDeckGradient] = useState<DeckGradientId>(DEFAULT_DECK_GRADIENT)
+  const [isGradientPickerOpen, setIsGradientPickerOpen] = useState(false)
+  const [isEditingBio, setIsEditingBio] = useState(false)
+  const [bioDraft, setBioDraft] = useState('')
+  const [savingBio, setSavingBio] = useState(false)
+  const [bioError, setBioError] = useState<string | null>(null)
+  const gradientPickerRef = useRef<HTMLDivElement | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [studyMode, setStudyMode] = useState(false)
   const [studySessionId, setStudySessionId] = useState<string | null>(null)
   const [studyItem, setStudyItem] = useState<Item | null>(null)
+  // Solo para mostrar "llevas X" en la barra de sesión — puramente visual, no
+  // participa en ninguna decisión de negocio (eso lo sigue llevando el motor).
+  const [studiedCount, setStudiedCount] = useState(0)
   const [studyLoading, setStudyLoading] = useState(false)
   const [studyClosing, setStudyClosing] = useState(false)
   const [deckSummary, setDeckSummary] = useState<DeckSummary>(EMPTY_DECK_SUMMARY)
@@ -616,6 +682,9 @@ export default function StudioDeckDetailPage() {
   const [subjectFilter, setSubjectFilter] = useState<string[]>([])
   const [statusFilter, setStatusFilter] = useState<StudyStatus | null>(null)
   const [studyRequestMode, setStudyRequestMode] = useState<StudyRequestMode>('normal')
+  // Solo dispara la explosión del icono de Smart Review; se incrementa en
+  // cada click y no participa en ninguna lógica de negocio.
+  const [smartReviewBurst, setSmartReviewBurst] = useState(0)
   const [studyFilters, setStudyFilters] = useState<StudyFilters>({
     subjects: [],
     status: null,
@@ -639,6 +708,7 @@ export default function StudioDeckDetailPage() {
     isVisible: boolean
   } | null>(null)
   const [deckItemsActionError, setDeckItemsActionError] = useState<string | null>(null)
+  const [confirmDeleteEntryId, setConfirmDeleteEntryId] = useState<string | null>(null)
   const [studyActionError, setStudyActionError] = useState<string | null>(null)
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [isAnswered, setIsAnswered] = useState(false)
@@ -672,6 +742,23 @@ export default function StudioDeckDetailPage() {
   const undoToastAnimationFrameRef = useRef<number | null>(null)
   const pendingDeleteRequestsRef = useRef<Map<string, Promise<void>>>(new Map())
   const TOAST_EXIT_ANIMATION_MS = 220
+
+  // Barra de "volver" del header global (mismo mecanismo que Electros). En
+  // modo estudio se apaga: esa pantalla ya tiene su propio botón de salida
+  // ("Salir del estudio") que cierra la sesión como toca — un back de header
+  // sin avisar la saltaría por encima sin cerrarla bien.
+  useEffect(() => {
+    if (studyMode) {
+      setBackAction(null)
+      return () => setBackAction(null)
+    }
+    setBackAction({
+      label: 'Mis mazos',
+      href: '/decks',
+      current: deck?.name?.trim() || deck?.title?.trim() || undefined,
+    })
+    return () => setBackAction(null)
+  }, [studyMode, deck, setBackAction])
 
   const clearUndoExpireTimeout = () => {
     if (!undoExpireTimeoutRef.current) return
@@ -813,6 +900,7 @@ export default function StudioDeckDetailPage() {
       setItemsPagination(null)
       setStudySessionId(null)
       setStudyItem(null)
+      setStudiedCount(0)
       setStudyLoading(false)
       setStudyClosing(false)
       setDeckSummary(EMPTY_DECK_SUMMARY)
@@ -900,6 +988,83 @@ export default function StudioDeckDetailPage() {
     }
   }, [deckId])
 
+  // Lee las preferencias de visualización guardadas la primera vez que se
+  // monta la pantalla (si no hay nada guardado, se quedan en su default:
+  // opciones plegadas, correctas ocultas, etiquetas activas).
+  useEffect(() => {
+    const storedShowAnswers = window.localStorage.getItem(SHOW_CORRECT_ANSWERS_STORAGE_KEY)
+    if (storedShowAnswers === '1') setShowCorrectAnswers(true)
+
+    const storedExpanded = window.localStorage.getItem(QUESTIONS_EXPANDED_STORAGE_KEY)
+    if (storedExpanded === '1') setQuestionsExpanded(true)
+
+    const storedMeta = window.localStorage.getItem(SHOW_QUESTION_META_STORAGE_KEY)
+    if (storedMeta === '0') setShowQuestionMeta(false)
+  }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(SHOW_CORRECT_ANSWERS_STORAGE_KEY, showCorrectAnswers ? '1' : '0')
+  }, [showCorrectAnswers])
+
+  useEffect(() => {
+    window.localStorage.setItem(QUESTIONS_EXPANDED_STORAGE_KEY, questionsExpanded ? '1' : '0')
+  }, [questionsExpanded])
+
+  useEffect(() => {
+    window.localStorage.setItem(SHOW_QUESTION_META_STORAGE_KEY, showQuestionMeta ? '1' : '0')
+  }, [showQuestionMeta])
+
+  // Gradiente de la portada: el mazo de fallos tiene el suyo fijo; el resto
+  // usan el que el usuario eligió para ESE mazo, guardado en BD (decks.banner_gradient)
+  // — así viaja entre dispositivos, a diferencia del localStorage de antes.
+  useEffect(() => {
+    if (!deckId) return
+
+    if (isAutoFailedDeck({ auto_type: deck?.auto_type })) {
+      setDeckGradient(FAILED_GLOBAL_GRADIENT)
+      return
+    }
+
+    const bannerGradient = deck?.banner_gradient
+    setDeckGradient(isDeckGradientId(bannerGradient) ? bannerGradient : DEFAULT_DECK_GRADIENT)
+  }, [deckId, deck?.auto_type, deck?.banner_gradient])
+
+  // Cerrar el selector de fondo al hacer click fuera o pulsar Escape.
+  useEffect(() => {
+    if (!isGradientPickerOpen) return
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!gradientPickerRef.current?.contains(event.target as Node)) {
+        setIsGradientPickerOpen(false)
+      }
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsGradientPickerOpen(false)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isGradientPickerOpen])
+
+  // Buscador de preguntas: debounce del texto tecleado antes de disparar la
+  // llamada al backend.
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setItemsSearch(itemsSearchInput.trim())
+    }, 350)
+    return () => clearTimeout(handle)
+  }, [itemsSearchInput])
+
+  // Cada vez que cambia la búsqueda, volvemos a la página 1 (los resultados
+  // filtrados pueden tener menos páginas que donde estaba el usuario).
+  useEffect(() => {
+    setItemsPage(1)
+  }, [itemsSearch])
+
   // Cambiar de página no recarga el mazo entero (deck + summary), solo pide
   // esa página de items al backend, que ya viene paginado (20 por página).
   useEffect(() => {
@@ -919,8 +1084,9 @@ export default function StudioDeckDetailPage() {
         const token = session?.access_token ?? ''
         if (!token) throw new Error('No hay sesion activa.')
 
+        const searchParam = itemsSearch ? `&q=${encodeURIComponent(itemsSearch)}` : ''
         const res = await fetch(
-          `${API_URL}/api/studio/decks/${deckId}/items?page=${itemsPage}&pageSize=20`,
+          `${API_URL}/api/studio/decks/${deckId}/items?page=${itemsPage}&pageSize=20${searchParam}`,
           { headers: { Authorization: `Bearer ${token}` } },
         )
 
@@ -951,7 +1117,7 @@ export default function StudioDeckDetailPage() {
     return () => {
       mounted = false
     }
-  }, [itemsPage, deckId])
+  }, [itemsPage, deckId, itemsSearch])
 
   useEffect(() => {
     let mounted = true
@@ -1054,40 +1220,25 @@ export default function StudioDeckDetailPage() {
     }
   }, [deckId])
 
+  // Una sola llamada para el número del badge Y la lista completa: antes se
+  // pedía la papelera aquí solo para el conteo, y otra vez entera al abrir
+  // la pestaña — dos viajes de red por los mismos datos en cada visita a la
+  // pantalla. `silent` evita el spinner de "Cargando papelera" mientras el
+  // usuario ni siquiera ha abierto esa pestaña; `trashCountLoading` (para el
+  // badge) sí se actualiza igual, silent o no.
   useEffect(() => {
-    let mounted = true
-
     if (!deckId) {
       setTrashCount(0)
       setTrashCountLoading(false)
-      return () => {
-        mounted = false
-      }
+      return
     }
 
-    setTrashCountLoading(true)
-    void fetchDeckItemsTrash(deckId)
-      .then((trash) => {
-        if (!mounted) return
-        setTrashCount(trash.length)
-      })
-      .catch(() => {
-        if (!mounted) return
-        setTrashCount(0)
-      })
-      .finally(() => {
-        if (mounted) setTrashCountLoading(false)
-      })
-
-    return () => {
-      mounted = false
-    }
+    void loadDeckTrashItems({ silent: true })
+    // Las acciones que meten o sacan preguntas de la papelera (borrar,
+    // deshacer, restaurar, expirar) ya mantienen `trashItems`/`trashCount`
+    // al día por su cuenta — abrir la pestaña no necesita volver a pedirla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deckId])
-
-  useEffect(() => {
-    if (activeDeckTab !== 'trash' || !deckId) return
-    void loadDeckTrashItems()
-  }, [activeDeckTab, deckId])
 
   useEffect(() => {
     if (loading) {
@@ -1164,6 +1315,7 @@ export default function StudioDeckDetailPage() {
   const clearStudySession = () => {
     setStudySessionId(null)
     setStudyItem(null)
+    setStudiedCount(0)
     setSelectedOption(null)
     setIsAnswered(false)
     setIsLoadingNext(false)
@@ -1355,8 +1507,75 @@ export default function StudioDeckDetailPage() {
     }
   }
 
+  const openBioEditor = () => {
+    setBioDraft(deck?.description ?? '')
+    setBioError(null)
+    setIsEditingBio(true)
+  }
+
+  const cancelBioEditor = () => {
+    setIsEditingBio(false)
+    setBioError(null)
+  }
+
+  const saveBio = async () => {
+    if (savingBio) return
+    if (bioDraft.length > DECK_DESCRIPTION_MAX_LENGTH) return
+
+    setSavingBio(true)
+    setBioError(null)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token ?? ''
+      if (!token) throw new Error('No hay sesion activa.')
+
+      const updated = await updateDeckDescription(token, deckId, bioDraft.trim())
+      setDeck((prev) => (prev ? { ...prev, description: updated.description ?? null } : prev))
+      setIsEditingBio(false)
+    } catch (err) {
+      setBioError(err instanceof Error ? err.message : 'No se pudo guardar la descripción.')
+    } finally {
+      setSavingBio(false)
+    }
+  }
+
+  const handleSelectGradient = async (gradientId: DeckGradientId) => {
+    const previousGradient = deckGradient
+    // Optimista: se pinta al instante, igual que antes con localStorage.
+    // Si el guardado en servidor falla, se revierte al gradiente anterior.
+    setDeckGradient(gradientId)
+    setIsGradientPickerOpen(false)
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token ?? ''
+      if (!token) throw new Error('No hay sesion activa.')
+
+      const updated = await updateDeckGradient(token, deckId, gradientId)
+      setDeck((prev) => (prev ? { ...prev, banner_gradient: updated.banner_gradient ?? null } : prev))
+    } catch {
+      setDeckGradient(previousGradient)
+    }
+  }
+
   const handleStartStudy = async () => {
     if (studyLoading || studyClosing) return
+
+    // Defensa por si el botón se pudo pulsar antes de que llegara el summary,
+    // o algo dejó el mazo vacío entre medias: sin esto, el modal de "cuántas
+    // preguntas quieres" se abre igual y la sesión falla al arrancar.
+    const totalItems = deckSummary.new + deckSummary.failed + deckSummary.learning + deckSummary.mastered
+    if (!deckSummaryLoading && totalItems === 0) {
+      // Este aviso vive en la pantalla principal (deckSummaryError), no en la
+      // de estudio: como este guardia corta ANTES de setStudyMode(true), la
+      // pantalla de estudio ni llega a montarse.
+      setDeckSummaryError('Este mazo todavía no tiene preguntas. Añade alguna antes de estudiar.')
+      return
+    }
 
     const limit = await requestStudyLimit()
     if (limit == null) return
@@ -1414,11 +1633,6 @@ export default function StudioDeckDetailPage() {
     if (itemIndex < 0) return
     const item = items[itemIndex]
 
-    const shouldDelete = window.confirm(
-      '¿Eliminar esta pregunta del mazo?\n\nPodrás restaurarla durante 24 horas.',
-    )
-    if (!shouldDelete) return
-
     const deckItemId = resolveDeckItemId(item)
     if (deckItemId == null) {
       setDeckItemsActionError('No se pudo identificar el item del mazo.')
@@ -1457,6 +1671,12 @@ export default function StudioDeckDetailPage() {
 
     try {
       await deletePromise
+      // `trashCount` ya subió arriba (optimista), pero `trashItems` no tiene
+      // esta pregunta todavía — no se puede fabricar en el cliente porque
+      // sus fechas de borrado/purga las pone el servidor. Un refresco en
+      // silencio (sin spinner) la deja lista para cuando se abra la pestaña,
+      // sin tener que volver a pedirla en ESE momento.
+      void loadDeckTrashItems({ silent: true })
     } catch (err) {
       clearUndoExpireTimeout()
       setItems((prev) => {
@@ -1589,6 +1809,7 @@ export default function StudioDeckDetailPage() {
       setStudyActionError(null)
       setSelectedOption(selectedOption)
       setIsAnswered(true)
+      setStudiedCount((prev) => prev + 1)
       setStudyItem((prev) => (prev ? patchItemProgressStatus(prev, optimisticStatus) : prev))
 
       void logDeckItemStudy(deckId, {
@@ -1651,6 +1872,7 @@ export default function StudioDeckDetailPage() {
       setStudyActionError(null)
       setSelectedOption(null)
       setIsAnswered(true)
+      setStudiedCount((prev) => prev + 1)
       setStudyItem((prev) => (prev ? patchItemProgressStatus(prev, 'incorrect') : prev))
 
       void logDeckItemStudy(deckId, {
@@ -1733,136 +1955,211 @@ export default function StudioDeckDetailPage() {
       void preloadNextQuestion(undefined, true)
     }
 
+    const studyDeckTitle = deck.name || deck.title || `Mazo ${deckId}`
+    const studyModeLabel = studyFilters.mode === 'smart' ? 'Smart Review' : 'Modo estudio'
+
+    const handleExitStudy = () => {
+      if (!studySessionId || isStudyBusy) return
+      void closeStudySessionAndNavigate(studySessionId).catch((err: unknown) => {
+        setStudyActionError(
+          err instanceof Error ? err.message : 'No se pudo cerrar la sesion de estudio.',
+        )
+      })
+    }
+
     return (
-      <div className="p-6">
-        <h2 className="mb-4 text-xl font-semibold">Modo estudio</h2>
+      <div className="relative min-h-screen overflow-x-hidden bg-[#FAF7F4] text-[#7D8A96]">
+        <div aria-hidden className="pointer-events-none fixed inset-0 z-0 opacity-70" style={trackerBackdropStyle()} />
+        <div className="pointer-events-none fixed top-[-12%] right-[-8%] z-0 h-[26rem] w-[26rem] rounded-full bg-[#E8A598]/12 blur-3xl" />
 
-        <div className="mb-6 rounded-xl bg-white p-6 shadow-sm">
-          {studyClosing ? (
-            <div className="flex min-h-[280px] flex-col items-center justify-center gap-4">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
-              <p className="text-sm font-medium text-slate-700">Cerrando sesión...</p>
-            </div>
-          ) : null}
-          {!studyClosing && currentItem ? (
-            <div className={`transition-opacity duration-200 ${isLoadingNext ? 'opacity-0' : 'opacity-100'}`}>
-              <div>{currentItem.questions?.statement || currentItem.statement || 'Item'}</div>
-            </div>
-          ) : null}
-          {!studyClosing &&
-          currentItem &&
-          currentOptions.length > 0 ? (
-            <div
-              className={`mt-4 space-y-2 transition-opacity duration-200 ${isLoadingNext ? 'opacity-0' : 'opacity-100'}`}
+        <main className="relative z-10 mx-auto flex w-full max-w-3xl flex-col px-5 py-8">
+          {/* Barra de sesión: salir, mazo, modo y cuántas llevas */}
+          <div
+            className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-[#2c3e50] bg-white px-4 py-3"
+            style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
+          >
+            <button
+              type="button"
+              onClick={handleExitStudy}
+              disabled={isStudyBusy}
+              className="flex items-center justify-center rounded-lg p-1.5 text-[#7D8A96] transition-colors hover:bg-[#F2EFED] hover:text-[#2C3E50] disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Salir del estudio"
+              title="Salir del estudio"
             >
-              {currentOptions.map((option, optionIndex) => {
-                const optionValue =
-                  typeof option.option_index === 'number' ? option.option_index : optionIndex + 1
-                const isCorrect = currentCorrectIndex != null && optionValue === currentCorrectIndex
-                const isSelected = selectedOption === optionValue
-                const showCorrect = isAnswered && isCorrect
-                const showIncorrectSelected = isAnswered && isSelected && !isCorrect
+              <span className="material-symbols-outlined">close</span>
+            </button>
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white"
+              style={{ backgroundColor: '#E8A598' }}
+            >
+              <span className="material-symbols-outlined text-lg">style</span>
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-black leading-tight text-[#2C3E50]">{studyDeckTitle}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#7D8A96]/60">{studyModeLabel}</p>
+            </div>
+            <span className="rounded-full px-3 py-1.5 text-xs font-black text-white" style={{ backgroundColor: '#E8A598' }}>
+              {studiedCount} {studiedCount === 1 ? 'respondida' : 'respondidas'}
+            </span>
+          </div>
 
-                const feedbackClass = showCorrect
-                  ? 'border-emerald-300 bg-emerald-50'
-                  : showIncorrectSelected
-                    ? 'border-rose-300 bg-rose-50'
-                    : 'border-slate-200 bg-slate-50'
+          {studyActionError ? (
+            <p className="mb-6 rounded-2xl border-2 border-[#E8A598]/40 bg-[#FFF8F6] px-4 py-3 text-sm font-semibold text-[#C4655A]">
+              {studyActionError}
+            </p>
+          ) : null}
 
-                const feedbackTextClass = showCorrect
-                  ? 'text-emerald-800'
-                  : showIncorrectSelected
-                    ? 'text-rose-800'
-                    : 'text-slate-800'
+          {studyClosing ? (
+            <div
+              className="flex min-h-[280px] flex-col items-center justify-center gap-4 rounded-3xl border-2 border-[#2c3e50] bg-white p-10 text-center"
+              style={{ boxShadow: '7px 7px 0 0 #2c3e50' }}
+            >
+              <GooFissionLoader size={120} label="Cerrando sesión" showGlow={false} />
+              <p className="text-sm font-bold text-[#2C3E50]">Cerrando sesión…</p>
+            </div>
+          ) : currentItem ? (
+            <div className={`flex flex-col gap-5 transition-opacity duration-200 ${isLoadingNext ? 'opacity-0' : 'opacity-100'}`}>
+              <div
+                className="rounded-3xl border-2 border-[#2c3e50] p-6"
+                style={{ ...trackerPaper('#7D8A96', 0.14), boxShadow: '6px 6px 0 0 #2c3e50' }}
+              >
+                <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#C99A8D]">Pregunta</span>
+                <p className="mt-2 whitespace-pre-wrap text-base font-semibold leading-relaxed text-[#2C3E50]">
+                  {currentItem.questions?.statement || currentItem.statement || 'Item'}
+                </p>
+              </div>
 
-                return (
-                  <button
-                    type="button"
-                    key={String(option.id ?? `${option.option_index ?? optionIndex}-${optionIndex}`)}
-                    onClick={() => {
-                      void handleSelectOption(option, optionIndex)
-                    }}
-                    disabled={isStudyBusy || isAnswered}
-                    className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${feedbackClass}`}
-                  >
-                    <span className="text-sm font-semibold text-slate-500">
-                      {getOptionLetter(option, optionIndex)}
-                    </span>
-                    <span className={`text-sm ${feedbackTextClass}`}>{option.option_text}</span>
-                    {showCorrect ? (
-                      <span className="ml-auto text-xs font-semibold text-emerald-700">
-                        Correcta
-                      </span>
-                    ) : null}
-                  </button>
-                )
-              })}
-              {/* Dejar en blanco: cuenta como fallo en el repaso, blank en analítica */}
-              {!isAnswered ? (
-                <button
-                  type="button"
-                  onClick={handleBlankOption}
-                  disabled={isStudyBusy}
-                  className="flex w-full items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-left transition-colors hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <span className="text-sm font-semibold text-slate-400">—</span>
-                  <span className="text-sm text-slate-500">Dejar en blanco</span>
-                </button>
-              ) : selectedOption == null ? (
-                <div className="flex w-full items-center gap-3 rounded-lg border border-slate-300 bg-slate-100 px-3 py-2">
-                  <span className="text-sm font-semibold text-slate-500">—</span>
-                  <span className="text-sm text-slate-600">Dejada en blanco</span>
-                  <span className="ml-auto text-xs font-semibold text-slate-500">
-                    Volverá a aparecer pronto
-                  </span>
+              {currentOptions.length > 0 ? (
+                <div className="flex flex-col gap-2.5">
+                  {currentOptions.map((option, optionIndex) => {
+                    const optionValue =
+                      typeof option.option_index === 'number' ? option.option_index : optionIndex + 1
+                    const isCorrect = currentCorrectIndex != null && optionValue === currentCorrectIndex
+                    const isSelected = selectedOption === optionValue
+                    const showCorrect = isAnswered && isCorrect
+                    const showIncorrectSelected = isAnswered && isSelected && !isCorrect
+
+                    const tone = showCorrect
+                      ? STATUS_TONE.mastered
+                      : showIncorrectSelected
+                        ? STATUS_TONE.failed
+                        : null
+
+                    return (
+                      <button
+                        type="button"
+                        key={String(option.id ?? `${option.option_index ?? optionIndex}-${optionIndex}`)}
+                        onClick={() => {
+                          void handleSelectOption(option, optionIndex)
+                        }}
+                        disabled={isStudyBusy || isAnswered}
+                        className="flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-all disabled:cursor-not-allowed enabled:hover:-translate-y-0.5"
+                        style={{
+                          borderColor: tone ? tone.border : INK,
+                          backgroundColor: tone ? tone.bg : '#ffffff',
+                          boxShadow: `3px 3px 0 0 ${tone ? tone.border : INK}`,
+                        }}
+                      >
+                        <span
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-xs font-black transition-colors duration-200"
+                          style={{
+                            borderColor: tone ? tone.fg : INK,
+                            color: tone ? tone.fg : INK,
+                            backgroundColor: '#ffffff',
+                          }}
+                        >
+                          {getOptionLetter(option, optionIndex)}
+                        </span>
+                        <span
+                          className="text-sm font-semibold transition-colors duration-200"
+                          style={{ color: tone ? tone.fg : '#2C3E50' }}
+                        >
+                          {option.option_text}
+                        </span>
+                        {/* Hueco del icono siempre montado: si solo aparecía al
+                            responder, la opción podía envolver texto y la
+                            tarjeta "saltaba" justo al contestar. `invisible`
+                            oculta sin liberar el espacio. */}
+                        <span
+                          aria-hidden={!showCorrect && !showIncorrectSelected}
+                          className={`material-symbols-outlined ml-auto shrink-0 text-lg transition-opacity duration-200 ${
+                            showCorrect || showIncorrectSelected ? 'opacity-100' : 'invisible opacity-0'
+                          }`}
+                          style={{
+                            color: showCorrect
+                              ? STATUS_TONE.mastered.fg
+                              : showIncorrectSelected
+                                ? STATUS_TONE.failed.fg
+                                : undefined,
+                          }}
+                        >
+                          {showIncorrectSelected ? 'cancel' : 'check_circle'}
+                        </span>
+                      </button>
+                    )
+                  })}
+
+                  {/* Dejar en blanco: cuenta como fallo en el repaso, blank en analítica */}
+                  {!isAnswered ? (
+                    <button
+                      type="button"
+                      onClick={handleBlankOption}
+                      disabled={isStudyBusy}
+                      className="flex w-full items-center gap-3 rounded-2xl border-2 border-dashed border-[#D8CDC7] bg-white/70 px-4 py-3 text-left transition-colors hover:border-[#B9B2AD] hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <span className="text-sm font-black text-[#B9B2AD]">—</span>
+                      <span className="text-sm font-semibold text-[#7D8A96]">Dejar en blanco</span>
+                    </button>
+                  ) : selectedOption == null ? (
+                    <div className="flex w-full items-center gap-3 rounded-2xl border-2 border-[#EAE4E2] bg-[#F5F1EF] px-4 py-3">
+                      <span className="text-sm font-black text-[#7D8A96]">—</span>
+                      <span className="text-sm font-semibold text-[#7D8A96]">Dejada en blanco</span>
+                      <span className="ml-auto text-xs font-bold text-[#7D8A96]/70">Volverá a aparecer pronto</span>
+                    </div>
+                  ) : null}
+
+                  {currentItem?.questions?.explanation ? (
+                    <div
+                      className={`transform-gpu overflow-hidden transition-[max-height,opacity,transform,margin,padding] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                        isAnswered
+                          ? 'mt-1 max-h-80 translate-y-0 scale-100 rounded-2xl border-2 border-[#EAE4E2] p-4 opacity-100'
+                          : 'mt-0 max-h-0 -translate-y-1 scale-[0.985] rounded-2xl border-0 p-0 opacity-0'
+                      }`}
+                      style={isAnswered ? trackerPaper('#7D8A96', 0.1) : undefined}
+                      aria-hidden={!isAnswered}
+                    >
+                      <div className={`transition-opacity duration-500 ${isAnswered ? 'opacity-100 delay-100' : 'opacity-0 delay-0'}`}>
+                        <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7FA07B]">Explicación</span>
+                        <p className="mt-1.5 text-sm leading-relaxed text-[#2C3E50]">
+                          {currentItem.questions.explanation}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {isAnswered ? (
+                    <div className={`mt-1 flex justify-end transition-opacity duration-200 ${isLoadingNext ? 'opacity-0' : 'opacity-100'}`}>
+                      <StickerButton
+                        icon="arrow_forward"
+                        onClick={() => {
+                          void handleNextQuestion()
+                        }}
+                        disabled={isStudyBusy || (nextQuestionCache == null && nextEndReason == null)}
+                      >
+                        Siguiente
+                      </StickerButton>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-              {currentItem?.questions?.explanation ? (
-                <div
-                  className={`transform-gpu overflow-hidden border bg-neutral-50 transition-[max-height,opacity,transform,margin,padding,border-radius,filter,background-color,border-color] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                    isAnswered
-                      ? 'mt-6 max-h-80 translate-y-0 scale-100 rounded-xl border-neutral-200 bg-neutral-50 p-4 opacity-100 blur-0'
-                      : 'mt-0 max-h-0 -translate-y-1 scale-[0.985] rounded-2xl border-transparent bg-neutral-50/60 p-0 opacity-0 blur-[2px]'
-                  }`}
-                  aria-hidden={!isAnswered}
-                >
-                  <div
-                    className={`transition-opacity duration-500 ${
-                      isAnswered ? 'opacity-100 delay-100' : 'opacity-0 delay-0'
-                    }`}
-                  >
-                    <h4 className="mb-2 text-sm font-semibold text-neutral-700">Explicación</h4>
-                    <p className="text-sm leading-relaxed text-neutral-700">
-                      {currentItem.questions.explanation}
-                    </p>
-                  </div>
-                </div>
-              ) : null}
+              ) : (
+                <p className="text-sm font-semibold text-[#7D8A96]">Este item no tiene opciones disponibles.</p>
+              )}
             </div>
           ) : null}
-          {!studyClosing &&
-          currentItem &&
-          currentOptions.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-600">Este item no tiene opciones disponibles.</p>
-          ) : null}
-          {!studyClosing && currentItem && currentOptions.length > 0 && isAnswered ? (
-            <div className={`mt-4 transition-opacity duration-200 ${isLoadingNext ? 'opacity-0' : 'opacity-100'}`}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleNextQuestion()
-                  }}
-                  disabled={isStudyBusy || (nextQuestionCache == null && nextEndReason == null)}
-                  className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                Siguiente
-              </button>
-            </div>
-          ) : null}
-          {studyActionError ? <p className="mt-4 text-sm text-red-600">{studyActionError}</p> : null}
-        </div>
+        </main>
+
         {isInitialStudyLoading ? (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-50/75 backdrop-blur-[2px]">
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#FAF7F4]/80 backdrop-blur-[2px]">
             <GooFissionLoader label="Cargando pregunta" />
           </div>
         ) : null}
@@ -1871,6 +2168,10 @@ export default function StudioDeckDetailPage() {
   }
 
   const deckTitle = deck.name || deck.title || `Mazo ${deckId}`
+  // El mazo automático de fallos no deja cambiar el fondo.
+  // El mazo automático de fallos no deja tocar ni su fondo ni su bio: las dos
+  // cosas son parte fija de su identidad, no algo que el usuario personalice.
+  const isAutoManagedDeck = isAutoFailedDeck({ auto_type: deck.auto_type })
   const itemsPageOffset = ((itemsPagination?.page ?? itemsPage) - 1) * (itemsPagination?.pageSize ?? 20)
   const deckItemEntries = items.map((item, indexInPage) => {
     const index = itemsPageOffset + indexInPage
@@ -1893,175 +2194,395 @@ export default function StudioDeckDetailPage() {
         }
       }),
       deleting: deletingItemIds.has(String(item.id)),
+      subject: item.questions?.subject?.trim() || null,
+      year: item.questions?.year ?? null,
     }
   })
 
+  const totalTracked = deckSummary.new + deckSummary.failed + deckSummary.learning + deckSummary.mastered
+  const masteryPercent =
+    deckSummaryLoading || totalTracked === 0 ? null : Math.round((deckSummary.mastered / totalTracked) * 100)
+  // Mientras el summary carga no lo damos por vacío: evita que "Estudiar" se
+  // deshabilite un instante en cada visita, antes de que lleguen los datos.
+  const isDeckEmpty = !deckSummaryLoading && totalTracked === 0
+
+  const STAT_TILES: Array<{ key: keyof typeof STATUS_TONE; label: string; value: number; icon: string }> = [
+    { key: 'new', label: 'Nuevas', value: deckSummary.new, icon: 'fiber_new' },
+    { key: 'failed', label: 'Falladas', value: deckSummary.failed, icon: 'close' },
+    { key: 'learning', label: 'En aprendizaje', value: deckSummary.learning, icon: 'trending_up' },
+    { key: 'mastered', label: 'Dominadas', value: deckSummary.mastered, icon: 'verified' },
+  ]
+
   return (
-    <main
-      className={`min-h-screen bg-slate-50 px-4 py-6 sm:px-6 transition-opacity duration-500 ease-out ${
+    <div
+      className={`relative min-h-screen overflow-x-hidden bg-[#FAF7F4] text-[#7D8A96] transition-opacity duration-500 ease-out ${
         isContentVisible ? 'opacity-100' : 'opacity-0'
       }`}
     >
-      <div className="mx-auto max-w-5xl space-y-6">
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => router.push('/decks')}
-            aria-label="Volver a mazos"
-            title="Volver a mazos"
-            className="mb-2 inline-flex h-9 min-w-[52px] items-center justify-center rounded-lg bg-[#E8A598] text-white transition hover:bg-[#D98C7D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598]/60 xl:absolute xl:-left-32 xl:top-2 xl:mb-0"
-          >
-            <svg
-              aria-hidden
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-3.5 w-3.5"
-            >
-              <path d="M19 12H5" />
-              <path d="M11 18l-6-6 6-6" />
-            </svg>
-          </button>
-          <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Workspace de aprendizaje
-            </p>
-            <h1 className="mt-1 text-2xl font-bold text-slate-900">{deckTitle}</h1>
-            {deckSubjects.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {deckSubjects.map((subject) => (
-                  <span
-                    key={subject.name}
-                    className="rounded-full border bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
-                  >
-                    {subject.name} {subject.percent}%
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </div>
+      <div aria-hidden className="pointer-events-none fixed inset-0 z-0 opacity-70" style={trackerBackdropStyle()} />
+      <div className="pointer-events-none fixed top-[-12%] right-[-8%] z-0 h-[26rem] w-[26rem] rounded-full bg-[#E8A598]/12 blur-3xl" />
 
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[340px] sm:flex-row sm:items-center sm:justify-end">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveDeckTab('trash')
-              }}
-              aria-label="Papelera de preguntas"
-              title="Papelera"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50"
-            >
-              <svg
-                aria-hidden
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-              >
-                <path d="M3 6h18" />
-                <path d="M8 6V4h8v2" />
-                <path d="M19 6l-1 14H6L5 6" />
-                <path d="M10 11v6" />
-                <path d="M14 11v6" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void handleStartStudy()
-              }}
-              disabled={studyLoading}
-              className="inline-flex min-w-[132px] items-center justify-center rounded-xl bg-slate-900 px-6 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+      <main className="relative z-10 mx-auto flex w-full max-w-5xl flex-col gap-6 px-5 py-8 sm:px-6">
+        <div className="relative">
+        <Hero
+          title={deckTitle}
+          backdrop={<DeckBannerGradient id={deckGradient} />}
+          // El mazo automático de fallos no tiene "Dominio": su contenido
+          // cambia solo, en cuanto fallas o aciertas algo — un % de largo
+          // plazo no significa nada ahí. Mismo criterio que ya se aplicó en
+          // la galería general (texto corto en vez de barra de progreso).
+          aside={isAutoManagedDeck ? undefined : <DeckMasteryBadge percent={masteryPercent} />}
+          actions={
+            <StickerButton
+              icon="play_arrow"
+              onClick={() => void handleStartStudy()}
+              disabled={studyLoading || isDeckEmpty}
+              title={isDeckEmpty ? 'Añade preguntas a este mazo antes de estudiar' : undefined}
             >
               Estudiar
+            </StickerButton>
+          }
+        >
+          {/* Bio corta del mazo: dos líneas como máximo, igual que la del
+              carné de perfil. Click para editar in situ, sin modal. El mazo
+              de fallos lleva un texto fijo (mismo que en la galería general)
+              en vez del editor: su contenido lo decide el sistema, no tiene
+              sentido dejar que el usuario lo describa a su manera. */}
+          {isAutoManagedDeck ? (
+            <p className="relative z-10 mt-3 max-w-xl text-sm font-medium leading-relaxed text-[#2C3E50]/90">
+              Tus fallos recientes, listos para repasar.
+            </p>
+          ) : isEditingBio ? (
+            <div className="relative z-10 mt-3 max-w-xl">
+              <textarea
+                value={bioDraft}
+                onChange={(event) => setBioDraft(event.target.value.slice(0, DECK_DESCRIPTION_MAX_LENGTH + 20))}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    cancelBioEditor()
+                  }
+                }}
+                rows={2}
+                maxLength={DECK_DESCRIPTION_MAX_LENGTH + 20}
+                autoFocus
+                placeholder="Describe en pocas palabras qué preguntas guardas aquí..."
+                className={`w-full resize-none rounded-2xl border-2 bg-white/90 px-3.5 py-2.5 text-sm font-medium text-[#2C3E50] outline-none backdrop-blur-sm transition-colors focus:border-[#2c3e50] placeholder:text-[#B9B2AD] ${
+                  bioDraft.length > DECK_DESCRIPTION_MAX_LENGTH ? 'border-[#E6B0A6]' : 'border-[#EAE4E2]'
+                }`}
+              />
+              <div className="mt-1.5 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <GhostButton onClick={cancelBioEditor} className="!px-3 !py-1.5 !text-xs" disabled={savingBio}>
+                    Cancelar
+                  </GhostButton>
+                  <StickerButton
+                    onClick={() => void saveBio()}
+                    className="!px-3 !py-1.5 !text-xs"
+                    disabled={savingBio || bioDraft.length > DECK_DESCRIPTION_MAX_LENGTH}
+                  >
+                    {savingBio ? 'Guardando…' : 'Guardar'}
+                  </StickerButton>
+                </div>
+                <span
+                  className={`text-xs font-black tabular-nums ${
+                    bioDraft.length > DECK_DESCRIPTION_MAX_LENGTH ? 'text-[#C4655A]' : 'text-[#7D8A96]'
+                  }`}
+                >
+                  {bioDraft.length}/{DECK_DESCRIPTION_MAX_LENGTH}
+                </span>
+              </div>
+              {bioError ? <p className="mt-1.5 text-xs font-bold text-[#C4655A]">{bioError}</p> : null}
+            </div>
+          ) : deck.description ? (
+            <button
+              type="button"
+              onClick={openBioEditor}
+              className="group relative z-10 mt-3 block max-w-xl text-left"
+              title="Editar bio del mazo"
+            >
+              <p className="line-clamp-2 text-sm font-medium leading-relaxed text-[#2C3E50]/90">
+                {deck.description}
+              </p>
+              <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-bold text-[#7D8A96] opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="material-symbols-outlined text-sm">edit</span>
+                Editar
+              </span>
             </button>
-          </div>
-          </header>
+          ) : (
+            <button
+              type="button"
+              onClick={openBioEditor}
+              className="group relative z-10 mt-3 flex items-center gap-1.5 text-sm font-bold text-[#B9705F]"
+            >
+              {/* El subrayado va SOLO en el texto: puesto en el botón entero,
+                  la línea pasaba también bajo el icono, que tiene otra
+                  altura de línea, y quedaba a dos alturas distintas. */}
+              <span className="material-symbols-outlined text-base">add</span>
+              <span className="group-hover:underline">Añade una bio</span>
+            </button>
+          )}
+
+          {deckSubjects.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {deckSubjects.map((subject) => (
+                <span
+                  key={subject.name}
+                  className="rounded-full border-2 border-[#EAE4E2] bg-white px-3 py-1 text-xs font-bold text-[#7D8A96]"
+                >
+                  {subject.name} · {subject.percent}%
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </Hero>
+
+          {/* Selector de fondo: vive FUERA del Hero porque este recorta su
+              contenido (overflow-hidden) para la malla animada, y el desplegable
+              se cortaría por abajo. */}
+          {isAutoManagedDeck ? null : (
+            <div ref={gradientPickerRef} className="absolute right-4 top-4 z-30">
+              <button
+                type="button"
+                onClick={() => setIsGradientPickerOpen((prev) => !prev)}
+                aria-expanded={isGradientPickerOpen}
+                aria-label="Personalizar el fondo del mazo"
+                title="Personalizar el fondo del mazo"
+                className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#2c3e50] bg-white/75 text-[#2C3E50] backdrop-blur-sm transition hover:bg-white"
+              >
+                <span className="material-symbols-outlined text-lg">palette</span>
+              </button>
+
+              <AnimatePresence>
+                {isGradientPickerOpen ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    className="absolute right-0 top-11 w-52 rounded-2xl border-2 border-[#2c3e50] bg-white p-2"
+                    style={{ boxShadow: '5px 5px 0 0 #2c3e50' }}
+                  >
+                    <p className="px-2 pb-1.5 pt-1 text-[10px] font-black uppercase tracking-[0.14em] text-[#7D8A96]/70">
+                      Fondo del mazo
+                    </p>
+                    <div className="flex flex-col gap-0.5">
+                      {DECK_GRADIENT_IDS.map((gradientId) => {
+                        const selected = gradientId === deckGradient
+                        return (
+                          <button
+                            key={gradientId}
+                            type="button"
+                            onClick={() => void handleSelectGradient(gradientId)}
+                            className={`flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-left text-xs font-bold transition-colors ${
+                              selected ? 'bg-[#2c3e50] text-white' : 'text-[#2C3E50] hover:bg-[#FAF7F4]'
+                            }`}
+                          >
+                            <DeckGradientSwatch id={gradientId} />
+                            {DECK_GRADIENTS[gradientId].label}
+                            {selected ? (
+                              <span className="material-symbols-outlined ml-auto text-sm">check</span>
+                            ) : null}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Nuevas
-            </p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">
-              {deckSummaryLoading ? '--' : deckSummary.new}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Falladas
-            </p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">
-              {deckSummaryLoading ? '--' : deckSummary.failed}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              En aprendizaje
-            </p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">
-              {deckSummaryLoading ? '--' : deckSummary.learning}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Dominadas
-            </p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">
-              {deckSummaryLoading ? '--' : deckSummary.mastered}
-            </p>
-          </div>
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {STAT_TILES.map((stat) => {
+            const tone = STATUS_TONE[stat.key]
+            return (
+              <div
+                key={stat.key}
+                className="rounded-2xl border-2 p-4 text-center"
+                style={{ borderColor: tone.border, backgroundColor: tone.bg, boxShadow: `3px 3px 0 0 ${tone.border}` }}
+              >
+                <span className="material-symbols-outlined text-xl" style={{ color: tone.fg }}>
+                  {stat.icon}
+                </span>
+                <p className="mt-1 text-2xl font-black tabular-nums" style={{ color: tone.fg }}>
+                  {deckSummaryLoading ? '--' : stat.value}
+                </p>
+                <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: tone.fg }}>
+                  {stat.label}
+                </p>
+              </div>
+            )
+          })}
         </section>
-        {deckSummaryError ? <p className="text-sm text-slate-600">{deckSummaryError}</p> : null}
+        {deckSummaryError ? (
+          <p className="rounded-2xl border-2 border-[#E8A598]/40 bg-[#FFF8F6] px-4 py-3 text-sm font-semibold text-[#C4655A]">
+            {deckSummaryError}
+          </p>
+        ) : null}
+
         {subjectPerformance.length > 0 ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="mb-2 font-semibold text-slate-900">Acierto por asignatura</h3>
+          <StickerCard as="section" className="p-5" depth={4}>
+            <SectionLabel>Acierto por asignatura</SectionLabel>
             <div className="space-y-3">
               {subjectPerformance.map((subject) => (
                 <div
                   key={subject.subject}
                   className="grid grid-cols-1 items-center gap-2 text-sm sm:grid-cols-[minmax(0,1fr)_14rem_auto]"
                 >
-                  <span className="truncate text-slate-700">{subject.subject}</span>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                  <span className="truncate font-semibold text-[#2C3E50]">{subject.subject}</span>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full border border-[#EAE4E2] bg-[#F5F1EF]">
                     <div
-                      className="h-full rounded-full bg-slate-900 transition-all"
-                      style={{ width: `${subject.accuracy}%` }}
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${subject.accuracy}%`, backgroundColor: '#E8A598' }}
                     />
                   </div>
-                  <span className="font-medium text-slate-900 sm:w-12 sm:text-right">
-                    {subject.accuracy}%
-                  </span>
+                  <span className="font-black text-[#2C3E50] sm:w-12 sm:text-right">{subject.accuracy}%</span>
                 </div>
               ))}
             </div>
-          </section>
+          </StickerCard>
         ) : null}
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold uppercase tracking-wide text-slate-700">
-              {activeDeckTab === 'items' ? 'PREGUNTAS' : 'PAPELERA'}
-            </p>
-            <span className="text-sm text-slate-500">
-              {activeDeckTab === 'items'
-                ? `${itemsPagination?.total ?? items.length} items`
-                : `${trashCountLoading ? '--' : trashCount} en papelera`}
-            </span>
+        <StickerCard as="section" className="p-5" depth={5}>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveDeckTab('items')}
+                className={`flex items-center gap-2 rounded-full border-2 px-3.5 py-1.5 text-xs font-black transition-colors ${
+                  activeDeckTab === 'items'
+                    ? 'border-[#2c3e50] bg-[#2c3e50] text-white'
+                    : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2C3E50]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">quiz</span>
+                Preguntas
+                <span
+                  className="rounded-full px-1.5 py-0.5 text-[10px]"
+                  style={{
+                    backgroundColor: activeDeckTab === 'items' ? 'rgba(255,255,255,0.2)' : '#F5F1EF',
+                  }}
+                >
+                  {itemsPagination?.total ?? items.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveDeckTab('trash')}
+                aria-label="Papelera"
+                title="Papelera"
+                className={`flex items-center gap-2 rounded-full border-2 px-3.5 py-1.5 text-xs font-black transition-colors ${
+                  activeDeckTab === 'trash'
+                    ? 'border-[#2c3e50] bg-[#2c3e50] text-white'
+                    : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2C3E50]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">delete</span>
+                <span
+                  className="rounded-full px-1.5 py-0.5 text-[10px]"
+                  style={{
+                    backgroundColor: activeDeckTab === 'trash' ? 'rgba(255,255,255,0.2)' : '#F5F1EF',
+                  }}
+                >
+                  {trashCountLoading ? '--' : trashCount}
+                </span>
+              </button>
+
+              <div aria-hidden className="mx-1 h-6 w-px self-center bg-[#EAE4E2]" />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCorrectAnswers((prev) => {
+                    const next = !prev
+                    if (next) setAnswerRevealKey((k) => k + 1)
+                    return next
+                  })
+                }}
+                aria-pressed={showCorrectAnswers}
+                title={showCorrectAnswers ? 'Ocultar respuestas correctas' : 'Mostrar respuestas correctas'}
+                className={`flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-xs font-black transition-colors ${
+                  showCorrectAnswers
+                    ? 'border-[#2c3e50] bg-[#2c3e50] text-white'
+                    : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2C3E50]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">
+                  {showCorrectAnswers ? 'visibility' : 'visibility_off'}
+                </span>
+                Respuestas
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setQuestionsExpanded((prev) => !prev)
+                  setItemExpandOverrides({})
+                }}
+                aria-pressed={questionsExpanded}
+                title={questionsExpanded ? 'Contraer todas las preguntas' : 'Desplegar todas las preguntas'}
+                className={`flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-xs font-black transition-colors ${
+                  questionsExpanded
+                    ? 'border-[#2c3e50] bg-[#2c3e50] text-white'
+                    : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2C3E50]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">
+                  {questionsExpanded ? 'unfold_less' : 'unfold_more'}
+                </span>
+                {/* "Desplegar" es más ancho que "Contraer": reservamos su hueco con un
+                    span invisible y superponemos el texto real, para que el botón no
+                    cambie de tamaño (y no arrastre al resto de badges) al alternar. */}
+                <span className="relative inline-block text-left">
+                  <span className="invisible">Desplegar</span>
+                  <span className="absolute inset-0">{questionsExpanded ? 'Contraer' : 'Desplegar'}</span>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowQuestionMeta((prev) => !prev)}
+                aria-pressed={showQuestionMeta}
+                title={showQuestionMeta ? 'Ocultar asignatura y año' : 'Mostrar asignatura y año'}
+                className={`flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-xs font-black transition-colors ${
+                  showQuestionMeta
+                    ? 'border-[#2c3e50] bg-[#2c3e50] text-white'
+                    : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2C3E50]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">sell</span>
+                Etiquetas
+              </button>
+            </div>
+            {activeDeckTab === 'items' ? (
+              <div
+                className="flex w-full min-w-[220px] items-center gap-2 rounded-full border-2 border-[#EAE4E2] bg-white px-3.5 py-1.5 transition-colors focus-within:border-[#2c3e50] sm:w-64"
+              >
+                <span className="material-symbols-outlined text-base text-[#7D8A96]">search</span>
+                <input
+                  type="text"
+                  value={itemsSearchInput}
+                  onChange={(event) => setItemsSearchInput(event.target.value)}
+                  placeholder="Buscar una pregunta..."
+                  className="w-full bg-transparent text-sm font-semibold text-[#2C3E50] placeholder:font-medium placeholder:text-[#B9B2AD] outline-none"
+                />
+                {itemsSearchInput ? (
+                  <button
+                    type="button"
+                    onClick={() => setItemsSearchInput('')}
+                    aria-label="Limpiar búsqueda"
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[#7D8A96] transition hover:bg-[#F5F1EF] hover:text-[#2C3E50]"
+                  >
+                    <span className="material-symbols-outlined text-base">close</span>
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           {deckItemsActionError ? (
-            <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            <p className="mb-3 rounded-xl border-2 border-[#F1C6BD] bg-[#FFF1EE] px-3 py-2 text-sm font-semibold text-[#C4655A]">
               {deckItemsActionError}
             </p>
           ) : null}
@@ -2069,46 +2590,57 @@ export default function StudioDeckDetailPage() {
             <>
               <DeckItemsList
                 entries={deckItemEntries}
+                searchActive={itemsSearch.length > 0}
+                highlightQuery={itemsSearch}
+                showCorrectAnswers={showCorrectAnswers}
+                answerRevealKey={answerRevealKey}
+                showMeta={showQuestionMeta}
+                defaultExpanded={questionsExpanded}
+                expandOverrides={itemExpandOverrides}
+                onToggleExpand={(entryId) => {
+                  setItemExpandOverrides((prev) => ({
+                    ...prev,
+                    [entryId]: !(prev[entryId] ?? questionsExpanded),
+                  }))
+                }}
                 onDelete={(entryId) => {
-                  void handleDeleteDeckItem(entryId)
+                  setConfirmDeleteEntryId(entryId)
                 }}
               />
               {itemsPagination && itemsPagination.totalPages > 1 ? (
-                <div className="mt-4 flex items-center justify-between text-sm text-slate-600">
-                  <button
-                    type="button"
+                <div className="mt-4 flex items-center justify-between text-sm font-bold text-[#7D8A96]">
+                  <GhostButton
+                    icon="chevron_left"
                     disabled={itemsPage <= 1 || itemsPageLoading}
                     onClick={() => setItemsPage((prev) => Math.max(1, prev - 1))}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="!px-4 !py-2"
                   >
                     Anterior
-                  </button>
+                  </GhostButton>
                   <span>
                     Página {itemsPagination.page} de {itemsPagination.totalPages}
                     {itemsPageLoading ? ' · cargando…' : ''}
                   </span>
-                  <button
-                    type="button"
+                  <GhostButton
+                    icon="chevron_right"
                     disabled={itemsPage >= itemsPagination.totalPages || itemsPageLoading}
-                    onClick={() =>
-                      setItemsPage((prev) => Math.min(itemsPagination.totalPages, prev + 1))
-                    }
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-40"
+                    onClick={() => setItemsPage((prev) => Math.min(itemsPagination.totalPages, prev + 1))}
+                    className="!px-4 !py-2"
                   >
                     Siguiente
-                  </button>
+                  </GhostButton>
                 </div>
               ) : null}
             </>
           ) : (
             <>
               {trashItemsError ? (
-                <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                <p className="mb-3 rounded-xl border-2 border-[#F1C6BD] bg-[#FFF1EE] px-3 py-2 text-sm font-semibold text-[#C4655A]">
                   {trashItemsError}
                 </p>
               ) : null}
               {trashItemsLoading ? (
-                <div className="flex items-center gap-3 text-sm text-slate-600">
+                <div className="flex items-center gap-3 text-sm font-semibold text-[#7D8A96]">
                   <GooFissionLoader size={64} label="Cargando papelera" showGlow={false} />
                   <span>Cargando papelera...</span>
                 </div>
@@ -2124,8 +2656,8 @@ export default function StudioDeckDetailPage() {
               )}
             </>
           )}
-        </section>
-      </div>
+        </StickerCard>
+      </main>
       {undoToast ? (
         <UndoDeleteToast
           message={undoToast.message}
@@ -2142,14 +2674,45 @@ export default function StudioDeckDetailPage() {
           }
         />
       ) : null}
+      {confirmDeleteEntryId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2c3e50]/45 p-4 backdrop-blur-[2px]">
+          <div className="w-full max-w-sm rounded-3xl border border-[#EAE4E2] bg-white p-6 shadow-2xl">
+            <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#C99A8D]">
+              Eliminar pregunta
+            </span>
+            <h3 className="mt-1 text-lg font-black text-[#2C3E50]">¿Eliminar esta pregunta del mazo?</h3>
+            {(() => {
+              const entry = deckItemEntries.find((candidate) => candidate.id === confirmDeleteEntryId)
+              return entry ? (
+                <p className="mt-2 line-clamp-2 text-sm font-medium text-[#7D8A96]">{entry.statement}</p>
+              ) : null
+            })()}
+            <p className="mt-2 text-sm text-[#7D8A96]">Podrás restaurarla desde la papelera durante 24 horas.</p>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <GhostButton onClick={() => setConfirmDeleteEntryId(null)}>Cancelar</GhostButton>
+              <StickerButton
+                icon="delete"
+                color="#C4655A"
+                onClick={() => {
+                  const entryId = confirmDeleteEntryId
+                  setConfirmDeleteEntryId(null)
+                  if (entryId) void handleDeleteDeckItem(entryId)
+                }}
+              >
+                Eliminar
+              </StickerButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {isStudyLimitModalOpen ? (
         <div
           className={`fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-[2px] transition-all duration-300 ease-out ${
-            isStudyLimitModalVisible ? 'bg-slate-900/45 opacity-100' : 'bg-slate-900/0 opacity-0'
+            isStudyLimitModalVisible ? 'bg-[#2c3e50]/45 opacity-100' : 'bg-[#2c3e50]/0 opacity-0'
           }`}
         >
           <div
-            className={`w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-xl transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            className={`w-full rounded-3xl border border-[#EAE4E2] bg-white p-6 shadow-2xl transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
               subjectFilterOptions.length > 8 ? 'max-w-2xl' : 'max-w-md'
             } ${
               isStudyLimitModalVisible
@@ -2157,26 +2720,26 @@ export default function StudioDeckDetailPage() {
                 : 'translate-y-3 scale-[0.97] opacity-0'
             }`}
           >
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#C99A8D]">
               Configurar sesión
-            </p>
-            <h3 className="mt-1 text-lg font-semibold text-slate-900">¿Cuántas tarjetas quieres estudiar?</h3>
-            <p className="mt-2 text-sm text-slate-600">
-              Elige el numero de preguntas que quieres ver en esta sesion.
+            </span>
+            <h3 className="mt-1 text-xl font-black text-[#2C3E50]">¿Cuántas preguntas quieres estudiar?</h3>
+            <p className="mt-1.5 text-sm text-[#7D8A96]">
+              Elige cuántas preguntas quieres ver en esta sesión.
             </p>
 
-            <div className="mt-4">
-              <p className="mb-2 text-sm font-medium text-slate-700">MODO DE ESTUDIO</p>
+            <div className="mt-5">
+              <SectionLabel>Modo de estudio</SectionLabel>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     setStudyRequestMode('normal')
                   }}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  className={`rounded-full border-2 px-4 py-1.5 text-xs font-black transition ${
                     studyRequestMode === 'normal'
-                      ? 'border-[#E8A598] bg-[#FFF4F1] text-[#C4655A]'
-                      : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
+                      ? 'border-[#2c3e50] bg-[#2c3e50] text-white'
+                      : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2C3E50]'
                   }`}
                 >
                   Normal
@@ -2185,87 +2748,88 @@ export default function StudioDeckDetailPage() {
                   type="button"
                   onClick={() => {
                     setStudyRequestMode('smart')
+                    setSmartReviewBurst((n) => n + 1)
                   }}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  className={`relative flex items-center gap-1.5 overflow-hidden rounded-full border-2 px-4 py-1.5 text-xs font-black transition-colors ${
                     studyRequestMode === 'smart'
-                      ? 'border-[#E8A598] bg-[#FFF4F1] text-[#C4655A]'
-                      : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
+                      ? 'border-[#2c3e50] bg-[#E8A598] text-white shadow-[0_0_8px_rgba(232,165,152,0.45)]'
+                      : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2C3E50]'
                   }`}
                 >
+                  <PremiumShimmer burstKey={smartReviewBurst} />
+                  <span className="material-symbols-outlined relative text-sm">bolt</span>
                   Smart Review
                 </button>
               </div>
+              <p className="mt-1.5 text-xs text-[#7D8A96]">
+                {studyRequestMode === 'smart'
+                  ? 'El motor decide qué repasar primero: lo que fallas, lo que se te resiste y lo que ya tocaba revisar.'
+                  : 'Tú eliges qué repasar; dentro de eso, el orden es aleatorio.'}
+              </p>
             </div>
 
-            <div className="mt-4">
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                FILTROS
-              </label>
-              <div className="rounded-xl border border-[#E8A598]/60 bg-[#E8A598]/25 px-3 py-2">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Asignaturas
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSubjectFilter([])
-                    }}
-                    className="text-xs font-medium text-slate-500 hover:text-slate-700"
-                  >
-                    Limpiar
-                  </button>
-                </div>
-                <div
-                  className={`space-y-2 transition-[max-height] duration-300 ease-out ${
-                    subjectFilterOptions.length > 8 ? 'max-h-52 overflow-y-auto pr-1' : 'max-h-80'
-                  }`}
+            <div className="mt-5">
+              <div className="mb-2 flex items-center justify-between">
+                <SectionLabel>Asignaturas</SectionLabel>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSubjectFilter([])
+                  }}
+                  className="mb-4 -mt-4 text-xs font-bold text-[#7D8A96] hover:text-[#2C3E50]"
                 >
-                  {subjectFilterOptions.length === 0 ? (
-                    <p className="text-sm text-slate-500">No hay asignaturas disponibles.</p>
-                  ) : (
-                    subjectFilterOptions.map((option) => {
-                      const checked = subjectFilter.includes(option.value)
-                      return (
-                        <label
-                          key={option.value}
-                          className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-                        >
-                          <span className="truncate">{option.label}</span>
-                          <span className="flex items-center gap-2">
-                            <span className="text-xs text-slate-500">({option.count})</span>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(event) => {
-                                const enabled = event.target.checked
-                                setSubjectFilter((prev) => {
-                                  if (enabled) {
-                                    if (prev.includes(option.value)) return prev
-                                    return [...prev, option.value]
-                                  }
-                                  return prev.filter((entry) => entry !== option.value)
-                                })
-                              }}
-                              className="h-4 w-4 rounded border-slate-300 text-[#E8A598] focus:ring-[#E8A598]/40"
-                            />
-                          </span>
-                        </label>
-                      )
-                    })
-                  )}
-                </div>
+                  Limpiar
+                </button>
+              </div>
+              <div
+                className={`space-y-1.5 rounded-2xl border-2 border-[#EAE4E2] bg-[#FAF7F4] p-2 transition-[max-height] duration-300 ease-out ${
+                  subjectFilterOptions.length > 8 ? 'max-h-52 overflow-y-auto' : 'max-h-80'
+                }`}
+              >
+                {subjectFilterOptions.length === 0 ? (
+                  <p className="p-2 text-sm text-[#7D8A96]">No hay asignaturas disponibles.</p>
+                ) : (
+                  subjectFilterOptions.map((option) => {
+                    const checked = subjectFilter.includes(option.value)
+                    return (
+                      <label
+                        key={option.value}
+                        className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border-2 px-3 py-2 text-sm font-semibold transition-colors ${
+                          checked
+                            ? 'border-[#2c3e50] bg-white text-[#2C3E50]'
+                            : 'border-transparent bg-white/60 text-[#7D8A96] hover:bg-white'
+                        }`}
+                      >
+                        <span className="truncate">{option.label}</span>
+                        <span className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-[#7D8A96]/70">({option.count})</span>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => {
+                              const enabled = event.target.checked
+                              setSubjectFilter((prev) => {
+                                if (enabled) {
+                                  if (prev.includes(option.value)) return prev
+                                  return [...prev, option.value]
+                                }
+                                return prev.filter((entry) => entry !== option.value)
+                              })
+                            }}
+                            className="h-4 w-4 rounded border-2 border-[#2c3e50] text-[#E8A598] focus:ring-[#E8A598]/40"
+                          />
+                        </span>
+                      </label>
+                    )
+                  })
+                )}
               </div>
 
-              <div className="mt-3">
-                <p className="mb-2 text-sm font-medium text-slate-700">
-                  PRIORIDAD
-                </p>
+              <div className="mt-4">
+                <SectionLabel>Prioridad</SectionLabel>
                 <div
                   aria-disabled={studyRequestMode === 'smart'}
-                  className={`flex flex-wrap gap-2 ${
-                    studyRequestMode === 'smart' ? 'opacity-45' : ''
-                  }`}
+                  className={`flex flex-wrap gap-2 ${studyRequestMode === 'smart' ? 'opacity-40' : ''}`}
                 >
                   <button
                     type="button"
@@ -2273,12 +2837,12 @@ export default function StudioDeckDetailPage() {
                     onClick={() => {
                       setStatusFilter(null)
                     }}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    className={`rounded-full border-2 px-3.5 py-1.5 text-xs font-black transition ${
                       studyRequestMode === 'smart'
-                        ? 'cursor-not-allowed border-slate-300 bg-slate-100 text-slate-400'
+                        ? 'cursor-not-allowed border-[#EAE4E2] bg-[#F5F1EF] text-[#B9B2AD]'
                         : statusFilter == null
-                        ? 'border-[#E8A598] bg-[#FFF4F1] text-[#C4655A]'
-                        : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
+                          ? 'border-[#2c3e50] bg-[#2c3e50] text-white'
+                          : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2C3E50]'
                     }`}
                   >
                     Todos
@@ -2293,15 +2857,15 @@ export default function StudioDeckDetailPage() {
                         onClick={() => {
                           setStatusFilter(option.value)
                         }}
-                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                        className={`flex items-center gap-1.5 rounded-full border-2 px-3.5 py-1.5 text-xs font-black transition ${
                           studyRequestMode === 'smart'
-                            ? 'cursor-not-allowed border-slate-300 bg-slate-100 text-slate-400'
+                            ? 'cursor-not-allowed border-[#EAE4E2] bg-[#F5F1EF] text-[#B9B2AD]'
                             : selected
-                            ? 'border-[#E8A598] bg-[#FFF4F1] text-[#C4655A]'
-                            : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
+                              ? 'border-[#2c3e50] bg-[#2c3e50] text-white'
+                              : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2C3E50]'
                         }`}
                       >
-                        <span className={`inline-block h-2.5 w-2.5 rounded-full ${option.dotClass}`} />
+                        <span className={`inline-block h-2 w-2 rounded-full ${option.dotClass}`} />
                         <span>{option.label}</span>
                       </button>
                     )
@@ -2310,62 +2874,62 @@ export default function StudioDeckDetailPage() {
               </div>
             </div>
 
-            <div className="mt-4">
-              <label htmlFor="study-limit-input" className="mb-2 block text-sm font-medium text-slate-700">
-                Número de tarjetas
+            <div className="mt-5">
+              <label htmlFor="study-limit-input" className="mb-2 block text-xs font-black uppercase tracking-wide text-[#7D8A96]">
+                Número de preguntas
               </label>
-              <input
-                id="study-limit-input"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={studyLimitInput}
-                autoFocus
-                onChange={(event) => {
-                  const digitsOnly = event.target.value.replace(/\D+/g, '')
-                  setStudyLimitInput(digitsOnly)
-                  if (studyLimitError) setStudyLimitError(null)
-                }}
-                onFocus={(event) => {
-                  event.currentTarget.select()
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    confirmStudyLimit()
-                  }
-                  if (event.key === 'Escape') {
-                    event.preventDefault()
-                    closeStudyLimitModal(null)
-                  }
-                }}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-[#E8A598] focus:ring-4 focus:ring-[#E8A598]/25"
-              />
-              {studyLimitError ? <p className="mt-2 text-sm text-rose-600">{studyLimitError}</p> : null}
+              <div
+                className={`flex w-full items-center rounded-2xl border-2 bg-white px-4 py-3 transition-colors focus-within:border-[#2c3e50] ${
+                  studyLimitError ? 'border-[#E6B0A6]' : 'border-[#EAE4E2]'
+                }`}
+              >
+                <input
+                  id="study-limit-input"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={studyLimitInput}
+                  autoFocus
+                  onChange={(event) => {
+                    const digitsOnly = event.target.value.replace(/\D+/g, '')
+                    setStudyLimitInput(digitsOnly)
+                    if (studyLimitError) setStudyLimitError(null)
+                  }}
+                  onFocus={(event) => {
+                    event.currentTarget.select()
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      confirmStudyLimit()
+                    }
+                    if (event.key === 'Escape') {
+                      event.preventDefault()
+                      closeStudyLimitModal(null)
+                    }
+                  }}
+                  className="w-full bg-transparent text-sm font-bold text-[#2C3E50] outline-none"
+                />
+              </div>
+              {studyLimitError ? <p className="mt-2 text-sm font-semibold text-[#C4655A]">{studyLimitError}</p> : null}
             </div>
 
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <button
-                type="button"
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <GhostButton
                 onClick={() => {
                   closeStudyLimitModal(null)
                 }}
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={confirmStudyLimit}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-              >
+              </GhostButton>
+              <StickerButton icon="play_arrow" onClick={confirmStudyLimit}>
                 Empezar
-              </button>
+              </StickerButton>
             </div>
           </div>
         </div>
       ) : null}
-    </main>
+    </div>
   )
 }
 

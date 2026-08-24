@@ -46,6 +46,7 @@ export function Hero({
   actions,
   aside,
   children,
+  backdrop,
 }: {
   /** Opcional: si la pantalla ya se explica sola, el distintivo sobra. */
   badge?: string
@@ -56,6 +57,8 @@ export function Hero({
   actions?: ReactNode
   aside?: ReactNode
   children?: ReactNode
+  /** Capa de fondo opcional (se pinta bajo el contenido, dentro del recorte). */
+  backdrop?: ReactNode
 }) {
   return (
     <motion.header
@@ -65,12 +68,24 @@ export function Hero({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
+      {backdrop}
       <div className="relative z-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-        <div className="min-w-0 max-w-2xl">
+        {/* flex-1: sin esto, un título corto (o sin chips debajo) hacía que
+            este bloque se encogiera al ancho de su contenido en vez de
+            ocupar el hueco disponible en la fila — y cualquier hijo `w-full`
+            (el textarea de la bio, por ejemplo) heredaba ese ancho diminuto. */}
+        <div className="min-w-0 max-w-2xl flex-1">
           {badge ? (
             <span
               className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]"
-              style={{ backgroundColor: `${accent}26`, color: accent }}
+              // Con un fondo propio detrás, el distintivo translúcido de
+              // siempre se perdía sobre los tonos saturados: pasa a blanco
+              // sólido para seguir leyéndose sin cambiar de color de marca.
+              style={
+                backdrop
+                  ? { backgroundColor: 'rgba(255,255,255,0.9)', color: accent }
+                  : { backgroundColor: `${accent}26`, color: accent }
+              }
             >
               {badgeIcon ? <span className="material-symbols-outlined text-sm">{badgeIcon}</span> : null}
               {badge}
