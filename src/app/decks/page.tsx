@@ -462,7 +462,14 @@ function DeckCard({
         aria-hidden
         className={`pointer-events-none absolute inset-0 z-[2] ${glowBandShapeClass} ${glowAnimationClass}`}
       />
-      <div className="absolute left-[3.1%] right-[3.1%] top-[11%] bottom-[8.3%] z-10 flex flex-col px-4 py-3 sm:px-5">
+      {/* top-7% (antes 11%): con la bio siempre reservada (2 líneas) más
+          Dominio, el contenido llegaba a solo ~19px del borde inferior real
+          de la tarjeta — encima del marco decorativo dibujado en la textura
+          ilustrada. bottom-X no sirve aquí para dar margen (el contenido no
+          está pegado a ese borde, crece desde arriba y ya lo desbordaba, así
+          que moverlo no cambiaba nada — comprobado midiendo antes/después);
+          hay que subir el punto de partida para que todo el bloque suba. */}
+      <div className="absolute left-[3.1%] right-[3.1%] top-[7%] bottom-[8.3%] z-10 flex flex-col px-4 py-3 sm:px-5">
         <div className="flex items-center justify-end gap-2">
           <span className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${theme.badgeClass}`}>
             {totalItems} cards
