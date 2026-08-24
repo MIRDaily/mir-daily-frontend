@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
@@ -21,11 +21,6 @@ import { useProfile } from '@/hooks/useProfile'
 import { restoreDeck, softDeleteDeck } from '@/lib/studio/trash'
 import { supabase } from '@/lib/supabaseBrowser'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
-
-// Silueta neutra de carta (la misma variante "clean" de siempre) usada como
-// máscara para recortar el degradado con la forma de tarjeta — así el modo
-// "Personalizado" sigue pareciendo una carta, no un rectángulo suelto.
-const GRADIENT_CARD_MASK = '/textures/decks/clean_1.svg'
 
 type Deck = {
   id: string | number
@@ -301,17 +296,6 @@ function DeckCard({
   // propia pantalla): banner_gradient nunca se le llega a guardar, así que
   // cae sola en el valor por defecto (albaricoque) al no ser un id válido.
   const gradientId = isDeckGradientId(deck.banner_gradient) ? deck.banner_gradient : DEFAULT_DECK_GRADIENT
-  // Recorta lo que sea que vaya dentro (el degradado animado del mazo, en
-  // este caso) con la silueta de carta de siempre, para que "Personalizado"
-  // siga pareciendo una carta y no un rectángulo suelto.
-  const gradientMaskStyle: CSSProperties = {
-    WebkitMaskImage: `url(${GRADIENT_CARD_MASK})`,
-    maskImage: `url(${GRADIENT_CARD_MASK})`,
-    WebkitMaskSize: '100% 100%',
-    maskSize: '100% 100%',
-    WebkitMaskRepeat: 'no-repeat',
-    maskRepeat: 'no-repeat',
-  }
   // Bio del mazo (o el aviso fijo del mazo de fallos) en vez de la etiqueta
   // "PERSONAL", que salía igual para cualquier mazo propio y no aportaba
   // nada. El resto — nombre, dominio, nº de tarjetas, papelera — se queda.
@@ -435,18 +419,14 @@ function DeckCard({
       className={`deck-card group relative aspect-[900/336] min-h-[210px] overflow-visible p-0 hover:z-40 focus-within:z-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598] sm:min-h-[230px] [transform-style:preserve-3d] ${theme.cardClass}`}
     >
       {isGradientStyle ? (
-        // Mismo degradado animado que la cabecera del mazo individual (blur +
-        // framer-motion), no una versión estática — recortado con la silueta
-        // de carta. Una sola capa: no se replica el truco de sombra-al-hover
-        // de las cartas ilustradas, que exigiría animar el blur por duplicado.
+        // Mismo degradado que la cabecera del mazo individual, pero congelado
+        // (ver DeckBannerGradient). Ya no se recorta con la silueta de carta
+        // ilustrada — lleva el borde de tinta y la sombra dura del propio
+        // mazo (StickerCard/Hero), no el contorno que dibujaba la textura.
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
-          style={{
-            ...gradientMaskStyle,
-            filter:
-              'drop-shadow(0 10px 22px rgba(0, 0, 0, 0.08)) drop-shadow(0 20px 48px rgba(0, 0, 0, 0.10))',
-          }}
+          className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-3xl border-2 border-[#2c3e50]"
+          style={{ boxShadow: '6px 6px 0 0 #2c3e50' }}
         >
           <DeckBannerGradient id={gradientId} animated={false} />
         </div>
