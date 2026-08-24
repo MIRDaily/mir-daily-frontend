@@ -2113,11 +2113,20 @@ export default function StudioDeckDetailPage() {
                     // Sin scale: combinar un transform de escala con el crecimiento de
                     // max-height hacía que el texto pareciera "reescalarse" y dar un salto
                     // justo al mostrar la solución, en vez de una aparición limpia.
+                    // `key` por pregunta: sin esto, al pasar a la siguiente pregunta React
+                    // reutiliza el mismo nodo — el texto ya cambiaba a la explicación nueva
+                    // un instante antes de que la transición de colapso terminara, así que
+                    // se veía "la respuesta ya extendida" de la pregunta que aún no has
+                    // contestado. Con key, cada pregunta monta su propia caja desde cero.
+                    // padding fijo (p-4 siempre, nunca en la lista de transition): animarlo
+                    // encogía el ancho disponible del texto durante el propio crecimiento,
+                    // y las palabras se recolocaban solas mientras la caja se abría.
                     <div
-                      className={`overflow-hidden transition-[max-height,opacity,margin,padding] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                      key={String(resolveDeckItemId(currentItem) ?? currentItem.id)}
+                      className={`overflow-hidden rounded-2xl p-4 transition-[max-height,opacity,margin] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                         isAnswered
-                          ? 'mt-1 max-h-[70vh] rounded-2xl border-2 border-[#EAE4E2] p-4 opacity-100'
-                          : 'mt-0 max-h-0 rounded-2xl border-0 p-0 opacity-0'
+                          ? 'mt-1 max-h-[70vh] border-2 border-[#EAE4E2] opacity-100'
+                          : 'mt-0 max-h-0 border-0 opacity-0'
                       }`}
                       style={isAnswered ? trackerPaper('#7D8A96', 0.1) : undefined}
                       aria-hidden={!isAnswered}
