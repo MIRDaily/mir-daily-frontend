@@ -474,7 +474,7 @@ function DeckCard({
           ese hueco entre los dos bordes, no lo bajan (comprobado: mover uno
           siempre suma lo mismo al otro). pt-5 reparte lo más parecido
           posible entre arriba y abajo dentro de ese margen fijo. */}
-      <div className="absolute left-[3.1%] right-[3.1%] top-[3%] bottom-[8.3%] z-10 flex flex-col px-4 pb-3 pt-5 sm:px-5">
+      <div className="absolute left-[3.1%] right-[3.1%] top-[3%] bottom-[8.3%] z-10 flex flex-col px-4 pb-3 pt-8 sm:px-5">
         <div className="flex items-center justify-end gap-2">
           <span className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${theme.badgeClass}`}>
             {totalItems} cards
@@ -511,8 +511,8 @@ function DeckCard({
           ) : null}
         </div>
 
-        <div className="mt-2 flex items-start justify-between gap-3">
-          <h3 className="min-w-0 flex-1 truncate pt-1 text-[clamp(1.25rem,1.5vw,1.9rem)] font-semibold leading-[1.2] text-slate-800">
+        <div className="mt-1 flex items-start justify-between gap-3">
+          <h3 className="min-w-0 flex-1 truncate text-[clamp(1.25rem,1.5vw,1.9rem)] font-semibold leading-[1.2] text-slate-800">
             {deck.name || `Mazo ${deck.id}`}
           </h3>
         </div>
@@ -521,8 +521,10 @@ function DeckCard({
             texto el mazo — si no, un mazo sin bio dejaba la barra de Dominio
             pegada al título mientras que uno con bio la empujaba más abajo,
             así que la misma pieza aparecía en una posición distinta según el
-            mazo. min-h fuerza el mismo punto de partida siempre. */}
-        <p className="mt-1.5 line-clamp-2 min-h-[39px] break-words text-xs font-medium leading-relaxed text-slate-500 sm:min-h-[46px] sm:text-sm">
+            mazo. min-h fuerza el mismo punto de partida siempre.
+            leading-snug (en vez de leading-relaxed) para que esas 2 líneas
+            reservadas ocupen menos alto sin dejar de ser 2 líneas. */}
+        <p className="mt-1 line-clamp-2 min-h-[33px] break-words text-xs font-medium leading-snug text-slate-500 sm:min-h-[39px] sm:text-sm">
           {subtitle}
         </p>
 
@@ -530,8 +532,8 @@ function DeckCard({
             cada acierto/fallo, un % de largo plazo no significa nada ahí
             (mismo criterio que ya se aplica en su cabecera). */}
         {isFailedQuestions ? null : (
-          <div className="mt-3">
-            <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 sm:text-sm">
+          <div className="mt-2">
+            <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-slate-500 sm:text-sm">
               <span>Dominio</span>
               {hasUnknownMastery ? (
                 <div className="group/mastery relative">
@@ -564,7 +566,7 @@ function DeckCard({
                 <span className="text-slate-600">{accuracyPercent}%</span>
               )}
             </div>
-            <div className="h-2.5 rounded-full bg-slate-100">
+            <div className="h-2 rounded-full bg-slate-100">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${domainColorClass}`}
                 style={{ width: `${accuracyPercent}%` }}
