@@ -262,7 +262,15 @@ export function PremiumShimmer({ burstKey = 0 }: { burstKey?: number }) {
    movimiento es `transform` sobre capas absolutas, así que no toca el layout
    de la tarjeta ni provoca reflow por mucho que se mueva.
 ─────────────────────────────────────────────────────────────────────────── */
-export type DeckGradientId = 'apricot' | 'slate' | 'ember' | 'violet' | 'inferno' | 'sage'
+export type DeckGradientId =
+  | 'apricot'
+  | 'slate'
+  | 'ember'
+  | 'violet'
+  | 'inferno'
+  | 'sage'
+  | 'blueMist'
+  | 'blueNight'
 
 export const DECK_GRADIENTS: Record<
   DeckGradientId,
@@ -274,6 +282,11 @@ export const DECK_GRADIENTS: Record<
   violet: { label: 'Violeta', light: '#E6E6FA', dark: '#240A24', mid: '#9932CC' },
   inferno: { label: 'Carmesí', light: '#FAFBFD', dark: '#AA0003', mid: '#BFB4DC' },
   sage: { label: 'Salvia', light: '#F0E5DE', dark: '#6F1D1B', mid: '#ADBDAB' },
+  // Los dos únicos presets azules, tal cual los definió el usuario en su
+  // propio prototipo ("APPS CODEX/Gradientes"): mismos tres HEX por preset
+  // (oscuro arriba, acento en medio, claro abajo), solo se traduce el label.
+  blueMist: { label: 'Bruma Azul', light: '#EEF5F8', dark: '#1D3144', mid: '#7AA7C7' },
+  blueNight: { label: 'Noche Azul', light: '#C8D8E6', dark: '#050B16', mid: '#193B61' },
 }
 
 export const DECK_GRADIENT_IDS = Object.keys(DECK_GRADIENTS) as DeckGradientId[]
