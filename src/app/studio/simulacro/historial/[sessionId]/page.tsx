@@ -28,7 +28,7 @@ export default function SimulacroHistoryDetailPage() {
     // El "current" (nº de preguntas) solo se conoce una vez llega el repaso;
     // hasta entonces se enseña solo la flecha con "Historial".
     setBackAction({
-      label: 'Historial',
+      label: 'Historial de simulacros',
       href: '/studio/simulacro/historial',
       current: detail ? `${detail.questions.length} preguntas` : undefined,
     })

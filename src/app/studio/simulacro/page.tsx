@@ -258,7 +258,9 @@ export default function SimulacroPage() {
   // sacaría al usuario sin avisar que pierde el simulacro.
   useEffect(() => {
     setBackAction(
-      phase === 'running' ? null : { label: 'Estudio', href: '/studio' },
+      phase === 'running'
+        ? null
+        : { label: 'Estudio', href: '/studio', current: 'Crear Simulacro' },
     )
     return () => setBackAction(null)
   }, [phase, setBackAction])

@@ -37,7 +37,7 @@ export default function SimulacroHistorialPage() {
   // Flecha de "volver" en la cabecera global, mismo mecanismo que en Mazos
   // (p. ej. `/decks/[deckId]/trash`).
   useEffect(() => {
-    setBackAction({ label: 'Estudio', href: '/studio' })
+    setBackAction({ label: 'Estudio', href: '/studio', current: 'Historial de simulacros' })
     return () => setBackAction(null)
   }, [setBackAction])
 
