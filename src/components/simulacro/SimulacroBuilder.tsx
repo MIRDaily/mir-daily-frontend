@@ -138,11 +138,6 @@ export default function SimulacroBuilder({
     return selectedTopicIds.filter((id) => valid.has(id))
   }, [topics, selectedTopicIds])
 
-  // Solo hay "cargando" si no se puede enseñar nada todavía; si ya hay temas
-  // de otra asignatura, los nuevos se suman sin desmontar lo que se ve.
-  const loadingTopics =
-    selectedSubjectIds.some((id) => !(id in topicsBySubject)) && topics.length === 0
-
   const toggleSubject = (id: number) => {
     setSelectedSubjectIds((prev) =>
       prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
@@ -367,62 +362,66 @@ export default function SimulacroBuilder({
             asignaturas seleccionadas.
           </p>
 
-          {selectedSubjectIds.length === 0 ? (
-            <p className="text-sm text-[#7D8A96]/70">
-              Selecciona una asignatura para ver sus temas.
-            </p>
-          ) : loadingTopics ? (
-            <div className="flex flex-col gap-3">
-              {Array.from({ length: 2 }).map((_, i) => (
-                <div
-                  key={`topic-skeleton-${i}`}
-                  className="h-16 w-full animate-pulse rounded-xl bg-[#F2EEEB]"
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {selectedTopicChips.length === 0 ? (
-                <p className="rounded-xl border-2 border-dashed border-[#EAE4E2] bg-[#FAF7F4] px-4 py-3 text-sm text-[#7D8A96]">
-                  Ahora mismo se incluirán{' '}
-                  <span className="font-black text-[#2c3e50]">todos los temas</span> de las
-                  asignaturas elegidas.
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {selectedTopicChips.slice(0, 8).map((topic) => (
-                    <span
-                      key={topic.id}
-                      className="inline-flex items-center gap-1.5 rounded-full border-2 border-[#8BA888]/50 bg-[#8BA888]/10 py-1.5 pl-3 pr-2 text-sm font-bold text-[#5f7d5c]"
-                    >
-                      {topic.name}
-                      <button
-                        type="button"
-                        onClick={() => toggleTopic(topic.id)}
-                        aria-label={`Quitar ${topic.name}`}
-                        className="flex items-center justify-center text-[#5f7d5c]/70 transition-colors hover:text-[#C4655A]"
-                      >
-                        <span className="material-symbols-outlined text-base">close</span>
-                      </button>
-                    </span>
-                  ))}
-                  {selectedTopicChips.length > 8 ? (
-                    <span className="inline-flex items-center rounded-full bg-[#F2EFED] px-3 py-1.5 text-sm font-bold text-[#7D8A96]">
-                      +{selectedTopicChips.length - 8} más
-                    </span>
-                  ) : null}
-                </div>
-              )}
+          {/* Misma estructura (caja + botón) en todos los estados: solo cambia
+              el contenido de dentro. Antes "sin asignatura" era un único
+              párrafo suelto y, al elegir la primera, aparecían de golpe la
+              caja punteada Y el botón debajo, empujando las tarjetas de más
+              abajo. Manteniendo el armazón fijo el salto desaparece.
 
-              <GhostButton
-                icon="tune"
-                onClick={() => setTopicPickerOpen(true)}
-                className="w-full sm:w-auto"
-              >
-                {selectedTopicChips.length > 0 ? 'Editar temas' : 'Elegir temas concretos'}
-              </GhostButton>
-            </div>
-          )}
+              Nada de esto espera a que lleguen los temas: el mensaje "se
+              incluirán todos los temas" vale igual estén cargados o no, así
+              que ya no hay un estado de "cargando" con su propio tamaño que
+              vuelva a saltar la primera vez que se elige cada asignatura
+              (antes del primer fetch, loadingTopics se activaba y sustituía
+              esta caja por un esqueleto de otra altura). */}
+          <div className="flex flex-col gap-3">
+            {selectedTopicChips.length === 0 ? (
+              <p className="rounded-xl border-2 border-dashed border-[#EAE4E2] bg-[#FAF7F4] px-4 py-3 text-sm text-[#7D8A96]">
+                {selectedSubjectIds.length === 0 ? (
+                  'Selecciona una asignatura para ver sus temas.'
+                ) : (
+                  <>
+                    Ahora mismo se incluirán{' '}
+                    <span className="font-black text-[#2c3e50]">todos los temas</span> de las
+                    asignaturas elegidas.
+                  </>
+                )}
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {selectedTopicChips.slice(0, 8).map((topic) => (
+                  <span
+                    key={topic.id}
+                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-[#8BA888]/50 bg-[#8BA888]/10 py-1.5 pl-3 pr-2 text-sm font-bold text-[#5f7d5c]"
+                  >
+                    {topic.name}
+                    <button
+                      type="button"
+                      onClick={() => toggleTopic(topic.id)}
+                      aria-label={`Quitar ${topic.name}`}
+                      className="flex items-center justify-center text-[#5f7d5c]/70 transition-colors hover:text-[#C4655A]"
+                    >
+                      <span className="material-symbols-outlined text-base">close</span>
+                    </button>
+                  </span>
+                ))}
+                {selectedTopicChips.length > 8 ? (
+                  <span className="inline-flex items-center rounded-full bg-[#F2EFED] px-3 py-1.5 text-sm font-bold text-[#7D8A96]">
+                    +{selectedTopicChips.length - 8} más
+                  </span>
+                ) : null}
+              </div>
+            )}
+
+            <GhostButton
+              icon="tune"
+              onClick={() => setTopicPickerOpen(true)}
+              disabled={selectedSubjectIds.length === 0}
+              className="w-full sm:w-auto"
+            >
+              {selectedTopicChips.length > 0 ? 'Editar temas' : 'Elegir temas concretos'}
+            </GhostButton>
+          </div>
         </StickerCard>
 
         <SimulacroTopicPicker
