@@ -206,6 +206,22 @@ export default function SimulacroBuilder({
   }, [topics, effectiveTopicIds])
 
   /**
+   * Asignaturas elegidas que NO tienen ningún tema marcado: el backend las
+   * incluye completas (mismo criterio que `subjectsWithoutTopics` en
+   * `simulacro.js`). En cuanto se marca un tema de OTRA asignatura, la caja
+   * de temas pasa a enseñar solo esa chip y, sin este aviso, parece que el
+   * resto de asignaturas se han quedado fuera del simulacro cuando en
+   * realidad entran enteras.
+   */
+  const subjectsFullyIncluded = useMemo(() => {
+    if (weighted || selectedTopicChips.length === 0) return []
+    const subjectIdsWithTopics = new Set(selectedTopicChips.map((t) => t.subject_id))
+    return subjects.filter(
+      (s) => selectedSubjectIds.includes(s.id) && !subjectIdsWithTopics.has(s.id),
+    )
+  }, [weighted, selectedTopicChips, subjects, selectedSubjectIds])
+
+  /**
    * Reparto que se va a pedir en modo MIR, para enseñarlo antes de generar.
    *
    * Si se quita una asignatura, `weighted` NO se desactiva: los pesos se
@@ -409,6 +425,17 @@ export default function SimulacroBuilder({
                   <span className="inline-flex items-center rounded-full bg-[#F2EFED] px-3 py-1.5 text-sm font-bold text-[#7D8A96]">
                     +{selectedTopicChips.length - 8} más
                   </span>
+                ) : null}
+
+                {/* Sin esto, en cuanto se marca un tema de UNA asignatura la
+                    caja solo enseña esa chip y da la impresión de que el
+                    resto de asignaturas elegidas se han quedado fuera,
+                    cuando en realidad entran con todos sus temas. */}
+                {subjectsFullyIncluded.length > 0 ? (
+                  <p className="w-full rounded-xl border-2 border-dashed border-[#8BA888]/40 bg-[#8BA888]/10 px-4 py-2.5 text-xs text-[#5f7d5c]">
+                    <span className="font-black">Además, con todos sus temas:</span>{' '}
+                    {subjectsFullyIncluded.map((s) => s.name).join(', ')}.
+                  </p>
                 ) : null}
               </div>
             )}
