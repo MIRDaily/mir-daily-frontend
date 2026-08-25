@@ -7,13 +7,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import SimulacroCalendarHeatmap from '@/components/simulacro/SimulacroCalendarHeatmap'
-import SimulacroResultsGrid from '@/components/simulacro/SimulacroResultsGrid'
-import {
-  fetchSimulacroHistory,
-  fetchSimulacroHistoryDetail,
-} from '@/lib/simulacro/queries'
-import type { SimulacroHistoryDetail, SimulacroHistorySession } from '@/lib/simulacro/types'
+import { fetchSimulacroHistory } from '@/lib/simulacro/queries'
+import type { SimulacroHistorySession } from '@/lib/simulacro/types'
+import { useHeaderUI } from '@/providers/HeaderUIProvider'
 
 const PAGE_SIZE = 20
 
@@ -28,16 +26,20 @@ function formatDate(iso: string) {
 }
 
 export default function SimulacroHistorialPage() {
+  const router = useRouter()
+  const { setBackAction } = useHeaderUI()
   const [sessions, setSessions] = useState<SimulacroHistorySession[]>([])
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [detail, setDetail] = useState<SimulacroHistoryDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [detailError, setDetailError] = useState<string | null>(null)
+  // Flecha de "volver" en la cabecera global, mismo mecanismo que en Mazos
+  // (p. ej. `/decks/[deckId]/trash`).
+  useEffect(() => {
+    setBackAction({ label: 'Estudio', href: '/studio' })
+    return () => setBackAction(null)
+  }, [setBackAction])
 
   useEffect(() => {
     let active = true
@@ -64,62 +66,7 @@ export default function SimulacroHistorialPage() {
   }, [page])
 
   const openSession = (id: string) => {
-    setSelectedId(id)
-    setDetail(null)
-    setDetailError(null)
-    setDetailLoading(true)
-    fetchSimulacroHistoryDetail(id)
-      .then((data) => setDetail(data))
-      .catch((err: unknown) => {
-        setDetailError(
-          err instanceof Error ? err.message : 'No se pudo cargar el repaso de este simulacro.',
-        )
-      })
-      .finally(() => setDetailLoading(false))
-  }
-
-  const closeSession = () => {
-    setSelectedId(null)
-    setDetail(null)
-    setDetailError(null)
-  }
-
-  if (selectedId) {
-    return (
-      <div className="relative min-h-screen overflow-x-hidden bg-[#FAF7F4] text-[#7D8A96]">
-        <div className="pointer-events-none fixed inset-0 z-0 opacity-40 [background-image:radial-gradient(circle_at_20%_20%,rgba(125,138,150,0.08)_0,transparent_30%),radial-gradient(circle_at_80%_75%,rgba(232,165,152,0.08)_0,transparent_30%)]" />
-        <main className="relative z-10 mx-auto w-full max-w-7xl px-6 py-10">
-          <button
-            type="button"
-            onClick={closeSession}
-            className="mb-6 flex items-center gap-2 rounded-xl border border-[#E9E4E1] px-4 py-2 text-sm font-semibold text-[#7D8A96] transition-all hover:border-[#E8A598]/40 hover:text-[#2D3748]"
-          >
-            <span className="material-symbols-outlined text-lg">arrow_back</span>
-            Volver al historial
-          </button>
-
-          {detailLoading ? (
-            <div className="mx-auto flex max-w-3xl items-center justify-center gap-2 rounded-2xl border border-[#F0EBE8] bg-white p-10 text-sm font-medium text-[#7D8A96] shadow-sm">
-              <span className="material-symbols-outlined animate-spin text-base text-[#E8A598]">
-                progress_activity
-              </span>
-              Cargando repaso...
-            </div>
-          ) : detailError ? (
-            <p className="mx-auto max-w-3xl rounded-2xl border border-[#E8A598]/30 bg-[#FFF8F6] px-4 py-3 text-sm font-semibold text-[#C4655A]">
-              {detailError}
-            </p>
-          ) : detail ? (
-            <SimulacroResultsGrid
-              questions={detail.questions}
-              answers={detail.answers}
-              results={detail.results}
-              onRestart={closeSession}
-            />
-          ) : null}
-        </main>
-      </div>
-    )
+    router.push(`/studio/simulacro/historial/${id}`)
   }
 
   return (
@@ -267,16 +214,6 @@ export default function SimulacroHistorialPage() {
             </button>
           </div>
         ) : null}
-
-        <div className="mt-8">
-          <Link
-            href="/studio"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[#7D8A96] transition-colors hover:text-[#2D3748]"
-          >
-            <span className="material-symbols-outlined text-lg">arrow_back</span>
-            Volver a Studio
-          </Link>
-        </div>
       </main>
     </div>
   )

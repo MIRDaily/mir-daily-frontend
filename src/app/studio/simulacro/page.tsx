@@ -17,6 +17,7 @@ import {
   fetchSimulacroQuestions,
   finishSimulacroSession,
 } from '@/lib/simulacro/queries'
+import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import type {
   SimulacroAnswer,
   SimulacroConfig,
@@ -47,6 +48,7 @@ function waitRemaining(startedAt: number, min: number): Promise<void> {
 
 export default function SimulacroPage() {
   const router = useRouter()
+  const { setBackAction } = useHeaderUI()
   const [phase, setPhase] = useState<SimulacroPhase>('builder')
   // Modal propio de "¿seguro que quieres salir?" (no el nativo del navegador)
   // para el botón "Salir", el botón atrás y los enlaces de navegación.
@@ -248,6 +250,18 @@ export default function SimulacroPage() {
       handleRestart()
     }
   }
+
+  // Flecha de "volver" en la cabecera global (mismo mecanismo que GramSwipe).
+  // Se retira durante 'running': el runner ya tiene su propia barra de
+  // progreso y su "Salir" con confirmación, así que un segundo botón de
+  // retroceso en la cabecera sería redundante y, sin el aviso de abandono,
+  // sacaría al usuario sin avisar que pierde el simulacro.
+  useEffect(() => {
+    setBackAction(
+      phase === 'running' ? null : { label: 'Estudio', href: '/studio' },
+    )
+    return () => setBackAction(null)
+  }, [phase, setBackAction])
 
   // Cerrar/recargar la pestaña o navegar a una URL externa mientras hay un
   // simulacro en curso (mismo patrón que ZenRoomClient.tsx: "exit friction").
