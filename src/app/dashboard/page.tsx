@@ -4366,7 +4366,7 @@ export default function DashboardPage() {
                       ) : null}
                     </div>
                   ) : null}
-                  <h1 className="text-[28px] sm:text-[32px] font-bold leading-tight text-[#2D3748] tracking-tight">
+                  <h1 className="text-[1.75rem] sm:text-[2rem] font-bold leading-tight text-[#2D3748] tracking-tight">
                     {currentQuestion?.statement}
                   </h1>
                 </div>

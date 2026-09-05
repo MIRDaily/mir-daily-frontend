@@ -160,7 +160,7 @@ export default function SimulacroRunner({
               {current.subject}
             </span>
           ) : null}
-          <h1 className="text-[28px] font-black leading-tight tracking-tight text-[#2C3E50] sm:text-[32px]">
+          <h1 className="text-[1.75rem] font-black leading-tight tracking-tight text-[#2C3E50] sm:text-[2rem]">
             {current?.statement}
           </h1>
           {current?.has_image && current?.image_url ? (

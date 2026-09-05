@@ -416,7 +416,7 @@ function DeckCard({
           onOpen()
         }
       } : undefined}
-      className={`deck-card group relative aspect-[900/336] min-h-[210px] overflow-visible p-0 hover:z-40 focus-within:z-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598] sm:min-h-[230px] [transform-style:preserve-3d] ${theme.cardClass}`}
+      className={`deck-card group relative w-full aspect-[900/336] min-h-[210px] overflow-visible p-0 hover:z-40 focus-within:z-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8A598] sm:min-h-[230px] [transform-style:preserve-3d] ${theme.cardClass}`}
     >
       {isGradientStyle ? (
         // Mismo degradado que la cabecera del mazo individual, pero congelado
@@ -798,7 +798,7 @@ function ConstructionDeckPlaceholder() {
         setIsPointerInside(false)
         setTilt({ rotateX: 0, rotateY: 0 })
       }}
-      className="deck-card-placeholder group relative aspect-[900/336] min-h-[210px] overflow-hidden rounded-2xl p-6 sm:min-h-[230px]"
+      className="deck-card-placeholder group relative w-full aspect-[900/336] min-h-[210px] overflow-hidden rounded-2xl p-6 sm:min-h-[230px]"
     >
       <span
         aria-hidden
@@ -1011,7 +1011,7 @@ function CreateDeckPlaceholder({ onCreate }: { onCreate: () => void }) {
           onCreate()
         }
       }}
-      className="deck-card-create group relative aspect-[900/336] min-h-[210px] cursor-pointer overflow-hidden rounded-2xl p-6 sm:min-h-[230px]"
+      className="deck-card-create group relative w-full aspect-[900/336] min-h-[210px] cursor-pointer overflow-hidden rounded-2xl p-6 sm:min-h-[230px]"
     >
       <span
         aria-hidden
@@ -1679,7 +1679,7 @@ export default function StudioDecksPage() {
 
         <section className="space-y-6">
             {systemDecks.length > 0 ? (
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <div className="grid grid-cols-1 gap-6 min-[880px]:grid-cols-2">
                 {systemDecks.map((deck) => (
                   <div key={String(deck.id)} className="cursor-default">
                     <DeckCard
@@ -1722,7 +1722,7 @@ export default function StudioDecksPage() {
             ) : null}
 
             {userDecks.length === 0 ? (
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <div className="grid grid-cols-1 gap-6 min-[880px]:grid-cols-2">
                 <CreateDeckPlaceholder
                   onCreate={() => {
                     setShowCreateForm(true)
@@ -1735,7 +1735,7 @@ export default function StudioDecksPage() {
                   items={userDecks.map((deck) => String(deck.id))}
                   strategy={rectSortingStrategy}
                 >
-                  <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-6 min-[880px]:grid-cols-2">
                     {userDecks.map((deck) => (
                       <SortableDeckCard key={String(deck.id)} deck={deck}>
                         <DeckCard

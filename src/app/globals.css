@@ -18,6 +18,37 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* ===============================
+   Escala de portatil
+   ===============================
+   La web se diseno para dos tamanos: movil (<640px) y monitor grande
+   (>=1440px). En medio queda la banda de los portatiles, que recibia el
+   diseno de escritorio a tamano de escritorio: cabe, pero apelmazado.
+
+   Casi todo el sistema esta en rem (text-lg, p-6, gap-4, max-w-4xl...), asi
+   que basta bajar la raiz para encogerlo entero de forma proporcional: mismo
+   diseno, misma cantidad de palabras por linea, mas cosas a la vista. De
+   14.5px hasta los 16px de siempre a partir de 1440px, donde el diseno
+   original ya respira. La banda arranca en 768px, que es donde aparece el
+   layout de escritorio (la nav centrada de AppHeader): por debajo manda el
+   diseno movil, que ya esta afinado y no se toca.
+
+   Dos cosas que NO se mueven, a proposito:
+
+   - Las etiquetas escritas en px fijos (text-[10px], text-[11px]...) ya estan
+     al limite de legibilidad; encogerlas seria peor que dejarlas.
+   - Los breakpoints. Dentro de una media query, rem SIEMPRE vale 16px (el
+     valor inicial), no el que se fije aqui. Esto cambia el tamano, nunca el
+     layout: sm:/md:/lg:/xl: siguen saltando exactamente donde saltaban.
+
+   La raiz se expresa en rem, no en px, para no pisar el tamano de letra que
+   el usuario haya configurado en su navegador. */
+@media (min-width: 48rem) and (max-width: 89.9375rem) {
+  html {
+    font-size: clamp(0.90625rem, 0.36vw + 0.68rem, 1rem);
+  }
+}
+
 /* Scrollbar discreta: aparece al pasar el raton por el borde */
 body {
   -ms-overflow-style: auto;

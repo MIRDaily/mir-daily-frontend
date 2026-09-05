@@ -112,7 +112,13 @@ export default function AppHeader({
           </h1>
         </Link>
         <LayoutGroup id="header-tabs">
-          <div className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
+          {/* La nav va centrada en absoluto, que es lo que la deja exactamente en
+              mitad de la cabecera. Pero al estar fuera del flujo no empuja a
+              nadie: por debajo de ~1150px se montaba encima del logo por la
+              izquierda y de la campana por la derecha. Ahi vuelve al flujo
+              normal (justify-between del contenedor la coloca en medio) y con
+              menos hueco entre enlaces, asi no pisa a nadie. */}
+          <div className="hidden md:flex items-center gap-4 min-[1150px]:gap-8 min-[1150px]:absolute min-[1150px]:left-1/2 min-[1150px]:-translate-x-1/2">
             <Link className={getNavClass(activeTab, 'studio')} href="/studio">
               {activeTab === 'studio' && (
                 <motion.span

@@ -378,7 +378,7 @@ export default function ProfileCard() {
     return (
       <div className="animate-pulse space-y-6">
         <div className="h-64 rounded-3xl border-2 border-[#EAE4E2] bg-white" />
-        <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
+        <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
           <div className="space-y-6">
             <div className="h-32 rounded-3xl border-2 border-[#EAE4E2] bg-white" />
             <div className="h-32 rounded-3xl border-2 border-[#EAE4E2] bg-white" />
@@ -429,7 +429,7 @@ export default function ProfileCard() {
         daysWithUs={daysSince(profile.created_at)}
       />
 
-      <div className="grid gap-7 xl:grid-cols-[1.6fr_1fr] xl:items-start">
+      <div className="grid gap-7 lg:grid-cols-[1.6fr_1fr] lg:items-start">
         {/* ─── Columna principal: lo que se edita ───────────────────────── */}
         <div className="min-w-0 space-y-7">
           <section>
@@ -612,7 +612,7 @@ export default function ProfileCard() {
         </div>
 
         {/* ─── Columna lateral: lo que solo se consulta ─────────────────── */}
-        <aside className="min-w-0 space-y-6 xl:sticky xl:top-24">
+        <aside className="min-w-0 space-y-6 lg:sticky lg:top-24">
           <section>
             <SectionLabel>Cuenta</SectionLabel>
             <StickerCard className="p-5" depth={4}>
