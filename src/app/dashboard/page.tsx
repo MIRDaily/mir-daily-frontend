@@ -3272,7 +3272,7 @@ export default function DashboardPage() {
               </button>
             </header>
 
-            <main className="flex-grow flex flex-col items-center justify-start px-4 pb-16 pt-6 sm:px-6 w-full relative">
+            <main className="flex-grow flex flex-col items-center justify-start px-4 pb-16 [@media(max-height:850px)]:pb-8 pt-6 [@media(max-height:850px)]:pt-4 sm:px-6 w-full relative">
               {showResults ? (
                 resultsLoading && !resultsData && !quizResult ? (
                   <div className="w-full max-w-5xl mx-auto text-center text-[#7D8A96] relative z-10 animate-fade-in-up">
@@ -4072,7 +4072,7 @@ export default function DashboardPage() {
                 transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
                 className="w-full min-w-0 max-w-4xl relative z-10 animate-fade-in-up"
               >
-                <div className="w-full mb-10">
+                <div className="w-full mb-10 [@media(max-height:850px)]:mb-5">
                 <div className="flex justify-between items-end mb-3">
                   <span className="text-[11px] font-bold tracking-[0.15em] text-[#7D8A96] uppercase">
                     Progreso Diario
@@ -4098,10 +4098,10 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="space-y-8 w-full">
+              <div className="space-y-8 [@media(max-height:850px)]:space-y-5 w-full">
                 <div className="relative pr-14">
                   {showSubjects && (
-                    <span className="inline-block px-4 py-1.5 rounded-full bg-white border border-[#E9E4E1] text-[11px] font-bold tracking-[0.1em] text-[#7D8A96] uppercase mb-6">
+                    <span className="inline-block px-4 py-1.5 rounded-full bg-white border border-[#E9E4E1] text-[11px] font-bold tracking-[0.1em] text-[#7D8A96] uppercase mb-6 [@media(max-height:850px)]:mb-3">
                       {currentQuestion?.subject}
                     </span>
                   )}
@@ -4366,7 +4366,12 @@ export default function DashboardPage() {
                       ) : null}
                     </div>
                   ) : null}
-                  <h1 className="text-[1.75rem] sm:text-[2rem] font-bold leading-tight text-[#2D3748] tracking-tight">
+                  {/* El enunciado era 32px fijos de 640px en adelante: en un
+                      portatil son 9 lineas y solo caben 2 opciones sin bajar.
+                      Ahora crece con el ancho — ~23px a 1024, ~26px a 1152,
+                      32px a partir de 1440, que es el tamano de siempre. El
+                      tope de 2rem lo deja clavado en monitor grande. */}
+                  <h1 className="text-[1.75rem] md:text-[clamp(1.6rem,2.22vw,2rem)] font-bold leading-tight text-[#2D3748] tracking-tight">
                     {currentQuestion?.statement}
                   </h1>
                 </div>
@@ -4407,7 +4412,7 @@ export default function DashboardPage() {
                   </div>
                 ) : null}
 
-                <div className="grid gap-4">
+                <div className="grid gap-4 [@media(max-height:850px)]:gap-3">
                   {currentQuestion?.options.map((option, optionIndex) => {
                     const isSelected = currentSelection === optionIndex
                     return (
@@ -4421,7 +4426,7 @@ export default function DashboardPage() {
                             return next
                           })
                         }}
-                        className={`group flex items-center p-5 rounded-2xl border-2 transition-all duration-200 text-left shadow-sm hover:shadow-md ${
+                        className={`group flex items-center p-5 [@media(max-height:850px)]:p-4 rounded-2xl border-2 transition-all duration-200 text-left shadow-sm hover:shadow-md ${
                           isSelected
                             ? 'bg-white border-[#E8A598]/60'
                             : 'bg-white border-transparent hover:border-[#E8A598]/30'
@@ -4451,7 +4456,7 @@ export default function DashboardPage() {
                   })}
                 </div>
 
-                <div className="pt-8 flex flex-wrap justify-between items-center gap-4">
+                <div className="pt-8 [@media(max-height:850px)]:pt-4 flex flex-wrap justify-between items-center gap-4">
                   <button className="flex items-center gap-2 text-[#9CA3AF] hover:text-[#7D8A96] text-sm font-semibold transition-colors">
                     <span className="material-symbols-outlined text-lg">
                       flag
