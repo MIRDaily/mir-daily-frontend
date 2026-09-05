@@ -15,6 +15,7 @@ import { debugRender } from '@/lib/debugRSC'
 import { supabase } from '@/lib/supabaseBrowser'
 import {
   type StudioDeck,
+  type StudioDeckError,
   addQuestionToDeck,
   createStudioDeck,
   fetchStudioDeckItems,
@@ -591,7 +592,12 @@ export default function DashboardPage() {
         showSaveQuestionFeedback('success', `Añadida a ${deckName}`)
       } catch (err) {
         console.error(err)
-        showSaveQuestionFeedback('error', 'Error al actualizar el mazo')
+        // Mazo lleno: se dice, con el limite real que manda el servidor, en vez
+        // de un "error" generico que no explica nada.
+        const motivo = (err as StudioDeckError | null)?.limitReached
+          ? (err as Error).message
+          : 'Error al actualizar el mazo'
+        showSaveQuestionFeedback('error', motivo)
       } finally {
         setPendingDeckKeys((prev) => {
           const next = { ...prev }

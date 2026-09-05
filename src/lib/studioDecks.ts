@@ -89,6 +89,28 @@ export async function fetchStudioDeckItems(
   return []
 }
 
+// Error de la API de mazos que conserva el motivo real. Sin esto, el cliente
+// solo sabia "ha fallado algo": el tope del mazo (400 con limitReached) se
+// mostraba igual que una caida de red, asi que el usuario veia "error al
+// actualizar el mazo" sin entender que su mazo estaba lleno.
+export type StudioDeckError = Error & { limitReached?: boolean }
+
+async function throwStudioError(res: Response, fallback: string): Promise<never> {
+  const payload = (await res.json().catch(() => null)) as {
+    error?: string
+    limitReached?: boolean
+  } | null
+
+  // El mensaje del servidor ya viene escrito para el usuario y lleva el limite
+  // real, que es configurable: mejor mostrarlo que reescribirlo aqui y que se
+  // queden desincronizados.
+  const err = new Error(payload?.error?.trim() || fallback) as StudioDeckError
+
+  if (payload?.limitReached) err.limitReached = true
+
+  throw err
+}
+
 export async function addQuestionToDeck(
   token: string,
   deckId: string,
@@ -102,7 +124,7 @@ export async function addQuestionToDeck(
     },
     body: JSON.stringify({ questionIds: [questionId] }),
   })
-  if (!res.ok) throw new Error('Error saving question')
+  if (!res.ok) await throwStudioError(res, 'Error saving question')
 
   // El backend devuelve un mapa question_id -> item_id de lo guardado. Se
   // extrae el de esta pregunta para poder deshacer sin tener que releerse el

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseBrowser'
 import {
   type StudioDeck,
+  type StudioDeckError,
   addQuestionToDeck,
   createStudioDeck,
   fetchStudioDecks,
@@ -168,7 +169,12 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
         showFeedback('success', `Añadida a ${deckName}`)
       } catch (err) {
         console.error(err)
-        showFeedback('error', 'Error al actualizar el mazo')
+        // El mazo lleno no es un fallo tecnico: se dice lo que pasa, con el
+        // limite real que manda el servidor.
+        const motivo = (err as StudioDeckError | null)?.limitReached
+          ? (err as Error).message
+          : 'Error al actualizar el mazo'
+        showFeedback('error', motivo)
       } finally {
         setPendingDecks((prev) => {
           const next = { ...prev }
