@@ -115,7 +115,7 @@ export default function SimulacroRunner({
       {/* Barra superior */}
       {/* Barra de sesión: salir, modo y progreso en una pieza que acompaña */}
       <div
-        className="sticky top-4 z-30 mb-8 rounded-2xl border-2 border-[#2c3e50] bg-white px-4 py-3"
+        className="sticky top-4 z-30 mb-8 [@media(max-height:850px)]:mb-5 rounded-2xl border-2 border-[#2c3e50] bg-white px-4 py-3"
         style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
       >
         <div className="flex flex-wrap items-center gap-3">
@@ -148,7 +148,7 @@ export default function SimulacroRunner({
         </div>
       </div>
 
-      <div className="w-full space-y-8">
+      <div className="w-full space-y-8 [@media(max-height:850px)]:space-y-5">
         <div className="relative pr-14">
           {current ? (
             <div className="absolute right-0 top-0">
@@ -156,11 +156,11 @@ export default function SimulacroRunner({
             </div>
           ) : null}
           {current?.subject ? (
-            <span className="mb-6 inline-block rounded-full border-2 border-[#EAE4E2] bg-white px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#7D8A96]">
+            <span className="mb-6 [@media(max-height:850px)]:mb-3 inline-block rounded-full border-2 border-[#EAE4E2] bg-white px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#7D8A96]">
               {current.subject}
             </span>
           ) : null}
-          <h1 className="text-[1.75rem] font-black leading-tight tracking-tight text-[#2C3E50] sm:text-[2rem]">
+          <h1 className="text-[1.75rem] font-black leading-tight tracking-tight text-[#2C3E50] md:text-[clamp(1.6rem,2.22vw,2rem)]">
             {current?.statement}
           </h1>
           {current?.has_image && current?.image_url ? (
@@ -194,7 +194,7 @@ export default function SimulacroRunner({
           ) : null}
         </div>
 
-        <div className="grid gap-4">
+        <div className="grid gap-4 [@media(max-height:850px)]:gap-3">
           {current?.options.map((option, optionIndex) => {
             const isSelected = selected === optionIndex
             const isCorrect = optionIndex === correctIndex
@@ -225,7 +225,7 @@ export default function SimulacroRunner({
                 type="button"
                 disabled={locked}
                 onClick={() => onSelect(index, optionIndex, secondsOnQuestion())}
-                className={`group flex items-center rounded-2xl border-2 p-5 text-left transition-all duration-200 disabled:cursor-default disabled:hover:translate-y-0 ${containerClass}`}
+                className={`group flex items-center rounded-2xl border-2 p-5 [@media(max-height:850px)]:p-4 text-left transition-all duration-200 disabled:cursor-default disabled:hover:translate-y-0 ${containerClass}`}
                 style={shadow ? { boxShadow: shadow } : undefined}
               >
                 <div

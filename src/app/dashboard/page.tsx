@@ -2325,8 +2325,8 @@ export default function DashboardPage() {
           }`}
         ></div>
 
-        <div className="text-center max-w-2xl mx-auto mb-10 hub-anim hub-anim-delay-2">
-          <h2 className="text-4xl md:text-5xl font-bold text-gray-800 mb-4 tracking-tight">
+        <div className="text-center max-w-2xl mx-auto mb-10 [@media(max-height:850px)]:mb-5 hub-anim hub-anim-delay-2">
+          <h2 className="text-4xl md:text-5xl [@media(max-height:850px)]:md:text-4xl font-bold text-gray-800 mb-4 [@media(max-height:850px)]:mb-2 tracking-tight">
             Tu Sobre de Hoy
           </h2>
           <p className="text-[#7D8A96] text-lg">
@@ -2336,13 +2336,13 @@ export default function DashboardPage() {
 
         <div
           ref={deckSectionRef}
-          className={`relative w-full max-w-5xl flex flex-col items-center justify-center mb-10 hub-anim hub-anim-delay-3 ${
+          className={`relative w-full max-w-5xl flex flex-col items-center justify-center mb-10 [@media(max-height:850px)]:mb-5 hub-anim hub-anim-delay-3 ${
             isEnvelopeOpening || showSubjectBurst ? 'z-[70]' : 'z-30'
           }`}
         >
           <div className="absolute -top-36 -left-80 md:-left-[30rem] w-[520px] md:w-[700px] h-[520px] md:h-[700px] rounded-[88px] bg-gradient-to-br from-[#E8A598]/70 via-[#F08D75]/40 to-[#F8C7A6]/20 hub-blob pointer-events-none -z-10"></div>
           <div className="absolute -bottom-44 -right-80 md:-right-[32rem] w-[560px] md:w-[740px] h-[560px] md:h-[740px] rounded-[96px] bg-gradient-to-tr from-[#F6D87A]/60 via-[#F9E3A2]/40 to-[#FFF1C9]/20 hub-blob-alt pointer-events-none -z-10"></div>
-          <div className="relative w-full flex justify-center items-center h-[420px] mb-8 group/deck z-40">
+          <div className="relative w-full flex justify-center items-center h-[420px] md:h-[min(26.25rem,44vh)] mb-8 [@media(max-height:850px)]:mb-4 group/deck z-40">
             <button
               type="button"
               onClick={rotateLeft}
@@ -2395,7 +2395,7 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={deck.id}
-                    className={`${baseClasses} ${positionClasses} ${roleClasses} w-72 md:w-80 aspect-[3/4] flex flex-col mx-auto cursor-pointer deck-idle transition-[filter,opacity,transform] duration-500 ${
+                    className={`${baseClasses} ${positionClasses} ${roleClasses} w-72 md:w-[min(20rem,33vh)] aspect-[3/4] flex flex-col mx-auto cursor-pointer deck-idle transition-[filter,opacity,transform] duration-500 ${
                       isEnvelopeOpening || showSubjectBurst ? 'blur-[4px] opacity-70 scale-[0.985]' : ''
                     }`}
                     style={
@@ -2452,7 +2452,7 @@ export default function DashboardPage() {
               return (
                 <div
                   key={deck.id}
-                  className={`${baseClasses} ${positionClasses} ${roleClasses} w-56 aspect-[3/4] hidden sm:flex flex-col cursor-pointer deck-idle`}
+                  className={`${baseClasses} ${positionClasses} ${roleClasses} w-56 md:w-[min(14rem,23vh)] aspect-[3/4] hidden sm:flex flex-col cursor-pointer deck-idle`}
                   style={
                     {
                       '--deck-delay': `${(deckIndex * 0.25).toFixed(2)}s`,
