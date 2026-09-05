@@ -9,6 +9,10 @@ export type StudioDeck = {
   auto_type?: string | null
   description?: string | null
   banner_gradient?: string | null
+  // Solo viene cuando se piden los mazos con `questionId`: el id de la fila si
+  // esa pregunta ya esta guardada en este mazo, o null si no. Sin el parametro
+  // el campo no existe.
+  saved_item_id?: string | number | null
 }
 
 // Límite de producto para la bio corta del mazo (la columna en BD es texto
@@ -41,8 +45,25 @@ function apiBase(): string {
   return apiUrl
 }
 
-export async function fetchStudioDecks(token: string): Promise<StudioDeck[]> {
-  const res = await fetch(`${apiBase()}/api/studio/decks`, {
+// Con `questionId` cada mazo vuelve anotado con `saved_item_id`, que responde
+// de una sola vez a "en que mazos esta esta pregunta". Sin el parametro la
+// respuesta es la de siempre.
+//
+// Antes esa pregunta se contestaba en el cliente: se pedian los items de TODOS
+// los mazos y se buscaba a mano. Medido en la galeria de un usuario con 13
+// mazos, abrir el selector costaba 13 peticiones, y a peor cuanto mas grande
+// la biblioteca.
+export async function fetchStudioDecks(
+  token: string,
+  options?: { questionId?: string | number | null },
+): Promise<StudioDeck[]> {
+  const questionId = options?.questionId
+  const qs =
+    questionId != null && String(questionId).trim() !== ''
+      ? `?questionId=${encodeURIComponent(String(questionId))}`
+      : ''
+
+  const res = await fetch(`${apiBase()}/api/studio/decks${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok) throw new Error('Error loading decks')
@@ -68,7 +89,11 @@ export async function fetchStudioDeckItems(
   return []
 }
 
-export async function addQuestionToDeck(token: string, deckId: string, questionId: string) {
+export async function addQuestionToDeck(
+  token: string,
+  deckId: string,
+  questionId: string,
+): Promise<string | null> {
   const res = await fetch(`${apiBase()}/api/studio/decks/${deckId}/items`, {
     method: 'POST',
     headers: {
@@ -78,7 +103,18 @@ export async function addQuestionToDeck(token: string, deckId: string, questionI
     body: JSON.stringify({ questionIds: [questionId] }),
   })
   if (!res.ok) throw new Error('Error saving question')
-  return res.json().catch(() => null)
+
+  // El backend devuelve un mapa question_id -> item_id de lo guardado. Se
+  // extrae el de esta pregunta para poder deshacer sin tener que releerse el
+  // mazo entero. Si el backend fuese anterior a ese cambio, devuelve null y
+  // quien llame ya se apanara como antes.
+  const payload = (await res.json().catch(() => null)) as {
+    items?: Record<string, string | number>
+  } | null
+
+  const itemId = payload?.items?.[String(questionId)]
+
+  return itemId != null ? String(itemId) : null
 }
 
 export async function removeQuestionFromDeck(token: string, deckId: string, itemId: string) {

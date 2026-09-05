@@ -6,7 +6,6 @@ import {
   type StudioDeck,
   addQuestionToDeck,
   createStudioDeck,
-  fetchStudioDeckItems,
   fetchStudioDecks,
   isAutoFailedDeck,
   removeQuestionFromDeck,
@@ -86,22 +85,20 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
     return session?.access_token ?? null
   }, [])
 
-  const loadMembership = useCallback(
-    async (token: string, deckList: StudioDeck[]) => {
-      const results = await Promise.all(
-        deckList.map(async (deck) => {
-          const deckId = String(deck.id)
-          const items = await fetchStudioDeckItems(token, deckId)
-          const matched = items.find((item) => {
-            const itemQuestionId = item.question_id ?? item.questionId
-            return itemQuestionId != null && String(itemQuestionId) === qid
-          })
-          return [deckId, matched ? String(matched.id) : null] as const
-        }),
-      )
-      setMembership(Object.fromEntries(results.map(([deckId, itemId]) => [deckId, Boolean(itemId)])))
+  // Los mazos ya vienen anotados con `saved_item_id` (una sola peticion, ver
+  // fetchStudioDecks). Antes esto lanzaba una peticion POR MAZO y buscaba la
+  // pregunta en el cliente.
+  const applyMembership = useCallback(
+    (deckList: StudioDeck[]) => {
+      const entries = deckList.map((deck) => {
+        const deckId = String(deck.id)
+        const savedItemId = deck.saved_item_id
+        return [deckId, savedItemId != null ? String(savedItemId) : null] as const
+      })
+
+      setMembership(Object.fromEntries(entries.map(([deckId, itemId]) => [deckId, Boolean(itemId)])))
       setItemIds(
-        Object.fromEntries(results.filter(([, itemId]) => Boolean(itemId)) as Array<[string, string]>),
+        Object.fromEntries(entries.filter(([, itemId]) => Boolean(itemId)) as Array<[string, string]>),
       )
       setMembershipQuestion(qid)
     },
@@ -122,15 +119,14 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
     setAuthed(true)
     try {
       setLoadingDecks(true)
-      let deckList = decks
-      if (!deckList) {
-        deckList = (await fetchStudioDecks(token)).filter(
+      // Una peticion para todo. Solo se repite si cambia la pregunta; si ya se
+      // sabe donde esta, se reutiliza lo que hay.
+      if (membershipQuestion !== qid || !decks) {
+        const deckList = (await fetchStudioDecks(token, { questionId: qid })).filter(
           (deck) => deck.deleted_at == null && !isAutoFailedDeck(deck),
         )
         setDecks(deckList)
-      }
-      if (membershipQuestion !== qid) {
-        await loadMembership(token, deckList)
+        applyMembership(deckList)
       }
     } catch (err) {
       console.error(err)
@@ -138,7 +134,7 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
     } finally {
       setLoadingDecks(false)
     }
-  }, [open, decks, getToken, loadMembership, membershipQuestion, qid, showFeedback])
+  }, [open, decks, getToken, applyMembership, membershipQuestion, qid, showFeedback])
 
   const handleToggleInDeck = useCallback(
     async (deckId: string, deckName: string) => {
@@ -164,14 +160,11 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
           return
         }
 
-        await addQuestionToDeck(token, deckId, qid)
-        const items = await fetchStudioDeckItems(token, deckId)
-        const matched = items.find((item) => {
-          const itemQuestionId = item.question_id ?? item.questionId
-          return itemQuestionId != null && String(itemQuestionId) === qid
-        })
+        // El POST ya devuelve el id de la fila, asi que no hace falta releerse
+        // el mazo entero solo para poder deshacer.
+        const savedItemId = await addQuestionToDeck(token, deckId, qid)
         setMembership((prev) => ({ ...prev, [deckId]: true }))
-        if (matched) setItemIds((prev) => ({ ...prev, [deckId]: String(matched.id) }))
+        if (savedItemId) setItemIds((prev) => ({ ...prev, [deckId]: savedItemId }))
         showFeedback('success', `Añadida a ${deckName}`)
       } catch (err) {
         console.error(err)

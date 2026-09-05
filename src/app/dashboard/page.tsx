@@ -567,13 +567,9 @@ export default function DashboardPage() {
           return
         }
 
-        await addQuestionToDeck(session.access_token, deckId, questionId)
-
-        const itemsAfterSave = await fetchStudioDeckItems(session.access_token, deckId)
-        const matchedAfterSave = itemsAfterSave.find((item) => {
-          const itemQuestionId = item.question_id ?? item.questionId
-          return itemQuestionId != null && String(itemQuestionId) === questionId
-        })
+        // El POST ya devuelve el id de la fila guardada, asi que no hace falta
+        // volver a leerse el mazo entero solo para poder deshacer.
+        const savedItemId = await addQuestionToDeck(session.access_token, deckId, questionId)
 
         setSavedQuestionIds((prev) => ({ ...prev, [questionId]: true }))
         setQuestionDeckMembership((prev) => ({
@@ -583,12 +579,12 @@ export default function DashboardPage() {
             [deckId]: true,
           },
         }))
-        if (matchedAfterSave) {
+        if (savedItemId) {
           setQuestionDeckItemIds((prev) => ({
             ...prev,
             [questionId]: {
               ...(prev[questionId] ?? {}),
-              [deckId]: String(matchedAfterSave.id),
+              [deckId]: savedItemId,
             },
           }))
         }
@@ -620,19 +616,19 @@ export default function DashboardPage() {
 
         if (!session) return
 
-        const results = await Promise.all(
-          decks
-            .filter((deck) => !isAutoFailedDeck(deck))
-            .map(async (deck) => {
+        // Los mazos vuelven anotados con `saved_item_id`: una sola peticion
+        // contesta "en que mazos esta esta pregunta". Antes se pedian los
+        // items de CADA mazo y se buscaba en el cliente, asi que abrir el
+        // selector costaba tantas peticiones como mazos tuviera el usuario.
+        const annotated = await fetchStudioDecks(session.access_token, { questionId })
+
+        const results = annotated
+          .filter((deck) => deck.deleted_at == null && !isAutoFailedDeck(deck))
+          .map((deck) => {
             const deckId = String(deck.id)
-            const items = await fetchStudioDeckItems(session.access_token, deckId)
-            const matched = items.find((item) => {
-              const itemQuestionId = item.question_id ?? item.questionId
-              return itemQuestionId != null && String(itemQuestionId) === questionId
-            })
-            return [deckId, matched ? String(matched.id) : null] as const
-          }),
-        )
+            const savedItemId = deck.saved_item_id
+            return [deckId, savedItemId != null ? String(savedItemId) : null] as const
+          })
 
         const membershipMap = Object.fromEntries(
           results.map(([deckId, itemId]) => [deckId, Boolean(itemId)]),
