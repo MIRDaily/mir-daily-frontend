@@ -85,12 +85,81 @@ function buildQuickStats(
   ]
 }
 
-const weakPointCard: OverviewCard = {
-  title: 'Punto Débil Detectado',
-  value: 'Digestivo',
-  description: 'Precisión baja en patología esofágica (45%).',
-  icon: 'priority_high',
-  tone: 'error',
+/** El punto débil que ya viene resuelto en el desafío personalizado. */
+type PuntoDebil = { tema: string; asignatura: string; precision: number | null }
+
+/* El punto débil, del heatmap real.
+
+   Hasta el 08-09-2026 esta tarjeta era una cadena escrita a mano que decía
+   "Digestivo · Precisión baja en patología esofágica (45%)" a todo el mundo.
+   Nadie podía comprobar que mentía hasta que el desafío personalizado del
+   perfil empezó a enseñar el punto débil DE VERDAD: el producto se contradecía
+   a sí mismo, y una de las dos respuestas era inventada.
+
+   El dato NO se pide aparte: sale del propio desafío "Ataca tu punto débil",
+   que ya lo trae resuelto en su meta. Al primer intento se conectó a
+   analytics_weak_points, que parecía el sitio natural, y el resultado fue que
+   la tarjeta y el desafío señalaban temas DISTINTOS: aquel endpoint no exige
+   un mínimo de intentos y mirdaily_weak_topic sí (ocho), así que la tarjeta
+   se iba a temas con seis respuestas, donde un 33% es ruido y no un punto
+   débil. Dos definiciones de lo mismo vuelven a ser una contradicción, aunque
+   las dos salgan de datos reales. Una sola fuente, y de paso una petición
+   menos. */
+function buildWeakPointCard(
+  topic: PuntoDebil | null,
+  loading: boolean,
+): OverviewCard {
+  const base = { title: 'Punto Débil Detectado', icon: 'priority_high', tone: 'error' as const }
+
+  if (!topic) {
+    return {
+      ...base,
+      value: '—',
+      description: loading
+        ? 'Buscando dónde flojeas…'
+        : 'Responde unas cuantas preguntas y aquí saldrá tu tema más flojo.',
+    }
+  }
+
+  const pct = topic.precision == null ? null : Math.round(topic.precision)
+
+  return {
+    ...base,
+    value: topic.asignatura,
+    description:
+      pct == null
+        ? `Tu tema más flojo ahora mismo es ${topic.tema}.`
+        : `${topic.tema}: ${pct}% de acierto en los últimos 30 días.`,
+  }
+}
+
+/* La tarjeta destacada prometía "IA Predictiva" y nombraba dos asignaturas
+   fijas. El motor predictivo está especificado pero NO implementado, así que
+   se le quita el nombre que no le corresponde y se describe lo que de verdad
+   hace: un simulacro centrado en lo que peor llevas, según el heatmap. */
+function buildFeaturedCard(topic: PuntoDebil | null): StudioCard {
+  const base = {
+    id: 'simulacros',
+    icon: 'psychology_alt',
+    cta: 'Generar sesión personalizada',
+    badge: 'RECOMENDADO',
+    type: 'featured' as const,
+  }
+
+  if (!topic) {
+    return {
+      ...base,
+      title: 'Simulacro a tu medida',
+      description:
+        'Cuando tengamos datos de tus fallos, te propondremos aquí una sesión centrada en ellos.',
+    }
+  }
+
+  return {
+    ...base,
+    title: 'Simulacro a tu medida',
+    description: `Una sesión de 30 preguntas centrada en ${topic.tema}, de ${topic.asignatura}, que es donde peor vas ahora mismo.`,
+  }
 }
 
 // "Progreso Mensual" con datos reales: preguntas repasadas en los últimos 30
@@ -130,17 +199,7 @@ function buildProgressCard(
   }
 }
 
-const studioCards: ReadonlyArray<StudioCard> = [
-  {
-    id: 'simulacros',
-    icon: 'psychology_alt',
-    title: 'Simulacro Inteligente',
-    description:
-      'IA Predictiva: Te sugerimos una sesión de 30 preguntas centrada en tus fallos recientes de Digestivo y Cardiología.',
-    cta: 'Generar sesión personalizada',
-    badge: 'RECOMENDADO',
-    type: 'featured',
-  },
+const studioCardsBase: ReadonlyArray<StudioCard> = [
   {
     id: 'preguntas-simulacros',
     icon: 'quiz',
@@ -249,12 +308,31 @@ export default function StudioPage() {
   const monthlyProgress = useMonthlyProgress(Boolean(user))
   const levelProgress = useProgressContext()
 
+  // Del desafío personalizado, que ya lo trae resuelto: misma fuente que el
+  // perfil, así que las dos pantallas no pueden decir cosas distintas.
+  const weakTopic = useMemo<PuntoDebil | null>(() => {
+    const meta = levelProgress.data?.daily.find((c) => c.metric === 'weak_topic_questions')?.meta
+    const tema = typeof meta?.topic_name === 'string' ? meta.topic_name : null
+    if (!tema) return null
+    const precision = typeof meta?.accuracy === 'number' ? meta.accuracy : null
+    return {
+      tema,
+      asignatura: typeof meta?.subject_name === 'string' ? meta.subject_name : '',
+      precision,
+    }
+  }, [levelProgress.data])
+
   const overviewCards = useMemo<ReadonlyArray<OverviewCard>>(
     () => [
       buildProgressCard(monthlyProgress.data, monthlyProgress.loading || loading),
-      weakPointCard,
+      buildWeakPointCard(weakTopic, levelProgress.loading || loading),
     ],
-    [monthlyProgress.data, monthlyProgress.loading, loading],
+    [monthlyProgress.data, monthlyProgress.loading, loading, weakTopic, levelProgress.loading],
+  )
+
+  const studioCards = useMemo<ReadonlyArray<StudioCard>>(
+    () => [buildFeaturedCard(weakTopic), ...studioCardsBase],
+    [weakTopic],
   )
 
   useLayoutEffect(() => {
