@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import ProfileOverview from '@/components/Profile/ProfileOverview'
+import SettingsCard from '@/components/Profile/SettingsCard'
 import { getOnboardingDeferredFlag } from '@/lib/onboarding'
 
-export default function ProfilePage() {
+export default function ConfiguracionPage() {
   const router = useRouter()
 
   useEffect(() => {
@@ -32,7 +33,20 @@ export default function ProfilePage() {
       <div className="pointer-events-none fixed bottom-[-14%] left-[-8%] z-0 h-[26rem] w-[26rem] rounded-full bg-[#7BA7C4]/10 blur-3xl" />
 
       <main className="relative z-10 mx-auto w-full max-w-6xl px-5 py-8 sm:px-6">
-        <ProfileOverview />
+        <header className="mb-7">
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7D8A96]/80">
+            Tu cuenta
+          </p>
+          <h1 className="mt-1 text-3xl font-black tracking-tight text-[#2C3E50]">Configuración</h1>
+          <p className="mt-1 text-sm text-[#7D8A96]">
+            Todo lo que puedes cambiar de MIRDaily.{' '}
+            <Link href="/profile" className="font-bold text-[#C4655A] underline-offset-2 hover:underline">
+              Volver al perfil
+            </Link>
+          </p>
+        </header>
+
+        <SettingsCard />
       </main>
     </div>
   )

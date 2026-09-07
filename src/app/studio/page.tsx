@@ -7,8 +7,7 @@ import { debugRender } from '@/lib/debugRSC'
 import { useAuth } from '@/hooks/useAuth'
 import { useMonthlyProgress } from '@/hooks/useAnalytics'
 import { useProgressContext } from '@/providers/ProgressProvider'
-import LevelCard from '@/components/progress/LevelCard'
-import ChallengesSection from '@/components/progress/ChallengesSection'
+import StreakFlame from '@/components/progress/StreakFlame'
 import type { MonthlyProgressResponse } from '@/services/analyticsService'
 import { SingleSheetArt, StackedSheetsArt } from '@/components/studio/SimulacrosHoverArt'
 import { DeckArt } from '@/components/studio/MazosHoverArt'
@@ -22,6 +21,8 @@ type QuickStat = {
   value: string
   icon: string
   iconClass: string
+  /** La racha se pinta con la llama, no con un icono dentro de un círculo. */
+  flame?: number
 }
 
 type OverviewCard = {
@@ -69,6 +70,7 @@ function buildQuickStats(
           : `${progress.currentStreak} ${progress.currentStreak === 1 ? 'día' : 'días'}`,
       icon: 'local_fire_department',
       iconClass: 'bg-[#e6f4ea] text-[#8BA888]',
+      flame: progress?.currentStreak ?? 0,
     },
     {
       label: 'XP hoy',
@@ -363,9 +365,13 @@ export default function StudioPage() {
                   {...entranceProps(reduceMotion, 0.18 + index * 0.06, 16, 0.98)}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`rounded-full p-1.5 ${stat.iconClass}`}>
-                      <span className="material-symbols-outlined text-xl">{stat.icon}</span>
-                    </div>
+                    {stat.flame === undefined ? (
+                      <div className={`rounded-full p-1.5 ${stat.iconClass}`}>
+                        <span className="material-symbols-outlined text-xl">{stat.icon}</span>
+                      </div>
+                    ) : (
+                      <StreakFlame streak={stat.flame} size={30} />
+                    )}
                     <div>
                       <p className="text-xs font-medium uppercase tracking-wide">{stat.label}</p>
                       <p className="text-base font-bold text-[#2c3e50]">{stat.value}</p>
@@ -374,32 +380,6 @@ export default function StudioPage() {
                 </motion.div>
               ))}
             </div>
-          </motion.section>
-
-          {/* Nivel y desafíos. Va lo primero a propósito: es el bloque que
-              contesta "¿qué hago hoy?", y el usuario debería toparse con él
-              antes que con las métricas de las que no puede hacer nada. */}
-          <motion.section
-            className="flex flex-col gap-6"
-            {...entranceProps(reduceMotion, 0.16, 16, 0.99, 4)}
-          >
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center">
-                <span className="material-symbols-outlined">military_tech</span>
-              </span>
-              <h2 className="text-xl font-bold text-[#2c3e50]">Tu Progreso</h2>
-            </div>
-
-            <LevelCard
-              progress={levelProgress.data?.progress ?? null}
-              loading={levelProgress.loading}
-            />
-
-            <ChallengesSection
-              daily={levelProgress.data?.daily ?? []}
-              weekly={levelProgress.data?.weekly ?? []}
-              loading={levelProgress.loading}
-            />
           </motion.section>
 
           <motion.section {...entranceProps(reduceMotion, 0.18, 16, 0.99, 4)}>

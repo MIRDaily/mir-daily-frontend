@@ -51,8 +51,10 @@ export default function AppHeader({
   const { unreadCount, refreshUnreadCount } = useNotificationsContext()
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+  const [isChallengesOpen, setIsChallengesOpen] = useState(false)
   const notificationRef = useRef<HTMLDivElement | null>(null)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
+  const challengesRef = useRef<HTMLDivElement | null>(null)
   const profileHref = getOnboardingDeferredFlag() ? '/onboarding' : '/profile'
 
   useEffect(() => {
@@ -69,11 +71,18 @@ export default function AppHeader({
       ) {
         setIsProfileMenuOpen(false)
       }
+      if (
+        challengesRef.current &&
+        !challengesRef.current.contains(event.target as Node)
+      ) {
+        setIsChallengesOpen(false)
+      }
     }
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsNotificationOpen(false)
         setIsProfileMenuOpen(false)
+        setIsChallengesOpen(false)
       }
     }
     document.addEventListener('mousedown', handlePointerDown)
@@ -189,7 +198,16 @@ export default function AppHeader({
           </div>
         </LayoutGroup>
         <div className="flex items-center gap-2 sm:gap-4">
-          <HeaderLevelBadge />
+          <HeaderLevelBadge
+            open={isChallengesOpen}
+            containerRef={challengesRef}
+            onToggle={() => {
+              setIsNotificationOpen(false)
+              setIsProfileMenuOpen(false)
+              setIsChallengesOpen((prev) => !prev)
+            }}
+            onClose={() => setIsChallengesOpen(false)}
+          />
           <div className="relative" ref={notificationRef}>
             <button
               type="button"
@@ -197,6 +215,7 @@ export default function AppHeader({
               aria-expanded={isNotificationOpen}
               onClick={() => {
                 setIsProfileMenuOpen(false)
+                setIsChallengesOpen(false)
                 setIsNotificationOpen((prev) => !prev)
               }}
               className={`relative size-10 rounded-full border-2 border-white shadow-[0_10px_22px_rgba(125,138,150,0.2),inset_0_1px_0_rgba(255,255,255,0.9)] flex items-center justify-center transition-all duration-150 active:scale-95 active:translate-y-0 focus:outline-none focus:ring-2 focus:ring-[#E8A598]/30 ${

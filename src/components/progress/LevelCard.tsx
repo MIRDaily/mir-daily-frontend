@@ -3,6 +3,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import type { ProgressSummary } from '@/services/progressService'
 import { nextRank, rankForLevel } from '@/lib/levels'
+import StreakFlame from '@/components/progress/StreakFlame'
 
 const numberFormat = new Intl.NumberFormat('es-ES')
 
@@ -114,11 +115,7 @@ export default function LevelCard({ progress, loading = false }: Props) {
       {/* Pie: racha, multiplicador y tope diario */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-[#EAE4E2] bg-[#FBF9F8] px-6 py-3">
         <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#feefc3]">
-            <span className="material-symbols-outlined text-[18px] text-[#ea8600]">
-              local_fire_department
-            </span>
-          </span>
+          <StreakFlame streak={progress.currentStreak} size={26} />
           <span className="text-sm text-[#2c3e50]">
             <strong>{progress.currentStreak}</strong>{' '}
             {progress.currentStreak === 1 ? 'día' : 'días'} de racha

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { motion, useReducedMotion } from 'framer-motion'
 import { useProgressContext } from '@/providers/ProgressProvider'
 import { rankForLevel } from '@/lib/levels'
+import StreakFlame from '@/components/progress/StreakFlame'
 
 const numberFormat = new Intl.NumberFormat('es-ES')
 
@@ -70,11 +71,7 @@ export default function DailyXpBanner() {
             <span className="text-sm font-medium text-[#7D8A96]">{rank.name}</span>
             {progress.currentStreak > 0 ? (
               <span className="flex items-center gap-1 text-sm font-medium text-[#7D8A96]">
-                <span className="flex h-4 w-4 items-center justify-center">
-                  <span className="material-symbols-outlined text-[16px] text-[#ea8600]">
-                    local_fire_department
-                  </span>
-                </span>
+                <StreakFlame streak={progress.currentStreak} size={20} />
                 {progress.currentStreak} {progress.currentStreak === 1 ? 'día' : 'días'} de racha
               </span>
             ) : null}

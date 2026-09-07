@@ -15,6 +15,7 @@ function shouldShowHeader(pathname: string): boolean {
     pathname.startsWith('/decks') ||
     pathname.startsWith('/session') ||
     pathname.startsWith('/profile') ||
+    pathname.startsWith('/configuracion') ||
     pathname.startsWith('/notifications') ||
     pathname.startsWith('/zen') ||
     pathname.startsWith('/versus') ||

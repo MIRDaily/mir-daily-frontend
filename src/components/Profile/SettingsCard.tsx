@@ -1,25 +1,26 @@
 'use client'
 
 /* ════════════════════════════════════════════════════════════════════════
-   Perfil de usuario.
+   Configuración: TODO lo que se puede tocar de la cuenta.
 
-   Rediseñado con el lenguaje compartido de la web (borde de tinta, sombra
-   dura, textura temática): la portada es el carné —ver `ProfileHero`— y
-   debajo quedan las dos cosas que se editan en línea, nombre visible y
-   username, más la galería de avatares. El resto del carné (bio, objetivo,
-   curso, especialidad, universidad y visibilidad) se edita en el modal de
-   `AcademicEditor`, contra `PATCH /api/profile/academic`.
+   Antes vivía en /profile mezclado con el carné. Se separó porque el perfil
+   pasó a ser la pantalla de "cómo voy" (carné + nivel + desafíos) y mezclar
+   ahí los ajustes hacía que la página tuviera dos trabajos a la vez.
 
-   Cambio de uso, no solo de estilo: el username se comprueba mientras se
-   escribe (mismo endpoint que el onboarding), así el usuario sabe si está
-   libre ANTES de gastar el cambio, que queda bloqueado una temporada.
+   Reúne identidad (nombre visible y username), la galería de avatares, los
+   datos del carné —bio, objetivo, curso, especialidad, universidad y
+   visibilidad, que se editan en el modal de `AcademicEditor` contra
+   `PATCH /api/profile/academic`— y las preferencias de la web.
+
+   El username se comprueba mientras se escribe (mismo endpoint que el
+   onboarding), así el usuario sabe si está libre ANTES de gastar el cambio,
+   que queda bloqueado una temporada.
 ═══════════════════════════════════════════════════════════════════════════ */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import AcademicEditor from '@/components/Profile/AcademicEditor'
 import AvatarSelector from '@/components/Profile/AvatarSelector'
-import ProfileHero from '@/components/Profile/ProfileHero'
 import {
   DocChip,
   GhostButton,
@@ -46,11 +47,6 @@ type ToastState = {
 /** Estado de la comprobación de username mientras se escribe. */
 type UsernameCheck = 'idle' | 'current' | 'invalid' | 'checking' | 'available' | 'taken' | 'error'
 
-const MAIN_GOAL_LABEL: Record<'prepare_mir' | 'reinforce_degree' | 'explore', string> = {
-  prepare_mir: 'Preparar el MIR',
-  reinforce_degree: 'Reforzar la carrera',
-  explore: 'Explorar',
-}
 const COZY_CURSOR_STORAGE_KEY = 'mirdaily.cozyCursorEnabled'
 const COZY_CURSOR_EVENT = 'mirdaily:cozy-cursor'
 const USERNAME_CHECK_DELAY_MS = 450
@@ -82,26 +78,12 @@ function subscribeCozyCursor(onChange: () => void) {
   }
 }
 
-function formatMedicalYear(value: number | null | undefined) {
-  if (value === null || value === undefined) return 'Sin definir'
-  if (value === 0) return 'Médico graduado'
-  return `${value}º de Medicina`
-}
-
 /** Fecha corta y en castellano, igual en todo el perfil. */
 function formatDate(date: Date) {
   return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-/** Días desde el alta, para el chip del carné. */
-function daysSince(iso: string | null | undefined) {
-  if (!iso) return 0
-  const from = new Date(iso).getTime()
-  if (!Number.isFinite(from)) return 0
-  return Math.max(0, Math.floor((Date.now() - from) / 86400000))
-}
-
-export default function ProfileCard() {
+export default function SettingsCard() {
   const {
     profile,
     loading,
@@ -137,7 +119,6 @@ export default function ProfileCard() {
     readCozyCursor,
     () => true,
   )
-  const avatarSectionRef = useRef<HTMLDivElement | null>(null)
   const usernameRequestSeq = useRef(0)
 
   useEffect(() => {
@@ -273,13 +254,6 @@ export default function ProfileCard() {
       }
     }, [isUsernameLocked, usernameCheck])
 
-  /* ─── Etiquetas del carné ────────────────────────────────────────────── */
-
-  const createdAtText = profile?.created_at ? formatDate(new Date(profile.created_at)) : '—'
-  const goalLabel = profile?.main_goal ? MAIN_GOAL_LABEL[profile.main_goal] : 'Sin definir'
-  const universityLabel = profile?.university?.name ?? 'Sin universidad'
-  const specialtyLabel = profile?.mir_specialty?.name ?? 'Sin definir'
-
   /* ─── Acciones ───────────────────────────────────────────────────────── */
 
   const openNameEditor = () => {
@@ -361,17 +335,6 @@ export default function ProfileCard() {
     setToast({ type: 'error', message: result.error ?? 'No se pudieron guardar los datos.' })
   }
 
-  // La foto del carné es un atajo al selector: se baja hasta la galería y se
-  // marca un instante para que se vea a dónde ha ido la página.
-  const scrollToAvatars = useCallback(() => {
-    const node = avatarSectionRef.current
-    if (!node) return
-    const reduced =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    node.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' })
-  }, [])
-
   /* ─── Estados de carga y error ───────────────────────────────────────── */
 
   if (loading) {
@@ -415,20 +378,6 @@ export default function ProfileCard() {
 
   return (
     <div className="space-y-7">
-      <ProfileHero
-        profile={profile}
-        onEditAvatar={scrollToAvatars}
-        avatarBusy={updatingAvatar}
-        onEditDetails={() => setIsEditingDetails(true)}
-        sheenPaused={isEditingDetails}
-        goalLabel={goalLabel}
-        yearLabel={formatMedicalYear(profile.medical_year)}
-        specialtyLabel={specialtyLabel}
-        universityLabel={universityLabel}
-        createdAtText={createdAtText}
-        daysWithUs={daysSince(profile.created_at)}
-      />
-
       <div className="grid gap-7 lg:grid-cols-[1.6fr_1fr] lg:items-start">
         {/* ─── Columna principal: lo que se edita ───────────────────────── */}
         <div className="min-w-0 space-y-7">
@@ -584,7 +533,7 @@ export default function ProfileCard() {
           </section>
 
           {/* Avatares */}
-          <section ref={avatarSectionRef}>
+          <section id="avatares" className="scroll-mt-28">
             <SectionLabel
               right={
                 updatingAvatar ? (
@@ -613,7 +562,10 @@ export default function ProfileCard() {
 
         {/* ─── Columna lateral: lo que solo se consulta ─────────────────── */}
         <aside className="min-w-0 space-y-6 lg:sticky lg:top-24">
-          <section>
+          {/* #datos: aquí aterriza el botón "Editar datos" del carné, que
+              vive en /profile. Se lleva al usuario hasta el botón en vez de
+              abrirle el modal de golpe. */}
+          <section id="datos" className="scroll-mt-28">
             <SectionLabel>Cuenta</SectionLabel>
             <StickerCard className="p-5" depth={4}>
               <div className="space-y-3">
