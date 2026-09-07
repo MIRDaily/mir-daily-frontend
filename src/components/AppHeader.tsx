@@ -9,7 +9,8 @@ import { getAvatarUrl } from '@/lib/avatar'
 import { getOnboardingDeferredFlag } from '@/lib/onboarding'
 import { supabase } from '@/lib/supabaseBrowser'
 import NotificationsPopup from '@/components/NotificationsPopup'
-import HeaderLevelBadge from '@/components/progress/HeaderLevelBadge'
+import HeaderStreakButton from '@/components/progress/HeaderStreakButton'
+import AvatarLevelRing from '@/components/progress/AvatarLevelRing'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
 import type { HeaderBackAction } from '@/providers/HeaderUIProvider'
 
@@ -198,7 +199,7 @@ export default function AppHeader({
           </div>
         </LayoutGroup>
         <div className="flex items-center gap-2 sm:gap-4">
-          <HeaderLevelBadge
+          <HeaderStreakButton
             open={isChallengesOpen}
             containerRef={challengesRef}
             onToggle={() => {
@@ -247,20 +248,20 @@ export default function AppHeader({
               }}
               className="flex w-[176px] items-center gap-2 rounded-full border-2 border-white shadow-[0_12px_26px_rgba(125,138,150,0.2),inset_0_1px_0_rgba(255,255,255,0.9)] cursor-pointer hover:ring-2 hover:ring-[#E8A598]/20 transition-all duration-150 active:scale-[0.98] active:translate-y-0 pl-1 pr-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#E8A598]/30 bg-white/90 hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(125,138,150,0.24),inset_0_1px_0_rgba(255,255,255,0.95)]"
             >
-              <div className="size-10 rounded-full overflow-hidden">
-                {profileLoading ? (
-                  <div className="size-10 rounded-full bg-gray-200 animate-pulse" />
-                ) : (
+              {profileLoading ? (
+                <div className="size-10 shrink-0 animate-pulse rounded-full bg-gray-200" />
+              ) : (
+                <AvatarLevelRing>
                   <Image
                     src={getAvatarUrl(profile?.avatar_id ?? 1)}
                     alt="Mi avatar"
                     title={profile?.display_name ?? 'Mi avatar'}
                     width={40}
                     height={40}
-                    className="size-10 rounded-full object-cover"
+                    className="size-full rounded-full object-cover"
                   />
-                )}
-              </div>
+                </AvatarLevelRing>
+              )}
               {profileLoading ? (
                 <span className="hidden sm:inline-block h-3 w-[108px] rounded-full bg-gray-200 animate-pulse" />
               ) : (
@@ -274,9 +275,9 @@ export default function AppHeader({
                 <Link className="block px-4 py-2 text-sm text-[#7D8A96] hover:bg-[#FAF7F4] hover:text-[#E8A598]" href={profileHref} onClick={() => setIsProfileMenuOpen(false)}>
                   Mi Perfil
                 </Link>
-                <a className="block px-4 py-2 text-sm text-[#7D8A96] hover:bg-[#FAF7F4] hover:text-[#E8A598]" href="#" onClick={() => setIsProfileMenuOpen(false)}>
+                <Link className="block px-4 py-2 text-sm text-[#7D8A96] hover:bg-[#FAF7F4] hover:text-[#E8A598]" href="/configuracion" onClick={() => setIsProfileMenuOpen(false)}>
                   Configuración
-                </a>
+                </Link>
                 <div className="border-t border-[#7D8A96]/10 my-1"></div>
                 <button
                   onClick={async () => {
