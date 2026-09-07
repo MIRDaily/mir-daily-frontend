@@ -6,6 +6,9 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { debugRender } from '@/lib/debugRSC'
 import { useAuth } from '@/hooks/useAuth'
 import { useMonthlyProgress } from '@/hooks/useAnalytics'
+import { useProgressContext } from '@/providers/ProgressProvider'
+import LevelCard from '@/components/progress/LevelCard'
+import ChallengesSection from '@/components/progress/ChallengesSection'
 import type { MonthlyProgressResponse } from '@/services/analyticsService'
 import { SingleSheetArt, StackedSheetsArt } from '@/components/studio/SimulacrosHoverArt'
 import { DeckArt } from '@/components/studio/MazosHoverArt'
@@ -49,20 +52,36 @@ type StudioCard = {
   linkTwo?: string
 }
 
-const quickStats: ReadonlyArray<QuickStat> = [
-  {
-    label: 'Racha',
-    value: '12 días',
-    icon: 'local_fire_department',
-    iconClass: 'bg-[#e6f4ea] text-[#8BA888]',
-  },
-  {
-    label: 'Hoy',
-    value: '4h 20m',
-    icon: 'timer',
-    iconClass: 'bg-[#feefc3] text-[#ea8600]',
-  },
-] as const
+const numberFormat = new Intl.NumberFormat('es-ES')
+
+// Antes estaban clavados a "12 días" y "4h 20m". La racha ya es un dato real;
+// el tiempo de estudio del día no se mide en ninguna parte, así que en su
+// hueco va el XP de hoy, que sí existe.
+function buildQuickStats(
+  progress: { currentStreak: number; xpToday: number; xpTodayTotal?: number } | null,
+): ReadonlyArray<QuickStat> {
+  return [
+    {
+      label: 'Racha',
+      value:
+        progress == null
+          ? '—'
+          : `${progress.currentStreak} ${progress.currentStreak === 1 ? 'día' : 'días'}`,
+      icon: 'local_fire_department',
+      iconClass: 'bg-[#e6f4ea] text-[#8BA888]',
+    },
+    {
+      label: 'XP hoy',
+      // El total del día, no lo que consume tope: los premios semanales cuentan.
+      value:
+        progress == null
+          ? '—'
+          : numberFormat.format(progress.xpTodayTotal ?? progress.xpToday),
+      icon: 'bolt',
+      iconClass: 'bg-[#feefc3] text-[#ea8600]',
+    },
+  ]
+}
 
 const weakPointCard: OverviewCard = {
   title: 'Punto Débil Detectado',
@@ -71,8 +90,6 @@ const weakPointCard: OverviewCard = {
   icon: 'priority_high',
   tone: 'error',
 }
-
-const numberFormat = new Intl.NumberFormat('es-ES')
 
 // "Progreso Mensual" con datos reales: preguntas repasadas en los últimos 30
 // días, su variación frente a los 30 previos y el acumulado del año.
@@ -228,6 +245,7 @@ export default function StudioPage() {
   const [zenHovered, setZenHovered] = useState(false)
   const [electrosHovered, setElectrosHovered] = useState(false)
   const monthlyProgress = useMonthlyProgress(Boolean(user))
+  const levelProgress = useProgressContext()
 
   const overviewCards = useMemo<ReadonlyArray<OverviewCard>>(
     () => [
@@ -338,7 +356,7 @@ export default function StudioPage() {
             </div>
 
             <div className="flex gap-4">
-              {quickStats.map((stat, index) => (
+              {buildQuickStats(levelProgress.data?.progress ?? null).map((stat, index) => (
                 <motion.div
                   key={stat.label}
                   className="rounded-xl border border-[#EAE4E2] bg-white px-5 py-3 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md"
@@ -356,6 +374,32 @@ export default function StudioPage() {
                 </motion.div>
               ))}
             </div>
+          </motion.section>
+
+          {/* Nivel y desafíos. Va lo primero a propósito: es el bloque que
+              contesta "¿qué hago hoy?", y el usuario debería toparse con él
+              antes que con las métricas de las que no puede hacer nada. */}
+          <motion.section
+            className="flex flex-col gap-6"
+            {...entranceProps(reduceMotion, 0.16, 16, 0.99, 4)}
+          >
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center">
+                <span className="material-symbols-outlined">military_tech</span>
+              </span>
+              <h2 className="text-xl font-bold text-[#2c3e50]">Tu Progreso</h2>
+            </div>
+
+            <LevelCard
+              progress={levelProgress.data?.progress ?? null}
+              loading={levelProgress.loading}
+            />
+
+            <ChallengesSection
+              daily={levelProgress.data?.daily ?? []}
+              weekly={levelProgress.data?.weekly ?? []}
+              loading={levelProgress.loading}
+            />
           </motion.section>
 
           <motion.section {...entranceProps(reduceMotion, 0.18, 16, 0.99, 4)}>

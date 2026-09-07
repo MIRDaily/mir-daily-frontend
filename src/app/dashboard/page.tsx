@@ -7,6 +7,8 @@ import { List, type RowComponentProps } from 'react-window'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { useDailyResults } from '@/hooks/useDailyResults'
+import { useProgressContext } from '@/providers/ProgressProvider'
+import DailyXpBanner from '@/components/progress/DailyXpBanner'
 import type { RankingEntry } from '@/hooks/useDailyResults'
 import { useScoreDistribution } from '@/hooks/useScoreDistribution'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
@@ -775,6 +777,7 @@ export default function DashboardPage() {
     loading: resultsLoading,
     error: resultsError,
   } = useDailyResults(showResults, dashboardRefreshKey)
+  const { refresh: refreshProgress } = useProgressContext()
   const {
     data: scoreDistribution,
     loading: scoreDistributionLoading,
@@ -1803,6 +1806,10 @@ export default function DashboardPage() {
       const payload = {
         sessionId,
         answers,
+        // El interruptor del sobre revela la asignatura antes de responder: es
+        // una pista, y el backend le aplica el -20% de XP que la propia
+        // etiqueta promete desde siempre.
+        showSubjects,
       }
       const response = await authenticatedFetch(`${API_URL}/api/submit-answers`, {
         method: 'POST',
@@ -1853,6 +1860,10 @@ export default function DashboardPage() {
         totalTime: (data as { totalTime?: number }).totalTime ?? 0,
       })
       refreshDashboardStats()
+      // El backend ya ha sumado el XP y sincronizado los desafíos dentro del
+      // submit; esto solo vuelve a leerlos para que la banda de resultados y la
+      // insignia de la cabecera no enseñen el estado de antes del Daily.
+      refreshProgress()
       setDailyCompleted(true)
       setShowResults(true)
     } catch (error) {
@@ -3299,6 +3310,8 @@ export default function DashboardPage() {
                       Resultados de tu sesión diaria
                     </p>
                   </div>
+
+                  <DailyXpBanner />
                   
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">

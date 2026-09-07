@@ -9,6 +9,7 @@ import { getAvatarUrl } from '@/lib/avatar'
 import { getOnboardingDeferredFlag } from '@/lib/onboarding'
 import { supabase } from '@/lib/supabaseBrowser'
 import NotificationsPopup from '@/components/NotificationsPopup'
+import HeaderLevelBadge from '@/components/progress/HeaderLevelBadge'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
 import type { HeaderBackAction } from '@/providers/HeaderUIProvider'
 
@@ -188,6 +189,7 @@ export default function AppHeader({
           </div>
         </LayoutGroup>
         <div className="flex items-center gap-2 sm:gap-4">
+          <HeaderLevelBadge />
           <div className="relative" ref={notificationRef}>
             <button
               type="button"
