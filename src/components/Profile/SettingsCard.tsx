@@ -33,6 +33,7 @@ import {
 } from '@/components/Profile/ui'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { useProfile } from '@/hooks/useProfile'
+import { useProgressContext } from '@/providers/ProgressProvider'
 import { DISPLAY_NAME_REGEX, USERNAME_REGEX, normalizeUsernameInput } from '@/lib/profile'
 import {
   checkUsernameAvailability,
@@ -99,6 +100,7 @@ export default function SettingsCard() {
     updateUsername,
   } = useProfile()
   const authenticatedFetch = useAuthenticatedFetch()
+  const { simularDesafio } = useProgressContext()
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
 
   const [isEditingName, setIsEditingName] = useState(false)
@@ -614,6 +616,27 @@ export default function SettingsCard() {
               </div>
               <p className="mt-3 text-[11px] font-black uppercase tracking-wide text-[#B9B2AD]">
                 {cozyCursorEnabled ? 'Activado' : 'Desactivado'}
+              </p>
+            </StickerCard>
+          </section>
+
+          <section>
+            <SectionLabel>Pruebas</SectionLabel>
+            <StickerCard className="p-5" depth={4}>
+              <p className="text-sm font-black text-[#2C3E50]">Aviso de desafío</p>
+              <p className="mt-1 text-sm text-[#7D8A96]">
+                Lanza un aviso de desafío completado para poder ver la animación
+                sin tener que completar uno de verdad.
+              </p>
+              <GhostButton
+                icon="notifications_active"
+                onClick={simularDesafio}
+                className="mt-3 w-full"
+              >
+                Probar el aviso
+              </GhostButton>
+              <p className="mt-2 text-xs text-[#7D8A96]">
+                No suma XP ni toca tus datos.
               </p>
             </StickerCard>
           </section>

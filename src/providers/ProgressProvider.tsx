@@ -38,6 +38,12 @@ type ProgressContextValue = {
   cerrarCelebracion: () => void
   /** Hay algo que celebrar Y estamos en un momento en que se puede. */
   celebracionLista: boolean
+  /**
+   * Dispara un desafío de mentira para poder mirar la animación sin tener que
+   * completar uno de verdad. NO toca el servidor ni el XP: solo mete el aviso
+   * en la cola, como haría la detección normal.
+   */
+  simularDesafio: () => void
 }
 
 const ProgressContext = createContext<ProgressContextValue | null>(null)
@@ -113,6 +119,20 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
 
   const permitirCelebracion = useCallback(() => setPermitido(true), [])
 
+  // La cola de mentira NO se persiste: es para mirar la animación, no para que
+  // reaparezca en la próxima visita.
+  const simularDesafio = useCallback(() => {
+    setLogros([
+      {
+        tipo: 'desafio',
+        titulo: 'Haz el Daily',
+        xp: 30,
+        scope: 'daily',
+      },
+    ])
+    setPermitido(true)
+  }, [])
+
   const cerrarCelebracion = useCallback(() => {
     setLogros([])
     guardarPendientes([])
@@ -132,8 +152,19 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       permitirCelebracion,
       cerrarCelebracion,
       celebracionLista: permitido && logros.length > 0,
+      simularDesafio,
     }),
-    [data, loading, error, load, logros, permitido, permitirCelebracion, cerrarCelebracion],
+    [
+      data,
+      loading,
+      error,
+      load,
+      logros,
+      permitido,
+      permitirCelebracion,
+      cerrarCelebracion,
+      simularDesafio,
+    ],
   )
 
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>
@@ -151,6 +182,7 @@ export function useProgressContext(): ProgressContextValue {
       permitirCelebracion: () => {},
       cerrarCelebracion: () => {},
       celebracionLista: false,
+      simularDesafio: () => {},
     }
   )
 }

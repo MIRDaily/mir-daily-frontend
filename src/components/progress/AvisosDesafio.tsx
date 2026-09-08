@@ -93,10 +93,33 @@ export default function AvisosDesafio({
             layout
             className="pointer-events-auto flex items-center gap-3 rounded-2xl border-2 border-[#2c3e50] bg-white px-3.5 py-3"
             style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
-            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 48, scale: 0.96 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 48, scale: 0.96 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+            /* Entrada con rebote y estela.
+
+               El desenfoque de movimiento real no existe en la web, pero se
+               finge bien: el filtro va de 10 px a 0 en menos de lo que tarda el
+               muelle en asentarse, así que la estela se disipa justo cuando la
+               pieza frena y el ojo lo lee como velocidad. Se anima aparte del
+               resto (transición propia) porque con el muelle rebotaría también
+               el desenfoque, y eso se ve como un fallo de render.
+
+               El muelle va poco amortiguado a propósito (damping 14): pasa de
+               largo y vuelve. Con el 30 de antes solo se deslizaba. */
+            initial={
+              reduceMotion
+                ? { opacity: 0 }
+                : { opacity: 0, x: 72, scale: 0.88, filter: 'blur(10px)' }
+            }
+            animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
+            exit={
+              reduceMotion
+                ? { opacity: 0 }
+                : { opacity: 0, x: 56, scale: 0.94, filter: 'blur(6px)' }
+            }
+            transition={{
+              default: { type: 'spring', stiffness: 520, damping: 14, mass: 0.9 },
+              filter: { duration: 0.26, ease: 'easeOut' },
+              opacity: { duration: 0.16 },
+            }}
             onClick={() => setVisibles((prev) => prev.filter((v) => v.id !== id))}
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-[#2c3e50] bg-[#8BA888]/14">
