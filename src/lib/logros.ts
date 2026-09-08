@@ -13,11 +13,22 @@ import { rankForLevel } from '@/lib/levels'
    un logro conseguido justo antes de recargar no se pierda por el camino.
 ═══════════════════════════════════════════════════════════════════════════ */
 
-export type Logro =
+/* Cada logro lleva identidad propia. No es burocracia: sin ella, dos avisos
+   seguidos comparten clave de React, que reutiliza el nodo y cambia el texto
+   sin animar nada. Se veía como si el aviso no tuviera entrada. */
+export type Logro = { id: string } & (
   | { tipo: 'rango'; nivel: number; rango: string; color: string }
   | { tipo: 'nivel'; nivel: number; color: string }
   | { tipo: 'racha'; dias: number }
   | { tipo: 'desafio'; titulo: string; xp: number; scope: 'daily' | 'weekly' }
+)
+
+let contador = 0
+/** Identificador único dentro de la pestaña. */
+export function nuevoId(): string {
+  contador += 1
+  return `${Date.now().toString(36)}-${contador}`
+}
 
 /** Lo que hay que recordar entre visitas para poder comparar. */
 export type Referencia = {
@@ -107,20 +118,32 @@ export function detectarLogros(ref: Referencia, datos: ProgressResponse): Logro[
     // Cambiar de rango pesa más que subir un nivel, así que se anuncia como
     // rango y no se duplica el aviso.
     if (rangoNuevo.name !== rangoViejo.name) {
-      out.push({ tipo: 'rango', nivel: level, rango: rangoNuevo.name, color: rangoNuevo.color })
+      out.push({
+        id: nuevoId(),
+        tipo: 'rango',
+        nivel: level,
+        rango: rangoNuevo.name,
+        color: rangoNuevo.color,
+      })
     } else {
-      out.push({ tipo: 'nivel', nivel: level, color: rangoNuevo.color })
+      out.push({ id: nuevoId(), tipo: 'nivel', nivel: level, color: rangoNuevo.color })
     }
   }
 
   if (currentStreak > ref.racha && HITOS_RACHA.includes(currentStreak)) {
-    out.push({ tipo: 'racha', dias: currentStreak })
+    out.push({ id: nuevoId(), tipo: 'racha', dias: currentStreak })
   }
 
   const yaVistos = new Set(ref.hechos)
   for (const c of [...datos.daily, ...datos.weekly]) {
     if (c.completed && !yaVistos.has(c.code)) {
-      out.push({ tipo: 'desafio', titulo: c.title, xp: c.xpReward, scope: c.scope })
+      out.push({
+        id: nuevoId(),
+        tipo: 'desafio',
+        titulo: c.title,
+        xp: c.xpReward,
+        scope: c.scope,
+      })
     }
   }
 

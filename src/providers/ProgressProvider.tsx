@@ -9,6 +9,7 @@ import {
   guardarReferencia,
   leerPendientes,
   leerReferencia,
+  nuevoId,
   referenciaDe,
   type Logro,
 } from '@/lib/logros'
@@ -36,6 +37,8 @@ type ProgressContextValue = {
   permitirCelebracion: () => void
   /** Se ha visto: fuera de la cola. */
   cerrarCelebracion: () => void
+  /** Quita UN logro de la cola, por identificador. */
+  descartarLogro: (id: string) => void
   /** Hay algo que celebrar Y estamos en un momento en que se puede. */
   celebracionLista: boolean
   /**
@@ -120,17 +123,32 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
   const permitirCelebracion = useCallback(() => setPermitido(true), [])
 
   // La cola de mentira NO se persiste: es para mirar la animación, no para que
-  // reaparezca en la próxima visita.
+  // reaparezca en la próxima visita. Se ACUMULA en vez de reemplazar, para
+  // poder pulsar varias veces y ver cómo se apilan.
   const simularDesafio = useCallback(() => {
-    setLogros([
-      {
-        tipo: 'desafio',
-        titulo: 'Haz el Daily',
-        xp: 30,
-        scope: 'daily',
-      },
+    const titulos = [
+      { titulo: 'Haz el Daily', xp: 30 },
+      { titulo: 'Sesión de fondo', xp: 25 },
+      { titulo: 'Ataca tu punto débil', xp: 35 },
+      { titulo: 'Cinco de siete', xp: 150 },
+    ]
+    const t = titulos[Math.floor(Math.random() * titulos.length)]
+    setLogros((prev) => [
+      ...prev,
+      { id: nuevoId(), tipo: 'desafio', titulo: t.titulo, xp: t.xp, scope: 'daily' },
     ])
     setPermitido(true)
+  }, [])
+
+  // Al vaciarse la cola se vuelve a cerrar el grifo del permiso: vale para una
+  // tanda, no para siempre.
+  const descartarLogro = useCallback((id: string) => {
+    setLogros((prev) => {
+      const cola = prev.filter((l) => l.id !== id)
+      guardarPendientes(cola)
+      if (cola.length === 0) setPermitido(false)
+      return cola
+    })
   }, [])
 
   const cerrarCelebracion = useCallback(() => {
@@ -152,6 +170,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       permitirCelebracion,
       cerrarCelebracion,
       celebracionLista: permitido && logros.length > 0,
+      descartarLogro,
       simularDesafio,
     }),
     [
@@ -163,6 +182,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       permitido,
       permitirCelebracion,
       cerrarCelebracion,
+      descartarLogro,
       simularDesafio,
     ],
   )
@@ -182,6 +202,7 @@ export function useProgressContext(): ProgressContextValue {
       permitirCelebracion: () => {},
       cerrarCelebracion: () => {},
       celebracionLista: false,
+      descartarLogro: () => {},
       simularDesafio: () => {},
     }
   )

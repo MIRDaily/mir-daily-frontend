@@ -108,7 +108,8 @@ function Confeti({ color }: { color: string }) {
 }
 
 export default function CelebracionLogros() {
-  const { logros, celebracionLista, cerrarCelebracion, data } = useProgressContext()
+  const { logros, celebracionLista, cerrarCelebracion, descartarLogro, data } =
+    useProgressContext()
   const reduceMotion = useReducedMotion()
 
   const ordenados = useMemo(() => ordenarPorPeso(logros), [logros])
@@ -140,7 +141,7 @@ export default function CelebracionLogros() {
   // Sin metas gordas, los desafíos se anuncian en la esquina y se van solos.
   if (!principal) {
     return desafios.length > 0 ? (
-      <AvisosDesafio desafios={desafios} onVistos={cerrarCelebracion} />
+      <AvisosDesafio desafios={desafios} onDescartar={descartarLogro} />
     ) : null
   }
 
