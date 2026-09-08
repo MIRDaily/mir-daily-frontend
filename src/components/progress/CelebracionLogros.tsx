@@ -136,22 +136,24 @@ export default function CelebracionLogros() {
     return () => document.removeEventListener('keydown', onKey)
   }, [celebracionLista, cerrarCelebracion])
 
-  if (!celebracionLista) return null
-
-  // Sin metas gordas, los desafíos se anuncian en la esquina y se van solos.
-  if (!principal) {
-    return desafios.length > 0 ? (
-      <AvisosDesafio desafios={desafios} onDescartar={descartarLogro} />
-    ) : null
-  }
-
-  const t = titularDe(principal)
+  // Las dos capas se montan SIEMPRE, y lo que se enciende y apaga es su
+  // CONTENIDO. Antes se devolvía null y eso se llevaba por delante el
+  // AnimatePresence: un contenedor desmontado no puede animar la salida de
+  // nadie, así que la última pieza en irse desaparecía de golpe. Pasaba con el
+  // último aviso y también con el modal, cuya salida no se veía nunca.
+  const avisos = celebracionLista && !principal ? desafios : []
+  const t = principal ? titularDe(principal) : null
   const nivel = data?.progress.level ?? 0
   const rango = rankForLevel(nivel)
 
   return (
-    <AnimatePresence>
+    <>
+      <AvisosDesafio desafios={avisos} onDescartar={descartarLogro} />
+
+      <AnimatePresence>
+        {celebracionLista && principal && t ? (
       <motion.div
+        key="celebracion"
         className="fixed inset-0 z-[100] flex items-center justify-center p-5"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -255,6 +257,8 @@ export default function CelebracionLogros() {
           </div>
         </motion.div>
       </motion.div>
-    </AnimatePresence>
+        ) : null}
+      </AnimatePresence>
+    </>
   )
 }

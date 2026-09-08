@@ -118,8 +118,13 @@ export default function AvisosDesafio({
   /** Quita ese aviso de la cola: se ha visto o se ha ido solo. */
   onDescartar: (id: string) => void
 }) {
-  if (desafios.length === 0) return null
-
+  // Sin `return null` cuando la lista se vacía. Devolverlo desmontaba el
+  // AnimatePresence junto con el último aviso, y un contenedor que ya no
+  // existe no puede animar la salida de nadie: por eso fallaba SIEMPRE la
+  // salida del último (con uno, la única; con tres, la tercera).
+  //
+  // El contenedor vacío no molesta: no tiene alto, no pinta nada y no
+  // intercepta el ratón.
   return (
     <div
       // Debajo de la cabecera pegajosa, que mide unos 72 px.
@@ -127,12 +132,13 @@ export default function AvisosDesafio({
       role="status"
       aria-live="polite"
     >
-      {/* SIN `initial={false}`. Lo llevaba, y era justo lo que dejaba el primer
-          aviso sin animación: esa bandera le dice a framer que no anime a los
-          hijos ya presentes cuando el propio AnimatePresence se monta, y como
-          este componente devuelve null mientras no hay avisos, al llegar el
-          primero se monta de cero CON el aviso ya dentro. Los siguientes sí
-          animaban, porque el contenedor ya existía. */}
+      {/* SIN `initial={false}`. Lo llevaba, y dejaba el PRIMER aviso sin
+          animación: esa bandera le dice a framer que no anime a los hijos ya
+          presentes cuando el propio AnimatePresence se monta, y entonces este
+          componente devolvía null mientras no hubiera avisos, así que el
+          primero llegaba con el contenedor recién montado. Los siguientes sí
+          animaban. Ahora el contenedor no se desmonta nunca —ver arriba— pero
+          la bandera se queda fuera igualmente: queremos entrada siempre. */}
       <AnimatePresence mode="popLayout">
         {desafios.map((logro) => (
           <Aviso key={logro.id} logro={logro} onIr={() => onDescartar(logro.id)} />
