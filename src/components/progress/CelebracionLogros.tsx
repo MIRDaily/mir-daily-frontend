@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useProgressContext } from '@/providers/ProgressProvider'
 import { ordenarPorPeso, type Logro } from '@/lib/logros'
 import StreakFlame from '@/components/progress/StreakFlame'
+import AvisosDesafio from '@/components/progress/AvisosDesafio'
 import { rankForLevel } from '@/lib/levels'
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -20,6 +21,13 @@ import { rankForLevel } from '@/lib/levels'
    2. UNA tarjeta, no una cadena de modales. Si se han cumplido cuatro cosas a
       la vez, manda la más importante y las demás van resumidas debajo.
       Encadenar cuatro ventanas sería su propia forma de interrumpir.
+
+   3. No todo pesa lo mismo. Un desafío completado no merece tapar la pantalla:
+      sale como aviso deslizante en la esquina y se va solo (AvisosDesafio).
+      Solo las metas gordas —rango, nivel, hito de racha— se quedan esperando
+      un gesto. Y las dos formas nunca conviven: si hay algo gordo, los
+      desafíos van listados dentro de la tarjeta, porque un aviso flotando
+      sobre un modal atenuado se lee como un error de montaje.
 ═══════════════════════════════════════════════════════════════════════════ */
 
 const numberFormat = new Intl.NumberFormat('es-ES')
@@ -104,8 +112,18 @@ export default function CelebracionLogros() {
   const reduceMotion = useReducedMotion()
 
   const ordenados = useMemo(() => ordenarPorPeso(logros), [logros])
-  const principal = ordenados[0]
-  const resto = ordenados.slice(1)
+
+  // Las metas que merecen detener al usuario, y las que no.
+  const mayores = useMemo(() => ordenados.filter((l) => l.tipo !== 'desafio'), [ordenados])
+  const desafios = useMemo(
+    () => ordenados.filter((l): l is Extract<Logro, { tipo: 'desafio' }> => l.tipo === 'desafio'),
+    [ordenados],
+  )
+
+  const principal = mayores[0]
+  // Cuando hay algo gordo, los desafíos se resumen aquí dentro en vez de salir
+  // por su cuenta.
+  const resto = [...mayores.slice(1), ...desafios]
 
   // Escape cierra, como cualquier diálogo.
   useEffect(() => {
@@ -117,7 +135,14 @@ export default function CelebracionLogros() {
     return () => document.removeEventListener('keydown', onKey)
   }, [celebracionLista, cerrarCelebracion])
 
-  if (!celebracionLista || !principal) return null
+  if (!celebracionLista) return null
+
+  // Sin metas gordas, los desafíos se anuncian en la esquina y se van solos.
+  if (!principal) {
+    return desafios.length > 0 ? (
+      <AvisosDesafio desafios={desafios} onVistos={cerrarCelebracion} />
+    ) : null
+  }
 
   const t = titularDe(principal)
   const nivel = data?.progress.level ?? 0
@@ -160,14 +185,11 @@ export default function CelebracionLogros() {
               animate={{ scale: 1, rotate: 0 }}
               transition={{ type: 'spring', stiffness: 260, damping: 14, delay: 0.08 }}
             >
+              {/* Aquí ya no puede llegar un desafío: esos salen por
+                  AvisosDesafio. Lo confirma el propio TypeScript, que marcaba
+                  la rama del desafío como comparación imposible. */}
               {principal.tipo === 'racha' ? (
                 <StreakFlame streak={principal.dias} size={76} />
-              ) : principal.tipo === 'desafio' ? (
-                <span className="flex h-20 w-20 items-center justify-center rounded-2xl border-2 border-[#2c3e50] bg-[#8BA888]/12">
-                  <span className="material-symbols-outlined text-[40px] text-[#8BA888]">
-                    task_alt
-                  </span>
-                </span>
               ) : (
                 <span
                   className="flex h-20 w-20 flex-col items-center justify-center rounded-2xl border-2"
