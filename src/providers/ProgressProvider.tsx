@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { xpParaNivel } from '@/lib/levels'
 import { useAuthContext } from '@/providers/AuthProvider'
 import { fetchProgress, type ProgressResponse } from '@/services/progressService'
 import {
@@ -137,13 +138,25 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       { id: nuevoId(), tipo: 'desafio', titulo: 'Sesión de fondo', xp: 25, scope: 'daily' },
       { id: nuevoId(), tipo: 'desafio', titulo: 'Cinco de siete', xp: 150, scope: 'weekly' },
     ]
-    const nivel: Logro = { id: nuevoId(), tipo: 'nivel', nivel: 12, color: '#5E9AA8' }
+    // Tramos de mentira pero coherentes con la curva, para que la barra
+    // recorra de verdad lo que le toca.
+    const nivel: Logro = {
+      id: nuevoId(),
+      tipo: 'nivel',
+      nivel: 12,
+      color: '#5E9AA8',
+      xpAntes: xpParaNivel(11) + 30,
+      xpDespues: xpParaNivel(12) + 90,
+    }
     const rango: Logro = {
       id: nuevoId(),
       tipo: 'rango',
       nivel: 20,
       rango: 'Residente R1',
       color: '#8BA888',
+      // Dos peldaños de golpe, para ver el encadenado.
+      xpAntes: xpParaNivel(18) + 120,
+      xpDespues: xpParaNivel(20) + 140,
     }
     const racha: Logro = { id: nuevoId(), tipo: 'racha', dias: 30 }
 

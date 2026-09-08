@@ -1,5 +1,5 @@
 import type { ProgressResponse } from '@/services/progressService'
-import { rankForLevel } from '@/lib/levels'
+import { rankForLevel, xpParaNivel } from '@/lib/levels'
 
 /* ════════════════════════════════════════════════════════════════════════
    Detección de metas cumplidas.
@@ -17,8 +17,8 @@ import { rankForLevel } from '@/lib/levels'
    seguidos comparten clave de React, que reutiliza el nodo y cambia el texto
    sin animar nada. Se veía como si el aviso no tuviera entrada. */
 export type Logro = { id: string } & (
-  | { tipo: 'rango'; nivel: number; rango: string; color: string }
-  | { tipo: 'nivel'; nivel: number; color: string }
+  | { tipo: 'rango'; nivel: number; rango: string; color: string; xpAntes: number; xpDespues: number }
+  | { tipo: 'nivel'; nivel: number; color: string; xpAntes: number; xpDespues: number }
   | { tipo: 'racha'; dias: number }
   | { tipo: 'desafio'; titulo: string; xp: number; scope: 'daily' | 'weekly' }
 )
@@ -33,6 +33,9 @@ export function nuevoId(): string {
 /** Lo que hay que recordar entre visitas para poder comparar. */
 export type Referencia = {
   nivel: number
+  /** XP acumulado la última vez que se miró. Es el punto de partida de la
+      animación de subida: sin él no habría desde dónde contar. */
+  xpTotal: number
   racha: number
   /** Códigos de desafío ya completados, por periodo, para no repetir el aviso. */
   hechos: string[]
@@ -51,7 +54,15 @@ export function leerReferencia(): Referencia | null {
     if (!crudo) return null
     const r = JSON.parse(crudo) as Partial<Referencia>
     if (typeof r?.nivel !== 'number' || typeof r?.racha !== 'number') return null
-    return { nivel: r.nivel, racha: r.racha, hechos: Array.isArray(r.hechos) ? r.hechos : [] }
+    return {
+      nivel: r.nivel,
+      // Las referencias guardadas antes de que existiera la animación no lo
+      // traen. Se rellena con el principio del nivel, que es lo más honesto
+      // que se puede decir sin inventar: la barra arrancará vacía.
+      xpTotal: typeof r.xpTotal === 'number' ? r.xpTotal : xpParaNivel(r.nivel),
+      racha: r.racha,
+      hechos: Array.isArray(r.hechos) ? r.hechos : [],
+    }
   } catch {
     return null
   }
@@ -97,6 +108,7 @@ export function guardarPendientes(logros: Logro[]) {
 export function referenciaDe(datos: ProgressResponse): Referencia {
   return {
     nivel: datos.progress.level,
+    xpTotal: datos.progress.xpTotal,
     racha: datos.progress.currentStreak,
     hechos: [...datos.daily, ...datos.weekly].filter((c) => c.completed).map((c) => c.code),
   }
@@ -115,6 +127,11 @@ export function detectarLogros(ref: Referencia, datos: ProgressResponse): Logro[
   if (level > ref.nivel) {
     const rangoNuevo = rankForLevel(level)
     const rangoViejo = rankForLevel(ref.nivel)
+    // El tramo que recorrerá la barra. Se protege de un XP anterior mayor que
+    // el nuevo (una reconstrucción del ledger) arrancando, como mucho, al
+    // principio del nivel de partida.
+    const xpAntes = Math.min(ref.xpTotal, datos.progress.xpTotal)
+    const xpDespues = datos.progress.xpTotal
     // Cambiar de rango pesa más que subir un nivel, así que se anuncia como
     // rango y no se duplica el aviso.
     if (rangoNuevo.name !== rangoViejo.name) {
@@ -124,9 +141,18 @@ export function detectarLogros(ref: Referencia, datos: ProgressResponse): Logro[
         nivel: level,
         rango: rangoNuevo.name,
         color: rangoNuevo.color,
+        xpAntes,
+        xpDespues,
       })
     } else {
-      out.push({ id: nuevoId(), tipo: 'nivel', nivel: level, color: rangoNuevo.color })
+      out.push({
+        id: nuevoId(),
+        tipo: 'nivel',
+        nivel: level,
+        color: rangoNuevo.color,
+        xpAntes,
+        xpDespues,
+      })
     }
   }
 

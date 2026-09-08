@@ -54,3 +54,33 @@ export function rankForLevel(level: number): Rank {
 export function nextRank(level: number): Rank | null {
   return RANKS.find((r) => r.minLevel > level) ?? null
 }
+
+/* ─── La curva, replicada en cliente ──────────────────────────────────────
+   Hasta ahora el servidor mandaba el nivel ya resuelto y con eso bastaba. La
+   animación de subida necesita más: hay que saber dónde empieza y acaba
+   CUALQUIER nivel para poder recorrer la barra desde el XP anterior hasta el
+   nuevo, cruzando los peldaños que haga falta.
+
+   OJO: esto DEBE coincidir con mirdaily_xp_for_level de la base de datos
+   (sql/2026-09-niveles.sql). Si algún día cambia la fórmula, cambia en los dos
+   sitios o la animación acabará en un número distinto del que enseña el
+   servidor. */
+
+/** Lo que cuesta pasar del nivel n al n+1. */
+export function costeNivel(n: number): number {
+  return 200 + 25 * (n - 1)
+}
+
+/** XP acumulado necesario para ESTAR en el nivel L. */
+export function xpParaNivel(nivel: number): number {
+  if (nivel <= 1) return 0
+  return 200 * (nivel - 1) + (25 * (nivel - 1) * (nivel - 2)) / 2
+}
+
+/** Nivel que corresponde a un XP acumulado. */
+export function nivelParaXp(xp: number): number {
+  const objetivo = Math.max(0, xp)
+  let nivel = 1
+  while (nivel < MAX_LEVEL && xpParaNivel(nivel + 1) <= objetivo) nivel += 1
+  return nivel
+}

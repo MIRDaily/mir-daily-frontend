@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import type { ProgressSummary } from '@/services/progressService'
 import { nextRank, rankForLevel } from '@/lib/levels'
 import StreakFlame from '@/components/progress/StreakFlame'
+import MarcoNivel from '@/components/progress/MarcoNivel'
 
 const numberFormat = new Intl.NumberFormat('es-ES')
 
@@ -60,17 +61,7 @@ export default function LevelCard({ progress, loading = false }: Props) {
       <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-center">
         {/* Insignia de nivel */}
         <div className="flex items-center gap-4">
-          <div
-            className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl border-2 text-center"
-            style={{ borderColor: rank.color, backgroundColor: `${rank.soft}14` }}
-          >
-            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: rank.color }}>
-              Nivel
-            </span>
-            <span className="text-2xl font-black leading-none" style={{ color: rank.color }}>
-              {progress.level}
-            </span>
-          </div>
+          <MarcoNivel nivel={progress.level} tamano={64} color={rank.color} />
 
           <div className="min-w-0">
             <p className="text-lg font-bold leading-tight text-[#2c3e50]">{rank.name}</p>

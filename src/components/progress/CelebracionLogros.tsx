@@ -1,11 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useProgressContext } from '@/providers/ProgressProvider'
 import { ordenarPorPeso, type Logro } from '@/lib/logros'
 import StreakFlame from '@/components/progress/StreakFlame'
 import AvisosDesafio from '@/components/progress/AvisosDesafio'
+import SubidaDeNivel from '@/components/progress/SubidaDeNivel'
 import { rankForLevel } from '@/lib/levels'
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -112,6 +113,140 @@ function Confeti({ color }: { color: string }) {
   )
 }
 
+type Titular = { kicker: string; titulo: string; sub: string; color: string }
+
+/* El interior de la tarjeta.
+
+   Va aparte para poder llevar `key={logro.id}`: así su estado —cuántos
+   peldaños se han cruzado, si el titular ya se ha descubierto— se reinicia
+   solo cuando cambia la meta que se celebra. Si viviera en el padre, la
+   segunda tarjeta de una tanda saldría con el titular ya destapado. */
+function ContenidoMeta({
+  logro,
+  t,
+  resto,
+  pie,
+  onCerrar,
+}: {
+  logro: Logro
+  t: Titular
+  resto: Logro[]
+  /** Estado en el que queda el usuario, ya formateado. */
+  pie: string | null
+  onCerrar: () => void
+}) {
+  const reduceMotion = useReducedMotion()
+  const esSalto = logro.tipo === 'nivel' || logro.tipo === 'rango'
+
+  /* El titular se guarda hasta que la barra cruza de verdad. Enseñar "Nivel
+     12" mientras la barra todavía va por el 11 destripa el momento: el número
+     tiene que llegar DESPUÉS del esfuerzo, no antes. */
+  const [revelado, setRevelado] = useState(!esSalto || !!reduceMotion)
+
+  const alSubir = useCallback(() => {
+    setRevelado(true)
+  }, [])
+
+  // Red de seguridad: si por lo que sea no llegara a cruzarse ningún peldaño
+  // (un tramo raro, una referencia vieja), el titular no se queda escondido.
+  useEffect(() => {
+    if (revelado) return
+    const t = setTimeout(() => setRevelado(true), 3600)
+    return () => clearTimeout(t)
+  }, [revelado])
+
+  return (
+    <>
+      {/* El confeti que cae desde arriba se queda para la racha, que no tiene
+          barra con la que interactuar. En un salto de nivel manda otra cosa:
+          las chispas salen de la propia barra al llenarse y rebotan en ella
+          (ChispasDeNivel, dentro de SubidaDeNivel). Papelitos cayendo por
+          delante de eso solo restarían. */}
+      {!reduceMotion && !esSalto ? <Confeti color={t.color} /> : null}
+
+      <div className="relative px-6 pb-6 pt-8 text-center">
+        {esSalto ? (
+          <div className="mx-auto mb-5 w-full max-w-[16rem]">
+            <SubidaDeNivel
+              xpAntes={logro.xpAntes}
+              xpDespues={logro.xpDespues}
+              onNivelNuevo={alSubir}
+            />
+          </div>
+        ) : (
+          <motion.div
+            className="mx-auto mb-4 flex h-20 w-20 items-center justify-center"
+            initial={reduceMotion ? false : { scale: 0.4, rotate: -12 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 14, delay: 0.08 }}
+          >
+            {/* Aquí ya no puede llegar un desafío: esos salen por
+                AvisosDesafio. Lo confirma el propio TypeScript, que marcaba la
+                rama del desafío como comparación imposible. */}
+            {logro.tipo === 'racha' ? <StreakFlame streak={logro.dias} size={76} /> : null}
+          </motion.div>
+        )}
+
+        <motion.div
+          initial={false}
+          animate={revelado ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
+          transition={{ type: 'spring', stiffness: 380, damping: 22 }}
+        >
+          <p
+            className="text-[11px] font-black uppercase tracking-[0.16em]"
+            style={{ color: t.color }}
+          >
+            {t.kicker}
+          </p>
+          <h2 className="mt-1 text-2xl font-black leading-tight text-[#2c3e50]">{t.titulo}</h2>
+          <p className="mt-1 text-sm text-[#7D8A96]">{t.sub}</p>
+        </motion.div>
+
+        {resto.length > 0 ? (
+          <div className="mt-5 space-y-1.5 rounded-2xl bg-[#FBF9F8] px-4 py-3 text-left">
+            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#7D8A96]/80">
+              Y además
+            </p>
+            {resto.map((l) => (
+              <p key={l.id} className="flex items-center gap-1.5 text-sm text-[#2c3e50]">
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                  <span className="material-symbols-outlined text-[15px] text-[#8BA888]">
+                    check_circle
+                  </span>
+                </span>
+                <span className="truncate">{resumenDe(l)}</span>
+              </p>
+            ))}
+          </div>
+        ) : null}
+
+        {/* El estado en el que queda, para que la celebración informe y no solo
+            aplauda. En un salto llega con el titular: hasta entonces contaría
+            el final de la historia por su cuenta. */}
+        {pie ? (
+          <motion.p
+            className="mt-5 text-xs text-[#7D8A96]"
+            initial={false}
+            animate={{ opacity: revelado ? 1 : 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            {pie}
+          </motion.p>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={onCerrar}
+          className="mt-4 w-full rounded-xl border-2 border-[#2c3e50] bg-[#E8A598] py-2.5 text-sm font-black text-white transition-transform active:scale-[0.98]"
+          style={{ boxShadow: '3px 3px 0 0 #2c3e50' }}
+        >
+          Seguir
+        </button>
+      </div>
+    </>
+  )
+}
+
 export default function CelebracionLogros() {
   const { logros, celebracionLista, cerrarCelebracion, descartarLogro, descartarLogros, data } =
     useProgressContext()
@@ -157,8 +292,9 @@ export default function CelebracionLogros() {
   // último aviso y también con el modal, cuya salida no se veía nunca.
   const avisos = celebracionLista && !principal ? desafios : []
   const t = principal ? titularDe(principal) : null
-  const nivel = data?.progress.level ?? 0
-  const rango = rankForLevel(nivel)
+  const pie = data?.progress
+    ? `${rankForLevel(data.progress.level).name} · ${numberFormat.format(data.progress.xpTotal)} XP en total`
+    : null
 
   return (
     <>
@@ -192,83 +328,14 @@ export default function CelebracionLogros() {
           exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
           transition={{ type: 'spring', stiffness: 320, damping: 24 }}
         >
-          {!reduceMotion ? <Confeti color={t.color} /> : null}
-
-          <div className="relative px-6 pb-6 pt-8 text-center">
-            {/* El emblema: la llama si es racha, la insignia de nivel si no. */}
-            <motion.div
-              className="mx-auto mb-4 flex h-20 w-20 items-center justify-center"
-              initial={reduceMotion ? false : { scale: 0.4, rotate: -12 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 14, delay: 0.08 }}
-            >
-              {/* Aquí ya no puede llegar un desafío: esos salen por
-                  AvisosDesafio. Lo confirma el propio TypeScript, que marcaba
-                  la rama del desafío como comparación imposible. */}
-              {principal.tipo === 'racha' ? (
-                <StreakFlame streak={principal.dias} size={76} />
-              ) : (
-                <span
-                  className="flex h-20 w-20 flex-col items-center justify-center rounded-2xl border-2"
-                  style={{ borderColor: t.color, backgroundColor: `${t.color}14` }}
-                >
-                  <span
-                    className="text-[10px] font-black uppercase tracking-wider"
-                    style={{ color: t.color }}
-                  >
-                    Nivel
-                  </span>
-                  <span className="text-3xl font-black leading-none" style={{ color: t.color }}>
-                    {principal.nivel}
-                  </span>
-                </span>
-              )}
-            </motion.div>
-
-            <p
-              className="text-[11px] font-black uppercase tracking-[0.16em]"
-              style={{ color: t.color }}
-            >
-              {t.kicker}
-            </p>
-            <h2 className="mt-1 text-2xl font-black leading-tight text-[#2c3e50]">{t.titulo}</h2>
-            <p className="mt-1 text-sm text-[#7D8A96]">{t.sub}</p>
-
-            {resto.length > 0 ? (
-              <div className="mt-5 space-y-1.5 rounded-2xl bg-[#FBF9F8] px-4 py-3 text-left">
-                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#7D8A96]/80">
-                  Y además
-                </p>
-                {resto.map((l, i) => (
-                  <p key={i} className="flex items-center gap-1.5 text-sm text-[#2c3e50]">
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-                      <span className="material-symbols-outlined text-[15px] text-[#8BA888]">
-                        check_circle
-                      </span>
-                    </span>
-                    <span className="truncate">{resumenDe(l)}</span>
-                  </p>
-                ))}
-              </div>
-            ) : null}
-
-            {/* El estado en el que queda, para que la celebración informe y no
-                solo aplauda. */}
-            {data?.progress ? (
-              <p className="mt-5 text-xs text-[#7D8A96]">
-                {rango.name} · {numberFormat.format(data.progress.xpTotal)} XP en total
-              </p>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={cerrarTarjeta}
-              className="mt-4 w-full rounded-xl border-2 border-[#2c3e50] bg-[#E8A598] py-2.5 text-sm font-black text-white transition-transform active:scale-[0.98]"
-              style={{ boxShadow: '3px 3px 0 0 #2c3e50' }}
-            >
-              Seguir
-            </button>
-          </div>
+          <ContenidoMeta
+            key={principal.id}
+            logro={principal}
+            t={t}
+            resto={resto}
+            pie={pie}
+            onCerrar={cerrarTarjeta}
+          />
         </motion.div>
       </motion.div>
         ) : null}

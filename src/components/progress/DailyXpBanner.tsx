@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { useProgressContext } from '@/providers/ProgressProvider'
 import { rankForLevel } from '@/lib/levels'
 import StreakFlame from '@/components/progress/StreakFlame'
+import MarcoNivel from '@/components/progress/MarcoNivel'
 
 const numberFormat = new Intl.NumberFormat('es-ES')
 
@@ -48,20 +49,7 @@ export default function DailyXpBanner() {
       transition={{ duration: 0.45, delay: 0.15 }}
     >
       <div className="flex flex-col items-center gap-5 sm:flex-row">
-        <div
-          className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl border-2 text-center"
-          style={{ borderColor: rank.color, backgroundColor: `${rank.soft}14` }}
-        >
-          <span
-            className="text-[10px] font-semibold uppercase tracking-wider"
-            style={{ color: rank.color }}
-          >
-            Nivel
-          </span>
-          <span className="text-2xl font-black leading-none" style={{ color: rank.color }}>
-            {progress.level}
-          </span>
-        </div>
+        <MarcoNivel nivel={progress.level} tamano={64} color={rank.color} />
 
         <div className="w-full min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
