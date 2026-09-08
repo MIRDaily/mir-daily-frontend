@@ -6,6 +6,7 @@
 // correcta hasta que el usuario responde y el servidor la valida (/check).
 
 import { useEffect, useRef, useState } from 'react'
+import { useProgressContext } from '@/providers/ProgressProvider'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import SimulacroBuilder from '@/components/simulacro/SimulacroBuilder'
@@ -50,6 +51,7 @@ export default function SimulacroPage() {
   const router = useRouter()
   const { setBackAction } = useHeaderUI()
   const [phase, setPhase] = useState<SimulacroPhase>('builder')
+  const { refresh: refreshProgress, permitirCelebracion } = useProgressContext()
   // Modal propio de "¿seguro que quieres salir?" (no el nativo del navegador)
   // para el botón "Salir", el botón atrás y los enlaces de navegación.
   // Cerrar/recargar la pestaña sí usa el diálogo nativo más abajo: ningún
@@ -212,11 +214,27 @@ export default function SimulacroPage() {
     }
     setPhase('results')
 
+    // La rejilla de resultados ES el final de la actividad: a partir de aquí ya
+    // se puede celebrar sin interrumpir a nadie.
+    const cerrarProgreso = () => {
+      refreshProgress()
+      permitirCelebracion()
+    }
+
     // Guarda el simulacro en el historial (best-effort: el backend solo lo
     // guarda de verdad si hay >=50 respuestas persistidas para esta sesión;
     // un fallo de red aquí no debe afectar a la pantalla de resultados).
+    //
+    // El progreso se recarga DESPUÉS de esta llamada, no antes: el bono de
+    // simulacro completado (+80 XP) lo concede /finish, así que refrescar
+    // primero dejaría fuera justo el logro que acaba de ganarse. Si la llamada
+    // falla, se recarga igual: el XP de las preguntas ya está puesto.
     if (sessionIdRef.current) {
-      finishSimulacroSession(sessionIdRef.current, mode).catch(() => {})
+      finishSimulacroSession(sessionIdRef.current, mode)
+        .catch(() => {})
+        .finally(cerrarProgreso)
+    } else {
+      cerrarProgreso()
     }
   }
 

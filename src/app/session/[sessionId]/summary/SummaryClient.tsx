@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
+import { useProgressContext } from '@/providers/ProgressProvider'
 import { supabase } from '@/lib/supabaseBrowser'
 import { fetchStudioDecks } from '@/lib/studioDecks'
 import GooFissionLoader from '@/components/studio/GooFissionLoader'
@@ -126,6 +127,15 @@ function SummaryErrorState({ deckId, message }: { deckId: string; message: strin
 
 export default function SummaryClient({ deckId, sessionId, filterExhausted }: SummaryClientProps) {
   const router = useRouter()
+  const { refresh: refreshProgress, permitirCelebracion } = useProgressContext()
+
+  // El resumen de la sesión es el final del repaso: se recarga el progreso
+  // (los mazos también dan XP, y nadie lo estaba recargando) y se abre la
+  // puerta a celebrar.
+  useEffect(() => {
+    refreshProgress()
+    permitirCelebracion()
+  }, [refreshProgress, permitirCelebracion])
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [finalMetrics, setFinalMetrics] = useState<SessionFinalMetrics | null>(null)
