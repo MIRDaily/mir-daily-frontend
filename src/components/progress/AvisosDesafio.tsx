@@ -11,9 +11,11 @@ import type { Logro } from '@/lib/logros'
    Las metas gordas —subir de nivel, cambiar de rango, un hito de racha— sí se
    quedan, y para eso está CelebracionLogros.
 
-   Los dos no conviven a la vez a propósito: si hay algo gordo que celebrar,
-   los desafíos van listados DENTRO de esa tarjeta. Un aviso flotando sobre un
-   modal con el fondo atenuado se lee como un error de montaje.
+   Los dos no conviven a la vez a propósito: se turnan. Si hay algo gordo que
+   celebrar sale primero su tarjeta, sola, y estos avisos esperan a que se
+   cierre. Subir de nivel es lo más importante que le pasa al usuario ese día y
+   no debe diluirse en una lista; y un aviso flotando sobre un modal con el
+   fondo atenuado se lee como un error de montaje.
 
    CADA AVISO SE APAGA SOLO. Antes había un lote de temporizadores compartidos
    en el padre y traía dos problemas: al llegar un aviso nuevo se cancelaban
@@ -27,6 +29,13 @@ const numberFormat = new Intl.NumberFormat('es-ES')
 
 /** Lo que tarda cada aviso en irse solo. */
 const VIDA_MS = 4600
+
+/* Cuántos se enseñan a la vez.
+   Siete son alcanzables de verdad —tres desafíos diarios, "Día redondo" y los
+   tres semanales, un domingo en que alguien lo cierre todo— y medidos ocupan
+   479 px: en un portátil de 768 px esa columna se come la pantalla entera por
+   el lado derecho. A partir del cuarto se cuentan en una línea. */
+const VISIBLES_MAX = 4
 type Desafio = Extract<Logro, { tipo: 'desafio' }>
 
 function Aviso({ logro, onIr }: { logro: Desafio; onIr: () => void }) {
@@ -118,6 +127,8 @@ export default function AvisosDesafio({
   /** Quita ese aviso de la cola: se ha visto o se ha ido solo. */
   onDescartar: (id: string) => void
 }) {
+  const sobran = Math.max(0, desafios.length - VISIBLES_MAX)
+
   // Sin `return null` cuando la lista se vacía. Devolverlo desmontaba el
   // AnimatePresence junto con el último aviso, y un contenedor que ya no
   // existe no puede animar la salida de nadie: por eso fallaba SIEMPRE la
@@ -140,9 +151,23 @@ export default function AvisosDesafio({
           animaban. Ahora el contenedor no se desmonta nunca —ver arriba— pero
           la bandera se queda fuera igualmente: queremos entrada siempre. */}
       <AnimatePresence mode="popLayout">
-        {desafios.map((logro) => (
+        {desafios.slice(0, VISIBLES_MAX).map((logro) => (
           <Aviso key={logro.id} logro={logro} onIr={() => onDescartar(logro.id)} />
         ))}
+
+        {sobran > 0 ? (
+          <motion.div
+            key="sobran"
+            layout
+            className="pointer-events-none rounded-2xl border-2 border-dashed border-[#2c3e50]/35 bg-white/80 px-3.5 py-2 text-center text-[11px] font-black uppercase tracking-[0.12em] text-[#7D8A96]"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            y {sobran} más
+          </motion.div>
+        ) : null}
       </AnimatePresence>
     </div>
   )

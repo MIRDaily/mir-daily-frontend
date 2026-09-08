@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useProgressContext } from '@/providers/ProgressProvider'
 import { ordenarPorPeso, type Logro } from '@/lib/logros'
@@ -25,9 +25,14 @@ import { rankForLevel } from '@/lib/levels'
    3. No todo pesa lo mismo. Un desafío completado no merece tapar la pantalla:
       sale como aviso deslizante en la esquina y se va solo (AvisosDesafio).
       Solo las metas gordas —rango, nivel, hito de racha— se quedan esperando
-      un gesto. Y las dos formas nunca conviven: si hay algo gordo, los
-      desafíos van listados dentro de la tarjeta, porque un aviso flotando
-      sobre un modal atenuado se lee como un error de montaje.
+      un gesto.
+
+   4. Cuando coinciden, se separan EN EL TIEMPO, no en la pantalla. La tarjeta
+      sale sola y limpia; los desafíos esperan a que se cierre y entonces se
+      anuncian como avisos. Subir de nivel es lo más importante que le pasa al
+      usuario ese día y no debe diluirse en una lista; y un aviso flotando
+      sobre un modal atenuado se lee como un error de montaje. Turnándose se
+      evitan las dos cosas.
 ═══════════════════════════════════════════════════════════════════════════ */
 
 const numberFormat = new Intl.NumberFormat('es-ES')
@@ -108,7 +113,7 @@ function Confeti({ color }: { color: string }) {
 }
 
 export default function CelebracionLogros() {
-  const { logros, celebracionLista, cerrarCelebracion, descartarLogro, data } =
+  const { logros, celebracionLista, cerrarCelebracion, descartarLogro, descartarLogros, data } =
     useProgressContext()
   const reduceMotion = useReducedMotion()
 
@@ -122,19 +127,28 @@ export default function CelebracionLogros() {
   )
 
   const principal = mayores[0]
-  // Cuando hay algo gordo, los desafíos se resumen aquí dentro en vez de salir
-  // por su cuenta.
-  const resto = [...mayores.slice(1), ...desafios]
+  // Solo se resumen OTRAS metas gordas (lo normal: un hito de racha el mismo
+  // día que se sube de nivel). Los desafíos ya no entran aquí: tienen su propio
+  // turno cuando esta tarjeta se cierre.
+  const resto = mayores.slice(1)
+
+  // Cerrar la tarjeta se lleva las metas gordas y SOLO esas. Si quedaban
+  // desafíos en la cola, el permiso sigue vivo y salen a continuación como
+  // avisos: ese es el relevo.
+  const cerrarTarjeta = useCallback(() => {
+    if (mayores.length > 0) descartarLogros(mayores.map((m) => m.id))
+    else cerrarCelebracion()
+  }, [mayores, descartarLogros, cerrarCelebracion])
 
   // Escape cierra, como cualquier diálogo.
   useEffect(() => {
     if (!celebracionLista) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') cerrarCelebracion()
+      if (e.key === 'Escape') cerrarTarjeta()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [celebracionLista, cerrarCelebracion])
+  }, [celebracionLista, cerrarTarjeta])
 
   // Las dos capas se montan SIEMPRE, y lo que se enciende y apaga es su
   // CONTENIDO. Antes se devolvía null y eso se llevaba por delante el
@@ -163,7 +177,7 @@ export default function CelebracionLogros() {
         <button
           type="button"
           aria-label="Cerrar"
-          onClick={cerrarCelebracion}
+          onClick={cerrarTarjeta}
           className="absolute inset-0 cursor-default bg-[#2c3e50]/35 backdrop-blur-[2px]"
         />
 
@@ -248,7 +262,7 @@ export default function CelebracionLogros() {
 
             <button
               type="button"
-              onClick={cerrarCelebracion}
+              onClick={cerrarTarjeta}
               className="mt-4 w-full rounded-xl border-2 border-[#2c3e50] bg-[#E8A598] py-2.5 text-sm font-black text-white transition-transform active:scale-[0.98]"
               style={{ boxShadow: '3px 3px 0 0 #2c3e50' }}
             >
