@@ -127,7 +127,13 @@ export default function AvisosDesafio({
       role="status"
       aria-live="polite"
     >
-      <AnimatePresence initial={false} mode="popLayout">
+      {/* SIN `initial={false}`. Lo llevaba, y era justo lo que dejaba el primer
+          aviso sin animación: esa bandera le dice a framer que no anime a los
+          hijos ya presentes cuando el propio AnimatePresence se monta, y como
+          este componente devuelve null mientras no hay avisos, al llegar el
+          primero se monta de cero CON el aviso ya dentro. Los siguientes sí
+          animaban, porque el contenedor ya existía. */}
+      <AnimatePresence mode="popLayout">
         {desafios.map((logro) => (
           <Aviso key={logro.id} logro={logro} onIr={() => onDescartar(logro.id)} />
         ))}
