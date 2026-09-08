@@ -3,6 +3,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuthContext } from '@/providers/AuthProvider'
 import { fetchProgress, type ProgressResponse } from '@/services/progressService'
+import {
+  detectarLogros,
+  guardarPendientes,
+  guardarReferencia,
+  leerPendientes,
+  leerReferencia,
+  referenciaDe,
+  type Logro,
+} from '@/lib/logros'
 
 type ProgressContextValue = {
   data: ProgressResponse | null
@@ -10,6 +19,25 @@ type ProgressContextValue = {
   error: string | null
   /** Recargar después de terminar una sesión de estudio. */
   refresh: () => void
+  /**
+   * Metas cumplidas pendientes de celebrar. Se llenan solas al recargar, pero
+   * NO se enseñan hasta que alguien da permiso con `permitirCelebracion`.
+   */
+  logros: Logro[]
+  /**
+   * "Ya no estoy en mitad de nada, puedes celebrar".
+   *
+   * El permiso es explícito a propósito. La alternativa —que cada pantalla
+   * avise de que está ocupada— falla en el lado malo: si un modo nuevo se
+   * olvida de declararse, interrumpe al usuario en mitad de una pregunta. Así,
+   * lo peor que pasa si alguien olvida llamar es que la celebración espera al
+   * siguiente momento seguro.
+   */
+  permitirCelebracion: () => void
+  /** Se ha visto: fuera de la cola. */
+  cerrarCelebracion: () => void
+  /** Hay algo que celebrar Y estamos en un momento en que se puede. */
+  celebracionLista: boolean
 }
 
 const ProgressContext = createContext<ProgressContextValue | null>(null)
@@ -33,6 +61,12 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<ProgressResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Arranca con lo que quedara pendiente de una sesión anterior. El
+  // inicializador perezoso evita tocar localStorage en el render del servidor.
+  const [logros, setLogros] = useState<Logro[]>(() =>
+    typeof window === 'undefined' ? [] : leerPendientes(),
+  )
+  const [permitido, setPermitido] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
   const load = useCallback(async () => {
@@ -46,7 +80,24 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     setLoading(true)
     setError(null)
     try {
-      setData(await fetchProgress(controller.signal))
+      const nuevo = await fetchProgress(controller.signal)
+      setData(nuevo)
+
+      // La primera vez que se ve a este usuario no se celebra nada: solo se
+      // toma la foto. Si no, entrar por primera vez dispararía un aluvión de
+      // avisos por cosas que no acaba de conseguir.
+      const ref = leerReferencia()
+      if (ref) {
+        const nuevos = detectarLogros(ref, nuevo)
+        if (nuevos.length > 0) {
+          setLogros((prev) => {
+            const cola = [...prev, ...nuevos]
+            guardarPendientes(cola)
+            return cola
+          })
+        }
+      }
+      guardarReferencia(referenciaDe(nuevo))
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
       setError(err instanceof Error ? err.message : 'No se pudo cargar tu progreso.')
@@ -60,9 +111,29 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     return () => abortRef.current?.abort()
   }, [load])
 
+  const permitirCelebracion = useCallback(() => setPermitido(true), [])
+
+  const cerrarCelebracion = useCallback(() => {
+    setLogros([])
+    guardarPendientes([])
+    // Se vuelve a cerrar el grifo: el permiso vale para una tanda, no para
+    // siempre. Si el usuario entra luego en otra pregunta, no queremos que la
+    // siguiente meta le salte encima.
+    setPermitido(false)
+  }, [])
+
   const value = useMemo<ProgressContextValue>(
-    () => ({ data, loading, error, refresh: () => void load() }),
-    [data, loading, error, load],
+    () => ({
+      data,
+      loading,
+      error,
+      refresh: () => void load(),
+      logros,
+      permitirCelebracion,
+      cerrarCelebracion,
+      celebracionLista: permitido && logros.length > 0,
+    }),
+    [data, loading, error, load, logros, permitido, permitirCelebracion, cerrarCelebracion],
   )
 
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>
@@ -76,6 +147,10 @@ export function useProgressContext(): ProgressContextValue {
       loading: false,
       error: null,
       refresh: () => {},
+      logros: [],
+      permitirCelebracion: () => {},
+      cerrarCelebracion: () => {},
+      celebracionLista: false,
     }
   )
 }

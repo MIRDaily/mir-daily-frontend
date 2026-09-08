@@ -11,6 +11,7 @@
    Los botones del carné no editan aquí: llevan a /configuracion con un ancla,
    porque el sitio donde se cambian las cosas es uno solo.
 ═══════════════════════════════════════════════════════════════════════════ */
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import ProfileHero from '@/components/Profile/ProfileHero'
@@ -45,8 +46,15 @@ function daysSince(iso: string | null | undefined) {
 
 export default function ProfileOverview() {
   const { profile, loading, error, updatingAvatar } = useProfile()
-  const { data: progressData, loading: progressLoading } = useProgressContext()
+  const { data: progressData, loading: progressLoading, permitirCelebracion } =
+    useProgressContext()
   const router = useRouter()
+
+  // El perfil es una pantalla de reposo: si quedaba algo por celebrar de una
+  // sesión anterior, este es un sitio seguro para soltarlo.
+  useEffect(() => {
+    permitirCelebracion()
+  }, [permitirCelebracion])
 
   if (loading) {
     return (

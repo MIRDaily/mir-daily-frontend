@@ -777,7 +777,7 @@ export default function DashboardPage() {
     loading: resultsLoading,
     error: resultsError,
   } = useDailyResults(showResults, dashboardRefreshKey)
-  const { refresh: refreshProgress } = useProgressContext()
+  const { refresh: refreshProgress, permitirCelebracion } = useProgressContext()
   const {
     data: scoreDistribution,
     loading: scoreDistributionLoading,
@@ -1866,6 +1866,10 @@ export default function DashboardPage() {
       refreshProgress()
       setDailyCompleted(true)
       setShowResults(true)
+      // La pantalla de resultados ES el final de la actividad: aquí ya no se
+      // interrumpe nada. Antes de esta línea el usuario estaba respondiendo y
+      // una celebración encima habría sido justo lo que no queremos.
+      permitirCelebracion()
     } catch (error) {
       console.error('Error enviando respuestas', error)
       setAuthMessage(
