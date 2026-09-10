@@ -2,20 +2,55 @@
 
 import { Fragment, useLayoutEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { debugRender } from '@/lib/debugRSC'
-import SmartSimulacroModal from '@/components/simulacro/SmartSimulacroModal'
 import { useAuth } from '@/hooks/useAuth'
 import { useMonthlyProgress } from '@/hooks/useAnalytics'
 import { useProgressContext } from '@/providers/ProgressProvider'
 import StreakFlame from '@/components/progress/StreakFlame'
 import type { MonthlyProgressResponse } from '@/services/analyticsService'
-import { SingleSheetArt, StackedSheetsArt } from '@/components/studio/SimulacrosHoverArt'
-import { DeckArt } from '@/components/studio/MazosHoverArt'
-import { FlipCardArt } from '@/components/studio/FlashcardsHoverArt'
-import { WaveCta } from '@/components/studio/SimulacroWaveArt'
-import { ZenTimerArt } from '@/components/studio/ZenHoverArt'
-import { EcgMonitorArt, EcgTraceCta } from '@/components/studio/ElectrosHoverArt'
+
+// El popup y la decoración de las tarjetas (SVG animados que solo se ven al
+// pasar el ratón: `opacity: 0` en reposo) se cargan aparte y después de la
+// primera pintura. No entran en el bundle inicial de /studio ni se montan
+// durante la hidratación, que es donde se notaba el tirón al cargar.
+const SmartSimulacroModal = dynamic(
+  () => import('@/components/simulacro/SmartSimulacroModal'),
+  { ssr: false },
+)
+const SingleSheetArt = dynamic(
+  () => import('@/components/studio/SimulacrosHoverArt').then((m) => m.SingleSheetArt),
+  { ssr: false },
+)
+const StackedSheetsArt = dynamic(
+  () => import('@/components/studio/SimulacrosHoverArt').then((m) => m.StackedSheetsArt),
+  { ssr: false },
+)
+const DeckArt = dynamic(
+  () => import('@/components/studio/MazosHoverArt').then((m) => m.DeckArt),
+  { ssr: false },
+)
+const FlipCardArt = dynamic(
+  () => import('@/components/studio/FlashcardsHoverArt').then((m) => m.FlipCardArt),
+  { ssr: false },
+)
+const WaveCta = dynamic(
+  () => import('@/components/studio/SimulacroWaveArt').then((m) => m.WaveCta),
+  { ssr: false },
+)
+const ZenTimerArt = dynamic(
+  () => import('@/components/studio/ZenHoverArt').then((m) => m.ZenTimerArt),
+  { ssr: false },
+)
+const EcgMonitorArt = dynamic(
+  () => import('@/components/studio/ElectrosHoverArt').then((m) => m.EcgMonitorArt),
+  { ssr: false },
+)
+const EcgTraceCta = dynamic(
+  () => import('@/components/studio/ElectrosHoverArt').then((m) => m.EcgTraceCta),
+  { ssr: false },
+)
 
 type QuickStat = {
   label: string
@@ -251,20 +286,22 @@ const studioDailyDuration = 0.5
 const studioDailyEase = 'easeOut' as const
 const studioGreetingRevealDelay = 0.96
 
+// Antes también animaba `filter: blur()`, pero desenfocar ~15 elementos a la vez
+// cargaba la primera pintura de repintados. Opacidad + desplazamiento + escala
+// se componen en GPU y bastan para el mismo efecto de entrada.
 function entranceProps(
   reduceMotion: boolean | null,
   delay: number,
   distance = 18,
   scale = 0.985,
-  blurPx = 6,
 ) {
   if (reduceMotion) {
     return { initial: false as const }
   }
 
   return {
-    initial: { opacity: 0, y: distance, scale, filter: `blur(${blurPx}px)` },
-    animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
+    initial: { opacity: 0, y: distance, scale },
+    animate: { opacity: 1, y: 0, scale: 1 },
     transition: { duration: studioDailyDuration, delay, ease: studioDailyEase },
   }
 }
@@ -379,17 +416,17 @@ export default function StudioPage() {
 
       <motion.main
         className="relative z-10 mx-auto w-full max-w-7xl px-6 py-8"
-        {...entranceProps(reduceMotion, 0.04, 14, 0.995, 4)}
+        {...entranceProps(reduceMotion, 0.04, 14, 0.995)}
       >
         <div className="flex flex-col gap-10">
           <motion.section
             className="flex flex-col justify-between gap-6 md:flex-row md:items-end"
-            {...entranceProps(reduceMotion, 0.1, 16, 0.99, 4)}
+            {...entranceProps(reduceMotion, 0.1, 16, 0.99)}
           >
             <div className="flex flex-col gap-2">
               <motion.h1
                 className="text-4xl font-black tracking-tight text-[#2c3e50]"
-                {...entranceProps(reduceMotion, 0.12, 12, 0.99, 3)}
+                {...entranceProps(reduceMotion, 0.12, 12, 0.99)}
               >
                 Studio
               </motion.h1>
@@ -456,7 +493,7 @@ export default function StudioPage() {
             </div>
           </motion.section>
 
-          <motion.section {...entranceProps(reduceMotion, 0.18, 16, 0.99, 4)}>
+          <motion.section {...entranceProps(reduceMotion, 0.18, 16, 0.99)}>
             <div className="mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined">dashboard</span>
               <h2 className="text-xl font-bold text-[#2c3e50]">Visión General del Estudio</h2>
@@ -515,7 +552,7 @@ export default function StudioPage() {
 
           <motion.section
             className="grid grid-cols-1 gap-6 md:grid-cols-2"
-            {...entranceProps(reduceMotion, 0.26, 18, 0.99, 4)}
+            {...entranceProps(reduceMotion, 0.26, 18, 0.99)}
           >
             {studioCards.map((card, index) => (
               <Fragment key={card.id}>
@@ -754,7 +791,7 @@ export default function StudioPage() {
 
           <motion.section
             className="border-t border-[#EAE4E2] pt-8"
-            {...entranceProps(reduceMotion, 0.36, 14, 0.995, 3)}
+            {...entranceProps(reduceMotion, 0.36, 14, 0.995)}
           >
             <h3 className="mb-4 text-xs font-bold uppercase tracking-wider">Acceso Rápido</h3>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
