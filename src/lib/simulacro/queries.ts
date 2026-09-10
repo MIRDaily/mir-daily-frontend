@@ -13,6 +13,7 @@ import type {
   SimulacroMode,
   SimulacroQuestion,
   SimulacroResult,
+  SmartSimulacroPlan,
   Subject,
   Topic,
 } from './types'
@@ -101,6 +102,22 @@ export async function fetchSimulacroQuestions(
     },
   )
   return questions ?? []
+}
+
+// Simulacro a tu medida: el backend elige las 30 preguntas según los puntos
+// débiles del usuario y devuelve, además, el desglose por asignatura y si hay
+// señal suficiente (coverage). Igual que /questions, nunca trae la respuesta
+// correcta: la corrección sigue pasando por /check.
+export async function fetchSmartSimulacro(count = 30): Promise<SmartSimulacroPlan> {
+  const plan = await apiFetch<SmartSimulacroPlan>('/smart', {
+    method: 'POST',
+    body: JSON.stringify({ count }),
+  })
+  return {
+    questions: plan.questions ?? [],
+    composition: plan.composition ?? [],
+    coverage: plan.coverage ?? 'insufficient',
+  }
 }
 
 /** Baraja una copia: si no, las preguntas saldrían agrupadas por asignatura. */

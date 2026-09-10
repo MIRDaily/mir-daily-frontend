@@ -29,6 +29,18 @@ export interface SimulacroConfig {
   weights?: { subjectId: number; count: number }[]
 }
 
+/** Respuesta de `POST /api/simulacro/smart`. */
+export interface SmartSimulacroPlan {
+  questions: SimulacroQuestion[]
+  /** Desglose por asignatura de la tanda que se va a jugar (mayor primero). */
+  composition: { subjectName: string; count: number }[]
+  /**
+   * `topics`: las 30 salieron de temas flojos · `mixed`: hubo que completar con
+   * asignaturas flojas · `insufficient`: no hay señal suficiente de fallos.
+   */
+  coverage: 'topics' | 'mixed' | 'insufficient'
+}
+
 // La pregunta tal y como la entrega el backend: SIN la respuesta correcta ni la
 // explicación. Esos datos solo se revelan tras corregir en el servidor (/check).
 export interface SimulacroQuestion {

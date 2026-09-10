@@ -4,6 +4,7 @@ import { useLayoutEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { debugRender } from '@/lib/debugRSC'
+import SmartSimulacroModal from '@/components/simulacro/SmartSimulacroModal'
 import { useAuth } from '@/hooks/useAuth'
 import { useMonthlyProgress } from '@/hooks/useAnalytics'
 import { useProgressContext } from '@/providers/ProgressProvider'
@@ -335,6 +336,12 @@ export default function StudioPage() {
     [weakTopic],
   )
 
+  // El "Simulacro a tu medida" necesita saber dónde flojea el usuario. Mientras
+  // no haya un punto débil detectado, el CTA se queda desactivado con aviso: es
+  // la misma señal que alimenta la tarjeta, así que no hay una petición extra.
+  const smartReady = weakTopic != null
+  const [smartOpen, setSmartOpen] = useState(false)
+
   useLayoutEffect(() => {
     const prevScrollRestoration = window.history.scrollRestoration
     window.history.scrollRestoration = 'manual'
@@ -581,11 +588,23 @@ export default function StudioPage() {
                 {card.id === 'flashcards' ? <FlipCardArt hovered={flashcardsHovered} /> : null}
                 {card.id === 'sala-zen' ? <ZenTimerArt hovered={zenHovered} /> : null}
                 {card.id === 'electros' ? <EcgMonitorArt hovered={electrosHovered} /> : null}
-                {card.id === 'simulacros' ? (
+                {card.id === 'simulacros' && smartReady ? (
                   <WaveCta hovered={featuredHovered}>
                     <span className="material-symbols-outlined">play_arrow</span>
                     {card.cta}
                   </WaveCta>
+                ) : null}
+                {/* La tarjeta entera abre el popup del "Simulacro a tu medida"
+                    (capa propia por encima del contenido, como en Electros).
+                    Solo si hay un punto débil detectado: sin datos no hace nada
+                    y debajo se explica por qué. */}
+                {card.id === 'simulacros' && smartReady ? (
+                  <button
+                    type="button"
+                    onClick={() => setSmartOpen(true)}
+                    aria-label={`${card.title}: ${card.cta}`}
+                    className="absolute inset-0 z-20 rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E8A598]"
+                  />
                 ) : null}
                 {card.id === 'electros' ? (
                   <EcgTraceCta hovered={electrosHovered}>
@@ -648,6 +667,12 @@ export default function StudioPage() {
                     </div>
                     <h3 className="mb-2 text-2xl font-bold text-[#2c3e50]">{card.title}</h3>
                     <p className="mb-5 text-sm sm:text-base">{card.description}</p>
+                    {card.id === 'simulacros' && !smartReady ? (
+                      <p className="inline-flex items-center gap-1.5 rounded-lg border border-[#E8A598]/30 bg-[#E8A598]/10 px-2.5 py-1 text-xs font-bold text-[#d18d80]">
+                        <span className="material-symbols-outlined text-sm">lock</span>
+                        Responde más preguntas para desbloquearlo
+                      </p>
+                    ) : null}
                   </div>
 
                   {card.type === 'featured' ? (
@@ -764,6 +789,8 @@ export default function StudioPage() {
           </motion.section>
         </div>
       </motion.main>
+
+      {smartOpen ? <SmartSimulacroModal onClose={() => setSmartOpen(false)} /> : null}
     </div>
   )
 }

@@ -4,6 +4,10 @@
 // Orquesta las fases builder → running → results. Las preguntas y su corrección
 // se obtienen del BACKEND (autenticado); el cliente nunca recibe la respuesta
 // correcta hasta que el usuario responde y el servidor la valida (/check).
+//
+// El "Simulacro a tu medida" (popup de Studio) no pasa por el creador: deja las
+// 30 preguntas ya elegidas en sessionStorage y esta página las recoge al montar
+// y arranca directa en la transición.
 
 import { useEffect, useRef, useState } from 'react'
 import { useProgressContext } from '@/providers/ProgressProvider'
@@ -13,6 +17,7 @@ import SimulacroBuilder from '@/components/simulacro/SimulacroBuilder'
 import SimulacroRunner from '@/components/simulacro/SimulacroRunner'
 import SimulacroResultsGrid from '@/components/simulacro/SimulacroResultsGrid'
 import SimulacroTransition from '@/components/simulacro/SimulacroTransition'
+import { SMART_SIM_STORAGE_KEY } from '@/components/simulacro/SmartSimulacroModal'
 import {
   checkSimulacroAnswers,
   fetchSimulacroQuestions,
@@ -22,6 +27,7 @@ import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import type {
   SimulacroAnswer,
   SimulacroConfig,
+  SimulacroMode,
   SimulacroPhase,
   SimulacroQuestion,
   SimulacroResult,
@@ -47,6 +53,34 @@ function waitRemaining(startedAt: number, min: number): Promise<void> {
   return left > 0 ? new Promise((resolve) => setTimeout(resolve, left)) : Promise.resolve()
 }
 
+/** Lee (y borra) la tanda que dejó el popup de Studio. Devuelve null si no hay,
+ *  está corrupta o es vieja (más de 2 min: el popup se abrió y se olvidó). */
+function readSmartPayload(): { questions: SimulacroQuestion[]; mode: SimulacroMode } | null {
+  let raw: string | null = null
+  try {
+    raw = sessionStorage.getItem(SMART_SIM_STORAGE_KEY)
+    if (raw) sessionStorage.removeItem(SMART_SIM_STORAGE_KEY)
+  } catch {
+    return null
+  }
+  if (!raw) return null
+  try {
+    const p = JSON.parse(raw) as {
+      questions?: unknown
+      mode?: unknown
+      ts?: unknown
+    }
+    if (!Array.isArray(p.questions) || p.questions.length === 0) return null
+    if (typeof p.ts === 'number' && Date.now() - p.ts > 120_000) return null
+    return {
+      questions: p.questions as SimulacroQuestion[],
+      mode: p.mode === 'immediate' ? 'immediate' : 'deferred',
+    }
+  } catch {
+    return null
+  }
+}
+
 export default function SimulacroPage() {
   const router = useRouter()
   const { setBackAction } = useHeaderUI()
@@ -69,6 +103,8 @@ export default function SimulacroPage() {
   // qué se está preparando (nº de preguntas y modo).
   const [pendingConfig, setPendingConfig] = useState<SimulacroConfig | null>(null)
   const [finishing, setFinishing] = useState(false)
+  // true si esta sesión salió del "Simulacro a tu medida" (popup de Studio).
+  const [wasSmart, setWasSmart] = useState(false)
   // Identificador de la sesión de simulacro: el backend lo usa para persistir
   // cada respuesta (analítica) de forma idempotente.
   const sessionIdRef = useRef<string | null>(null)
@@ -133,6 +169,42 @@ export default function SimulacroPage() {
       setGenerating(false)
     }
   }
+
+  // Arranque del "Simulacro a tu medida": las preguntas ya vienen del popup, así
+  // que aquí solo queda la cola de handleSubmit (fijar estado, pase, a correr).
+  const bootSmart = (smartQuestions: SimulacroQuestion[], smartMode: SimulacroMode) => {
+    setWasSmart(true)
+    setQuestions(smartQuestions)
+    updateAnswers(() => smartQuestions.map(() => ({ selectedIndex: null })))
+    setResults(smartQuestions.map(() => null))
+    setMode(smartMode)
+    sessionIdRef.current = crypto.randomUUID()
+    setPendingConfig({ subjectIds: [], topicIds: [], count: smartQuestions.length, mode: smartMode })
+    setGenerating(true)
+    const startedAt = Date.now()
+    waitRemaining(startedAt, TRANSITION_MIN_MS)
+      .then(() => {
+        setPhase('running')
+        window.scrollTo({ top: 0, behavior: 'auto' })
+        return new Promise((resolve) => setTimeout(resolve, BUILDER_EXIT_MS + 40))
+      })
+      .then(() => setGenerating(false))
+  }
+
+  // Recoge la tanda que dejó el popup de Studio y arranca, una sola vez al
+  // montar. `readSmartPayload` borra la clave al leerla, así que el segundo
+  // pase de StrictMode en desarrollo la encuentra vacía y no hace nada. Sin
+  // setTimeout a propósito: si el arranque fuese diferido, el cleanup del
+  // primer pase de StrictMode lo cancelaría y la tanda se perdería.
+  const smartBootedRef = useRef(false)
+  useEffect(() => {
+    if (smartBootedRef.current) return
+    const payload = readSmartPayload()
+    if (!payload) return
+    smartBootedRef.current = true
+    bootSmart(payload.questions, payload.mode)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Corrección inmediata de una pregunta en el servidor (respuesta o blanco).
   const checkImmediate = (
@@ -244,8 +316,22 @@ export default function SimulacroPage() {
     setResults([])
     setGenerationError(null)
     setPendingConfig(null)
+    setWasSmart(false)
     sessionIdRef.current = null
     setPhase('builder')
+  }
+
+  // "Crear otro simulacro" en la pantalla de resultados. El "Simulacro a tu
+  // medida" no tiene creador en esta página: se vuelve a Studio, donde está su
+  // tarjeta. El resto de caminos de abandono (Salir, atrás, enlaces) usan
+  // handleRestart y caen en el creador normal, que es un destino razonable para
+  // una sesión dejada a medias.
+  const handleResultsRestart = () => {
+    if (wasSmart) {
+      router.push('/studio')
+    } else {
+      handleRestart()
+    }
   }
 
   // Abre el modal propio y devuelve una promesa que se resuelve cuando el
@@ -278,10 +364,14 @@ export default function SimulacroPage() {
     setBackAction(
       phase === 'running'
         ? null
-        : { label: 'Estudio', href: '/studio', current: 'Crear Simulacro' },
+        : {
+            label: 'Estudio',
+            href: '/studio',
+            current: wasSmart ? 'Simulacro a tu medida' : 'Crear Simulacro',
+          },
     )
     return () => setBackAction(null)
-  }, [phase, setBackAction])
+  }, [phase, wasSmart, setBackAction])
 
   // Cerrar/recargar la pestaña o navegar a una URL externa mientras hay un
   // simulacro en curso (mismo patrón que ZenRoomClient.tsx: "exit friction").
@@ -411,7 +501,7 @@ export default function SimulacroPage() {
                 questions={questions}
                 answers={answers}
                 results={results}
-                onRestart={handleRestart}
+                onRestart={handleResultsRestart}
               />
             </motion.div>
           )}
