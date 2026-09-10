@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useLayoutEffect, useMemo, useState } from 'react'
+import { Fragment, useLayoutEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { debugRender } from '@/lib/debugRSC'
@@ -56,11 +56,10 @@ type StudioCard = {
 
 const numberFormat = new Intl.NumberFormat('es-ES')
 
-// Antes estaban clavados a "12 días" y "4h 20m". La racha ya es un dato real;
-// el tiempo de estudio del día no se mide en ninguna parte, así que en su
-// hueco va el XP de hoy, que sí existe.
+// Solo la racha. El XP de hoy y el nivel ya viven en la cabecera global (el
+// aro del avatar) y en el perfil; repetirlos aquí era ruido.
 function buildQuickStats(
-  progress: { currentStreak: number; xpToday: number; xpTodayTotal?: number } | null,
+  progress: { currentStreak: number } | null,
 ): ReadonlyArray<QuickStat> {
   return [
     {
@@ -72,16 +71,6 @@ function buildQuickStats(
       icon: 'local_fire_department',
       iconClass: 'bg-[#e6f4ea] text-[#8BA888]',
       flame: progress?.currentStreak ?? 0,
-    },
-    {
-      label: 'XP hoy',
-      // El total del día, no lo que consume tope: los premios semanales cuentan.
-      value:
-        progress == null
-          ? '—'
-          : numberFormat.format(progress.xpTodayTotal ?? progress.xpToday),
-      icon: 'bolt',
-      iconClass: 'bg-[#feefc3] text-[#ea8600]',
     },
   ]
 }
@@ -414,7 +403,7 @@ export default function StudioPage() {
                   {greetingParts[0]}
                 </span>
                 <span
-                  className={`inline-block font-medium text-[#d18d80] ${
+                  className={`inline-block align-baseline text-3xl font-black uppercase leading-none tracking-tight text-[#d18d80] sm:text-4xl ${
                     !studioName ? 'min-w-[6ch]' : ''
                   } ${
                     !studioName && loading ? 'rounded bg-[#E8A598]/18' : ''
@@ -529,10 +518,21 @@ export default function StudioPage() {
             {...entranceProps(reduceMotion, 0.26, 18, 0.99, 4)}
           >
             {studioCards.map((card, index) => (
-              <motion.article
-                key={card.id}
-                id={card.id}
-                className={`group relative overflow-hidden rounded-2xl border-2 p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-[#2c3e50] hover:shadow-[4px_4px_0_0_#2c3e50] ${
+              <Fragment key={card.id}>
+                {/* Encabezado de sección: separa la tarjeta destacada del resto
+                    de módulos para que no quede todo apelmazado. Mismo estilo
+                    que "Visión General del Estudio". */}
+                {index === 1 ? (
+                  <div className="mt-6 flex items-center gap-2 sm:mt-8 md:col-span-2">
+                    <span className="material-symbols-outlined">folder_copy</span>
+                    <h2 className="text-xl font-bold text-[#2c3e50]">
+                      Módulos de entrenamiento
+                    </h2>
+                  </div>
+                ) : null}
+                <motion.article
+                  id={card.id}
+                  className={`group relative overflow-hidden rounded-2xl border-2 p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-[#2c3e50] hover:shadow-[4px_4px_0_0_#2c3e50] ${
                   card.type === 'featured'
                     ? 'border-[#E8A598]/30 bg-gradient-to-br from-white to-[#fff0ec] md:col-span-2'
                     : card.type === 'zen'
@@ -747,7 +747,8 @@ export default function StudioPage() {
                     </Link>
                   ) : null}
                 </div>
-              </motion.article>
+                </motion.article>
+              </Fragment>
             ))}
           </motion.section>
 
