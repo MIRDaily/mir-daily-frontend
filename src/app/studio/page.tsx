@@ -461,7 +461,7 @@ export default function StudioPage() {
                   {greetingParts[0]}
                 </span>
                 <span
-                  className={`inline-block align-baseline text-5xl font-black uppercase leading-none tracking-tight text-[#d18d80] [overflow-wrap:anywhere] sm:text-7xl ${
+                  className={`inline-block align-baseline text-4xl font-black uppercase leading-none tracking-tight text-[#d18d80] [overflow-wrap:anywhere] sm:text-5xl ${
                     !studioName ? 'min-w-[6ch]' : ''
                   } ${
                     !studioName && loading ? 'rounded bg-[#E8A598]/18' : ''
