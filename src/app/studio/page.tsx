@@ -441,16 +441,12 @@ export default function StudioPage() {
         className="relative z-10 mx-auto w-full max-w-7xl px-6 py-8"
         {...entranceProps(reduceMotion, 0.04, 14, 0.995)}
       >
-        {/* "Studio" ya no se enseña: el usuario sabe dónde está. Queda solo
-            para lectores de pantalla. */}
-        <h1 className="sr-only">Studio</h1>
-
         <div className="flex flex-col gap-10">
           <motion.section
-            className="mb-4 sm:mb-8"
+            className="mb-4 flex items-end justify-between gap-4 sm:mb-8"
             {...entranceProps(reduceMotion, 0.1, 16, 0.99)}
           >
-            <div>
+            <div className="min-w-0">
               <motion.p
                 className="relative overflow-hidden text-lg font-light leading-tight"
                 initial={reduceMotion ? false : { clipPath: 'inset(0 100% 0 0)', opacity: 0.98 }}
@@ -488,6 +484,15 @@ export default function StudioPage() {
                 ) : null}
               </motion.p>
             </div>
+
+            {/* "Studio" pasa a la derecha, donde antes iban los badges de XP y
+                racha. Es el h1 de la página. */}
+            <motion.h1
+              className="shrink-0 pb-0.5 text-xl font-black uppercase tracking-[0.18em] text-[#2c3e50]/60 sm:text-2xl"
+              {...entranceProps(reduceMotion, 0.16, 12, 0.99)}
+            >
+              Studio
+            </motion.h1>
           </motion.section>
 
           <section>
