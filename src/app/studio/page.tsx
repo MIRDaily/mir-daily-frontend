@@ -1,14 +1,13 @@
 ﻿'use client'
 
-import { Fragment, useLayoutEffect, useMemo, useState } from 'react'
+import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion, useInView, useReducedMotion } from 'framer-motion'
 import { debugRender } from '@/lib/debugRSC'
 import { useAuth } from '@/hooks/useAuth'
 import { useMonthlyProgress } from '@/hooks/useAnalytics'
 import { useProgressContext } from '@/providers/ProgressProvider'
-import StreakFlame from '@/components/progress/StreakFlame'
 import type { MonthlyProgressResponse } from '@/services/analyticsService'
 
 // El popup y la decoración de las tarjetas (SVG animados que solo se ven al
@@ -52,15 +51,6 @@ const EcgTraceCta = dynamic(
   { ssr: false },
 )
 
-type QuickStat = {
-  label: string
-  value: string
-  icon: string
-  iconClass: string
-  /** La racha se pinta con la llama, no con un icono dentro de un círculo. */
-  flame?: number
-}
-
 type OverviewCard = {
   title: string
   value: string
@@ -90,25 +80,6 @@ type StudioCard = {
 }
 
 const numberFormat = new Intl.NumberFormat('es-ES')
-
-// Solo la racha. El XP de hoy y el nivel ya viven en la cabecera global (el
-// aro del avatar) y en el perfil; repetirlos aquí era ruido.
-function buildQuickStats(
-  progress: { currentStreak: number } | null,
-): ReadonlyArray<QuickStat> {
-  return [
-    {
-      label: 'Racha',
-      value:
-        progress == null
-          ? '—'
-          : `${progress.currentStreak} ${progress.currentStreak === 1 ? 'día' : 'días'}`,
-      icon: 'local_fire_department',
-      iconClass: 'bg-[#e6f4ea] text-[#8BA888]',
-      flame: progress?.currentStreak ?? 0,
-    },
-  ]
-}
 
 /** El punto débil que ya viene resuelto en el desafío personalizado. */
 type PuntoDebil = { tema: string; asignatura: string; precision: number | null }
@@ -306,6 +277,58 @@ function entranceProps(
   }
 }
 
+/**
+ * Bloque que aparece al entrar en el viewport y se vuelve a esconder al salir
+ * (mismo patrón que `LazyCard` del dashboard / revisión del daily). Reacciona al
+ * scroll: la tarjeta se revela justo donde el usuario está mirando y se apaga
+ * al alejarse, así el recorrido por la página se siente vivo.
+ */
+function Reveal({
+  children,
+  className,
+  id,
+  reduceMotion,
+  onMouseEnter,
+  onMouseLeave,
+  // Los encabezados solo entran una vez; las tarjetas entran y salen con el
+  // scroll (`once` = false) para que el recorrido se sienta vivo.
+  once = false,
+}: {
+  children: ReactNode
+  className?: string
+  id?: string
+  reduceMotion: boolean | null
+  onMouseEnter?: () => void
+  onMouseLeave?: () => void
+  once?: boolean
+}) {
+  const ref = useRef<HTMLDivElement | null>(null)
+  const inView = useInView(ref, { amount: 0.2, margin: '0px 0px -10% 0px', once })
+
+  if (reduceMotion) {
+    return (
+      <div ref={ref} className={className} id={id} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+        {children}
+      </div>
+    )
+  }
+
+  return (
+    <motion.div
+      ref={ref}
+      className={className}
+      id={id}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      initial={{ opacity: 0, y: 26, scale: 0.985 }}
+      animate={inView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 26, scale: 0.985 }}
+      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
 function resolveStudioName(
   user: { display_name?: string; username?: string; email?: string } | null,
 ): string | null {
@@ -418,20 +441,18 @@ export default function StudioPage() {
         className="relative z-10 mx-auto w-full max-w-7xl px-6 py-8"
         {...entranceProps(reduceMotion, 0.04, 14, 0.995)}
       >
+        {/* "Studio" ya no se enseña: el usuario sabe dónde está. Queda solo
+            para lectores de pantalla. */}
+        <h1 className="sr-only">Studio</h1>
+
         <div className="flex flex-col gap-10">
           <motion.section
-            className="flex flex-col justify-between gap-6 md:flex-row md:items-end"
+            className="mb-4 sm:mb-8"
             {...entranceProps(reduceMotion, 0.1, 16, 0.99)}
           >
-            <div className="flex flex-col gap-2">
-              <motion.h1
-                className="text-4xl font-black tracking-tight text-[#2c3e50]"
-                {...entranceProps(reduceMotion, 0.12, 12, 0.99)}
-              >
-                Studio
-              </motion.h1>
+            <div>
               <motion.p
-                className="relative overflow-hidden text-lg font-light"
+                className="relative overflow-hidden text-lg font-light leading-tight"
                 initial={reduceMotion ? false : { clipPath: 'inset(0 100% 0 0)', opacity: 0.98 }}
                 animate={reduceMotion ? undefined : { clipPath: 'inset(0 0 0 0)', opacity: 1 }}
                 transition={{ duration: 0.58, delay: studioGreetingRevealDelay, ease: [0.2, 0.9, 0.2, 1] }}
@@ -440,7 +461,7 @@ export default function StudioPage() {
                   {greetingParts[0]}
                 </span>
                 <span
-                  className={`inline-block align-baseline text-3xl font-black uppercase leading-none tracking-tight text-[#d18d80] sm:text-4xl ${
+                  className={`inline-block align-baseline text-5xl font-black uppercase leading-none tracking-tight text-[#d18d80] [overflow-wrap:anywhere] sm:text-7xl ${
                     !studioName ? 'min-w-[6ch]' : ''
                   } ${
                     !studioName && loading ? 'rounded bg-[#E8A598]/18' : ''
@@ -467,43 +488,19 @@ export default function StudioPage() {
                 ) : null}
               </motion.p>
             </div>
-
-            <div className="flex gap-4">
-              {buildQuickStats(levelProgress.data?.progress ?? null).map((stat, index) => (
-                <motion.div
-                  key={stat.label}
-                  className="rounded-xl border border-[#EAE4E2] bg-white px-5 py-3 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md"
-                  {...entranceProps(reduceMotion, 0.18 + index * 0.06, 16, 0.98)}
-                >
-                  <div className="flex items-center gap-3">
-                    {stat.flame === undefined ? (
-                      <div className={`rounded-full p-1.5 ${stat.iconClass}`}>
-                        <span className="material-symbols-outlined text-xl">{stat.icon}</span>
-                      </div>
-                    ) : (
-                      <StreakFlame streak={stat.flame} size={30} />
-                    )}
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide">{stat.label}</p>
-                      <p className="text-base font-bold text-[#2c3e50]">{stat.value}</p>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
           </motion.section>
 
-          <motion.section {...entranceProps(reduceMotion, 0.18, 16, 0.99)}>
-            <div className="mb-4 flex items-center gap-2">
+          <section>
+            <Reveal once reduceMotion={reduceMotion} className="mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined">dashboard</span>
               <h2 className="text-xl font-bold text-[#2c3e50]">Visión General del Estudio</h2>
-            </div>
+            </Reveal>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {overviewCards.map((card, index) => (
-                <motion.article
+              {overviewCards.map((card) => (
+                <Reveal
                   key={card.title}
-                  className="relative flex items-center justify-between overflow-hidden rounded-2xl border border-[#EAE4E2] bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md"
-                  {...entranceProps(reduceMotion, 0.24 + index * 0.08, 18, 0.985)}
+                  reduceMotion={reduceMotion}
+                  className="relative flex items-center justify-between overflow-hidden rounded-2xl border border-[#EAE4E2] bg-white p-6 shadow-sm transition-shadow hover:shadow-md"
                 >
                   <div
                     className={`absolute right-0 top-0 h-full w-24 bg-gradient-to-l to-transparent ${
@@ -545,38 +542,39 @@ export default function StudioPage() {
                   >
                     <span className="material-symbols-outlined text-3xl">{card.icon}</span>
                   </div>
-                </motion.article>
+                </Reveal>
               ))}
             </div>
-          </motion.section>
+          </section>
 
-          <motion.section
-            className="grid grid-cols-1 gap-6 md:grid-cols-2"
-            {...entranceProps(reduceMotion, 0.26, 18, 0.99)}
-          >
+          <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
             {studioCards.map((card, index) => (
               <Fragment key={card.id}>
                 {/* Encabezado de sección: separa la tarjeta destacada del resto
                     de módulos para que no quede todo apelmazado. Mismo estilo
                     que "Visión General del Estudio". */}
                 {index === 1 ? (
-                  <div className="mt-6 flex items-center gap-2 sm:mt-8 md:col-span-2">
+                  <Reveal
+                    once
+                    reduceMotion={reduceMotion}
+                    className="mt-6 flex items-center gap-2 sm:mt-8 md:col-span-2"
+                  >
                     <span className="material-symbols-outlined">folder_copy</span>
                     <h2 className="text-xl font-bold text-[#2c3e50]">
                       Módulos de entrenamiento
                     </h2>
-                  </div>
+                  </Reveal>
                 ) : null}
-                <motion.article
+                <Reveal
+                  reduceMotion={reduceMotion}
                   id={card.id}
-                  className={`group relative overflow-hidden rounded-2xl border-2 p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-[#2c3e50] hover:shadow-[4px_4px_0_0_#2c3e50] ${
+                  className={`group relative overflow-hidden rounded-2xl border-2 p-6 shadow-sm transition-[border-color,box-shadow] duration-200 hover:border-[#2c3e50] hover:shadow-[4px_4px_0_0_#2c3e50] ${
                   card.type === 'featured'
                     ? 'border-[#E8A598]/30 bg-gradient-to-br from-white to-[#fff0ec] md:col-span-2'
                     : card.type === 'zen'
                       ? 'border-[#EAE4E2] bg-[#f4f7f4]'
                       : 'border-[#EAE4E2] bg-white'
                 }`}
-                {...entranceProps(reduceMotion, 0.32 + index * 0.08, 20, 0.98)}
                 {...(card.id === 'preguntas-simulacros'
                   ? {
                       onMouseEnter: () => setSimulacrosHovered(true),
@@ -784,18 +782,17 @@ export default function StudioPage() {
                     </Link>
                   ) : null}
                 </div>
-                </motion.article>
+                </Reveal>
               </Fragment>
             ))}
-          </motion.section>
+          </section>
 
-          <motion.section
-            className="border-t border-[#EAE4E2] pt-8"
-            {...entranceProps(reduceMotion, 0.36, 14, 0.995)}
-          >
-            <h3 className="mb-4 text-xs font-bold uppercase tracking-wider">Acceso Rápido</h3>
+          <section className="border-t border-[#EAE4E2] pt-8">
+            <Reveal once reduceMotion={reduceMotion}>
+              <h3 className="mb-4 text-xs font-bold uppercase tracking-wider">Acceso Rápido</h3>
+            </Reveal>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <motion.div {...entranceProps(reduceMotion, 0.44, 16, 0.98)}>
+              <Reveal once reduceMotion={reduceMotion}>
                 <Link
                   href="/library"
                   className="group flex cursor-pointer items-center gap-4 rounded-xl border border-[#EAE4E2] bg-white p-4 transition-colors hover:border-[#E8A598]/50"
@@ -808,8 +805,8 @@ export default function StudioPage() {
                     <p className="text-xs">Biblioteca de manuales</p>
                   </div>
                 </Link>
-              </motion.div>
-              <motion.div {...entranceProps(reduceMotion, 0.48, 16, 0.98)}>
+              </Reveal>
+              <Reveal once reduceMotion={reduceMotion}>
                 <Link
                   href="/studio/minijuegos"
                   className="group flex cursor-pointer items-center gap-4 rounded-xl border border-[#EAE4E2] bg-white p-4 transition-colors hover:border-[#E8A598]/50"
@@ -822,9 +819,9 @@ export default function StudioPage() {
                     <p className="text-xs">Repasa jugando: GramSwipe y más</p>
                   </div>
                 </Link>
-              </motion.div>
+              </Reveal>
             </div>
-          </motion.section>
+          </section>
         </div>
       </motion.main>
 
