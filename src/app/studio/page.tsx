@@ -302,8 +302,13 @@ function Reveal({
   onMouseLeave?: () => void
   once?: boolean
 }) {
+  // Sin margen negativo por abajo: encogía el viewport "efectivo" un 10 % desde
+  // el fondo, así que el contenido que queda al final de la página (Acceso
+  // Rápido) nunca llegaba a cruzar esa línea con scroll normal — no hay más
+  // recorrido de scroll que lo empuje más arriba — y se quedaba invisible para
+  // siempre, ni haciendo scroll hasta el final.
   const ref = useRef<HTMLDivElement | null>(null)
-  const inView = useInView(ref, { amount: 0.2, margin: '0px 0px -10% 0px', once })
+  const inView = useInView(ref, { amount: 0.2, once })
 
   if (reduceMotion) {
     return (
