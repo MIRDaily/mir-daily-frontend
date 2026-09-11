@@ -302,13 +302,16 @@ function Reveal({
   onMouseLeave?: () => void
   once?: boolean
 }) {
-  // Sin margen negativo por abajo: encogía el viewport "efectivo" un 10 % desde
-  // el fondo, así que el contenido que queda al final de la página (Acceso
-  // Rápido) nunca llegaba a cruzar esa línea con scroll normal — no hay más
-  // recorrido de scroll que lo empuje más arriba — y se quedaba invisible para
-  // siempre, ni haciendo scroll hasta el final.
+  // El margen negativo por abajo retrasa el disparo hasta que la tarjeta ya
+  // está bien entrada en pantalla (si no, se revela nada más asomar por el
+  // borde y se pierde la sensación de "aparece con el scroll"). El problema
+  // que tenía antes no era el margen: era que el último bloque de la página
+  // (Acceso Rápido) no tenía recorrido de scroll de sobra para cruzar esa
+  // línea recortada una vez la página llega a su tope — se quedaba invisible
+  // para siempre. Se arregla dando ese margen extra en el <main> (pb-32) en
+  // vez de quitando el efecto.
   const ref = useRef<HTMLDivElement | null>(null)
-  const inView = useInView(ref, { amount: 0.2, once })
+  const inView = useInView(ref, { amount: 0.2, margin: '0px 0px -8% 0px', once })
 
   if (reduceMotion) {
     return (
@@ -443,7 +446,7 @@ export default function StudioPage() {
 
 
       <motion.main
-        className="relative z-10 mx-auto w-full max-w-7xl px-6 py-8"
+        className="relative z-10 mx-auto w-full max-w-7xl px-6 pb-32 pt-8"
         {...entranceProps(reduceMotion, 0.04, 14, 0.995)}
       >
         <div className="flex flex-col gap-10">
