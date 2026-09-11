@@ -38,6 +38,10 @@ const WaveCta = dynamic(
   () => import('@/components/studio/SimulacroWaveArt').then((m) => m.WaveCta),
   { ssr: false },
 )
+const WaveBackdrop = dynamic(
+  () => import('@/components/studio/SimulacroWaveArt').then((m) => m.WaveBackdrop),
+  { ssr: false },
+)
 const ZenTimerArt = dynamic(
   () => import('@/components/studio/ZenHoverArt').then((m) => m.ZenTimerArt),
   { ssr: false },
@@ -634,7 +638,11 @@ export default function StudioPage() {
                 {card.id === 'mazos' ? <DeckArt hovered={mazosHovered} /> : null}
                 {card.id === 'flashcards' ? <FlipCardArt hovered={flashcardsHovered} /> : null}
                 {card.id === 'sala-zen' ? <ZenTimerArt hovered={zenHovered} /> : null}
-                {card.id === 'electros' ? <EcgMonitorArt hovered={electrosHovered} /> : null}
+                {card.id === 'electros' ? <EcgMonitorArt /> : null}
+                {/* Oleaje de fondo: contenido ambiente de la tarjeta, en bucle
+                    mientras esté a la vista (no con el hover). El hover solo
+                    destaca el borde y saca el botón de abajo, si lo hay. */}
+                {card.id === 'simulacros' ? <WaveBackdrop /> : null}
                 {card.id === 'simulacros' && smartReady ? (
                   <WaveCta hovered={featuredHovered}>
                     <span className="material-symbols-outlined">play_arrow</span>

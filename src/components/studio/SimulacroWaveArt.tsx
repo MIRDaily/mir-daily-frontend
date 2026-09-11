@@ -1,7 +1,7 @@
 'use client'
 
-import { type ReactNode } from 'react'
-import { motion } from 'framer-motion'
+import { useRef, type ReactNode } from 'react'
+import { motion, useInView } from 'framer-motion'
 
 const bounce = { type: 'spring', stiffness: 300, damping: 26, mass: 0.9 } as const
 
@@ -76,11 +76,39 @@ function Bubble({ x, size, delay, duration }: (typeof bubbles)[number]) {
   )
 }
 
+/**
+ * Oleaje de fondo de la tarjeta destacada. Antes vivía dentro de `WaveCta` y
+ * solo corría mientras el ratón estaba encima; ahora es contenido ambiente de
+ * la tarjeta, en bucle mientras esté a la vista (con `useInView` propio, no
+ * con el hover): al salir del viewport se desmonta y no queda nada animando.
+ * El hover ya no lo controla — solo destaca el borde de la tarjeta y saca el
+ * botón (`WaveCta`, si hay acción).
+ */
+export function WaveBackdrop() {
+  const ref = useRef<HTMLDivElement | null>(null)
+  const inView = useInView(ref, { amount: 0.2 })
+
+  return (
+    <div
+      ref={ref}
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-24 overflow-hidden rounded-b-2xl"
+    >
+      <div className="absolute inset-x-0 top-0 -bottom-4">
+        {inView ? waveLayers.map((layer, i) => <WaveLayer key={i} {...layer} />) : null}
+        {inView ? bubbles.map((b, i) => <Bubble key={i} {...b} />) : null}
+      </div>
+    </div>
+  )
+}
+
+/** Botón de acción: solo el texto se alza al pasar el ratón. El oleaje que se
+ *  ve detrás es el de `WaveBackdrop`, que ya está corriendo de fondo. */
 export function WaveCta({ hovered, children }: { hovered: boolean; children: ReactNode }) {
   return (
     <button
       type="button"
-      className="absolute inset-x-0 bottom-0 z-0 h-24 overflow-hidden rounded-b-2xl"
+      className="absolute inset-x-0 bottom-0 z-[1] h-24 overflow-hidden rounded-b-2xl"
     >
       <motion.div
         className="absolute inset-0 flex items-end justify-center pb-6"
@@ -92,12 +120,6 @@ export function WaveCta({ hovered, children }: { hovered: boolean; children: Rea
         }}
         transition={bounce}
       >
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 -bottom-4">
-          {hovered
-            ? waveLayers.map((layer, i) => <WaveLayer key={i} {...layer} />)
-            : null}
-          {hovered ? bubbles.map((b, i) => <Bubble key={i} {...b} />) : null}
-        </div>
         <span className="relative z-10 flex items-center gap-2 text-base font-semibold text-[#2c3e50] [text-shadow:0_1px_2px_rgba(255,255,255,0.55)]">
           {children}
         </span>

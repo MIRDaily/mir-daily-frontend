@@ -1,9 +1,8 @@
 'use client'
 
-import { type ReactNode } from 'react'
-import { motion } from 'framer-motion'
+import { useRef, type ReactNode } from 'react'
+import { motion, useInView } from 'framer-motion'
 
-const bounce = { type: 'spring', stiffness: 340, damping: 20, mass: 0.9 } as const
 const ctaBounce = { type: 'spring', stiffness: 300, damping: 26, mass: 0.9 } as const
 
 /* ─── Trazado de un ECG ────────────────────────────────────────────────
@@ -62,18 +61,23 @@ const GRID_MM = 24
 // centro de la propia figura, que es donde debe pivotar el latido del corazón.
 const selfOrigin = { transformBox: 'fill-box', transformOrigin: '50% 50%' } as const
 
-export function EcgMonitorArt({ hovered }: { hovered: boolean }) {
+/**
+ * Monitor de cabecera de la tarjeta de Electros. Antes solo aparecía (y solo
+ * latía/barría) mientras se pasaba el ratón; ahora es contenido ambiente,
+ * siempre a la vista, con el latido y el barrido en bucle mientras la
+ * tarjeta esté en el viewport (`useInView` propio) — el hover ya no lo
+ * controla, solo destaca el borde de la tarjeta y saca el botón
+ * (`EcgTraceCta`).
+ */
+export function EcgMonitorArt() {
+  const ref = useRef<HTMLDivElement | null>(null)
+  const inView = useInView(ref, { amount: 0.2 })
+
   return (
-    <motion.div
+    <div
+      ref={ref}
       aria-hidden="true"
       className="pointer-events-none absolute right-8 top-[38%] z-0 hidden w-56 -translate-y-1/2 sm:block lg:w-64"
-      initial="rest"
-      animate={hovered ? 'hover' : 'rest'}
-      variants={{
-        rest: { opacity: 0, x: '130%', rotate: 10 },
-        hover: { opacity: 1, x: '0%', rotate: -3 },
-      }}
-      transition={bounce}
     >
       <svg viewBox="0 0 720 620" className="h-auto w-full">
         <defs>
@@ -108,9 +112,9 @@ export function EcgMonitorArt({ hovered }: { hovered: boolean }) {
               y={SCREEN_Y}
               height={SCREEN_H}
               initial={{ width: 0 }}
-              animate={hovered ? { width: [0, SCREEN_W] } : { width: 0 }}
+              animate={inView ? { width: [0, SCREEN_W] } : { width: 0 }}
               transition={
-                hovered
+                inView
                   ? { duration: SWEEP_S, repeat: Infinity, ease: 'linear' }
                   : { duration: 0.2 }
               }
@@ -135,9 +139,9 @@ export function EcgMonitorArt({ hovered }: { hovered: boolean }) {
           strokeWidth="10"
           strokeLinejoin="round"
           style={selfOrigin}
-          animate={hovered ? { scale: [1, 1.18, 0.97, 1] } : { scale: 1 }}
+          animate={inView ? { scale: [1, 1.18, 0.97, 1] } : { scale: 1 }}
           transition={
-            hovered
+            inView
               ? { duration: BEAT_MS, repeat: Infinity, ease: 'easeOut', times: [0, 0.16, 0.34, 1] }
               : { duration: 0.25 }
           }
@@ -188,7 +192,7 @@ export function EcgMonitorArt({ hovered }: { hovered: boolean }) {
           </g>
 
           {/* Cabezal del barrido */}
-          {hovered ? (
+          {inView ? (
             <motion.g
               initial={{ x: 0 }}
               animate={{ x: [0, SCREEN_W] }}
@@ -208,7 +212,7 @@ export function EcgMonitorArt({ hovered }: { hovered: boolean }) {
           ) : null}
         </g>
       </svg>
-    </motion.div>
+    </div>
   )
 }
 
