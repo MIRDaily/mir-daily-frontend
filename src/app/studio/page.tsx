@@ -328,9 +328,9 @@ function Reveal({
       id={id}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      initial={{ opacity: 0, y: 26, scale: 0.985 }}
-      animate={inView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 26, scale: 0.985 }}
-      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      initial={{ opacity: 0, y: 34, scale: 0.98 }}
+      animate={inView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 34, scale: 0.98 }}
+      transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
     >
       {children}
     </motion.div>
