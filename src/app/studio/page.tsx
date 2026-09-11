@@ -443,9 +443,17 @@ export default function StudioPage() {
       >
         <div className="flex flex-col gap-10">
           <motion.section
-            className="mb-4 flex items-end justify-between gap-4 sm:mb-8"
+            className="mb-4 flex flex-col gap-1 sm:mb-8"
             {...entranceProps(reduceMotion, 0.1, 16, 0.99)}
           >
+            {/* "Studio" encima del saludo. Es el h1 de la página. */}
+            <motion.h1
+              className="text-xl font-black uppercase tracking-[0.18em] text-[#2c3e50]/60 sm:text-2xl"
+              {...entranceProps(reduceMotion, 0.12, 10, 0.99)}
+            >
+              Studio
+            </motion.h1>
+
             <div className="min-w-0">
               <motion.p
                 className="relative overflow-hidden text-lg font-light leading-tight"
@@ -457,7 +465,7 @@ export default function StudioPage() {
                   {greetingParts[0]}
                 </span>
                 <span
-                  className={`inline-block align-baseline text-4xl font-black uppercase leading-none tracking-tight text-[#d18d80] [overflow-wrap:anywhere] sm:text-5xl ${
+                  className={`inline-block align-baseline text-3xl font-black uppercase leading-none tracking-tight text-[#d18d80] [overflow-wrap:anywhere] sm:text-4xl ${
                     !studioName ? 'min-w-[6ch]' : ''
                   } ${
                     !studioName && loading ? 'rounded bg-[#E8A598]/18' : ''
@@ -484,15 +492,6 @@ export default function StudioPage() {
                 ) : null}
               </motion.p>
             </div>
-
-            {/* "Studio" pasa a la derecha, donde antes iban los badges de XP y
-                racha. Es el h1 de la página. */}
-            <motion.h1
-              className="shrink-0 pb-0.5 text-xl font-black uppercase tracking-[0.18em] text-[#2c3e50]/60 sm:text-2xl"
-              {...entranceProps(reduceMotion, 0.16, 12, 0.99)}
-            >
-              Studio
-            </motion.h1>
           </motion.section>
 
           <section>
