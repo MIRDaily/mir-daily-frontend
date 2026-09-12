@@ -11,6 +11,7 @@ import {
   useInView,
 } from 'framer-motion'
 import LandingSwitcher from './LandingSwitcher'
+import { NEXT_MIR_DATE } from '@/lib/examDate'
 
 /* ────────────────────────────────────────────────────────────────────────
    MIRDaily — Landing variante D: «Recta final»
@@ -23,9 +24,6 @@ import LandingSwitcher from './LandingSwitcher'
 const INK = 'rgba(17, 24, 39, 0.85)'
 const CORAL = '#D4978C'
 const CORAL_DEEP = '#B87A6F'
-
-/* Fecha estimada del próximo examen MIR (último sábado de enero). */
-const NEXT_MIR_DATE = new Date('2027-01-30T09:00:00')
 
 /* ─── Cuenta atrás al día del MIR ──────────────────────────────────────── */
 

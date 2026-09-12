@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { fetchSimulacroCalendar } from '@/lib/simulacro/queries'
+import { accuracyToColor, buildMonthWeeks, isoDateLocal } from '@/lib/simulacro/calendarView'
 import type { SimulacroCalendarDay } from '@/lib/simulacro/types'
 
 const MONTH_NAMES = [
@@ -27,47 +28,9 @@ const MAX_YEARS_BACK = 2 // 3 años de histórico en total (año actual + 2 atr�
 // compensa con un margin-top negativo igual para no mover nada visualmente.
 const TOOLTIP_RESERVE_PX = 32
 
-const RED_PASTEL = { r: 0xf3, g: 0xb7, b: 0xae }
-const GREEN_PASTEL = { r: 0xb9, g: 0xdc, b: 0xb4 }
-
-function accuracyToColor(pct: number): string {
-  const t = Math.max(0, Math.min(1, pct / 100))
-  const r = Math.round(RED_PASTEL.r + (GREEN_PASTEL.r - RED_PASTEL.r) * t)
-  const g = Math.round(RED_PASTEL.g + (GREEN_PASTEL.g - RED_PASTEL.g) * t)
-  const b = Math.round(RED_PASTEL.b + (GREEN_PASTEL.b - RED_PASTEL.b) * t)
-  return `rgb(${r}, ${g}, ${b})`
-}
-
-function isoDateLocal(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
 function formatDayLabel(iso: string): string {
   const d = new Date(`${iso}T00:00:00`)
   return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-// Semanas (filas) de un mes real: lunes en la 1ª columna, domingo en la 7ª.
-// Huecos (null) antes del día 1 y después del último día para completar
-// semanas de 7 — así el día 1 en domingo cae en la última columna de la
-// primera fila, como un calendario de verdad.
-function buildMonthWeeks(year: number, month: number): (Date | null)[][] {
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const leading = (new Date(year, month, 1).getDay() + 6) % 7
-  const totalCells = Math.ceil((leading + daysInMonth) / 7) * 7
-
-  const cells: (Date | null)[] = []
-  for (let i = 0; i < totalCells; i++) {
-    const dayNum = i - leading + 1
-    cells.push(dayNum >= 1 && dayNum <= daysInMonth ? new Date(year, month, dayNum) : null)
-  }
-
-  const weeks: (Date | null)[][] = []
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
-  return weeks
 }
 
 type SimulacroCalendarHeatmapProps = {

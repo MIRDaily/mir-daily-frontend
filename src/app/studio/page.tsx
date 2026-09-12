@@ -8,6 +8,8 @@ import { debugRender } from '@/lib/debugRSC'
 import { useAuth } from '@/hooks/useAuth'
 import { useMonthlyProgress } from '@/hooks/useAnalytics'
 import { useProgressContext } from '@/providers/ProgressProvider'
+import StudioSearchButton from '@/components/studio/StudioSearchButton'
+import StudioCalendarButton from '@/components/studio/StudioCalendarButton'
 import type { MonthlyProgressResponse } from '@/services/analyticsService'
 
 // El popup y la decoración de las tarjetas (SVG animados que solo se ven al
@@ -455,9 +457,10 @@ export default function StudioPage() {
       >
         <div className="flex flex-col gap-10">
           <motion.section
-            className="mb-4 flex flex-col gap-1 sm:mb-8"
+            className="mb-4 flex flex-row items-start justify-between gap-4 sm:mb-8"
             {...entranceProps(reduceMotion, 0.1, 16, 0.99)}
           >
+            <div className="min-w-0 flex flex-col gap-1">
             {/* "Studio" encima del saludo. Es el h1 de la página. */}
             <motion.h1
               className="text-xl font-black uppercase tracking-[0.18em] text-[#2c3e50]/60 sm:text-2xl"
@@ -504,6 +507,15 @@ export default function StudioPage() {
                 ) : null}
               </motion.p>
             </div>
+            </div>
+
+            <motion.div
+              className="flex shrink-0 items-center gap-2 pt-1"
+              {...entranceProps(reduceMotion, 0.14, 10, 0.99)}
+            >
+              <StudioSearchButton />
+              <StudioCalendarButton />
+            </motion.div>
           </motion.section>
 
           <section>
