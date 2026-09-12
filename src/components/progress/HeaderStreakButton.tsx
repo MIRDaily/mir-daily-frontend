@@ -1,9 +1,11 @@
 'use client'
 
 import type { RefObject } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { useProgressContext } from '@/providers/ProgressProvider'
 import StreakFlame from '@/components/progress/StreakFlame'
 import ChallengesPopup from '@/components/progress/ChallengesPopup'
+import { headerPopIn } from '@/lib/headerEntrance'
 
 /* ════════════════════════════════════════════════════════════════════════
    El botón de la racha, en la cabecera.
@@ -30,6 +32,7 @@ export default function HeaderStreakButton({
 }) {
   const { data, loading } = useProgressContext()
   const progress = data?.progress
+  const reduceMotion = useReducedMotion()
 
   // Sin datos no se pinta nada: en una cabecera fija, un hueco que aparece y
   // desaparece salta más que no tener nada.
@@ -48,7 +51,11 @@ export default function HeaderStreakButton({
       : 'Sin racha. Haz el Daily para encenderla'
 
   return (
-    <div className="relative hidden sm:block" ref={containerRef}>
+    <motion.div
+      className="relative hidden sm:block"
+      ref={containerRef}
+      {...headerPopIn(reduceMotion)}
+    >
       <button
         type="button"
         aria-label={`Desafíos. ${titulo}`}
@@ -86,6 +93,6 @@ export default function HeaderStreakButton({
         weekly={data?.weekly ?? []}
         loading={loading}
       />
-    </div>
+    </motion.div>
   )
 }

@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { LayoutGroup, motion } from 'framer-motion'
+import { LayoutGroup, motion, useReducedMotion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 import { useProfile } from '@/hooks/useProfile'
 import { getAvatarUrl } from '@/lib/avatar'
@@ -13,6 +13,7 @@ import HeaderStreakButton from '@/components/progress/HeaderStreakButton'
 import AvatarLevelRing from '@/components/progress/AvatarLevelRing'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
 import type { HeaderBackAction } from '@/providers/HeaderUIProvider'
+import { headerPopIn } from '@/lib/headerEntrance'
 
 type HeaderTab = 'studio' | 'library' | 'daily' | 'dashboard' | 'versus' | 'medguess' | null
 
@@ -49,6 +50,7 @@ export default function AppHeader({
   backAction = null,
 }: AppHeaderProps) {
   const { profile, loading: profileLoading } = useProfile()
+  const reduceMotion = useReducedMotion()
   const { unreadCount, refreshUnreadCount } = useNotificationsContext()
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
@@ -209,7 +211,11 @@ export default function AppHeader({
             }}
             onClose={() => setIsChallengesOpen(false)}
           />
-          <div className="relative" ref={notificationRef}>
+          <motion.div
+            className="relative"
+            ref={notificationRef}
+            {...headerPopIn(reduceMotion, 0.06)}
+          >
             <button
               type="button"
               aria-label="Notificaciones"
@@ -236,8 +242,12 @@ export default function AppHeader({
               open={isNotificationOpen}
               onClose={() => setIsNotificationOpen(false)}
             />
-          </div>
-          <div className="relative ml-1" ref={profileMenuRef}>
+          </motion.div>
+          <motion.div
+            className="relative ml-1"
+            ref={profileMenuRef}
+            {...headerPopIn(reduceMotion, 0.12)}
+          >
             <button
               type="button"
               aria-label="Perfil"
@@ -251,23 +261,28 @@ export default function AppHeader({
               {profileLoading ? (
                 <div className="size-10 shrink-0 animate-pulse rounded-full bg-gray-200" />
               ) : (
-                <AvatarLevelRing>
-                  <Image
-                    src={getAvatarUrl(profile?.avatar_id ?? 1)}
-                    alt="Mi avatar"
-                    title={profile?.display_name ?? 'Mi avatar'}
-                    width={40}
-                    height={40}
-                    className="size-full rounded-full object-cover"
-                  />
-                </AvatarLevelRing>
+                <motion.div {...headerPopIn(reduceMotion)}>
+                  <AvatarLevelRing>
+                    <Image
+                      src={getAvatarUrl(profile?.avatar_id ?? 1)}
+                      alt="Mi avatar"
+                      title={profile?.display_name ?? 'Mi avatar'}
+                      width={40}
+                      height={40}
+                      className="size-full rounded-full object-cover"
+                    />
+                  </AvatarLevelRing>
+                </motion.div>
               )}
               {profileLoading ? (
                 <span className="hidden sm:inline-block h-3 w-[108px] rounded-full bg-gray-200 animate-pulse" />
               ) : (
-                <span className="hidden sm:inline-block w-[108px] truncate text-sm font-semibold text-[#4B5563]">
+                <motion.span
+                  {...headerPopIn(reduceMotion)}
+                  className="hidden sm:inline-block w-[108px] truncate text-sm font-semibold text-[#4B5563]"
+                >
                   {profile?.display_name ?? 'Mi perfil'}
-                </span>
+                </motion.span>
               )}
             </button>
             <div className={`absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-soft border border-[#7D8A96]/10 transition-all duration-200 transform origin-top-right z-50 ${isProfileMenuOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
@@ -294,7 +309,7 @@ export default function AppHeader({
                 </button>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       </div>
 
