@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { AnimatePresence, motion, useInView, useReducedMotion } from 'framer-motion'
@@ -56,10 +56,16 @@ const EcgTraceCta = dynamic(
   () => import('@/components/studio/ElectrosHoverArt').then((m) => m.EcgTraceCta),
   { ssr: false },
 )
+const TraceBackdrop = dynamic(
+  () => import('@/components/studio/ElectrosHoverArt').then((m) => m.TraceBackdrop),
+  { ssr: false },
+)
 
 type OverviewCard = {
   title: string
   value: string
+  /** Si está, el valor cuenta hacia arriba desde 0 en vez de aparecer ya escrito. */
+  valueAnimation?: { target: number; prefix?: string }
   badge?: string
   /** Color del badge: verde si la tendencia sube, rojo si baja, neutro si no cambia. */
   badgeTone?: 'up' | 'down' | 'flat'
@@ -86,6 +92,48 @@ type StudioCard = {
 }
 
 const numberFormat = new Intl.NumberFormat('es-ES')
+
+/**
+ * Número que cuenta hacia arriba desde 0 cuando aparece (una vez, no en cada
+ * repintado). Antes "Progreso Mensual" pasaba de "—" al número final de golpe
+ * en cuanto llegaba el dato; contar le da algo de vida sin exagerar.
+ */
+function AnimatedCount({
+  target,
+  prefix = '',
+  reduceMotion,
+}: {
+  target: number
+  prefix?: string
+  reduceMotion: boolean | null
+}) {
+  const [display, setDisplay] = useState(reduceMotion ? target : 0)
+
+  useEffect(() => {
+    if (reduceMotion) {
+      setDisplay(target)
+      return
+    }
+    let raf = 0
+    const duration = 900
+    const start = performance.now()
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration)
+      const eased = 1 - (1 - t) ** 3
+      setDisplay(Math.round(target * eased))
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target, reduceMotion])
+
+  return (
+    <>
+      {prefix}
+      {numberFormat.format(display)}
+    </>
+  )
+}
 
 /** El punto débil que ya viene resuelto en el desafío personalizado. */
 type PuntoDebil = { tema: string; asignatura: string; precision: number | null }
@@ -189,6 +237,7 @@ function buildProgressCard(
   return {
     ...base,
     value: month.questions > 0 ? `+${numberFormat.format(month.questions)}` : '0',
+    valueAnimation: month.questions > 0 ? { target: month.questions, prefix: '+' } : undefined,
     // Sin mes previo con actividad no hay tendencia honesta que enseñar.
     badge:
       trendPct == null ? undefined : `${trendPrefix}${numberFormat.format(trendPct)}%`,
@@ -257,6 +306,13 @@ const studioGreetingTemplates: ReadonlyArray<string> = [
   'Cada bloque suma, {name}. Vamos a mantener el ritmo.',
   'Buen momento para afinar tus puntos débiles, {name}.',
   '{name}, una sesión enfocada hoy puede marcar la diferencia.',
+  '{name}, sigamos sumando minutos de estudio de calidad.',
+  'Un paso más hoy, {name}: así se construye la nota.',
+  '{name}, vamos con calma y constancia.',
+  'Hoy es un buen día para avanzar un poco más, {name}.',
+  '{name}, tu preparación avanza sesión a sesión.',
+  'Vamos a seguir puliendo lo que ya sabes, {name}.',
+  '{name}, un poco cada día también es avanzar mucho.',
 ] as const
 
 const studioDailyDuration = 0.5
@@ -463,7 +519,7 @@ export default function StudioPage() {
             <div className="min-w-0 flex flex-col gap-1">
             {/* "Studio" encima del saludo. Es el h1 de la página. */}
             <motion.h1
-              className="text-xl font-black uppercase tracking-[0.18em] text-[#2c3e50]/60 sm:text-2xl"
+              className="text-xl font-black uppercase tracking-[0.18em] text-[#7D8A96] sm:text-2xl"
               {...entranceProps(reduceMotion, 0.12, 10, 0.99)}
             >
               Studio
@@ -539,14 +595,25 @@ export default function StudioPage() {
                     <span className="text-sm font-medium uppercase tracking-wider">{card.title}</span>
                     <div className="mt-2 flex items-baseline gap-3">
                       <p
-                        className={`text-4xl font-black tracking-tight ${
+                        className={`text-4xl font-black tracking-tight tabular-nums ${
                           card.tone === 'success' ? 'text-[#8BA888]' : 'text-[#2c3e50]'
                         }`}
                       >
-                        {card.value}
+                        {card.valueAnimation ? (
+                          <AnimatedCount
+                            target={card.valueAnimation.target}
+                            prefix={card.valueAnimation.prefix}
+                            reduceMotion={reduceMotion}
+                          />
+                        ) : (
+                          card.value
+                        )}
                       </p>
                       {card.badge ? (
-                        <span
+                        <motion.span
+                          initial={reduceMotion ? false : { opacity: 0, scale: 0.75, y: 4 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          transition={{ duration: 0.4, delay: 0.5, ease: [0.2, 0.9, 0.2, 1] }}
                           className={`rounded-lg px-2 py-0.5 text-sm font-bold ${
                             card.badgeTone === 'down'
                               ? 'bg-[#C4655A]/10 text-[#C4655A]'
@@ -556,7 +623,7 @@ export default function StudioPage() {
                           }`}
                         >
                           {card.badge}
-                        </span>
+                        </motion.span>
                       ) : null}
                     </div>
                     <p className="mt-1 text-sm">{card.description}</p>
@@ -650,11 +717,12 @@ export default function StudioPage() {
                 {card.id === 'mazos' ? <DeckArt hovered={mazosHovered} /> : null}
                 {card.id === 'flashcards' ? <FlipCardArt hovered={flashcardsHovered} /> : null}
                 {card.id === 'sala-zen' ? <ZenTimerArt hovered={zenHovered} /> : null}
-                {card.id === 'electros' ? <EcgMonitorArt /> : null}
-                {/* Oleaje de fondo: contenido ambiente de la tarjeta, en bucle
-                    mientras esté a la vista (no con el hover). El hover solo
-                    destaca el borde y saca el botón de abajo, si lo hay. */}
+                {card.id === 'electros' ? <EcgMonitorArt hovered={electrosHovered} /> : null}
+                {/* Fondo ambiente de cada tarjeta: en bucle mientras esté a la
+                    vista (no con el hover). El hover solo destaca el borde y
+                    saca el botón de abajo, si lo hay. */}
                 {card.id === 'simulacros' ? <WaveBackdrop /> : null}
+                {card.id === 'electros' ? <TraceBackdrop /> : null}
                 {card.id === 'simulacros' && smartReady ? (
                   <WaveCta hovered={featuredHovered}>
                     <span className="material-symbols-outlined">play_arrow</span>

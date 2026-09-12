@@ -3,6 +3,7 @@
 import { useRef, type ReactNode } from 'react'
 import { motion, useInView } from 'framer-motion'
 
+const bounce = { type: 'spring', stiffness: 340, damping: 20, mass: 0.9 } as const
 const ctaBounce = { type: 'spring', stiffness: 300, damping: 26, mass: 0.9 } as const
 
 /* ─── Trazado de un ECG ────────────────────────────────────────────────
@@ -62,22 +63,22 @@ const GRID_MM = 24
 const selfOrigin = { transformBox: 'fill-box', transformOrigin: '50% 50%' } as const
 
 /**
- * Monitor de cabecera de la tarjeta de Electros. Antes solo aparecía (y solo
- * latía/barría) mientras se pasaba el ratón; ahora es contenido ambiente,
- * siempre a la vista, con el latido y el barrido en bucle mientras la
- * tarjeta esté en el viewport (`useInView` propio) — el hover ya no lo
- * controla, solo destaca el borde de la tarjeta y saca el botón
- * (`EcgTraceCta`).
+ * Monitor de cabecera de la tarjeta de Electros: entra deslizando desde fuera
+ * al pasar el ratón, y solo entonces late/barre. La animación continua de la
+ * tarjeta es la de abajo (`TraceBackdrop`); esta es la sorpresa del hover.
  */
-export function EcgMonitorArt() {
-  const ref = useRef<HTMLDivElement | null>(null)
-  const inView = useInView(ref, { amount: 0.2 })
-
+export function EcgMonitorArt({ hovered }: { hovered: boolean }) {
   return (
-    <div
-      ref={ref}
+    <motion.div
       aria-hidden="true"
       className="pointer-events-none absolute right-8 top-[38%] z-0 hidden w-56 -translate-y-1/2 sm:block lg:w-64"
+      initial="rest"
+      animate={hovered ? 'hover' : 'rest'}
+      variants={{
+        rest: { opacity: 0, x: '130%', rotate: 10 },
+        hover: { opacity: 1, x: '0%', rotate: -3 },
+      }}
+      transition={bounce}
     >
       <svg viewBox="0 0 720 620" className="h-auto w-full">
         <defs>
@@ -112,9 +113,9 @@ export function EcgMonitorArt() {
               y={SCREEN_Y}
               height={SCREEN_H}
               initial={{ width: 0 }}
-              animate={inView ? { width: [0, SCREEN_W] } : { width: 0 }}
+              animate={hovered ? { width: [0, SCREEN_W] } : { width: 0 }}
               transition={
-                inView
+                hovered
                   ? { duration: SWEEP_S, repeat: Infinity, ease: 'linear' }
                   : { duration: 0.2 }
               }
@@ -139,9 +140,9 @@ export function EcgMonitorArt() {
           strokeWidth="10"
           strokeLinejoin="round"
           style={selfOrigin}
-          animate={inView ? { scale: [1, 1.18, 0.97, 1] } : { scale: 1 }}
+          animate={hovered ? { scale: [1, 1.18, 0.97, 1] } : { scale: 1 }}
           transition={
-            inView
+            hovered
               ? { duration: BEAT_MS, repeat: Infinity, ease: 'easeOut', times: [0, 0.16, 0.34, 1] }
               : { duration: 0.25 }
           }
@@ -192,7 +193,7 @@ export function EcgMonitorArt() {
           </g>
 
           {/* Cabezal del barrido */}
-          {inView ? (
+          {hovered ? (
             <motion.g
               initial={{ x: 0 }}
               animate={{ x: [0, SCREEN_W] }}
@@ -212,7 +213,7 @@ export function EcgMonitorArt() {
           ) : null}
         </g>
       </svg>
-    </div>
+    </motion.div>
   )
 }
 
@@ -268,9 +269,32 @@ function TraceMarquee() {
   )
 }
 
+/**
+ * Tira de ECG de fondo de la tarjeta de Electros: contenido ambiente, en
+ * bucle mientras la tarjeta esté a la vista (no con el hover) — mismo patrón
+ * que `WaveBackdrop` en Simulacros. El hover solo saca el texto del botón
+ * (`EcgTraceCta`), que vive encima de este fondo.
+ */
+export function TraceBackdrop() {
+  const ref = useRef<HTMLDivElement | null>(null)
+  const inView = useInView(ref, { amount: 0.2 })
+
+  return (
+    <div
+      ref={ref}
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-24 overflow-hidden rounded-b-2xl"
+    >
+      <div className="absolute inset-x-0 top-0 -bottom-4">{inView ? <TraceMarquee /> : null}</div>
+    </div>
+  )
+}
+
+/** Botón de acción: solo el texto se alza al pasar el ratón. El trazo que se
+ *  ve detrás es el de `TraceBackdrop`, que ya está corriendo de fondo. */
 export function EcgTraceCta({ hovered, children }: { hovered: boolean; children: ReactNode }) {
   return (
-    <button type="button" className="absolute inset-x-0 bottom-0 z-0 h-24 overflow-hidden rounded-b-2xl">
+    <button type="button" className="absolute inset-x-0 bottom-0 z-[1] h-24 overflow-hidden rounded-b-2xl">
       <motion.div
         className="absolute inset-0 flex items-end justify-center pb-6"
         initial="rest"
@@ -281,11 +305,6 @@ export function EcgTraceCta({ hovered, children }: { hovered: boolean; children:
         }}
         transition={ctaBounce}
       >
-        {/* Solo existe mientras se ve: al salir el ratón se desmonta y no queda
-            ninguna animación corriendo de fondo. */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 -bottom-4">
-          {hovered ? <TraceMarquee /> : null}
-        </div>
         <span className="relative z-10 flex items-center gap-2 text-base font-semibold text-[#2c3e50] [text-shadow:0_1px_2px_rgba(255,255,255,0.55)]">
           {children}
         </span>
