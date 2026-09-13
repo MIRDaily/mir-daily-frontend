@@ -32,8 +32,20 @@ export function useAnchorRect(ancla: string | undefined, activo: boolean): Rect 
       return () => cancelAnimationFrame(id)
     }
 
-    const union = (): Rect => {
-      const rs = els.map((el) => el.getBoundingClientRect())
+    /* Los ocultos NO entran en la unión.
+
+       Hace falta en cuanto una misma ancla marca las dos versiones de algo
+       responsive: la nav de escritorio es `hidden md:flex` y la de móvil
+       `md:hidden`, así que una de las dos está siempre en `display:none`. Un
+       elemento oculto devuelve un rect de ceros, y como la unión coge el
+       mínimo de `top`/`left`, ese cero arrastraba el foco hasta la esquina
+       superior izquierda de la pantalla. */
+    const union = (): Rect | null => {
+      const rs = els
+        .map((el) => el.getBoundingClientRect())
+        .filter((r) => r.width > 0 && r.height > 0)
+      if (rs.length === 0) return null
+
       const top = Math.min(...rs.map((r) => r.top))
       const left = Math.min(...rs.map((r) => r.left))
       const bottom = Math.max(...rs.map((r) => r.bottom))
@@ -47,8 +59,10 @@ export function useAnchorRect(ancla: string | undefined, activo: boolean): Rect 
     // solo, el otro puede quedarse fuera de pantalla, que es justo lo que se
     // quería evitar al agrupar.
     const u = union()
-    const centro = u.top + window.scrollY + u.height / 2
-    window.scrollTo({ top: Math.max(centro - window.innerHeight / 2, 0), behavior: 'smooth' })
+    if (u) {
+      const centro = u.top + window.scrollY + u.height / 2
+      window.scrollTo({ top: Math.max(centro - window.innerHeight / 2, 0), behavior: 'smooth' })
+    }
 
     // Medir en el siguiente fotograma, no en este: el scroll acaba de empezar
     // y medir ahora daría la posición vieja. Además, así no se encadena un

@@ -9,7 +9,7 @@ import { armarDesbloqueo } from '@/lib/tutorials/mascotAudio'
 import {
   MENSAJE_APP_MOVIL_ID,
   TUTORIALS,
-  textoAppMovil,
+  pasoAppMovil,
   type Superficie,
 } from '@/lib/tutorials/scripts'
 import {
@@ -102,16 +102,19 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
     const guion = [...tutorial.steps]
     let llevaMensajeApp = false
 
-    // El aviso de la app móvil se engancha como cierre, pero con su propia
-    // clave: si viviera dentro de "daily.v1", quien entre antes de que la app
-    // salga no se enteraría nunca de que existe.
+    // El aviso de la app móvil va DESPUÉS del contenido y ANTES de la
+    // despedida, pero con su propia clave: si viviera dentro de "daily.vN",
+    // quien entre antes de que la app salga no se enteraría nunca de que
+    // existe. Por eso se inserta aquí y no está escrito en el guion.
     if (!vistos.has(MENSAJE_APP_MOVIL_ID)) {
-      const texto = textoAppMovil(detectarSuperficie(), user.mobile_app_available)
-      if (texto) {
-        guion.push({ pose: 'despedida', placement: 'centro', text: texto })
+      const paso = pasoAppMovil(detectarSuperficie(), user.mobile_app_available)
+      if (paso) {
+        guion.push(paso)
         llevaMensajeApp = true
       }
     }
+
+    if (tutorial.cierre) guion.push(...tutorial.cierre)
 
     // Un fotograma de margen: la pantalla acaba de decir que está lista y
     // todavía se está pintando. Arrancar dentro de su mismo commit encadena

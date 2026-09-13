@@ -131,7 +131,10 @@ export default function AppHeader({
               izquierda y de la campana por la derecha. Ahi vuelve al flujo
               normal (justify-between del contenedor la coloca en medio) y con
               menos hueco entre enlaces, asi no pisa a nadie. */}
-          <div className="hidden md:flex items-center gap-4 min-[1150px]:gap-8 min-[1150px]:absolute min-[1150px]:left-1/2 min-[1150px]:-translate-x-1/2">
+          <div
+            data-tutorial="nav-pestanas"
+            className="hidden md:flex items-center gap-4 min-[1150px]:gap-8 min-[1150px]:absolute min-[1150px]:left-1/2 min-[1150px]:-translate-x-1/2"
+          >
             <Link className={getNavClass(activeTab, 'studio')} href="/studio">
               {activeTab === 'studio' && (
                 <motion.span
@@ -313,7 +316,10 @@ export default function AppHeader({
         </div>
       </div>
 
-      <div className="md:hidden -mx-6 mt-3 overflow-x-auto border-t border-[#7D8A96]/10 px-6 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div
+        data-tutorial="nav-pestanas"
+        className="md:hidden -mx-6 mt-3 overflow-x-auto border-t border-[#7D8A96]/10 px-6 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         <div className="flex w-max items-center gap-6">
           {MOBILE_TABS.map(({ tab, href, label }) => (
             <Link

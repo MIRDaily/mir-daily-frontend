@@ -35,4 +35,11 @@ export type TutorialId = `${string}.v${number}`
 export type Tutorial = {
   id: TutorialId
   steps: TutorialStep[]
+  /**
+   * La despedida. Separada de `steps` porque en medio de los dos va el aviso
+   * de la app móvil, que tiene su propia clave y puede no salir: dejándolo
+   * todo en una sola lista habría que insertarlo por índice, y ese índice se
+   * rompe en cuanto alguien añade un paso.
+   */
+  cierre?: TutorialStep[]
 }

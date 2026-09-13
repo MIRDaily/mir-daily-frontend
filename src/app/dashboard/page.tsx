@@ -3121,7 +3121,10 @@ export default function DashboardPage() {
         </section>
 
         <div className="w-full max-w-6xl mx-auto mt-8 mb-12 hub-anim hub-anim-delay-5">
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 md:p-12 shadow-soft border border-white/50 relative overflow-hidden">
+          <div
+            data-tutorial="daily-app-movil"
+            className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 md:p-12 shadow-soft border border-white/50 relative overflow-hidden"
+          >
             <div className="absolute top-0 right-0 w-96 h-96 bg-[#E8A598]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
             <div className="absolute bottom-0 left-0 w-96 h-96 bg-[#7D8A96]/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
             <div className="relative z-10 flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
