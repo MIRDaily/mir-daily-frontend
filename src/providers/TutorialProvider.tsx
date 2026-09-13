@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { useProgressContext } from '@/providers/ProgressProvider'
 import TutorialOverlay from '@/components/tutorial/TutorialOverlay'
+import { armarDesbloqueo } from '@/lib/tutorials/mascotAudio'
 import {
   MENSAJE_APP_MOVIL_ID,
   TUTORIALS,
@@ -79,6 +80,10 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (user?.tutorials_seen) guardarVistosLocales(vistos)
   }, [user?.tutorials_seen, vistos])
+
+  // Se arma nada más montar la app, no al abrir el tutorial: así cualquier
+  // click previo del usuario ya deja el audio listo para el primer cuadro.
+  useEffect(() => armarDesbloqueo(), [])
 
   const declararListo = useCallback((id: TutorialId, listo: boolean) => {
     setCandidato((actual) => (listo ? id : actual === id ? null : actual))

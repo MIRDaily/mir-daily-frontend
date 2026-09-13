@@ -83,8 +83,19 @@ export default function MascotBubble({ texto, pose, mirandoIzquierda, onTextoCom
     return () => window.removeEventListener('tutorial:completar-texto', completar)
   }, [texto])
 
+  // En móvil se apilan: la mascota arriba y el bocadillo debajo. Al lado no
+  // caben —una caja de 384 px más la mascota se salía de un viewport de 375— y
+  // encogiendo la caja el texto quedaba en una columna estrechísima. Apilados,
+  // el bocadillo recupera el ancho entero y la mascota no tiene que menguar.
+  //
+  // La mascota se queda del lado hacia el que mira, que en vertical es lo único
+  // que queda de la relación izquierda/derecha que en horizontal da el orden.
   return (
-    <div className={`flex items-end gap-3 ${mirandoIzquierda ? 'flex-row-reverse' : ''}`}>
+    <div
+      className={`flex max-w-[calc(100vw-2rem)] flex-col gap-2 sm:flex-row sm:items-end sm:gap-3 ${
+        mirandoIzquierda ? 'items-end sm:flex-row-reverse' : 'items-start'
+      }`}
+    >
       {/* El volteo va por `scaleX` de framer, NO por un `transform` en `style`:
           framer escribe ese mismo `transform` para animar la entrada, así que
           un transform propio se lo comería —o al revés—. Va también en
@@ -99,7 +110,7 @@ export default function MascotBubble({ texto, pose, mirandoIzquierda, onTextoCom
         <Image src={POSE_SRC[pose]} alt="" fill sizes="160px" className="object-contain" />
       </motion.div>
 
-      <div className="relative max-w-sm rounded-3xl border border-[#E8A598]/30 bg-white px-5 py-4 shadow-[0_18px_40px_rgba(125,138,150,0.22)]">
+      <div className="relative min-w-0 max-w-sm rounded-3xl border border-[#E8A598]/30 bg-white px-5 py-4 shadow-[0_18px_40px_rgba(125,138,150,0.22)]">
         {/* Tres capas, cada una con su trabajo:
             1. el texto completo OCULTO pero ocupando sitio, que reserva el
                tamaño final de la caja — si no, el bocadillo crece letra a

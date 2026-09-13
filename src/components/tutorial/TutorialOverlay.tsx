@@ -21,8 +21,14 @@ import type { TutorialStep } from '@/lib/tutorials/types'
 ═══════════════════════════════════════════════════════════════════════════ */
 
 const MARGEN_FOCO = 10
-const ALTO_BOCADILLO = 220
+// Alto estimado del bocadillo, generoso a propósito: en móvil se apila la
+// mascota sobre el texto y crece. Pasarse solo empuja hacia la colocación
+// anclada abajo, que siempre es segura; quedarse corto lo saca de pantalla.
+const ALTO_BOCADILLO = 260
 const ANCHO_BOCADILLO = 440
+const HUECO = 24
+// Sitio para los puntos y el botón "Saltar" cuando el bocadillo va abajo.
+const ALTO_BARRA = 72
 
 type Props = {
   paso: TutorialStep
@@ -71,13 +77,24 @@ export default function TutorialOverlay({ paso, indice, total, onAvanzar, onSalt
 
   const hayFoco = rect !== null && rect.width > 0 && rect.height > 0
 
-  // El bocadillo va debajo del objetivo salvo que no quepa, y entonces
-  // encima. Nada de colocarlo "inteligentemente" en ocho direcciones: dos
-  // casos bien resueltos se ven mejor que ocho a medias.
-  const debajo = hayFoco ? rect.top + rect.height + 24 : 0
-  const cabeDebajo = hayFoco && debajo + ALTO_BOCADILLO < window.innerHeight
+  /* Tres colocaciones, no ocho: debajo del objetivo, encima si debajo no cabe,
+     y anclado al fondo de la pantalla cuando no cabe en ninguno de los dos.
+     El tercer caso no es rebuscado —es el normal en móvil, donde el foco del
+     sobre ocupa casi toda la pantalla— y sin él el bocadillo se salía por
+     arriba con la mascota cortada por el borde. */
+  const espacioDebajo = hayFoco ? window.innerHeight - (rect.top + rect.height) : 0
+  const espacioEncima = hayFoco ? rect.top : 0
+  const cabeDebajo = hayFoco && espacioDebajo >= ALTO_BOCADILLO + HUECO
+  const cabeEncima = hayFoco && espacioEncima >= ALTO_BOCADILLO + HUECO
+
   const centroX = hayFoco ? rect.left + rect.width / 2 : 0
   const mirandoIzquierda = hayFoco && centroX > window.innerWidth * 0.6
+
+  const posicionVertical = cabeDebajo
+    ? { top: rect.top + rect.height + HUECO }
+    : cabeEncima
+      ? { bottom: window.innerHeight - rect.top + HUECO }
+      : { bottom: ALTO_BARRA }
 
   return createPortal(
     <div className="fixed inset-0 z-[120]" role="dialog" aria-modal="true" aria-live="polite">
@@ -128,8 +145,7 @@ export default function TutorialOverlay({ paso, indice, total, onAvanzar, onSalt
           style={
             hayFoco
               ? {
-                  top: cabeDebajo ? debajo : undefined,
-                  bottom: cabeDebajo ? undefined : window.innerHeight - rect.top + 24,
+                  ...posicionVertical,
                   left: Math.min(
                     Math.max(centroX - ANCHO_BOCADILLO / 2, 16),
                     Math.max(window.innerWidth - ANCHO_BOCADILLO - 16, 16),

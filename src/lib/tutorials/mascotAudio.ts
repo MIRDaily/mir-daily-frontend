@@ -30,6 +30,37 @@ function getCtx(): AudioContext | null {
   }
 }
 
+/**
+ * Deja el audio listo en cuanto el usuario toque CUALQUIER cosa de la app, sin
+ * esperar al primer click del tutorial.
+ *
+ * Importa más de lo que parece: si se llega al Daily navegando por dentro de
+ * la web —un click en "Daily" del header— es el mismo documento, el gesto ya
+ * ha ocurrido y el primer cuadro puede sonar. Desbloqueando solo en el click
+ * del tutorial, ese caso se perdía y el saludo salía mudo siempre.
+ *
+ * En una recarga dura no hay nada que hacer: sin gesto previo en el documento
+ * nuevo, el navegador no deja sonar. Ese caso sigue mudo hasta el primer toque.
+ */
+export function armarDesbloqueo(): () => void {
+  if (typeof window === 'undefined') return () => {}
+
+  const alTocar = () => {
+    void desbloquearVoz()
+  }
+
+  const opciones = { once: true, passive: true } as const
+  window.addEventListener('pointerdown', alTocar, opciones)
+  window.addEventListener('keydown', alTocar, opciones)
+  window.addEventListener('touchstart', alTocar, opciones)
+
+  return () => {
+    window.removeEventListener('pointerdown', alTocar)
+    window.removeEventListener('keydown', alTocar)
+    window.removeEventListener('touchstart', alTocar)
+  }
+}
+
 /** Llamar de forma síncrona dentro del onClick que avanza el tutorial. */
 export async function desbloquearVoz(): Promise<void> {
   const ctx = getCtx()
