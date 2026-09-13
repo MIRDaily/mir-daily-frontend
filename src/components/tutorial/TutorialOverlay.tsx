@@ -48,12 +48,22 @@ export default function TutorialOverlay({ paso, indice, total, onAvanzar, onSalt
 
   const rect = useAnchorRect(paso.placement === 'centro' ? undefined : paso.anchor, true)
 
-  /** Un toque completa el texto; el segundo avanza. Como en Animal Crossing:
-      es la diferencia entre encantador e insufrible. */
+  /** Mientras escribe, un toque ACELERA —y se puede tocar varias veces, cada
+      una corre más—. Solo con la frase entera en pantalla el toque pasa al
+      paso siguiente. Como en Animal Crossing: es la diferencia entre
+      encantador e insufrible.
+
+      Que no salte a la frase completa de golpe es lo que separa "voy con
+      prisa" de "no quiero leerlo": el salto instantáneo mataba también los
+      blips, así que quien tocaba por impaciencia se quedaba sin la voz.
+
+      El `desbloquearVoz()` de aquí arriba es, además, lo que hace que el
+      primer cuadro acabe sonando: es un gesto del usuario, y el navegador
+      solo deja arrancar el audio después de uno. */
   const avanzar = useCallback(() => {
     void desbloquearVoz()
     if (!textoCompleto) {
-      window.dispatchEvent(new Event('tutorial:completar-texto'))
+      window.dispatchEvent(new Event('tutorial:acelerar'))
       return
     }
     onAvanzar()
@@ -123,7 +133,7 @@ export default function TutorialOverlay({ paso, indice, total, onAvanzar, onSalt
         type="button"
         className="absolute inset-0 h-full w-full cursor-pointer"
         onClick={avanzar}
-        aria-label={textoCompleto ? 'Siguiente' : 'Ver el texto completo'}
+        aria-label={textoCompleto ? 'Siguiente' : 'Escribir más rápido'}
       />
 
       <AnimatePresence mode="wait">

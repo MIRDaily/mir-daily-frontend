@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { motion, useReducedMotion } from 'framer-motion'
-import { blip } from '@/lib/tutorials/mascotAudio'
+import { blip, vozActual } from '@/lib/tutorials/mascotAudio'
 import type { MascotPose } from '@/lib/tutorials/types'
 
 /* La mascota todavía no está exportada. Hasta que lo esté, cada pose apunta a
@@ -18,6 +18,12 @@ const POSE_SRC: Record<MascotPose, string> = {
 }
 
 const MS_POR_CARACTER = 28
+/** Cada toque durante el tecleo divide el retardo por esto. */
+const FACTOR_ACELERACION = 4
+/** Suelo: por debajo el texto ya aparece de golpe y no se lee el avance. */
+const MS_MINIMO = 4
+/** Separación mínima entre blips. Sin esto, acelerar suena a metralleta. */
+const MS_ENTRE_BLIPS = 55
 
 type Props = {
   texto: string
@@ -34,6 +40,11 @@ type Props = {
  * Se remonta en cada paso (el overlay le pone `key`), así que el estado
  * inicial ya es el correcto y no hace falta reiniciarlo desde un efecto.
  *
+ * El tecleo va con `setTimeout` encadenado y NO con `setInterval`: el ritmo
+ * cambia en caliente cuando el usuario toca para acelerar, y un intervalo ya
+ * programado no cambia de periodo — habría que destruirlo y recrearlo en cada
+ * toque, con el salto de tiempo que eso mete.
+ *
  * Con "reduce motion" activado no hay máquina de escribir ni blips: el texto
  * sale entero. No es una degradación, es lo correcto — quien pide menos
  * movimiento no quiere que el texto le baile.
@@ -42,6 +53,9 @@ export default function MascotBubble({ texto, pose, mirandoIzquierda, onTextoCom
   const reduceMotion = useReducedMotion()
   const [visibles, setVisibles] = useState(() => (reduceMotion ? texto.length : 0))
   const avisoRef = useRef(onTextoCompleto)
+  const retardoRef = useRef(MS_POR_CARACTER)
+
+  const completo = visibles >= texto.length
 
   useEffect(() => {
     avisoRef.current = onTextoCompleto
@@ -53,35 +67,53 @@ export default function MascotBubble({ texto, pose, mirandoIzquierda, onTextoCom
       return () => cancelAnimationFrame(id)
     }
 
+    // Cada paso vuelve a empezar a velocidad normal: acelerar es una decisión
+    // sobre ESTA frase, no un ajuste que se arrastra el resto del tutorial.
+    retardoRef.current = MS_POR_CARACTER
+
     let i = 0
-    const id = window.setInterval(() => {
+    let id: number
+
+    const escribir = () => {
       i += 1
       setVisibles(i)
 
-      // Ni en los espacios ni en cada letra: uno de cada dos caracteres
-      // visibles suena a voz, uno por letra satura.
+      /* Ni en los espacios ni en cada letra. La cadencia se calcula sobre el
+         retardo actual y no es fija: a velocidad normal sale uno de cada dos
+         caracteres —que es lo que suena a voz—, y cuanto más se acelera, más
+         caracteres se salta, de modo que el ritmo de los blips se mantiene
+         aunque el texto vuele. */
       const c = texto[i - 1]
-      if (c && c.trim() && i % 2 === 0) blip(i + c.charCodeAt(0))
+      const cadencia = Math.max(
+        vozActual().cadencia,
+        Math.round(MS_ENTRE_BLIPS / retardoRef.current),
+      )
+      if (c && c.trim() && i % cadencia === 0) blip(i + c.charCodeAt(0))
 
       if (i >= texto.length) {
-        window.clearInterval(id)
         avisoRef.current?.()
+        return
       }
-    }, MS_POR_CARACTER)
+      id = window.setTimeout(escribir, retardoRef.current)
+    }
 
-    return () => window.clearInterval(id)
+    id = window.setTimeout(escribir, retardoRef.current)
+    return () => window.clearTimeout(id)
   }, [texto, reduceMotion])
 
-  // Saltarse el tecleo. Va por el DOM para no tener que subir un ref hasta el
-  // overlay solo para esto.
+  /* Acelerar. Va por el DOM para no tener que subir un ref hasta el overlay
+     solo para esto.
+
+     Acelerar y NO completar de golpe es deliberado: el salto instantáneo se
+     come la frase entera —y con ella los blips— justo cuando la persona ha
+     tocado porque quiere ir más rápido, no porque quiera dejar de leer. */
   useEffect(() => {
-    const completar = () => {
-      setVisibles(texto.length)
-      avisoRef.current?.()
+    const acelerar = () => {
+      retardoRef.current = Math.max(MS_MINIMO, retardoRef.current / FACTOR_ACELERACION)
     }
-    window.addEventListener('tutorial:completar-texto', completar)
-    return () => window.removeEventListener('tutorial:completar-texto', completar)
-  }, [texto])
+    window.addEventListener('tutorial:acelerar', acelerar)
+    return () => window.removeEventListener('tutorial:acelerar', acelerar)
+  }, [])
 
   // En móvil se apilan: la mascota arriba y el bocadillo debajo. Al lado no
   // caben —una caja de 384 px más la mascota se salía de un viewport de 375— y
@@ -123,6 +155,33 @@ export default function MascotBubble({ texto, pose, mirandoIzquierda, onTextoCom
           <span aria-hidden className="absolute inset-0">{texto.slice(0, visibles)}</span>
           <span className="sr-only">{texto}</span>
         </p>
+
+        {/* La señal de "ya puedes seguir".
+
+            Antes no hacía falta: cualquier toque avanzaba, tarde o temprano.
+            Ahora que el primer toque solo acelera, sin esta marca no hay forma
+            de saber cuándo el siguiente toque pasa de página. */}
+        {completo && (
+          <motion.span
+            aria-hidden
+            className="absolute -bottom-2 -right-2 flex size-6 items-center justify-center rounded-full border border-[#E8A598]/40 bg-white text-[#E8A598] shadow-sm"
+            initial={reduceMotion ? false : { scale: 0.6, opacity: 0 }}
+            animate={
+              reduceMotion
+                ? { scale: 1, opacity: 1 }
+                : { scale: 1, opacity: 1, y: [0, 2, 0] }
+            }
+            transition={
+              reduceMotion
+                ? { duration: 0 }
+                : { y: { repeat: Infinity, duration: 1.1, ease: 'easeInOut' }, duration: 0.2 }
+            }
+          >
+            <svg viewBox="0 0 10 10" className="size-2.5 fill-current">
+              <path d="M1 1 L9 5 L1 9 Z" />
+            </svg>
+          </motion.span>
+        )}
       </div>
     </div>
   )
