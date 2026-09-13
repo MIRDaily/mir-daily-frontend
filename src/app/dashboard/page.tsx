@@ -93,6 +93,9 @@ type MostFailedWeekStats = {
   youWereCorrect: boolean | null
   answeredAt: string | null
   explanation?: string | null
+  // El backend devuelve true cuando la semana no llego al minimo de respuestas
+  // y la tarjeta se ha rellenado con cifras de ejemplo sobre una pregunta real.
+  isPlaceholder?: boolean
 }
 
 type MostFailedWeekPayload =
@@ -2803,6 +2806,12 @@ export default function DashboardPage() {
               <p className="text-[#7D8A96] text-lg mt-3 max-w-2xl">
                 Aprendizaje compartido con la pregunta que más costó la semana pasada.
               </p>
+              {mostFailedWeek?.isPlaceholder && (
+                <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#E8A598]/40 bg-[#FFF8F6] px-3 py-1.5 text-xs font-semibold text-[#C45B4B]">
+                  <span className="material-symbols-outlined text-base">science</span>
+                  Datos de ejemplo: aún no hay suficientes respuestas esta semana
+                </p>
+              )}
             </div>
             <div className="bg-white border border-[#E8A598]/20 ring-1 ring-white/70 rounded-2xl px-5 py-4 shadow-[0_18px_40px_rgba(125,138,150,0.18)] flex items-center gap-4">
               <div className="text-sm text-[#7D8A96]">
