@@ -27,6 +27,8 @@ import {
 } from '@/lib/studioDecks'
 import { parseApiError } from '@/lib/profile'
 import { getOnboardingDeferredFlag } from '@/lib/onboarding'
+import { useTutorialReady } from '@/providers/TutorialProvider'
+import { TUTORIAL_DAILY } from '@/lib/tutorials/scripts'
 import { getUserSummary } from '@/services/resultsService'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
@@ -388,6 +390,24 @@ export default function DashboardPage() {
   const dailyImageHintPlayed = useRef(false)
   const idleStartRef = useRef(performance.now())
   const deckSectionRef = useRef<HTMLDivElement | null>(null)
+
+  /* ─── Tutorial de la mascota ───────────────────────────────────────────
+     Esta página es tres cosas a la vez —el hub, el quiz y los resultados—,
+     así que el tutorial no puede dispararse por la ruta: sacaría la mascota
+     en mitad de una pregunta. Y espera además a que termine la entrada
+     escalonada del hub (el último elemento acaba sobre los 1290 ms), o el
+     foco perseguiría a un elemento que todavía se está colocando. */
+  const [hubAsentado, setHubAsentado] = useState(false)
+
+  useEffect(() => {
+    const id = setTimeout(() => setHubAsentado(true), 1400)
+    return () => clearTimeout(id)
+  }, [])
+
+  useTutorialReady(
+    TUTORIAL_DAILY.id,
+    hubAsentado && !showQuiz && !showResults && !isExitingDaily && !isEnvelopeOpening,
+  )
 
   const openTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const exitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -2353,6 +2373,7 @@ export default function DashboardPage() {
 
         <div
           ref={deckSectionRef}
+          data-tutorial="daily-sobre"
           className={`relative w-full max-w-5xl flex flex-col items-center justify-center mb-10 [@media(max-height:850px)]:mb-5 hub-anim hub-anim-delay-3 ${
             isEnvelopeOpening || showSubjectBurst ? 'z-[70]' : 'z-30'
           }`}
@@ -2566,7 +2587,13 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="flex flex-col items-center gap-6 z-30 hub-anim-soft hub-anim-delay-4 mb-12">
+        {/* Misma ancla que el sobre: el foco del tutorial ilumina la unión de
+            los dos, que son hermanos y no se pueden envolver sin tocar este
+            flex. */}
+        <div
+          data-tutorial="daily-sobre"
+          className="flex flex-col items-center gap-6 z-30 hub-anim-soft hub-anim-delay-4 mb-12"
+        >
             <label
               className={`inline-flex items-center group select-none ${
                 hasOpenedEnvelope ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
@@ -2761,7 +2788,10 @@ export default function DashboardPage() {
           <div className="absolute top-10 left-1/4 size-4 bg-[#8BA888]/20 rounded-full blur-sm animate-pulse-slow -z-10"></div>
           <div className="absolute bottom-32 right-1/3 size-6 bg-[#E8A598]/20 rounded-full blur-sm animate-pulse-slow delay-700 -z-10"></div>
 
-        <section className="relative z-10 w-full max-w-6xl mx-auto mb-20 mt-10 hub-anim hub-anim-delay-4">
+        <section
+          data-tutorial="daily-fallada"
+          className="relative z-10 w-full max-w-6xl mx-auto mb-20 mt-10 hub-anim hub-anim-delay-4"
+        >
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
             <div>
               <p className="text-sm uppercase tracking-[0.25em] text-[#C45B4B] font-semibold">
@@ -3122,7 +3152,7 @@ export default function DashboardPage() {
               </div>
               <div className="w-full lg:w-1/2 flex flex-col items-center lg:items-start text-center lg:text-left">
                 <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-6 leading-tight">
-                  Tus 10 preguntas diarias te esperan en la App Móvil
+                  Tus 5 preguntas diarias te esperan en la App Móvil
                 </h2>
                 <p className="text-[#7D8A96] text-lg mb-10 max-w-md">
                   Accede a tu sobre diario, sigue tu racha y mejora tu preparación MIR con una experiencia diseñada para ti.

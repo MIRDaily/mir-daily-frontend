@@ -41,6 +41,10 @@ export type AuthUser = {
   /** Fecha en la que podrá volver a cambiar el username (null si puede ya). */
   username_next_change_at: string | null
   onboarding_completed: boolean
+  /** Claves versionadas de los tutoriales de la mascota ya vistos. */
+  tutorials_seen: string[]
+  /** Si la app de Android/iOS está publicada ya. Lo dice el backend. */
+  mobile_app_available: boolean
   mustUpdateDisplayName: boolean
   created_at: string
 }
@@ -148,6 +152,13 @@ function coerceAuthUser(payload: unknown, fallbackSession: Session): AuthUser | 
       : typeof source.onboardingCompleted === 'boolean'
         ? source.onboardingCompleted
         : false
+  const tutorialsSeen = Array.isArray(source.tutorials_seen)
+    ? source.tutorials_seen.filter((x): x is string => typeof x === 'string')
+    : []
+  const mobileAppAvailable =
+    typeof source.mobile_app_available === 'boolean'
+      ? source.mobile_app_available
+      : false
   const mustUpdateDisplayName =
     typeof source.mustUpdateDisplayName === 'boolean'
       ? source.mustUpdateDisplayName
@@ -174,6 +185,8 @@ function coerceAuthUser(payload: unknown, fallbackSession: Session): AuthUser | 
     bio,
     username_next_change_at: usernameNextChangeAt,
     onboarding_completed: onboardingCompleted,
+    tutorials_seen: tutorialsSeen,
+    mobile_app_available: mobileAppAvailable,
     mustUpdateDisplayName,
     created_at: createdAt,
   }
