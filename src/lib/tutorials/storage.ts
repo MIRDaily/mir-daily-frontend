@@ -41,22 +41,51 @@ export function guardarVistosLocales(claves: Iterable<string>) {
   }
 }
 
+/* ── Interruptor de Configuración ─────────────────────────────────────────
+   Mismo patrón que el cursor de marca: preferencia local, expuesta como
+   store externo para que `useSyncExternalStore` la lea sin desincronizarse
+   entre pestañas del mismo navegador.
+
+   Va aparte de `tutorials_seen` a propósito: "no quiero tutoriales" es una
+   preferencia de este navegador, no un dato de la cuenta. Quien lo apague en
+   el portátil no tiene por qué apagarlo también en el móvil.
+─────────────────────────────────────────────────────────────────────────── */
+
+export const TUTORIALES_EVENT = 'mirdaily:tutoriales-activos'
+
+// Si localStorage no está disponible (modo privado) la preferencia vive solo
+// en memoria y dura lo que la pestaña.
+let activosEnMemoria = true
+
 /** Los tutoriales se pueden apagar del todo desde Configuración. */
 export function tutorialesActivos(): boolean {
   if (typeof window === 'undefined') return true
   try {
     return window.localStorage.getItem(CLAVE_ACTIVOS) !== 'false'
   } catch {
-    return true
+    return activosEnMemoria
   }
 }
 
 export function setTutorialesActivos(valor: boolean) {
   if (typeof window === 'undefined') return
+  activosEnMemoria = valor
   try {
     window.localStorage.setItem(CLAVE_ACTIVOS, String(valor))
   } catch {
     /* ver arriba */
+  }
+  window.dispatchEvent(new Event(TUTORIALES_EVENT))
+}
+
+export function subscribeTutorialesActivos(alCambiar: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  window.addEventListener(TUTORIALES_EVENT, alCambiar)
+  // `storage` cubre el caso de tenerlo abierto en dos pestañas.
+  window.addEventListener('storage', alCambiar)
+  return () => {
+    window.removeEventListener(TUTORIALES_EVENT, alCambiar)
+    window.removeEventListener('storage', alCambiar)
   }
 }
 

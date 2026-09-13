@@ -32,6 +32,12 @@ import {
   StickerCard,
 } from '@/components/Profile/ui'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
+import {
+  reiniciarTutoriales,
+  setTutorialesActivos,
+  subscribeTutorialesActivos,
+  tutorialesActivos,
+} from '@/lib/tutorials/storage'
 import { useProfile } from '@/hooks/useProfile'
 import { useProgressContext } from '@/providers/ProgressProvider'
 import { DISPLAY_NAME_REGEX, USERNAME_REGEX, normalizeUsernameInput } from '@/lib/profile'
@@ -121,6 +127,12 @@ export default function SettingsCard() {
     readCozyCursor,
     () => true,
   )
+  const tutorialesEncendidos = useSyncExternalStore(
+    subscribeTutorialesActivos,
+    tutorialesActivos,
+    () => true,
+  )
+  const [reiniciandoTutoriales, setReiniciandoTutoriales] = useState(false)
   const usernameRequestSeq = useRef(0)
 
   useEffect(() => {
@@ -147,6 +159,25 @@ export default function SettingsCard() {
   useEffect(() => {
     document.documentElement.setAttribute('data-cozy-cursor', cozyCursorEnabled ? 'on' : 'off')
   }, [cozyCursorEnabled])
+
+  /* Volver a ver los tutoriales.
+
+     Termina con una navegación DURA y no con router.push: el provider de
+     tutoriales guarda en memoria lo que se ha marcado en esta sesión, y el
+     perfil cacheado del AuthProvider todavía trae la lista vieja del
+     servidor. Recargando de cero se limpian los dos de un golpe y el usuario
+     aterriza justo donde va a ver el tutorial, que es lo que acaba de pedir. */
+  const volverAVerTutoriales = async () => {
+    setReiniciandoTutoriales(true)
+    try {
+      await reiniciarTutoriales(apiUrl, authenticatedFetch)
+      if (!tutorialesEncendidos) setTutorialesActivos(true)
+      window.location.assign('/dashboard')
+    } catch {
+      setReiniciandoTutoriales(false)
+      setToast({ type: 'error', message: 'No se pudieron reiniciar los tutoriales.' })
+    }
+  }
 
   const toggleCozyCursor = () => {
     const next = !cozyCursorEnabled
@@ -616,6 +647,35 @@ export default function SettingsCard() {
               </div>
               <p className="mt-3 text-[11px] font-black uppercase tracking-wide text-[#B9B2AD]">
                 {cozyCursorEnabled ? 'Activado' : 'Desactivado'}
+              </p>
+            </StickerCard>
+
+            <StickerCard className="mt-3 p-5" depth={4}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-black text-[#2C3E50]">Tutoriales</p>
+                  <p className="mt-1 text-xs leading-relaxed text-[#7D8A96]">
+                    La mascota te enseña cada pantalla la primera vez que entras. Apágalos y no
+                    volverá a aparecer.
+                  </p>
+                </div>
+                <InkSwitch
+                  checked={tutorialesEncendidos}
+                  onChange={() => setTutorialesActivos(!tutorialesEncendidos)}
+                  label="Activar o desactivar los tutoriales de la mascota"
+                />
+              </div>
+              <GhostButton
+                icon="replay"
+                onClick={volverAVerTutoriales}
+                disabled={reiniciandoTutoriales}
+                className="mt-3 w-full"
+              >
+                {reiniciandoTutoriales ? 'Reiniciando…' : 'Volver a verlos desde el principio'}
+              </GhostButton>
+              <p className="mt-2 text-xs text-[#7D8A96]">
+                Se te olvidan en todos tus dispositivos, no solo en este, y te lleva al Daily para
+                empezar.
               </p>
             </StickerCard>
           </section>
