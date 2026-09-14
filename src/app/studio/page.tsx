@@ -10,6 +10,7 @@ import { useMonthlyProgress } from '@/hooks/useAnalytics'
 import { useProgressContext } from '@/providers/ProgressProvider'
 import { useAnclaTutorial, useTutorialReady } from '@/providers/TutorialProvider'
 import { TUTORIAL_STUDIO } from '@/lib/tutorials/scripts'
+import StudioCountdown from '@/components/studio/StudioCountdown'
 import StudioSearchButton from '@/components/studio/StudioSearchButton'
 import StudioCalendarButton from '@/components/studio/StudioCalendarButton'
 import type { MonthlyProgressResponse } from '@/services/analyticsService'
@@ -615,6 +616,7 @@ export default function StudioPage() {
             >
               <StudioSearchButton />
               <StudioCalendarButton />
+              <StudioCountdown />
             </motion.div>
           </motion.section>
 
