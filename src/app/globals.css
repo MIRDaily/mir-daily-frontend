@@ -1586,3 +1586,302 @@ textarea:disabled {
     transform: scaleY(1);
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   La "muestra" de un modo dentro del tutorial: una miniatura de la
+   pantalla real y un raton que ejecuta la accion importante, en bucle.
+
+   Ciclo de 9 s repartido en CLICS, no en clases sueltas. El del simulacro
+   hace cuatro (asignatura, tema, cantidad y generar) y el de mazos dos
+   (abrir el mazo y estudiarlo), pero el primero y el ultimo caen a la vez
+   en los dos para que el ritmo se lea igual.
+
+   Cada clic tiene su "fase": lo que estaba antes lleva `-a` y lo que
+   aparece despues `-b`. Asi el panel entero reacciona a la vez —el
+   resumen, el contador, los avisos— en vez de animar cada cosa por su
+   cuenta con tiempos que se descuadran al tocar algo.
+
+     fase1 -> clic en la asignatura (23%)
+     fase2 -> clic en el tema       (41%)
+     fase3 -> clic en la cantidad   (58%)
+
+   Las coordenadas van en el espacio de dibujo del panel (560x450); el
+   overlay lo escala entero, asi que no hay que tocarlas al cambiar de
+   tamano. Estan MEDIDAS sobre el DOM, no estimadas a ojo: al calcularlas
+   a mano el raton pulsaba los contadores en vez de "Estudiar". Si se
+   mueve algo de la maqueta, volver a medir el centro del destino en vez
+   de recalcularlo de cabeza.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.mir-prev {
+  --mir-prev-ciclo: 9s;
+  animation: mir-prev-entra 450ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes mir-prev-entra {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── El raton ────────────────────────────────────────────────────────── */
+
+.mir-prev-raton {
+  animation-duration: var(--mir-prev-ciclo);
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+
+.mir-prev-raton-simulacros { animation-name: mir-prev-raton-simulacros; }
+
+@keyframes mir-prev-raton-simulacros {
+  0%   { opacity: 0; transform: translate(470px, 415px); }
+  5%   { opacity: 1; transform: translate(470px, 415px); }
+  20%  { transform: translate(311px, 156px) scale(1); }
+  23%  { transform: translate(311px, 156px) scale(0.78); }
+  27%  { transform: translate(311px, 156px) scale(1); }
+  38%  { transform: translate(185px, 282px) scale(1); }
+  41%  { transform: translate(185px, 282px) scale(0.78); }
+  45%  { transform: translate(185px, 282px) scale(1); }
+  55%  { transform: translate(181px, 392px) scale(1); }
+  58%  { transform: translate(181px, 392px) scale(0.78); }
+  62%  { transform: translate(181px, 392px) scale(1); }
+  72%  { transform: translate(469px, 385px) scale(1); }
+  75%  { transform: translate(469px, 385px) scale(0.78); }
+  79%  { transform: translate(469px, 385px) scale(1); }
+  93%  { opacity: 1; transform: translate(469px, 385px) scale(1); }
+  100% { opacity: 0; transform: translate(500px, 425px) scale(1); }
+}
+
+.mir-prev-raton-mazos { animation-name: mir-prev-raton-mazos; }
+
+@keyframes mir-prev-raton-mazos {
+  0%   { opacity: 0; transform: translate(470px, 415px); }
+  5%   { opacity: 1; transform: translate(470px, 415px); }
+  20%  { transform: translate(278px, 291px) scale(1); }
+  23%  { transform: translate(278px, 291px) scale(0.78); }
+  27%  { transform: translate(278px, 291px) scale(1); }
+  72%  { transform: translate(76px, 131px) scale(1); }
+  75%  { transform: translate(76px, 131px) scale(0.78); }
+  79%  { transform: translate(76px, 131px) scale(1); }
+  93%  { opacity: 1; transform: translate(76px, 131px) scale(1); }
+  100% { opacity: 0; transform: translate(500px, 425px) scale(1); }
+}
+
+/* ── Las tres fases: lo de antes (-a) y lo de despues (-b) ───────────── */
+
+.mir-prev-fase1-a,
+.mir-prev-fase1-b,
+.mir-prev-fase2-a,
+.mir-prev-fase2-b,
+.mir-prev-fase3-a,
+.mir-prev-fase3-b {
+  animation-duration: var(--mir-prev-ciclo);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.mir-prev-fase1-a { animation-name: mir-prev-fase1-a; }
+.mir-prev-fase1-b { opacity: 0; animation-name: mir-prev-fase1-b; }
+
+@keyframes mir-prev-fase1-a {
+  0%, 24%  { opacity: 1; }
+  28%, 96% { opacity: 0; }
+  100%     { opacity: 1; }
+}
+
+@keyframes mir-prev-fase1-b {
+  0%, 24%   { opacity: 0; }
+  28%, 96%  { opacity: 1; }
+  99%, 100% { opacity: 0; }
+}
+
+.mir-prev-fase2-a { animation-name: mir-prev-fase2-a; }
+.mir-prev-fase2-b { opacity: 0; animation-name: mir-prev-fase2-b; }
+
+@keyframes mir-prev-fase2-a {
+  0%, 42%  { opacity: 1; }
+  46%, 96% { opacity: 0; }
+  100%     { opacity: 1; }
+}
+
+@keyframes mir-prev-fase2-b {
+  0%, 42%   { opacity: 0; }
+  46%, 96%  { opacity: 1; }
+  99%, 100% { opacity: 0; }
+}
+
+.mir-prev-fase3-a { animation-name: mir-prev-fase3-a; }
+.mir-prev-fase3-b { opacity: 0; animation-name: mir-prev-fase3-b; }
+
+@keyframes mir-prev-fase3-a {
+  0%, 59%  { opacity: 1; }
+  63%, 96% { opacity: 0; }
+  100%     { opacity: 1; }
+}
+
+@keyframes mir-prev-fase3-b {
+  0%, 59%   { opacity: 0; }
+  63%, 96%  { opacity: 1; }
+  99%, 100% { opacity: 0; }
+}
+
+/* ── Lo que se marca al elegirlo ─────────────────────────────────────── */
+
+.mir-prev-elige-simulacros {
+  animation: mir-prev-elige-simulacros var(--mir-prev-ciclo) linear infinite;
+}
+
+@keyframes mir-prev-elige-simulacros {
+  0%, 22%   { background-color: #fff; color: #7d8a96; box-shadow: inset 0 0 0 1px #e5e7eb; }
+  26%, 95%  { background-color: rgba(232,165,152,0.22); color: #c4655a; box-shadow: inset 0 0 0 1.5px rgba(232,165,152,0.9); }
+  99%, 100% { background-color: #fff; color: #7d8a96; box-shadow: inset 0 0 0 1px #e5e7eb; }
+}
+
+.mir-prev-tema-elegido {
+  animation: mir-prev-tema-elegido var(--mir-prev-ciclo) linear infinite;
+}
+
+@keyframes mir-prev-tema-elegido {
+  0%, 40%   { background-color: #fff; color: #7d8a96; box-shadow: inset 0 0 0 1px #e5e7eb; }
+  44%, 95%  { background-color: rgba(232,165,152,0.22); color: #c4655a; box-shadow: inset 0 0 0 1.5px rgba(232,165,152,0.9); }
+  99%, 100% { background-color: #fff; color: #7d8a96; box-shadow: inset 0 0 0 1px #e5e7eb; }
+}
+
+/* La tarjeta de un mazo ya tiene su degradado, asi que "elegida" no puede
+   ser un color de fondo: se marca con un cerco y un empujon de escala. */
+.mir-prev-elige-mazos {
+  animation: mir-prev-elige-mazos var(--mir-prev-ciclo) ease-out infinite;
+  will-change: transform;
+}
+
+@keyframes mir-prev-elige-mazos {
+  0%, 20%   { transform: scale(1); box-shadow: none; }
+  24%, 30%  { transform: scale(1.025); box-shadow: 0 0 0 2px #fff, 0 0 0 5px rgba(232,165,152,0.95); }
+  36%, 100% { transform: scale(1); box-shadow: none; }
+}
+
+/* ── Los atajos de cantidad y su barra (fase 3) ──────────────────────── */
+
+.mir-prev-atajo {
+  animation-duration: var(--mir-prev-ciclo);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.mir-prev-atajo-off { animation-name: mir-prev-atajo-off; }
+
+@keyframes mir-prev-atajo-off {
+  0%, 59%  { background-color: #e8a598; color: #fff; box-shadow: none; }
+  63%, 96% { background-color: #fff; color: #7d8a96; box-shadow: inset 0 0 0 1px #e5e7eb; }
+  100%     { background-color: #e8a598; color: #fff; box-shadow: none; }
+}
+
+.mir-prev-atajo-on { animation-name: mir-prev-atajo-on; }
+
+@keyframes mir-prev-atajo-on {
+  0%, 59%  { background-color: #fff; color: #7d8a96; box-shadow: inset 0 0 0 1px #e5e7eb; }
+  63%, 96% { background-color: #e8a598; color: #fff; box-shadow: none; }
+  100%     { background-color: #fff; color: #7d8a96; box-shadow: inset 0 0 0 1px #e5e7eb; }
+}
+
+.mir-prev-barra {
+  width: 8%;
+  animation: mir-prev-barra var(--mir-prev-ciclo) linear infinite;
+}
+
+@keyframes mir-prev-barra {
+  0%, 59%  { width: 8%; }
+  63%, 96% { width: 24%; }
+  100%     { width: 8%; }
+}
+
+/* ── Las dos escenas de mazos ────────────────────────────────────────── */
+
+.mir-prev-escena {
+  animation-duration: var(--mir-prev-ciclo);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: opacity;
+}
+
+.mir-prev-escena-a { animation-name: mir-prev-escena-a; }
+
+@keyframes mir-prev-escena-a {
+  0%, 27%  { opacity: 1; }
+  34%, 96% { opacity: 0; }
+  100%     { opacity: 1; }
+}
+
+.mir-prev-escena-b { opacity: 0; animation-name: mir-prev-escena-b; }
+
+@keyframes mir-prev-escena-b {
+  0%, 29%   { opacity: 0; }
+  36%, 95%  { opacity: 1; }
+  99%, 100% { opacity: 0; }
+}
+
+/* ── El boton principal ──────────────────────────────────────────────── */
+
+.mir-prev-cta {
+  animation-duration: var(--mir-prev-ciclo);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+/* Nace apagado y solo se enciende cuando ya hay una asignatura elegida: es
+   literalmente lo que hace la pantalla real. */
+.mir-prev-cta-simulacros {
+  background-color: #d8cfcb;
+  animation-name: mir-prev-cta-simulacros;
+}
+
+@keyframes mir-prev-cta-simulacros {
+  0%, 23%   { background-color: #d8cfcb; transform: scale(1); }
+  27%, 73%  { background-color: #e8a598; transform: scale(1); }
+  76%       { background-color: #d68c7f; transform: scale(0.96); }
+  80%, 95%  { background-color: #d68c7f; transform: scale(1); }
+  99%, 100% { background-color: #d8cfcb; transform: scale(1); }
+}
+
+/* Dentro del mazo, Estudiar ya esta activo desde que entras: solo se hunde
+   al pulsarlo. Inventarle un estado apagado seria mentir. */
+.mir-prev-cta-mazos {
+  background-color: #e8a598;
+  animation-name: mir-prev-cta-mazos;
+}
+
+@keyframes mir-prev-cta-mazos {
+  0%, 73%   { background-color: #e8a598; transform: scale(1); }
+  76%       { background-color: #d68c7f; transform: scale(0.96); }
+  80%, 95%  { background-color: #d68c7f; transform: scale(1); }
+  99%, 100% { background-color: #e8a598; transform: scale(1); }
+}
+
+/* Sin movimiento: la miniatura se queda en el fotograma que mas informa,
+   con todo ya elegido. El raton no pinta nada ahi. */
+@media (prefers-reduced-motion: reduce) {
+  .mir-prev,
+  .mir-prev-escena,
+  .mir-prev-elige-mazos,
+  .mir-prev-barra,
+  .mir-prev-atajo,
+  .mir-prev-cta,
+  .mir-prev-tema-elegido,
+  .mir-prev-elige-simulacros,
+  .mir-prev-fase1-a, .mir-prev-fase1-b,
+  .mir-prev-fase2-a, .mir-prev-fase2-b,
+  .mir-prev-fase3-a, .mir-prev-fase3-b { animation: none; }
+  .mir-prev-raton { display: none; }
+  .mir-prev-escena-a { opacity: 0; }
+  .mir-prev-escena-b { opacity: 1; }
+  .mir-prev-fase1-a, .mir-prev-fase2-a, .mir-prev-fase3-a { opacity: 0; }
+  .mir-prev-fase1-b, .mir-prev-fase2-b, .mir-prev-fase3-b { opacity: 1; }
+  .mir-prev-barra { width: 24%; }
+  .mir-prev-atajo-off { background-color: #fff; color: #7d8a96; box-shadow: inset 0 0 0 1px #e5e7eb; }
+  .mir-prev-atajo-on { background-color: #e8a598; color: #fff; }
+  .mir-prev-elige-simulacros,
+  .mir-prev-tema-elegido { background-color: rgba(232,165,152,0.22); color: #c4655a; box-shadow: inset 0 0 0 1.5px rgba(232,165,152,0.9); }
+  .mir-prev-cta { background-color: #e8a598; }
+}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import MascotBubble from '@/components/tutorial/MascotBubble'
+import PreviewModo, { ALTO_PREVIEW, ANCHO_PREVIEW } from '@/components/tutorial/PreviewModo'
 import { useAnchorRect } from '@/components/tutorial/useAnchorRect'
 import { desbloquearVoz } from '@/lib/tutorials/mascotAudio'
 import type { TutorialStep } from '@/lib/tutorials/types'
@@ -25,7 +26,13 @@ const MARGEN_FOCO = 10
 // mascota sobre el texto y crece. Pasarse solo empuja hacia la colocación
 // anclada abajo, que siempre es segura; quedarse corto lo saca de pantalla.
 const ALTO_BOCADILLO = 260
-const ANCHO_BOCADILLO = 440
+/* Ancho REAL del conjunto mascota + globo en escritorio: 160 de la mascota,
+   12 de hueco y 384 del globo (`max-w-sm`). Estaba puesto en 440, que es solo
+   el globo, y eso tenia dos consecuencias feas: el conjunto no quedaba
+   centrado sobre el foco —se iba 58 px a la derecha— y la comprobacion de
+   choque con la maqueta del modo creia que cabian los dos cuando no. Si
+   cambia el tamano de la mascota o del globo, este numero cambia con ellos. */
+const ANCHO_BOCADILLO = 556
 const HUECO = 24
 // Sitio para los puntos y el botón "Saltar" cuando el bocadillo va abajo.
 const ALTO_BARRA = 72
@@ -106,6 +113,79 @@ export default function TutorialOverlay({ paso, indice, total, onAvanzar, onSalt
       ? { bottom: window.innerHeight - rect.top + HUECO }
       : { bottom: ALTO_BARRA }
 
+  const izquierdaBocadillo = hayFoco
+    ? Math.min(
+        Math.max(centroX - ANCHO_BOCADILLO / 2, 16),
+        Math.max(window.innerWidth - ANCHO_BOCADILLO - 16, 16),
+      )
+    : 0
+
+  /* La maqueta del modo va en el hueco que el foco deja al otro lado: se mide
+     el espacio libre a izquierda y derecha y gana el mayor. En móvil el foco
+     ocupa casi todo el ancho, no hay hueco y no sale — que es lo correcto,
+     porque ahí competiría con el bocadillo por una pantalla ya llena. */
+  const huecoIzquierda = hayFoco ? rect.left - HUECO * 2 : 0
+  const huecoDerecha = hayFoco ? window.innerWidth - (rect.left + rect.width) - HUECO * 2 : 0
+  const previewALaIzquierda = huecoIzquierda >= huecoDerecha
+  const huecoPreview = Math.max(huecoIzquierda, huecoDerecha)
+
+  /* La miniatura se DIBUJA siempre al mismo tamaño y aquí se escala para
+     llenar el hueco. Antes tenía un tamaño fijo y prudente, y el resultado
+     era que se veía enana aunque al lado sobrara media pantalla. Escalando,
+     las coordenadas del ratón siguen valiendo —van en el espacio de dibujo—
+     y la maqueta se ve todo lo grande que quepa.
+
+     El tope de 1.35 existe para que en un monitor enorme no acabe siendo más
+     grande que la propia tarjeta que está explicando. */
+  const altoDisponible = window.innerHeight - HUECO * 2 - ALTO_BARRA
+  const escalaPreview = Math.min(
+    1.35,
+    huecoPreview / ANCHO_PREVIEW,
+    altoDisponible / ALTO_PREVIEW,
+  )
+  const anchoEscalado = ANCHO_PREVIEW * escalaPreview
+  const altoEscalado = ALTO_PREVIEW * escalaPreview
+
+  const izquierdaPreview = !hayFoco
+    ? 0
+    : previewALaIzquierda
+      ? Math.max(rect.left - HUECO - anchoEscalado, HUECO)
+      : rect.left + rect.width + HUECO
+
+  // Centrada con el foco, pero sin salirse por arriba ni por abajo.
+  const topPreview = hayFoco
+    ? Math.min(
+        Math.max(rect.top + rect.height / 2 - altoEscalado / 2, HUECO),
+        Math.max(window.innerHeight - altoEscalado - ALTO_BARRA, HUECO),
+      )
+    : HUECO
+
+  /* Y no se pinta si fuera a chocar con el bocadillo.
+
+     La primera versión de esto era una regla de brocha gorda —"solo si el
+     bocadillo cabe encima o debajo del foco"— y se cargaba justo el caso
+     normal: con una tarjeta alta, el bocadillo se ancla al fondo aunque a los
+     lados sobre media pantalla. Así que en vez de adivinar, se comparan los
+     dos rectángulos de verdad. */
+  const topBocadillo = cabeDebajo
+    ? rect.top + rect.height + HUECO
+    : cabeEncima
+      ? rect.top - HUECO - ALTO_BOCADILLO
+      : window.innerHeight - ALTO_BARRA - ALTO_BOCADILLO
+
+  const chocanEnHorizontal =
+    izquierdaPreview < izquierdaBocadillo + ANCHO_BOCADILLO &&
+    izquierdaPreview + anchoEscalado > izquierdaBocadillo
+  const chocanEnVertical =
+    topPreview < topBocadillo + ALTO_BOCADILLO && topPreview + altoEscalado > topBocadillo
+
+  // Por debajo de ~0,6 los rótulos dejan de leerse: mejor no enseñarla.
+  const muestraPreview =
+    hayFoco &&
+    Boolean(paso.preview) &&
+    escalaPreview >= 0.6 &&
+    !(chocanEnHorizontal && chocanEnVertical)
+
   return createPortal(
     <div className="fixed inset-0 z-[120]" role="dialog" aria-modal="true" aria-live="polite">
       {/* Capa oscura. Con foco es la sombra del recorte; sin foco, un velo. */}
@@ -135,6 +215,35 @@ export default function TutorialOverlay({ paso, indice, total, onAvanzar, onSalt
         onClick={avanzar}
         aria-label={textoCompleto ? 'Siguiente' : 'Escribir más rápido'}
       />
+
+      {/* La maqueta del modo, en el hueco de al lado. Va ANTES del bocadillo
+          en el DOM a propósito: si algún día llegaran a rozarse, el que
+          manda es el que lleva el texto. */}
+      {muestraPreview && paso.preview ? (
+        <motion.div
+          /* La clave es el MODO y no el índice: con varios bocadillos
+             seguidos sobre la misma tarjeta, indexar por paso remontaba la
+             maqueta en cada uno y la animación volvía a empezar sin llegar
+             nunca a terminar su vuelta. */
+          key={`preview-${paso.preview}`}
+          className="pointer-events-none absolute"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.25 }}
+          style={{
+            top: topPreview,
+            left: izquierdaPreview,
+            width: anchoEscalado,
+            height: altoEscalado,
+          }}
+        >
+          <div
+            style={{ transform: `scale(${escalaPreview})`, transformOrigin: 'top left' }}
+          >
+            <PreviewModo modo={paso.preview} />
+          </div>
+        </motion.div>
+      ) : null}
 
       <AnimatePresence mode="wait">
         {/* Centrar con flex y NO con `translate(-50%,-50%)`: framer anima `y`

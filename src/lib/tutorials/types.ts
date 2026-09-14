@@ -12,6 +12,13 @@ export type MascotPose = 'saludo' | 'senalando' | 'hablando' | 'despedida'
 
 export type StepPlacement = 'auto' | 'centro'
 
+/**
+ * Modos que tienen "muestra": un esquema animado de lo que hay dentro, que
+ * el overlay pinta en el hueco que deja el foco al otro lado de la pantalla.
+ * Solo los dos modos donde lo de dentro NO se adivina desde fuera.
+ */
+export type PreviewModo = 'simulacros' | 'mazos'
+
 export type TutorialStep = {
   /**
    * Valor del `data-tutorial` del elemento a iluminar. Si no se indica —o si
@@ -23,6 +30,12 @@ export type TutorialStep = {
   pose: MascotPose
   text: string
   placement?: StepPlacement
+  /**
+   * Enseña además la maqueta animada de ese modo. Solo se pinta si hay foco
+   * y si al lado queda hueco de sobra: en móvil no cabe y no sale, que es lo
+   * correcto —ahí la pantalla ya la ocupa entera el propio foco—.
+   */
+  preview?: PreviewModo
 }
 
 /**
