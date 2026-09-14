@@ -8,6 +8,8 @@ import { debugRender } from '@/lib/debugRSC'
 import { useAuth } from '@/hooks/useAuth'
 import { useMonthlyProgress } from '@/hooks/useAnalytics'
 import { useProgressContext } from '@/providers/ProgressProvider'
+import { useTutorialReady } from '@/providers/TutorialProvider'
+import { TUTORIAL_STUDIO } from '@/lib/tutorials/scripts'
 import StudioSearchButton from '@/components/studio/StudioSearchButton'
 import StudioCalendarButton from '@/components/studio/StudioCalendarButton'
 import type { MonthlyProgressResponse } from '@/services/analyticsService'
@@ -349,6 +351,7 @@ function Reveal({
   children,
   className,
   id,
+  dataTutorial,
   reduceMotion,
   onMouseEnter,
   onMouseLeave,
@@ -359,6 +362,10 @@ function Reveal({
   children: ReactNode
   className?: string
   id?: string
+  /** Ancla del tutorial de la mascota. Va como prop explícita porque este
+      componente no reenvía el resto de props: puesto como `data-tutorial`
+      desde fuera se perdía en silencio y el paso salía sin foco. */
+  dataTutorial?: string
   reduceMotion: boolean | null
   onMouseEnter?: () => void
   onMouseLeave?: () => void
@@ -377,7 +384,7 @@ function Reveal({
 
   if (reduceMotion) {
     return (
-      <div ref={ref} className={className} id={id} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+      <div ref={ref} className={className} id={id} data-tutorial={dataTutorial} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
         {children}
       </div>
     )
@@ -388,6 +395,7 @@ function Reveal({
       ref={ref}
       className={className}
       id={id}
+      data-tutorial={dataTutorial}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       initial={{ opacity: 0, y: 34, scale: 0.98 }}
@@ -460,6 +468,20 @@ export default function StudioPage() {
   // la misma señal que alimenta la tarjeta, así que no hay una petición extra.
   const smartReady = weakTopic != null
   const [smartOpen, setSmartOpen] = useState(false)
+
+  /* La mascota espera a que la pagina se asiente, igual que en el Daily. Aqui
+     hace falta incluso mas: al montar se fuerza el scroll arriba y las
+     tarjetas entran con su propia animacion, asi que disparar antes mediria
+     las anclas mientras todavia se estan colocando. */
+  const [studioAsentado, setStudioAsentado] = useState(false)
+
+  useEffect(() => {
+    const id = setTimeout(() => setStudioAsentado(true), 1400)
+    return () => clearTimeout(id)
+  }, [])
+
+  // Nunca con el popup del simulacro abierto: son dos capas que se taparian.
+  useTutorialReady(TUTORIAL_STUDIO.id, studioAsentado && !loading && Boolean(user) && !smartOpen)
 
   useLayoutEffect(() => {
     const prevScrollRestoration = window.history.scrollRestoration
@@ -663,6 +685,15 @@ export default function StudioPage() {
                 <Reveal
                   reduceMotion={reduceMotion}
                   id={card.id}
+                  /* El índice y no `card.type`: Electros TAMBIÉN es
+                     'featured', así que por tipo se iluminarían dos tarjetas
+                     como si fueran el simulacro. El 0 es siempre la destacada
+                     —`[buildFeaturedCard(...), ...studioCardsBase]`— que es el
+                     mismo criterio con el que se inserta el encabezado de
+                     "Módulos de entrenamiento" justo arriba. Los módulos
+                     comparten ancla a propósito: useAnchorRect ilumina la
+                     unión de todos y el foco abarca la rejilla entera. */
+                  dataTutorial={index === 0 ? 'studio-simulacro' : 'studio-modulos'}
                   className={`group relative overflow-hidden rounded-2xl border-2 p-6 shadow-sm transition-[border-color,box-shadow] duration-200 hover:border-[#2c3e50] hover:shadow-[4px_4px_0_0_#2c3e50] ${
                   card.type === 'featured'
                     ? 'border-[#E8A598]/30 bg-gradient-to-br from-white to-[#fff0ec] md:col-span-2'

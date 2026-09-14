@@ -1390,3 +1390,199 @@ textarea:disabled {
   .galactic-nebula { animation: none; opacity: 0.75; }
   .galactic-rainbow { animation: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Maqueta animada de la tarjeta "App Movil" del dashboard.
+
+   Un test respondiendose solo en el movil y la grafica del repaso del
+   daily en la tablet. Todo CSS y cero JS: son adornos: no merecen un
+   re-render de React ni un timer por fotograma.
+
+   Lo que se mueve son `transform` y `opacity`, que van en el compositor.
+   El unico color animado son las tres pastillas de respuesta —tres cajas
+   de 8 px de alto— y ahi el repintado es irrelevante.
+
+   Un solo ciclo (--mir-ciclo) manda sobre las dos pantallas, asi que van
+   acompasadas sin que nadie las coordine: cuando el movil pasa de
+   pregunta, las barras de la tablet ya estan arriba.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.mir-mock {
+  --mir-ciclo: 13.5s;
+}
+
+/* ── Movil: tres preguntas que entran, se responden y se van ─────────── */
+
+.mir-quiz-card {
+  opacity: 0;
+  animation: mir-quiz-card var(--mir-ciclo) linear infinite;
+  animation-delay: var(--mir-paso, 0s);
+  will-change: transform, opacity;
+}
+
+/* Cada pregunta ocupa un tercio del ciclo. Las tarjetas no comparten un
+   carrusel: cada una entra y sale por su cuenta con su propio retardo, y
+   asi no hay salto al volver a empezar —que es lo que pasa al arrastrar
+   una tira larga y devolverla de golpe al origen. */
+@keyframes mir-quiz-card {
+  0% {
+    opacity: 0;
+    transform: translateX(22%);
+  }
+  3% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  33% {
+    opacity: 0;
+    transform: translateX(-22%);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-22%);
+  }
+}
+
+/* La opcion que "elige" el usuario: neutra, se marca, y se confirma en
+   verde. El resto de pastillas no se animan. */
+.mir-quiz-pick {
+  animation: mir-quiz-pick var(--mir-ciclo) linear infinite;
+  animation-delay: var(--mir-paso, 0s);
+}
+
+@keyframes mir-quiz-pick {
+  0%,
+  11% {
+    background-color: #f9fafb;
+    border-color: #f3f4f6;
+  }
+  15%,
+  21% {
+    background-color: rgba(232, 165, 152, 0.2);
+    border-color: rgba(232, 165, 152, 0.5);
+  }
+  25%,
+  30% {
+    background-color: rgba(16, 185, 129, 0.16);
+    border-color: rgba(16, 185, 129, 0.45);
+  }
+  33%,
+  100% {
+    background-color: #f9fafb;
+    border-color: #f3f4f6;
+  }
+}
+
+/* Barra de progreso de la cabecera: un tercio por pregunta. Da saltos
+   porque avanza al responder, no de forma continua. El reset al volver a
+   la primera pregunta se tapa con un parpadeo, si no se ve retroceder. */
+.mir-quiz-progreso {
+  transform-origin: left center;
+  animation: mir-quiz-progreso var(--mir-ciclo) linear infinite;
+  will-change: transform;
+}
+
+@keyframes mir-quiz-progreso {
+  0%,
+  30% {
+    transform: scaleX(0.34);
+    opacity: 1;
+  }
+  33%,
+  63% {
+    transform: scaleX(0.67);
+    opacity: 1;
+  }
+  66%,
+  93% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  95% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+  96% {
+    transform: scaleX(0.34);
+    opacity: 0;
+  }
+  100% {
+    transform: scaleX(0.34);
+    opacity: 1;
+  }
+}
+
+/* ── Tablet: las barras del repaso del daily ─────────────────────────── */
+
+/* La altura final la pone el `height` de cada barra; la animacion solo
+   escala de 0 a esa altura, que es gratis para el compositor. */
+.mir-bar {
+  transform-origin: bottom center;
+  animation: mir-bar var(--mir-ciclo) cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  animation-delay: var(--mir-bar-delay, 0s);
+  will-change: transform;
+}
+
+/* La grafica sube pronto y se queda arriba casi todo el ciclo: solo se
+   desinfla al final, para volver a crecer cuando el test empieza de nuevo.
+   Con la bajada mas temprana se pasaba media vuelta a media asta mientras
+   el movil seguia respondiendo, y parecia estropeada. */
+@keyframes mir-bar {
+  0% {
+    transform: scaleY(0.06);
+  }
+  16%,
+  88% {
+    transform: scaleY(1);
+  }
+  97%,
+  100% {
+    transform: scaleY(0.06);
+  }
+}
+
+/* Retardos: por pregunta (movil) y por barra (tablet). Como clases y no
+   en `style`, igual que los `hub-anim-delay-N`. */
+.mir-paso-2 {
+  --mir-paso: 4.5s;
+}
+.mir-paso-3 {
+  --mir-paso: 9s;
+}
+
+.mir-bar-1 { --mir-bar-delay: 0s; }
+.mir-bar-2 { --mir-bar-delay: 0.12s; }
+.mir-bar-3 { --mir-bar-delay: 0.24s; }
+.mir-bar-4 { --mir-bar-delay: 0.36s; }
+.mir-bar-5 { --mir-bar-delay: 0.48s; }
+.mir-bar-6 { --mir-bar-delay: 0.6s; }
+
+/* Quien pide menos movimiento se queda con la escena quieta y legible:
+   la primera pregunta ya respondida y las barras arriba. */
+@media (prefers-reduced-motion: reduce) {
+  .mir-quiz-card {
+    animation: none;
+    opacity: 0;
+    transform: none;
+  }
+  .mir-quiz-card:first-child {
+    opacity: 1;
+  }
+  .mir-quiz-pick {
+    animation: none;
+    background-color: rgba(232, 165, 152, 0.2);
+    border-color: rgba(232, 165, 152, 0.5);
+  }
+  .mir-quiz-progreso {
+    animation: none;
+    transform: scaleX(0.34);
+  }
+  .mir-bar {
+    animation: none;
+    transform: scaleY(1);
+  }
+}

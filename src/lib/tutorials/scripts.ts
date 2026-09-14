@@ -20,6 +20,8 @@ export const TUTORIAL_DAILY: Tutorial = {
      versión lo vuelve a enseñar a quien ya vio la v1, que es lo que toca
      cuando lo que cambia es el guion y no una errata. */
   id: 'daily.v2',
+  // El aviso de la app cuelga de este tutorial: su ancla vive en el Daily.
+  llevaMensajeAppMovil: true,
   steps: [
     {
       pose: 'saludo',
@@ -51,8 +53,33 @@ export const TUTORIAL_DAILY: Tutorial = {
   ],
 }
 
+export const TUTORIAL_STUDIO: Tutorial = {
+  id: 'studio.v1',
+  /* Sin `cierre`: la despedida y el "te voy explicando cada pestaña" ya los
+     dio el Daily, y este tutorial es justo el cumplimiento de esa promesa.
+     Repetir el adiós en cada pantalla lo convertiría en un peaje. */
+  steps: [
+    {
+      pose: 'saludo',
+      placement: 'centro',
+      text: 'Esto es el Studio. Aquí eliges tú qué estudiar, sin esperar al sobre del día.',
+    },
+    {
+      anchor: 'studio-simulacro',
+      pose: 'senalando',
+      text: 'Este simulacro se monta solo: 30 preguntas de aquello que peor llevas.',
+    },
+    {
+      anchor: 'studio-modulos',
+      pose: 'hablando',
+      text: 'Y el resto de módulos: mazos, flashcards, electros y la sala Zen para concentrarte.',
+    },
+  ],
+}
+
 export const TUTORIALS: Record<TutorialId, Tutorial> = {
   [TUTORIAL_DAILY.id]: TUTORIAL_DAILY,
+  [TUTORIAL_STUDIO.id]: TUTORIAL_STUDIO,
 }
 
 /* ── Mensajes de una sola vez ────────────────────────────────────────────

@@ -4,6 +4,11 @@ import { useEffect, useState } from 'react'
 
 export type Rect = { top: number; left: number; width: number; height: number }
 
+/** Cuánto se sigue midiendo el ancla tras activarla, para no perderse su
+    animación de entrada. Da de sobra para un scroll suave (~0,5 s) más el
+    revelado de una tarjeta (0,75 s). */
+const MS_ASENTAR = 1200
+
 /**
  * Sigue a los elementos marcados con `data-tutorial="<ancla>"` y devuelve el
  * rectángulo que los engloba a TODOS, en coordenadas de viewport, o null si no
@@ -53,7 +58,27 @@ export function useAnchorRect(ancla: string | undefined, activo: boolean): Rect 
       return { top, left, width: right - left, height: bottom - top }
     }
 
-    const medir = () => setRect(union())
+    /* Solo se avisa a React cuando el rectángulo cambia de verdad.
+
+       Este `medir` lo llaman el oyente de scroll y el bucle de asentamiento
+       de abajo, o sea muchas veces por segundo. Devolviendo el objeto
+       anterior cuando nada se ha movido, React descarta el render y el
+       overlay no se repinta en balde. */
+    const medir = () =>
+      setRect((previo) => {
+        const u = union()
+        if (!u) return previo === null ? previo : null
+        if (
+          previo &&
+          previo.top === u.top &&
+          previo.left === u.left &&
+          previo.width === u.width &&
+          previo.height === u.height
+        ) {
+          return previo
+        }
+        return u
+      })
 
     // Centrar la UNIÓN, no el primer elemento: con `scrollIntoView` sobre uno
     // solo, el otro puede quedarse fuera de pantalla, que es justo lo que se
@@ -64,10 +89,26 @@ export function useAnchorRect(ancla: string | undefined, activo: boolean): Rect 
       window.scrollTo({ top: Math.max(centro - window.innerHeight / 2, 0), behavior: 'smooth' })
     }
 
-    // Medir en el siguiente fotograma, no en este: el scroll acaba de empezar
-    // y medir ahora daría la posición vieja. Además, así no se encadena un
-    // render dentro del propio commit.
-    const id = requestAnimationFrame(medir)
+    /* Medir durante un rato, no una sola vez.
+
+       Empieza en el fotograma siguiente y no en este: el scroll acaba de
+       arrancar y medir ahora daría la posición vieja; además, así no se
+       encadena un render dentro del propio commit.
+
+       Y sigue midiendo ~1,2 s porque las tarjetas tienen animación de entrada
+       propia (las del Studio entran con `y: 34` y `scale: 0.98`) y
+       `getBoundingClientRect` incluye el transform. El scroll suave dispara
+       re-medidas mientras dura, pero termina ANTES que esa animación: con una
+       sola medida, el foco se quedaba clavado donde estaba la tarjeta a medio
+       entrar. La ventana está acotada y, gracias a la guarda de `medir`, los
+       fotogramas en los que nada se mueve no cuestan ni un render. */
+    let id = 0
+    const desde = performance.now()
+    const asentar = (ahora: number) => {
+      medir()
+      if (ahora - desde < MS_ASENTAR) id = requestAnimationFrame(asentar)
+    }
+    id = requestAnimationFrame(asentar)
 
     const ro = new ResizeObserver(medir)
     els.forEach((el) => ro.observe(el))

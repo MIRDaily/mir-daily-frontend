@@ -3130,21 +3130,80 @@ export default function DashboardPage() {
             <div className="relative z-10 flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
               <div className="w-full lg:w-1/2 flex justify-center items-center relative">
                 <div className="absolute inset-0 bg-gradient-to-tr from-[#E8A598]/20 to-[#F08D75]/10 rounded-full blur-3xl transform scale-90"></div>
-                <div className="relative flex gap-4 transform translate-y-4">
-                  <div className="w-32 md:w-40 h-64 md:h-80 bg-slate-800 rounded-[2rem] border-4 border-slate-800 shadow-xl transform -rotate-6 translate-y-8 opacity-90 hidden sm:block">
-                    <div className="w-full h-full bg-slate-700 rounded-[1.7rem] overflow-hidden flex flex-col relative">
-                      <div className="h-full w-full bg-[#FAF7F4] opacity-10"></div>
+                {/* Maqueta animada: la tablet enseña el repaso del daily y el
+                    móvil va respondiendo un test en bucle. Los dos se solapan
+                    con un margen negativo en vez de separarse con `gap`, que es
+                    lo que mantiene el conjunto en el mismo ancho de antes.
+                    La animación vive entera en globals.css (.mir-*). */}
+                <div className="mir-mock relative flex items-end transform translate-y-4">
+                  {/* ── Tablet: repaso del daily ───────────────────────── */}
+                  {/* Proporción 3:4, que es la de una tablet: con la de un
+                      móvil (0,65) parecía un teléfono grande. El marco va con
+                      `p-` y no con `border-` para que quede uniforme por los
+                      cuatro lados y quepa la cámara frontal centrada arriba,
+                      que es lo que de un vistazo la distingue de un móvil.
+
+                      El tamaño importa tanto como la forma: la tablet mide el
+                      DOBLE de ancho que el móvil y lo saca una cabeza de alto,
+                      que es la diferencia real entre los dos aparatos. Antes
+                      el móvil era incluso más alto, y eso desbarataba la
+                      lectura por mucho que la forma fuese correcta. El padre
+                      lleva `items-end` para que los dos apoyen abajo. */}
+                  <div className="relative w-64 md:w-[20rem] h-[21.25rem] md:h-[26.5rem] bg-slate-800 rounded-[1.4rem] p-2.5 shadow-xl transform -rotate-6 opacity-95 hidden sm:block">
+                    <div className="absolute top-[3px] left-1/2 -translate-x-1/2 size-1 rounded-full bg-slate-600"></div>
+                    <div className="w-full h-full bg-[#FAF7F4] rounded-[0.8rem] overflow-hidden flex flex-col">
+                      <div className="h-9 bg-white border-b border-gray-100 flex items-center gap-2 px-3">
+                        <div className="size-3 rounded-full bg-[#E8A598]/30"></div>
+                        <div className="h-2 w-12 rounded-full bg-gray-200"></div>
+                        <div className="ml-auto h-2 w-5 rounded-full bg-gray-100"></div>
+                      </div>
+                      <div className="flex-1 p-2.5">
+                        <div className="h-full bg-white rounded-xl shadow-sm border border-gray-100 p-3 flex flex-col gap-2">
+                          <div className="h-2 w-16 rounded bg-gray-100"></div>
+                          <div className="h-2 w-10 rounded bg-gray-100"></div>
+                          {/* Dos cifras de resumen. Al crecer la tablet, la
+                              pantalla se quedaba con un claro enorme entre el
+                              título y la gráfica. */}
+                          <div className="mt-1 flex gap-2">
+                            <div className="h-7 flex-1 rounded-lg bg-[#E8A598]/10 border border-[#E8A598]/20"></div>
+                            <div className="h-7 flex-1 rounded-lg bg-gray-50 border border-gray-100"></div>
+                          </div>
+                          {/* La altura de cada barra la fija su `height`; la
+                              animación solo la escala desde abajo. */}
+                          <div className="mt-1 flex flex-1 items-end gap-1.5">
+                            <div className="mir-bar mir-bar-1 flex-1 rounded-t bg-[#E8A598]/40" style={{ height: '45%' }}></div>
+                            <div className="mir-bar mir-bar-2 flex-1 rounded-t bg-[#E8A598]" style={{ height: '70%' }}></div>
+                            <div className="mir-bar mir-bar-3 flex-1 rounded-t bg-[#E8A598]/40" style={{ height: '55%' }}></div>
+                            <div className="mir-bar mir-bar-4 flex-1 rounded-t bg-[#E8A598]" style={{ height: '85%' }}></div>
+                            <div className="mir-bar mir-bar-5 flex-1 rounded-t bg-[#E8A598]/40" style={{ height: '62%' }}></div>
+                            <div className="mir-bar mir-bar-6 flex-1 rounded-t bg-[#E8A598]" style={{ height: '95%' }}></div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="w-40 md:w-48 h-80 md:h-96 bg-gray-900 rounded-[2.5rem] border-[6px] border-gray-900 shadow-2xl relative z-10">
-                    <div className="absolute top-0 inset-x-0 h-4 bg-gray-900 rounded-b-lg w-20 mx-auto z-20"></div>
-                    <div className="w-full h-full bg-[#FAF7F4] rounded-[2rem] overflow-hidden flex flex-col">
-                      <div className="h-12 bg-white border-b border-gray-100 flex items-center justify-between px-4 pt-2">
-                        <div className="w-4 h-4 rounded-full bg-[#E8A598]/20"></div>
-                        <div className="w-16 h-2 rounded-full bg-gray-200"></div>
+
+                  {/* ── Móvil: el test ─────────────────────────────────── */}
+                  {/* El móvil encoge SOLO a partir de `sm`, que es donde
+                      aparece la tablet y hay con qué compararlo. En móvil no
+                      hay tablet, así que ahí se queda con su tamaño de
+                      siempre: encogerlo no ayudaría a entender nada. */}
+                  <div className="w-40 sm:w-36 md:w-40 h-80 sm:h-72 md:h-80 bg-gray-900 rounded-[2rem] border-[5px] border-gray-900 shadow-2xl relative z-10 sm:-ml-12 md:-ml-14">
+                    <div className="absolute top-0 inset-x-0 h-3.5 bg-gray-900 rounded-b-lg w-16 mx-auto z-20"></div>
+                    <div className="w-full h-full bg-[#FAF7F4] rounded-[1.6rem] overflow-hidden flex flex-col">
+                      <div className="h-11 bg-white border-b border-gray-100 flex flex-col justify-center gap-1.5 px-3 pt-2">
+                        <div className="flex items-center justify-between">
+                          <div className="w-4 h-4 rounded-full bg-[#E8A598]/20"></div>
+                          <div className="w-16 h-2 rounded-full bg-gray-200"></div>
+                        </div>
+                        <div className="h-1 w-full rounded-full bg-gray-100 overflow-hidden">
+                          <div className="mir-quiz-progreso h-full w-full rounded-full bg-[#E8A598]"></div>
+                        </div>
                       </div>
-                      <div className="p-3 flex flex-col gap-3">
-                        <div className="w-full aspect-[4/5] bg-white rounded-xl shadow-sm border border-gray-100 p-3 flex flex-col gap-2 relative overflow-hidden">
+                      {/* Las tres preguntas se apilan y cada una entra y sale
+                          por su cuenta con su propio retardo. */}
+                      <div className="relative flex-1">
+                        <div className="mir-quiz-card absolute inset-3 bg-white rounded-xl shadow-sm border border-gray-100 p-3 flex flex-col gap-2 overflow-hidden">
                           <div className="flex gap-2">
                             <div className="w-12 h-3 rounded bg-blue-50"></div>
                             <div className="w-4 h-3 rounded-full bg-gray-100 ml-auto"></div>
@@ -3153,8 +3212,36 @@ export default function DashboardPage() {
                           <div className="w-3/4 h-2 rounded bg-gray-100 mb-2"></div>
                           <div className="mt-auto flex flex-col gap-2">
                             <div className="w-full h-8 rounded-lg bg-gray-50 border border-gray-100"></div>
-                            <div className="w-full h-8 rounded-lg bg-[#E8A598]/10 border border-[#E8A598]/20"></div>
+                            <div className="mir-quiz-pick w-full h-8 rounded-lg bg-gray-50 border border-gray-100"></div>
                             <div className="w-full h-8 rounded-lg bg-gray-50 border border-gray-100"></div>
+                          </div>
+                        </div>
+
+                        <div className="mir-quiz-card mir-paso-2 absolute inset-3 bg-white rounded-xl shadow-sm border border-gray-100 p-3 flex flex-col gap-2 overflow-hidden">
+                          <div className="flex gap-2">
+                            <div className="w-10 h-3 rounded bg-blue-50"></div>
+                            <div className="w-4 h-3 rounded-full bg-gray-100 ml-auto"></div>
+                          </div>
+                          <div className="w-full h-2 rounded bg-gray-100 mt-2"></div>
+                          <div className="w-2/3 h-2 rounded bg-gray-100 mb-2"></div>
+                          <div className="mt-auto flex flex-col gap-2">
+                            <div className="mir-quiz-pick mir-paso-2 w-full h-8 rounded-lg bg-gray-50 border border-gray-100"></div>
+                            <div className="w-full h-8 rounded-lg bg-gray-50 border border-gray-100"></div>
+                            <div className="w-full h-8 rounded-lg bg-gray-50 border border-gray-100"></div>
+                          </div>
+                        </div>
+
+                        <div className="mir-quiz-card mir-paso-3 absolute inset-3 bg-white rounded-xl shadow-sm border border-gray-100 p-3 flex flex-col gap-2 overflow-hidden">
+                          <div className="flex gap-2">
+                            <div className="w-14 h-3 rounded bg-blue-50"></div>
+                            <div className="w-4 h-3 rounded-full bg-gray-100 ml-auto"></div>
+                          </div>
+                          <div className="w-full h-2 rounded bg-gray-100 mt-2"></div>
+                          <div className="w-4/5 h-2 rounded bg-gray-100 mb-2"></div>
+                          <div className="mt-auto flex flex-col gap-2">
+                            <div className="w-full h-8 rounded-lg bg-gray-50 border border-gray-100"></div>
+                            <div className="w-full h-8 rounded-lg bg-gray-50 border border-gray-100"></div>
+                            <div className="mir-quiz-pick mir-paso-3 w-full h-8 rounded-lg bg-gray-50 border border-gray-100"></div>
                           </div>
                         </div>
                       </div>

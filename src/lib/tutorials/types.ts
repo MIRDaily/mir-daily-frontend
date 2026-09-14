@@ -42,4 +42,14 @@ export type Tutorial = {
    * rompe en cuanto alguien añade un paso.
    */
   cierre?: TutorialStep[]
+  /**
+   * Marca al tutorial que se lleva el aviso único de la app móvil.
+   *
+   * Va aquí y no suelto en el provider porque ese aviso está anclado a un
+   * bloque que SOLO existe en el Daily. Enganchado a cualquier tutorial —que
+   * es como estaba— aparecía también en el Studio, donde ese elemento no
+   * existe: el paso degradaba a cuadro centrado y la mascota señalaba a la
+   * nada hablando de una tarjeta que no estaba en pantalla.
+   */
+  llevaMensajeAppMovil?: boolean
 }

@@ -106,7 +106,7 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
     // despedida, pero con su propia clave: si viviera dentro de "daily.vN",
     // quien entre antes de que la app salga no se enteraría nunca de que
     // existe. Por eso se inserta aquí y no está escrito en el guion.
-    if (!vistos.has(MENSAJE_APP_MOVIL_ID)) {
+    if (tutorial.llevaMensajeAppMovil && !vistos.has(MENSAJE_APP_MOVIL_ID)) {
       const paso = pasoAppMovil(detectarSuperficie(), user.mobile_app_available)
       if (paso) {
         guion.push(paso)
