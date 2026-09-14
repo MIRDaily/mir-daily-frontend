@@ -26,13 +26,22 @@ const MARGEN_FOCO = 10
 // mascota sobre el texto y crece. Pasarse solo empuja hacia la colocación
 // anclada abajo, que siempre es segura; quedarse corto lo saca de pantalla.
 const ALTO_BOCADILLO = 260
-/* Ancho REAL del conjunto mascota + globo en escritorio: 160 de la mascota,
-   12 de hueco y 384 del globo (`max-w-sm`). Estaba puesto en 440, que es solo
-   el globo, y eso tenia dos consecuencias feas: el conjunto no quedaba
-   centrado sobre el foco —se iba 58 px a la derecha— y la comprobacion de
-   choque con la maqueta del modo creia que cabian los dos cuando no. Si
-   cambia el tamano de la mascota o del globo, este numero cambia con ellos. */
-const ANCHO_BOCADILLO = 556
+/* Ancho REAL del conjunto mascota + globo, en sus dos disposiciones.
+
+   En fila son 556: 160 de la mascota, 12 de hueco y 384 del globo
+   (`max-w-sm`). Estaba puesto en 440 —solo el globo— y eso tenia dos
+   consecuencias feas: el conjunto no quedaba centrado sobre el foco (se iba
+   58 px a la derecha) y la comprobacion de choque con la maqueta creia que
+   cabian los dos cuando no.
+
+   Apilado son 384, los del globo, porque la mascota se pone encima y es mas
+   estrecha. Esos 172 px de diferencia son los que deciden si la maqueta cabe
+   al lado: en fila hacia falta pantalla de 1120 px para verla, y por debajo
+   —un portatil con el escalado de Windows al 125%, una ventana sin
+   maximizar, media pantalla— desaparecia. Si cambia el tamano de la mascota
+   o del globo, estos numeros cambian con ellos. */
+const ANCHO_BOCADILLO_FILA = 556
+const ANCHO_BOCADILLO_APILADO = 384
 const HUECO = 24
 // Sitio para los puntos y el botón "Saltar" cuando el bocadillo va abajo.
 const ALTO_BARRA = 72
@@ -113,12 +122,19 @@ export default function TutorialOverlay({ paso, indice, total, onAvanzar, onSalt
       ? { bottom: window.innerHeight - rect.top + HUECO }
       : { bottom: ALTO_BARRA }
 
-  const izquierdaBocadillo = hayFoco
-    ? Math.min(
-        Math.max(centroX - ANCHO_BOCADILLO / 2, 16),
-        Math.max(window.innerWidth - ANCHO_BOCADILLO - 16, 16),
-      )
-    : 0
+  /** Dónde cae el bocadillo para un ancho dado, sin salirse de la pantalla. */
+  const izquierdaPara = (ancho: number) =>
+    hayFoco
+      ? Math.min(
+          Math.max(centroX - ancho / 2, 16),
+          Math.max(window.innerWidth - ancho - 16, 16),
+        )
+      : 0
+
+  /* Se comprueba el choque suponiendo el bocadillo APILADO, que es como se
+     va a dibujar si la maqueta sale. Comprobarlo con el de fila seria
+     preguntarse si cabe algo que no se va a dibujar. */
+  const izquierdaBocadilloApilado = izquierdaPara(ANCHO_BOCADILLO_APILADO)
 
   /* La maqueta del modo va en el hueco que el foco deja al otro lado: se mide
      el espacio libre a izquierda y derecha y gana el mayor. En móvil el foco
@@ -174,8 +190,8 @@ export default function TutorialOverlay({ paso, indice, total, onAvanzar, onSalt
       : window.innerHeight - ALTO_BARRA - ALTO_BOCADILLO
 
   const chocanEnHorizontal =
-    izquierdaPreview < izquierdaBocadillo + ANCHO_BOCADILLO &&
-    izquierdaPreview + anchoEscalado > izquierdaBocadillo
+    izquierdaPreview < izquierdaBocadilloApilado + ANCHO_BOCADILLO_APILADO &&
+    izquierdaPreview + anchoEscalado > izquierdaBocadilloApilado
   const chocanEnVertical =
     topPreview < topBocadillo + ALTO_BOCADILLO && topPreview + altoEscalado > topBocadillo
 
@@ -185,6 +201,12 @@ export default function TutorialOverlay({ paso, indice, total, onAvanzar, onSalt
     Boolean(paso.preview) &&
     escalaPreview >= 0.6 &&
     !(chocanEnHorizontal && chocanEnVertical)
+
+  /* Ya se sabe si hay maqueta: el bocadillo se apila solo si la hay, y se
+     recoloca con el ancho que de verdad va a ocupar. */
+  const izquierdaBocadillo = muestraPreview
+    ? izquierdaBocadilloApilado
+    : izquierdaPara(ANCHO_BOCADILLO_FILA)
 
   return createPortal(
     <div className="fixed inset-0 z-[120]" role="dialog" aria-modal="true" aria-live="polite">
@@ -266,8 +288,7 @@ export default function TutorialOverlay({ paso, indice, total, onAvanzar, onSalt
               ? {
                   ...posicionVertical,
                   left: Math.min(
-                    Math.max(centroX - ANCHO_BOCADILLO / 2, 16),
-                    Math.max(window.innerWidth - ANCHO_BOCADILLO - 16, 16),
+                    izquierdaBocadillo,
                   ),
                 }
               : undefined
@@ -277,6 +298,7 @@ export default function TutorialOverlay({ paso, indice, total, onAvanzar, onSalt
             texto={paso.text}
             pose={paso.pose}
             mirandoIzquierda={mirandoIzquierda}
+            apilada={muestraPreview}
             onTextoCompleto={() => setCompletoEn(indice)}
           />
         </motion.div>

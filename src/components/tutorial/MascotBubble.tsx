@@ -30,6 +30,13 @@ type Props = {
   pose: MascotPose
   /** Volteada cuando el bocadillo cae a la derecha del objetivo. */
   mirandoIzquierda?: boolean
+  /**
+   * Fuerza la disposición de móvil —mascota encima del texto— también en
+   * escritorio. El overlay la pide cuando hay maqueta del modo en pantalla:
+   * en fila el conjunto mide 556 px y en columna 384, y esos 172 px son la
+   * diferencia entre que la maqueta quepa al lado o no quepa.
+   */
+  apilada?: boolean
   /** Se llama una vez, cuando ya está escrito del todo. */
   onTextoCompleto?: () => void
 }
@@ -49,7 +56,13 @@ type Props = {
  * sale entero. No es una degradación, es lo correcto — quien pide menos
  * movimiento no quiere que el texto le baile.
  */
-export default function MascotBubble({ texto, pose, mirandoIzquierda, onTextoCompleto }: Props) {
+export default function MascotBubble({
+  texto,
+  pose,
+  mirandoIzquierda,
+  apilada = false,
+  onTextoCompleto,
+}: Props) {
   const reduceMotion = useReducedMotion()
   const [visibles, setVisibles] = useState(() => (reduceMotion ? texto.length : 0))
   const avisoRef = useRef(onTextoCompleto)
@@ -124,8 +137,12 @@ export default function MascotBubble({ texto, pose, mirandoIzquierda, onTextoCom
   // que queda de la relación izquierda/derecha que en horizontal da el orden.
   return (
     <div
-      className={`flex max-w-[calc(100vw-2rem)] flex-col gap-2 sm:flex-row sm:items-end sm:gap-3 ${
-        mirandoIzquierda ? 'items-end sm:flex-row-reverse' : 'items-start'
+      className={`flex max-w-[calc(100vw-2rem)] flex-col gap-2 ${
+        apilada ? '' : 'sm:flex-row sm:items-end sm:gap-3'
+      } ${
+        mirandoIzquierda
+          ? `items-end ${apilada ? '' : 'sm:flex-row-reverse'}`
+          : 'items-start'
       }`}
     >
       {/* El volteo va por `scaleX` de framer, NO por un `transform` en `style`:
