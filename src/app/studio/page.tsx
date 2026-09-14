@@ -8,7 +8,7 @@ import { debugRender } from '@/lib/debugRSC'
 import { useAuth } from '@/hooks/useAuth'
 import { useMonthlyProgress } from '@/hooks/useAnalytics'
 import { useProgressContext } from '@/providers/ProgressProvider'
-import { useTutorialReady } from '@/providers/TutorialProvider'
+import { useAnclaTutorial, useTutorialReady } from '@/providers/TutorialProvider'
 import { TUTORIAL_STUDIO } from '@/lib/tutorials/scripts'
 import StudioSearchButton from '@/components/studio/StudioSearchButton'
 import StudioCalendarButton from '@/components/studio/StudioCalendarButton'
@@ -483,6 +483,23 @@ export default function StudioPage() {
   // Nunca con el popup del simulacro abierto: son dos capas que se taparian.
   useTutorialReady(TUTORIAL_STUDIO.id, studioAsentado && !loading && Boolean(user) && !smartOpen)
 
+  /* Una tarjeta iluminada por el tutorial se comporta como si el ratón
+     estuviera encima: enciende su animación.
+
+     No es un adorno. Estas tarjetas guardan su dibujo en `opacity: 0` hasta
+     que las tocas, así que la que el tutorial señala —justo aquella a la que
+     la persona está mirando— era la única que se veía apagada y con un hueco
+     vacío. Y de paso el arte se enseña solo, sin tener que descubrirlo
+     pasando el ratón por encima. */
+  const anclaTutorial = useAnclaTutorial()
+  const destacada = (ancla: string) => anclaTutorial === ancla
+
+  const featuredActivo = featuredHovered || destacada('studio-simulacro')
+  const simulacrosActivo = simulacrosHovered || destacada('studio-preguntas-simulacros')
+  const mazosActivo = mazosHovered || destacada('studio-mazos')
+  const flashcardsActivo = flashcardsHovered || destacada('studio-flashcards')
+  const zenActivo = zenHovered || destacada('studio-sala-zen')
+
   useLayoutEffect(() => {
     const prevScrollRestoration = window.history.scrollRestoration
     window.history.scrollRestoration = 'manual'
@@ -558,7 +575,12 @@ export default function StudioPage() {
                   {greetingParts[0]}
                 </span>
                 <span
-                  className={`inline-block align-baseline text-3xl font-black uppercase leading-none tracking-tight text-[#d18d80] [overflow-wrap:anywhere] sm:text-4xl ${
+                  /* `me-[0.08em]`: en TODAS las frases del saludo al nombre le
+                     sigue un signo pegado (":", ",", "."), y con el interletraje
+                     negativo de `tracking-tight` a este cuerpo el signo se comia
+                     la ultima letra. El margen va en `em` para que crezca con la
+                     letra en vez de descuadrarse al saltar a sm:text-4xl. */
+                  className={`me-[0.08em] inline-block align-baseline text-3xl font-black uppercase leading-none tracking-tight text-[#d18d80] [overflow-wrap:anywhere] sm:text-4xl ${
                     !studioName ? 'min-w-[6ch]' : ''
                   } ${
                     !studioName && loading ? 'rounded bg-[#E8A598]/18' : ''
@@ -685,15 +707,27 @@ export default function StudioPage() {
                 <Reveal
                   reduceMotion={reduceMotion}
                   id={card.id}
-                  /* El índice y no `card.type`: Electros TAMBIÉN es
-                     'featured', así que por tipo se iluminarían dos tarjetas
-                     como si fueran el simulacro. El 0 es siempre la destacada
-                     —`[buildFeaturedCard(...), ...studioCardsBase]`— que es el
-                     mismo criterio con el que se inserta el encabezado de
-                     "Módulos de entrenamiento" justo arriba. Los módulos
-                     comparten ancla a propósito: useAnchorRect ilumina la
-                     unión de todos y el foco abarca la rejilla entera. */
-                  dataTutorial={index === 0 ? 'studio-simulacro' : 'studio-modulos'}
+                  /* Un ancla POR tarjeta: la mascota se para en cada modo y
+                     cuenta para qué sirve, en vez de iluminar la rejilla
+                     entera de una vez.
+
+                     El índice y no `card.type` para la destacada: Electros
+                     TAMBIÉN es 'featured', así que por tipo se iluminarían dos
+                     tarjetas como si ambas fueran el simulacro. El 0 es
+                     siempre la destacada —`[buildFeaturedCard(...),
+                     ...studioCardsBase]`—, el mismo criterio con el que se
+                     inserta el encabezado de "Módulos de entrenamiento".
+
+                     Electros se queda FUERA del recorrido a propósito: sin
+                     `data-tutorial` no hay ancla, y el paso que no existe no
+                     se puede enseñar. */
+                  dataTutorial={
+                    index === 0
+                      ? 'studio-simulacro'
+                      : card.id === 'electros'
+                        ? undefined
+                        : `studio-${card.id}`
+                  }
                   className={`group relative overflow-hidden rounded-2xl border-2 p-6 shadow-sm transition-[border-color,box-shadow] duration-200 hover:border-[#2c3e50] hover:shadow-[4px_4px_0_0_#2c3e50] ${
                   card.type === 'featured'
                     ? 'border-[#E8A598]/30 bg-gradient-to-br from-white to-[#fff0ec] md:col-span-2'
@@ -739,15 +773,15 @@ export default function StudioPage() {
                 {card.id === 'preguntas-simulacros' ? (
                   <AnimatePresence initial={false}>
                     {simulacrosArtVariant === 0 ? (
-                      <SingleSheetArt key="single" hovered={simulacrosHovered} />
+                      <SingleSheetArt key="single" hovered={simulacrosActivo} />
                     ) : (
-                      <StackedSheetsArt key="stacked" hovered={simulacrosHovered} />
+                      <StackedSheetsArt key="stacked" hovered={simulacrosActivo} />
                     )}
                   </AnimatePresence>
                 ) : null}
-                {card.id === 'mazos' ? <DeckArt hovered={mazosHovered} /> : null}
-                {card.id === 'flashcards' ? <FlipCardArt hovered={flashcardsHovered} /> : null}
-                {card.id === 'sala-zen' ? <ZenTimerArt hovered={zenHovered} /> : null}
+                {card.id === 'mazos' ? <DeckArt hovered={mazosActivo} /> : null}
+                {card.id === 'flashcards' ? <FlipCardArt hovered={flashcardsActivo} /> : null}
+                {card.id === 'sala-zen' ? <ZenTimerArt hovered={zenActivo} /> : null}
                 {card.id === 'electros' ? <EcgMonitorArt hovered={electrosHovered} /> : null}
                 {/* Fondo ambiente de cada tarjeta: en bucle mientras esté a la
                     vista (no con el hover). El hover solo destaca el borde y
@@ -755,7 +789,7 @@ export default function StudioPage() {
                 {card.id === 'simulacros' ? <WaveBackdrop /> : null}
                 {card.id === 'electros' ? <TraceBackdrop /> : null}
                 {card.id === 'simulacros' && smartReady ? (
-                  <WaveCta hovered={featuredHovered}>
+                  <WaveCta hovered={featuredActivo}>
                     <span className="material-symbols-outlined">play_arrow</span>
                     {card.cta}
                   </WaveCta>

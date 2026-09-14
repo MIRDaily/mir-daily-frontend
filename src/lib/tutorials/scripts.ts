@@ -5,11 +5,16 @@ import type { Tutorial, TutorialId, TutorialStep } from './types'
 
    Tres reglas que conviene no perder al añadir pantallas:
 
-   1. Máximo tres pasos de contenido. Si una pantalla necesita seis, el
-      problema es la pantalla, no la falta de tutorial. (El cierre va aparte y
-      no cuenta: no explica la pantalla, despide.)
+   1. Un paso por cosa que el usuario tenga que DECIDIR, y ninguno más. El
+      Daily son tres porque solo hay tres; el Studio son seis porque son seis
+      modos distintos y elegir entre ellos es justo la decisión de esa
+      pantalla. La regla no es un número: es que ningún paso sobre. (El cierre
+      va aparte y no cuenta: no explica la pantalla, despide.)
    2. Solo se explica lo que no se explica solo. Versus no lleva tutorial
-      porque un botón que pone "Versus" ya dice lo que hace.
+      porque un botón que pone "Versus" ya dice lo que hace, y por eso mismo
+      los pasos de los modos NO repiten su nombre —que ya está escrito en la
+      tarjeta— sino para qué sirven. Electros se queda fuera del recorrido:
+      su propia tarjeta ya se explica con detalle.
    3. Frases cortas. El texto se escribe letra a letra: un párrafo se vuelve
       una espera.
 ═══════════════════════════════════════════════════════════════════════════ */
@@ -54,7 +59,14 @@ export const TUTORIAL_DAILY: Tutorial = {
 }
 
 export const TUTORIAL_STUDIO: Tutorial = {
-  id: 'studio.v1',
+  /* v2: la rejilla de módulos era un solo paso que los nombraba de carrerilla.
+     Ahora la mascota para en cada modo y dice para qué sirve, que es lo que
+     de verdad hacía falta: los nombres ya están escritos en las tarjetas, lo
+     que no se ve es en qué te ayuda cada uno.
+     v3: los mazos se explicaban por el mazo automático de fallos, que es el
+     caso raro y encima no lo crea el usuario. Ahora se explica el mazo normal
+     —lo armas tú— y qué gana quien lo use. */
+  id: 'studio.v3',
   /* Sin `cierre`: la despedida y el "te voy explicando cada pestaña" ya los
      dio el Daily, y este tutorial es justo el cumplimiento de esa promesa.
      Repetir el adiós en cada pantalla lo convertiría en un peaje. */
@@ -69,10 +81,45 @@ export const TUTORIAL_STUDIO: Tutorial = {
       pose: 'senalando',
       text: 'Este simulacro se monta solo: 30 preguntas de aquello que peor llevas.',
     },
+    /* Una parada por modo. Electros no está: es la única tarjeta del Studio
+       sin ancla, y se queda fuera del recorrido a propósito. */
     {
-      anchor: 'studio-modulos',
+      anchor: 'studio-preguntas-simulacros',
+      pose: 'senalando',
+      preview: 'simulacros',
+      text: 'Aquí los montas tú: por asignatura, por tema, o un test rápido si solo tienes cinco minutos.',
+    },
+    /* Tres bocadillos para un solo sitio: qué es, cómo funciona y para qué
+       sirve. No es saltarse la regla 1 —sigue siendo UNA decisión— sino la
+       3: cabe en tres frases cortas o en un párrafo que nadie espera a que
+       se escriba. La maqueta no se reinicia entre ellos. */
+    {
+      anchor: 'studio-mazos',
+      pose: 'senalando',
+      preview: 'mazos',
+      text: 'Un mazo lo armas tú: cuando una pregunta te cueste, la guardas ahí desde el Daily o desde un simulacro.',
+    },
+    {
+      anchor: 'studio-mazos',
       pose: 'hablando',
-      text: 'Y el resto de módulos: mazos, flashcards, electros y la sala Zen para concentrarte.',
+      preview: 'mazos',
+      text: 'Y al estudiarlo, cada pregunta te vuelve a salir justo antes de que se te olvide.',
+    },
+    {
+      anchor: 'studio-mazos',
+      pose: 'hablando',
+      preview: 'mazos',
+      text: 'Así dejas de repasar mil veces lo que ya te sabes y le das el tiempo a lo que se te resiste.',
+    },
+    {
+      anchor: 'studio-flashcards',
+      pose: 'senalando',
+      text: 'Y si te lo escribes tú, flashcards: van bien para fármacos, dosis y criterios.',
+    },
+    {
+      anchor: 'studio-sala-zen',
+      pose: 'hablando',
+      text: 'Y cuando no te concentres, para aquí un rato. Puedes entrar en sala con alguien más.',
     },
   ],
 }

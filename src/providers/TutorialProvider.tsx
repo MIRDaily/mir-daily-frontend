@@ -47,6 +47,15 @@ function detectarSuperficie(): Superficie {
 type TutorialContextValue = {
   /** La pantalla avisa de que ya se puede enseñar su tutorial. */
   declararListo: (id: TutorialId, listo: boolean) => void
+  /**
+   * El `data-tutorial` que se está iluminando ahora, o null si no hay
+   * tutorial abierto o el paso va centrado.
+   *
+   * Lo publica el provider para que una pantalla pueda REACCIONAR a estar
+   * señalada —el Studio enciende la animación de su tarjeta— sin tener que
+   * saber nada del guion ni espiar el DOM.
+   */
+  anclaActual: string | null
 }
 
 const TutorialContext = createContext<TutorialContextValue | null>(null)
@@ -165,7 +174,12 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
     setIndice(indice + 1)
   }, [indice, pasos.length, terminar])
 
-  const valor = useMemo(() => ({ declararListo }), [declararListo])
+  const anclaActual = (enCurso && pasos[indice]?.anchor) || null
+
+  const valor = useMemo(
+    () => ({ declararListo, anclaActual }),
+    [declararListo, anclaActual],
+  )
 
   return (
     <TutorialContext.Provider value={valor}>
@@ -188,6 +202,14 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
  * que este tutorial tiene sentido". Es la única línea que hace falta tocar en
  * la página, aparte de los `data-tutorial` de los elementos a señalar.
  */
+/**
+ * Qué está señalando la mascota ahora mismo. Devuelve el valor del
+ * `data-tutorial` iluminado, o null.
+ */
+export function useAnclaTutorial(): string | null {
+  return useContext(TutorialContext)?.anclaActual ?? null
+}
+
 export function useTutorialReady(id: TutorialId, listo: boolean) {
   const ctx = useContext(TutorialContext)
 
