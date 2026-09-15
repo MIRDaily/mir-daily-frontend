@@ -78,21 +78,31 @@ export const TUTORIAL_STUDIO: Tutorial = {
     },
     {
       anchor: 'studio-simulacro',
-      pose: 'senalando',
+      /* Aquí y en el paso siguiente la pose cuenta la mitad del mensaje: el
+         simulacro automático se lo come ella (está haciendo el examen), y el
+         que montas tú lo mira con cara de "esto lo decides tú". Por eso
+         ninguna de las dos señala: la tarjeta ya está iluminada por el foco,
+         y el dedo no aporta nada que no diga ya el propio foco. */
+      pose: 'haciendo-examen',
       text: 'Este simulacro se monta solo: 30 preguntas de aquello que peor llevas.',
     },
     /* Una parada por modo. Electros no está: es la única tarjeta del Studio
        sin ancla, y se queda fuera del recorrido a propósito. */
     {
       anchor: 'studio-preguntas-simulacros',
-      pose: 'senalando',
+      pose: 'confiado',
       preview: 'simulacros',
       text: 'Aquí los montas tú: por asignatura, por tema, o un test rápido si solo tienes cinco minutos.',
     },
     /* Tres bocadillos para un solo sitio: qué es, cómo funciona y para qué
        sirve. No es saltarse la regla 1 —sigue siendo UNA decisión— sino la
        3: cabe en tres frases cortas o en un párrafo que nadie espera a que
-       se escriba. La maqueta no se reinicia entre ellos. */
+       se escriba. La maqueta no se reinicia entre ellos.
+
+       Los tres iluminan la MISMA tarjeta, así que solo el primero señala:
+       repetir el gesto tres veces seguidas sobre algo que ya está iluminado
+       no informa de nada. Los otros dos rotan de pose —con el mazo en la
+       mano y hablando— para que el conjunto no se quede clavado. */
     {
       anchor: 'studio-mazos',
       pose: 'senalando',
@@ -101,13 +111,13 @@ export const TUTORIAL_STUDIO: Tutorial = {
     },
     {
       anchor: 'studio-mazos',
-      pose: 'hablando',
+      pose: 'con-mazo',
       preview: 'mazos',
       text: 'Y al estudiarlo, cada pregunta te vuelve a salir justo antes de que se te olvide.',
     },
     {
       anchor: 'studio-mazos',
-      pose: 'hablando',
+      pose: 'hablando-variante2',
       preview: 'mazos',
       text: 'Así dejas de repasar mil veces lo que ya te sabes y le das el tiempo a lo que se te resiste.',
     },
@@ -169,7 +179,10 @@ export function pasoAppMovil(
 
   return {
     anchor: ANCLA_APP_MOVIL,
-    pose: disponible ? 'senalando' : 'hablando',
+    /* La variante 2 y no 'hablando' a secas: este paso va pegado al de la
+       pregunta más fallada, que ya usa 'hablando', y dos bocadillos seguidos
+       con la misma pose se leen como si la mascota se hubiera congelado. */
+    pose: disponible ? 'senalando' : 'hablando-variante2',
     text: texto,
   }
 }

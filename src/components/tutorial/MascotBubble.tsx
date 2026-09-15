@@ -6,15 +6,25 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { blip, vozActual } from '@/lib/tutorials/mascotAudio'
 import type { MascotPose } from '@/lib/tutorials/types'
 
-/* La mascota todavía no está exportada. Hasta que lo esté, cada pose apunta a
-   un fichero que puede no existir: el <Image> falla en silencio y queda el
-   bocadillo solo, que se lee perfectamente. Sustituir por los PNG definitivos
-   en /public/img/mascota no requiere tocar nada más de este fichero. */
+/* Los PNG están todos normalizados con el mismo criterio: la cabeza del mismo
+   ancho y las patas sobre una línea de suelo común, para que la mascota no dé
+   un salto al cambiar de pose. Añadir una nueva es añadirla a `MascotPose` y
+   poner aquí su fichero; el resto del componente no se entera.
+
+   Si algún fichero faltara, el <Image> falla en silencio y queda el bocadillo
+   solo, que se lee perfectamente. */
 const POSE_SRC: Record<MascotPose, string> = {
   saludo: '/img/mascota/saludo.png',
   senalando: '/img/mascota/senalando.png',
   hablando: '/img/mascota/hablando.png',
   despedida: '/img/mascota/despedida.png',
+  'senalando-abajo': '/img/mascota/senalando-abajo.png',
+  celebracion: '/img/mascota/celebracion.png',
+  'hablando-variante2': '/img/mascota/hablando-variante2.png',
+  confiado: '/img/mascota/confiado.png',
+  dudando: '/img/mascota/dudando.png',
+  'haciendo-examen': '/img/mascota/haciendo-examen.png',
+  'con-mazo': '/img/mascota/con-mazo.png',
 }
 
 const MS_POR_CARACTER = 28
@@ -135,10 +145,19 @@ export default function MascotBubble({
   //
   // La mascota se queda del lado hacia el que mira, que en vertical es lo único
   // que queda de la relación izquierda/derecha que en horizontal da el orden.
+  //
+  // En fila, el bocadillo se alinea ARRIBA (`sm:items-start`) y no abajo: así
+  // queda a la altura de la cabeza y parece que sale de ella, en vez de flotar
+  // a la altura de las patas como un cartel plantado al lado. Con la mascota a
+  // 160 px, el icosaedro ocupa de 22 a 79 px desde arriba de su caja, y un
+  // bocadillo de dos líneas alineado arriba queda centrado en 41 y termina a la
+  // altura de la barbilla. Si algún día cambia el encuadre de los PNG —los
+  // pies van sobre una línea común y la cabeza sale donde sale— esta relación
+  // cambia con él.
   return (
     <div
       className={`flex max-w-[calc(100vw-2rem)] flex-col gap-2 ${
-        apilada ? '' : 'sm:flex-row sm:items-end sm:gap-3'
+        apilada ? '' : 'sm:flex-row sm:items-start sm:gap-3'
       } ${
         mirandoIzquierda
           ? `items-end ${apilada ? '' : 'sm:flex-row-reverse'}`
@@ -160,6 +179,46 @@ export default function MascotBubble({
       </motion.div>
 
       <div className="relative min-w-0 max-w-sm rounded-3xl border border-[#E8A598]/30 bg-white px-5 py-4 shadow-[0_18px_40px_rgba(125,138,150,0.22)]">
+        {/* ── El pico ──────────────────────────────────────────────────────
+            Un cuadrado girado 45° con borde en sus dos lados de fuera. La
+            mitad que queda dentro del bocadillo es blanca sobre blanco, y de
+            paso tapa el trozo de borde por el que sale: por eso va DENTRO de
+            la caja y no detrás, que dejaría la línea del borde cruzándolo.
+
+            Apunta a la CABEZA, y por eso las medidas están atadas al encuadre
+            de los PNG: con la mascota a 160 px su cabeza está centrada a 50 px
+            del alto de la caja, y el bocadillo empieza a esa misma altura
+            (`sm:items-start`), así que el pico va a 50 px — el cuadrado mide
+            14, de ahí el `top-[43px]`.
+
+            Son dos y no uno porque en columna la mascota está ENCIMA, no al
+            lado: ahí el pico sale por arriba, alineado con el centro de su
+            cabeza (mitad de 128 px, o de 160 cuando además hay maqueta). */}
+        <span
+          aria-hidden
+          className={`absolute -top-[6px] size-3.5 rotate-45 border-l border-t border-[#E8A598]/30 bg-white ${
+            apilada ? '' : 'sm:hidden'
+          } ${
+            apilada
+              ? mirandoIzquierda
+                ? 'right-[57px] sm:right-[73px]'
+                : 'left-[57px] sm:left-[73px]'
+              : mirandoIzquierda
+                ? 'right-[57px]'
+                : 'left-[57px]'
+          }`}
+        />
+        {!apilada && (
+          <span
+            aria-hidden
+            className={`absolute top-[43px] hidden size-3.5 rotate-45 border-[#E8A598]/30 bg-white sm:block ${
+              mirandoIzquierda
+                ? '-right-[6px] border-r border-t'
+                : '-left-[6px] border-b border-l'
+            }`}
+          />
+        )}
+
         {/* Tres capas, cada una con su trabajo:
             1. el texto completo OCULTO pero ocupando sitio, que reserva el
                tamaño final de la caja — si no, el bocadillo crece letra a

@@ -7,8 +7,26 @@
    la web).
 ═══════════════════════════════════════════════════════════════════════════ */
 
-/** Poses de la mascota. Cada una es un fichero en /img/mascota. */
-export type MascotPose = 'saludo' | 'senalando' | 'hablando' | 'despedida'
+/**
+ * Poses de la mascota. Cada una es un fichero en /img/mascota.
+ *
+ * Las cuatro primeras son las que usan los guiones. El resto están dibujadas
+ * y normalizadas pero todavía no las pide nadie: viven aquí para poder verlas
+ * en /mockup-mascota y para que, cuando se decida dónde van, sea solo
+ * escribir el nombre. Declararlas no las mete en ningún tutorial.
+ */
+export type MascotPose =
+  | 'saludo'
+  | 'senalando'
+  | 'hablando'
+  | 'despedida'
+  | 'senalando-abajo'
+  | 'celebracion'
+  | 'hablando-variante2'
+  | 'confiado'
+  | 'dudando'
+  | 'haciendo-examen'
+  | 'con-mazo'
 
 export type StepPlacement = 'auto' | 'centro'
 
