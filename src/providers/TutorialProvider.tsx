@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { useProgressContext } from '@/providers/ProgressProvider'
 import TutorialOverlay from '@/components/tutorial/TutorialOverlay'
+import { precargarPoses } from '@/lib/tutorials/poses'
 import { armarDesbloqueo } from '@/lib/tutorials/mascotAudio'
 import {
   MENSAJE_APP_MOVIL_ID,
@@ -124,6 +125,10 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (tutorial.cierre) guion.push(...tutorial.cierre)
+
+    // Todas las poses del guion, ya: si cada una se pide al llegar a su paso,
+    // el bocadillo sale antes que la mascota.
+    precargarPoses(guion.map((paso) => paso.pose))
 
     // Un fotograma de margen: la pantalla acaba de decir que está lista y
     // todavía se está pintando. Arrancar dentro de su mismo commit encadena

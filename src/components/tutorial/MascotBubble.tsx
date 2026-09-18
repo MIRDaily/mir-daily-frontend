@@ -4,28 +4,17 @@ import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { motion, useReducedMotion } from 'framer-motion'
 import { blip, vozActual } from '@/lib/tutorials/mascotAudio'
+import { POSE_SRC, poseCargada, precargarPose } from '@/lib/tutorials/poses'
 import type { MascotPose } from '@/lib/tutorials/types'
 
-/* Los PNG están todos normalizados con el mismo criterio: la cabeza del mismo
-   ancho y las patas sobre una línea de suelo común, para que la mascota no dé
-   un salto al cambiar de pose. Añadir una nueva es añadirla a `MascotPose` y
-   poner aquí su fichero; el resto del componente no se entera.
+/* Las poses están todas normalizadas con el mismo criterio: la cabeza del
+   mismo ancho y las patas sobre una línea de suelo común, para que la mascota
+   no dé un salto al cambiar de pose. Los ficheros y su precarga viven en
+   `lib/tutorials/poses.ts`. */
 
-   Si algún fichero faltara, el <Image> falla en silencio y queda el bocadillo
-   solo, que se lee perfectamente. */
-const POSE_SRC: Record<MascotPose, string> = {
-  saludo: '/img/mascota/saludo.png',
-  senalando: '/img/mascota/senalando.png',
-  hablando: '/img/mascota/hablando.png',
-  despedida: '/img/mascota/despedida.png',
-  'senalando-abajo': '/img/mascota/senalando-abajo.png',
-  celebracion: '/img/mascota/celebracion.png',
-  'hablando-variante2': '/img/mascota/hablando-variante2.png',
-  confiado: '/img/mascota/confiado.png',
-  dudando: '/img/mascota/dudando.png',
-  'haciendo-examen': '/img/mascota/haciendo-examen.png',
-  'con-mazo': '/img/mascota/con-mazo.png',
-}
+/** Lo máximo que el bocadillo espera a la mascota. Si la red va tan mal que
+    no llega ni así, sale el texto solo y ella aparece cuando llegue. */
+const MS_ESPERA_IMAGEN = 700
 
 const MS_POR_CARACTER = 28
 /** Cada toque durante el tecleo divide el retardo por esto. */
@@ -78,6 +67,27 @@ export default function MascotBubble({
   const avisoRef = useRef(onTextoCompleto)
   const retardoRef = useRef(MS_POR_CARACTER)
 
+  /* Mascota y bocadillo salen A LA VEZ. Antes el texto empezaba a escribirse
+     mientras la pose aún se descargaba, y la mascota aparecía tarde, con la
+     frase a medias. Normalmente ya está precargada (el provider pide todas las
+     del guion al arrancar) y esto nace en `true`; si no, se espera a que
+     llegue, con un tope para no dejar a nadie mirando una pantalla vacía. */
+  const [imagenLista, setImagenLista] = useState(() => poseCargada(pose))
+
+  useEffect(() => {
+    if (imagenLista) return
+    let vivo = true
+    const listo = () => {
+      if (vivo) setImagenLista(true)
+    }
+    void precargarPose(pose).then(listo)
+    const id = window.setTimeout(listo, MS_ESPERA_IMAGEN)
+    return () => {
+      vivo = false
+      window.clearTimeout(id)
+    }
+  }, [imagenLista, pose])
+
   const completo = visibles >= texto.length
 
   useEffect(() => {
@@ -85,6 +95,7 @@ export default function MascotBubble({
   }, [onTextoCompleto])
 
   useEffect(() => {
+    if (!imagenLista) return
     if (reduceMotion) {
       const id = requestAnimationFrame(() => avisoRef.current?.())
       return () => cancelAnimationFrame(id)
@@ -122,7 +133,7 @@ export default function MascotBubble({
 
     id = window.setTimeout(escribir, retardoRef.current)
     return () => window.clearTimeout(id)
-  }, [texto, reduceMotion])
+  }, [texto, reduceMotion, imagenLista])
 
   /* Acelerar. Va por el DOM para no tener que subir un ref hasta el overlay
      solo para esto.
@@ -172,13 +183,24 @@ export default function MascotBubble({
         aria-hidden
         className="relative size-32 shrink-0 sm:size-40"
         initial={reduceMotion ? false : { y: 8, opacity: 0, scaleX: mirandoIzquierda ? -1 : 1 }}
-        animate={{ y: 0, opacity: 1, scaleX: mirandoIzquierda ? -1 : 1 }}
+        animate={
+          imagenLista
+            ? { y: 0, opacity: 1, scaleX: mirandoIzquierda ? -1 : 1 }
+            : { y: 8, opacity: 0, scaleX: mirandoIzquierda ? -1 : 1 }
+        }
         transition={{ type: 'spring', stiffness: 260, damping: 20 }}
       >
-        <Image src={POSE_SRC[pose]} alt="" fill sizes="160px" className="object-contain" />
+        {/* `unoptimized`: el WebP ya va a su tamaño, y así la URL es la misma
+            que se precargó. Con el optimizador de Next pediría otra
+            (/_next/image?…) y la precarga no serviría de nada. */}
+        <Image src={POSE_SRC[pose]} alt="" fill unoptimized className="object-contain" />
       </motion.div>
 
-      <div className="relative min-w-0 max-w-sm rounded-3xl border border-[#E8A598]/30 bg-white px-5 py-4 shadow-[0_18px_40px_rgba(125,138,150,0.22)]">
+      <div
+        className={`relative min-w-0 max-w-sm rounded-3xl border border-[#E8A598]/30 bg-white px-5 py-4 shadow-[0_18px_40px_rgba(125,138,150,0.22)] transition-opacity duration-150 ${
+          imagenLista ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
         {/* ── El pico ──────────────────────────────────────────────────────
             Un cuadrado girado 45° con borde en sus dos lados de fuera. La
             mitad que queda dentro del bocadillo es blanca sobre blanco, y de
