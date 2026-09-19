@@ -40,6 +40,15 @@ type SimulacroRunnerProps = {
 
 const NO_HIGHLIGHTS: ReadonlySet<number> = new Set()
 
+/** 83 → "1:23"; 3725 → "1:02:05". */
+function formatClock(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  const ss = String(s).padStart(2, '0')
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`
+}
+
 export default function SimulacroRunner({
   questions,
   mode,
@@ -74,6 +83,17 @@ export default function SimulacroRunner({
   }, [index])
   const secondsOnQuestion = () =>
     Math.max(0, Math.round((Date.now() - shownAtRef.current) / 1000))
+
+  // Reloj de la sesión. Se calcula contra la hora de inicio (no sumando
+  // ticks), así que no se desfasa si la pestaña se duerme en segundo plano.
+  const sessionStartRef = useRef(Date.now())
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setElapsed(Math.floor((Date.now() - sessionStartRef.current) / 1000))
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [])
 
   // Elegir no compromete: en modo inmediato la pregunta se bloquea cuando se
   // corrige (botón "Comprobar"), no al tocar una opción. Hasta entonces se
@@ -227,11 +247,14 @@ export default function SimulacroRunner({
           >
             <span className="material-symbols-outlined">close</span>
           </button>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8A598]/15 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#d18d80]">
-            <span className="material-symbols-outlined text-sm">
-              {mode === 'immediate' ? 'bolt' : 'flag'}
-            </span>
-            {mode === 'immediate' ? 'Inmediata' : 'Al final'}
+          {/* Reloj de la sesión: tiempo total desde que empezó. */}
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#E8A598]/15 px-3 py-1 text-xs font-black tabular-nums text-[#d18d80]"
+            role="timer"
+            aria-label={`Tiempo transcurrido ${formatClock(elapsed)}`}
+          >
+            <span className="material-symbols-outlined text-base">timer</span>
+            {formatClock(elapsed)}
           </span>
           {/* Acciones de la pregunta en la propia barra: antes tenían una
               fila entera encima del enunciado y lo empujaban hacia abajo. */}
