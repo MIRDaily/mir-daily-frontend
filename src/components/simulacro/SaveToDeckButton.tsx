@@ -22,12 +22,18 @@ import {
 type SaveToDeckButtonProps = {
   questionId: number | string
   className?: string
+  /** Más pequeño (36 px), para colocarlo en una barra. */
+  compact?: boolean
 }
 
 // Botón "guardar pregunta en un mazo" reutilizable (misma UX que el daily del
 // dashboard). Autónomo: gestiona su propia sesión, lista de mazos y pertenencia
 // de la pregunta actual. Pensado para montarse por pregunta en el simulacro.
-export default function SaveToDeckButton({ questionId, className }: SaveToDeckButtonProps) {
+export default function SaveToDeckButton({
+  questionId,
+  className,
+  compact = false,
+}: SaveToDeckButtonProps) {
   const qid = String(questionId)
 
   const [open, setOpen] = useState(false)
@@ -286,14 +292,16 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
         ref={buttonRef}
         type="button"
         onClick={() => void handleToggleSelector()}
-        className={`relative flex h-11 w-11 items-center justify-center rounded-2xl border bg-white shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+        className={`relative flex items-center justify-center border bg-white shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+          compact ? 'h-9 w-9 rounded-xl' : 'h-11 w-11 rounded-2xl'
+        } ${
           isSaved
             ? 'border-[#8BA888]/40 text-[#6E8D6B]'
             : 'border-[#E9E4E1] text-[#7D8A96] hover:border-[#E8A598]/40 hover:text-[#C4655A]'
         }`}
         aria-label="Guardar pregunta en un mazo"
       >
-        <span className="material-symbols-outlined text-[20px]">
+        <span className={`material-symbols-outlined ${compact ? 'text-[18px]' : 'text-[20px]'}`}>
           {isSaved ? 'bookmark_added' : 'bookmark'}
         </span>
       </button>

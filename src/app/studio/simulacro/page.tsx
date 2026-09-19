@@ -85,7 +85,7 @@ function readSmartPayload(): { questions: SimulacroQuestion[]; mode: SimulacroMo
 
 export default function SimulacroPage() {
   const router = useRouter()
-  const { setBackAction } = useHeaderUI()
+  const { setBackAction, setHidden } = useHeaderUI()
   const [phase, setPhase] = useState<SimulacroPhase>('builder')
   const { refresh: refreshProgress, permitirCelebracion } = useProgressContext()
   // Modal propio de "¿seguro que quieres salir?" (no el nativo del navegador)
@@ -402,6 +402,12 @@ export default function SimulacroPage() {
       handleRestart()
     }
   }
+
+  // Respondiendo, la cabecera global sobra: el runner trae su propia barra.
+  useEffect(() => {
+    setHidden(phase === 'running')
+    return () => setHidden(false)
+  }, [phase, setHidden])
 
   // Flecha de "volver" en la cabecera global (mismo mecanismo que GramSwipe).
   // Se retira durante 'running': el runner ya tiene su propia barra de

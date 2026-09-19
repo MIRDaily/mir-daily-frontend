@@ -4247,63 +4247,33 @@ export default function DashboardPage() {
                 className="w-full min-w-0 max-w-4xl relative z-10 animate-fade-in-up"
               >
                 <div className="w-full mb-10 [@media(max-height:850px)]:mb-5">
-                <div className="flex justify-between items-end mb-3">
+                <div className="flex justify-between items-center mb-3">
                   <span className="text-[11px] font-bold tracking-[0.15em] text-[#7D8A96] uppercase">
                     Progreso Diario
                   </span>
-                  <span className="text-sm font-bold text-[#7D8A96]">
-                    Pregunta{' '}
-                    <span className="text-[#C45B4B]">
-                      {currentQuestionIndex + 1}
-                    </span>{' '}
-                    de {questions.length}
-                  </span>
-                </div>
-                <div className="h-2 w-full bg-[#E9E4E1] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-[#E8A598] rounded-full transition-all duration-500 ease-out"
-                    style={{
-                      width: `${Math.round(
-                        ((currentQuestionIndex + 1) / questions.length) *
-                          100,
-                      )}%`,
-                    }}
-                  ></div>
-                </div>
-              </div>
-
-              <div className="space-y-8 [@media(max-height:850px)]:space-y-5 w-full">
-                <div className="relative">
-                  {/* Cabecera: asignatura (si se muestra) a la izquierda y
-                      acciones a la derecha, como en el simulacro. Antes las
-                      acciones le quitaban ancho al enunciado (pr-14). */}
-                  <div className="mb-6 [@media(max-height:850px)]:mb-3 flex min-h-11 items-center justify-between gap-3">
-                  {showSubjects ? (
-                    <span className="inline-block px-4 py-1.5 rounded-full bg-white border border-[#E9E4E1] text-[11px] font-bold tracking-[0.1em] text-[#7D8A96] uppercase">
-                      {currentQuestion?.subject}
-                    </span>
-                  ) : (
-                    <span />
-                  )}
+                  <div className="flex items-center gap-3">
+                    {/* Acciones de la pregunta en la barra de progreso: antes
+                        tenian una fila propia y empujaban el enunciado. */}
                   {currentQuestionId ? (
                     <div className="relative flex shrink-0 items-center gap-2">
                       {/* Limpiar subrayado, a la izquierda del marcador para no
                           moverlo al aparecer. */}
                       <ClearHighlightButton
+                        compact
                         visible={currentHighlights.size > 0}
                         onClear={() => dailyHighlights.set(currentQuestionId, new Set())}
                       />
                       <button
                         type="button"
                         onClick={() => void handleToggleQuestionDeckSelector(currentQuestionId)}
-                        className={`relative flex h-11 w-11 items-center justify-center rounded-2xl border bg-white shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+                        className={`relative flex h-9 w-9 items-center justify-center rounded-xl border bg-white shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                           isCurrentQuestionSaved
                             ? 'border-[#8BA888]/40 text-[#6E8D6B]'
                             : 'border-[#E9E4E1] text-[#7D8A96] hover:border-[#E8A598]/40 hover:text-[#C4655A]'
                         }`}
                         aria-label="Guardar pregunta en un mazo"
                       >
-                        <span className="material-symbols-outlined text-[20px]">
+                        <span className="material-symbols-outlined text-[18px]">
                           {isCurrentQuestionSaved ? 'bookmark_added' : 'bookmark'}
                         </span>
                       </button>
@@ -4552,7 +4522,38 @@ export default function DashboardPage() {
                       ) : null}
                     </div>
                   ) : null}
+                    <span className="text-sm font-bold text-[#7D8A96]">
+                      Pregunta{' '}
+                      <span className="text-[#C45B4B]">
+                        {currentQuestionIndex + 1}
+                      </span>{' '}
+                      de {questions.length}
+                    </span>
                   </div>
+                </div>
+                <div className="h-2 w-full bg-[#E9E4E1] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#E8A598] rounded-full transition-all duration-500 ease-out"
+                    style={{
+                      width: `${Math.round(
+                        ((currentQuestionIndex + 1) / questions.length) *
+                          100,
+                      )}%`,
+                    }}
+                  ></div>
+                </div>
+              </div>
+
+              <div className="space-y-8 [@media(max-height:850px)]:space-y-5 w-full">
+                <div className="relative">
+                  {/* La asignatura solo ocupa fila si se muestra. */}
+                  {showSubjects && currentQuestion?.subject ? (
+                    <div className="mb-4 [@media(max-height:850px)]:mb-3">
+                      <span className="inline-block px-4 py-1.5 rounded-full bg-white border border-[#E9E4E1] text-[11px] font-bold tracking-[0.1em] text-[#7D8A96] uppercase">
+                        {currentQuestion.subject}
+                      </span>
+                    </div>
+                  ) : null}
                   {/* El enunciado era 32px fijos de 640px en adelante: en un
                       portatil son 9 lineas y solo caben 2 opciones sin bajar.
                       Ahora crece con el ancho — ~23px a 1024, ~26px a 1152,

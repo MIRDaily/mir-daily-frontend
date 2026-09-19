@@ -44,12 +44,12 @@ function resolveActiveTab(pathname: string): HeaderTab {
 
 export default function GlobalHeader() {
   const pathname = usePathname()
-  const { blurred, backAction } = useHeaderUI()
+  const { blurred, backAction, hidden } = useHeaderUI()
 
   const visible = useMemo(() => shouldShowHeader(pathname), [pathname])
   const activeTab = useMemo(() => resolveActiveTab(pathname), [pathname])
 
-  if (!visible) return null
+  if (!visible || hidden) return null
 
   return <AppHeader activeTab={activeTab} blurred={blurred} backAction={backAction} />
 }

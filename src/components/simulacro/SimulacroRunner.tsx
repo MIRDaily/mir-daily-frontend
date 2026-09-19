@@ -233,11 +233,45 @@ export default function SimulacroRunner({
             </span>
             {mode === 'immediate' ? 'Inmediata' : 'Al final'}
           </span>
+          {/* Acciones de la pregunta en la propia barra: antes tenían una
+              fila entera encima del enunciado y lo empujaban hacia abajo. */}
+          {current ? (
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {/* Limpiar el subrayado, a la IZQUIERDA del marcador: el
+                  marcador no se mueve cuando esto aparece o desaparece. */}
+              <ClearHighlightButton
+                compact
+                visible={highlighted.size > 0}
+                onClear={() => setHighlighted(new Set())}
+              />
+              {/* Marcar para revisar: sale en el mapa y en el aviso final. */}
+              <button
+                type="button"
+                onClick={() => onToggleFlag(index)}
+                aria-pressed={flagged.has(index)}
+                aria-label={flagged.has(index) ? 'Quitar marca de revisar' : 'Marcar para revisar'}
+                title={flagged.has(index) ? 'Quitar marca de revisar' : 'Marcar para revisar'}
+                className={`flex h-9 w-9 items-center justify-center rounded-xl border shadow-sm transition-colors ${
+                  flagged.has(index)
+                    ? 'border-[#C9A24A]/50 bg-[#FFF7E0] text-[#A9821F]'
+                    : 'border-[#E9E4E1] bg-white text-[#7D8A96] hover:border-[#C9A24A]/50 hover:text-[#A9821F]'
+                }`}
+              >
+                <span
+                  className="material-symbols-outlined text-[18px]"
+                  style={flagged.has(index) ? { fontVariationSettings: "'FILL' 1" } : undefined}
+                >
+                  flag
+                </span>
+              </button>
+              <SaveToDeckButton questionId={current.id} compact />
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={() => setMapOpen((v) => !v)}
             aria-expanded={mapOpen}
-            className={`ml-auto flex items-center gap-1.5 rounded-xl border-2 px-2.5 py-1 text-xs font-black transition-colors ${
+            className={`${current ? '' : 'ml-auto '}flex items-center gap-1.5 rounded-xl border-2 px-2.5 py-1 text-xs font-black transition-colors ${
               mapOpen
                 ? 'border-[#2c3e50] bg-[#2c3e50] text-white'
                 : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2c3e50]'
@@ -310,50 +344,14 @@ export default function SimulacroRunner({
 
       <div className="w-full space-y-8 [@media(max-height:850px)]:space-y-5">
         <div className="relative">
-          {/* Fila de cabecera: asignatura a la izquierda, acciones a la
-              derecha. Antes las acciones iban en una columna junto al
-              enunciado y le quitaban ancho (pr-14) en todo su alto. */}
-          <div className="mb-6 [@media(max-height:850px)]:mb-3 flex min-h-11 items-center justify-between gap-3">
-            {showSubject && current?.subject ? (
+          {/* La asignatura solo ocupa fila si se muestra. */}
+          {showSubject && current?.subject ? (
+            <div className="mb-4 [@media(max-height:850px)]:mb-3">
               <span className="inline-block rounded-full border-2 border-[#EAE4E2] bg-white px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#7D8A96]">
                 {current.subject}
               </span>
-            ) : (
-              <span />
-            )}
-          {current ? (
-            <div className="flex shrink-0 items-center gap-2">
-              {/* Limpiar el subrayado, a la IZQUIERDA del marcador: el
-                  marcador va pegado al borde y no se mueve cuando esto
-                  aparece o desaparece. */}
-              <ClearHighlightButton
-                visible={highlighted.size > 0}
-                onClear={() => setHighlighted(new Set())}
-              />
-              {/* Marcar para revisar: sale en el mapa y en el aviso final. */}
-              <button
-                type="button"
-                onClick={() => onToggleFlag(index)}
-                aria-pressed={flagged.has(index)}
-                aria-label={flagged.has(index) ? 'Quitar marca de revisar' : 'Marcar para revisar'}
-                title={flagged.has(index) ? 'Quitar marca de revisar' : 'Marcar para revisar'}
-                className={`flex h-11 w-11 items-center justify-center rounded-2xl border shadow-sm transition-colors ${
-                  flagged.has(index)
-                    ? 'border-[#C9A24A]/50 bg-[#FFF7E0] text-[#A9821F]'
-                    : 'border-[#E9E4E1] bg-white text-[#7D8A96] hover:border-[#C9A24A]/50 hover:text-[#A9821F]'
-                }`}
-              >
-                <span
-                  className="material-symbols-outlined text-[20px]"
-                  style={flagged.has(index) ? { fontVariationSettings: "'FILL' 1" } : undefined}
-                >
-                  flag
-                </span>
-              </button>
-              <SaveToDeckButton questionId={current.id} />
             </div>
           ) : null}
-          </div>
           <h1 className="text-[1.75rem] font-black leading-tight tracking-tight text-[#2C3E50] md:text-[clamp(1.6rem,2.22vw,2rem)]">
             {current ? (
               <HighlightableStatement

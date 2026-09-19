@@ -635,7 +635,7 @@ export default function StudioDeckDetailPage() {
   const params = useParams<{ deckId: string }>()
   const router = useRouter()
   const deckId = String(params?.deckId ?? '')
-  const { setBackAction } = useHeaderUI()
+  const { setBackAction, setHidden } = useHeaderUI()
 
   const [deck, setDeck] = useState<Deck | null>(null)
   const [items, setItems] = useState<Item[]>([])
@@ -763,6 +763,12 @@ export default function StudioDeckDetailPage() {
     })
     return () => setBackAction(null)
   }, [studyMode, deck, setBackAction])
+
+  // Respondiendo preguntas la cabecera global sobra, como en el daily.
+  useEffect(() => {
+    setHidden(studyMode)
+    return () => setHidden(false)
+  }, [studyMode, setHidden])
 
   const clearUndoExpireTimeout = () => {
     if (!undoExpireTimeoutRef.current) return

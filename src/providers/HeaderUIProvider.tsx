@@ -15,6 +15,9 @@ type HeaderUIContextValue = {
   setBlurred: (value: boolean) => void
   backAction: HeaderBackAction | null
   setBackAction: (value: HeaderBackAction | null) => void
+  /** Oculta la cabecera global entera (pantallas de responder preguntas). */
+  hidden: boolean
+  setHidden: (value: boolean) => void
 }
 
 const HeaderUIContext = createContext<HeaderUIContextValue | null>(null)
@@ -22,6 +25,7 @@ const HeaderUIContext = createContext<HeaderUIContextValue | null>(null)
 export function HeaderUIProvider({ children }: { children: React.ReactNode }) {
   const [blurred, setBlurred] = useState(false)
   const [backAction, setBackAction] = useState<HeaderBackAction | null>(null)
+  const [hidden, setHidden] = useState(false)
 
   const value = useMemo(
     () => ({
@@ -29,8 +33,10 @@ export function HeaderUIProvider({ children }: { children: React.ReactNode }) {
       setBlurred,
       backAction,
       setBackAction,
+      hidden,
+      setHidden,
     }),
-    [blurred, backAction],
+    [blurred, backAction, hidden],
   )
 
   return <HeaderUIContext.Provider value={value}>{children}</HeaderUIContext.Provider>
