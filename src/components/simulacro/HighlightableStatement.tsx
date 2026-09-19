@@ -15,13 +15,16 @@
 // El estado (qué palabras están marcadas) vive fuera, en el runner: hay que
 // poder limpiarlo al cambiar de pregunta y saber si hay algo marcado.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 
 type Props = {
   text: string
   /** Índices de las palabras marcadas. */
   highlighted: ReadonlySet<number>
-  onChange: (next: Set<number>) => void
+  /** Sin onChange es de solo lectura: pinta lo marcado y el texto se puede
+   *  seleccionar con normalidad (p. ej. el repaso de resultados). */
+  onChange?: (next: Set<number>) => void
   className?: string
 }
 
@@ -85,7 +88,7 @@ export default function HighlightableStatement({
       if (drag.erase) next.delete(i)
       else next.add(i)
     }
-    onChangeRef.current(next)
+    onChangeRef.current?.(next)
   }, [])
 
   const endDrag = useCallback(() => {
@@ -97,10 +100,13 @@ export default function HighlightableStatement({
   const toggle = useCallback((index: number) => {
     const next = new Set(highlightedRef.current)
     if (!next.delete(index)) next.add(index)
-    onChangeRef.current(next)
+    onChangeRef.current?.(next)
   }, [])
 
+  const readOnly = onChange == null
+
   const onPointerDown = (e: React.PointerEvent<HTMLSpanElement>) => {
+    if (readOnly) return
     if (e.pointerType === 'mouse' && e.button !== 0) return
     const index = wordAt(e.clientX, e.clientY)
     if (index == null) return
@@ -185,7 +191,7 @@ export default function HighlightableStatement({
       onContextMenu={(e) => {
         if (dragRef.current) e.preventDefault()
       }}
-      className={`cursor-text select-none [-webkit-touch-callout:none] ${className ?? ''}`}
+      className={`${readOnly ? '' : 'cursor-text select-none [-webkit-touch-callout:none]'} ${className ?? ''}`}
     >
       {tokens.map((token, i) => {
         if (token.index < 0) {
@@ -222,4 +228,66 @@ export default function HighlightableStatement({
       })}
     </span>
   )
+}
+
+/** Botón "Limpiar subrayado". Solo se ve si hay algo marcado; aparece y
+ *  desaparece sin mover lo de alrededor si se coloca a la IZQUIERDA del
+ *  marcador de guardar (que va pegado al borde). */
+export function ClearHighlightButton({
+  visible,
+  onClear,
+  compact = false,
+  className,
+}: {
+  visible: boolean
+  onClear: () => void
+  /** Más pequeño (32 px), para filas bajas como un rótulo. */
+  compact?: boolean
+  className?: string
+}) {
+  return (
+    <AnimatePresence>
+      {visible ? (
+        <motion.button
+          type="button"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.8 }}
+          transition={{ duration: 0.15 }}
+          onClick={onClear}
+          className={`flex ${compact ? 'h-8 w-8 rounded-xl' : 'h-11 w-11 rounded-2xl'} shrink-0 items-center justify-center border border-[#E9E4E1] bg-white text-[#7D8A96] shadow-sm transition-colors hover:border-[#E8A598]/40 hover:text-[#C4655A] ${className ?? ''}`}
+          aria-label="Limpiar subrayado"
+          title="Limpiar subrayado"
+        >
+          <span className={`material-symbols-outlined ${compact ? 'text-[17px]' : 'text-[20px]'}`}>format_clear</span>
+        </motion.button>
+      ) : null}
+    </AnimatePresence>
+  )
+}
+
+const NO_HIGHLIGHTS: ReadonlySet<number> = new Set()
+
+/**
+ * Subrayado de varias preguntas durante una sesión (en memoria, por clave de
+ * pregunta). Volver a una pregunta la encuentra como la dejaste; se pierde al
+ * desmontar o recargar. Las preguntas sin nada marcado no ocupan sitio.
+ */
+export function useSessionHighlights() {
+  const [byKey, setByKey] = useState<Record<string, ReadonlySet<number>>>({})
+  const get = useCallback(
+    (key: string | number | null | undefined): ReadonlySet<number> =>
+      key == null ? NO_HIGHLIGHTS : (byKey[String(key)] ?? NO_HIGHLIGHTS),
+    [byKey],
+  )
+  const set = useCallback((key: string | number, next: ReadonlySet<number>) => {
+    setByKey((prev) => {
+      const copy = { ...prev }
+      if (next.size > 0) copy[String(key)] = next
+      else delete copy[String(key)]
+      return copy
+    })
+  }, [])
+  const reset = useCallback(() => setByKey({}), [])
+  return { byKey, get, set, reset }
 }

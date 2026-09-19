@@ -21,6 +21,10 @@ import {
 } from '@/lib/studioDecks'
 import { supabase } from '@/lib/supabaseBrowser'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
+import HighlightableStatement, {
+  ClearHighlightButton,
+  useSessionHighlights,
+} from '@/components/simulacro/HighlightableStatement'
 import {
   DeckBannerGradient,
   DECK_GRADIENT_IDS,
@@ -710,6 +714,9 @@ export default function StudioDeckDetailPage() {
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [isAnswered, setIsAnswered] = useState(false)
   const [isLoadingNext, setIsLoadingNext] = useState(false)
+  // Subrayado del enunciado en el modo estudio, por ítem: dura mientras la
+  // página está abierta (solo en memoria).
+  const studyHighlights = useSessionHighlights()
   const [nextQuestionCache, setNextQuestionCache] = useState<Item | null>(null)
   const [nextEndReason, setNextEndReason] = useState<'done' | 'limitReached' | 'expired' | null>(null)
   const [preloadInFlight, setPreloadInFlight] = useState(false)
@@ -1752,6 +1759,9 @@ export default function StudioDeckDetailPage() {
 
   if (studyMode) {
     const currentItem = studyItem
+    const studyHighlightKey = currentItem
+      ? String(resolveDeckItemId(currentItem) ?? currentItem.questions?.statement ?? currentItem.statement ?? '')
+      : ''
     const currentOptions = currentItem ? getSortedQuestionOptions(currentItem) : []
     const currentCorrectIndex = currentItem ? getQuestionCorrectIndex(currentItem) : null
     const isStudyBusy = studyLoading || studyClosing || isLoadingNext
@@ -2009,9 +2019,23 @@ export default function StudioDeckDetailPage() {
                 className="rounded-3xl border-2 border-[#2c3e50] p-6"
                 style={{ ...trackerPaper('#7D8A96', 0.14), boxShadow: '6px 6px 0 0 #2c3e50' }}
               >
-                <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#C99A8D]">Pregunta</span>
+                {/* h-5 fija: el botón compacto (32 px) sobresale sin mover
+                    el enunciado cuando aparece. */}
+                <div className="flex h-5 items-center justify-between gap-3">
+                  <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#C99A8D]">Pregunta</span>
+                  <ClearHighlightButton
+                    compact
+                    visible={studyHighlights.get(studyHighlightKey).size > 0}
+                    onClear={() => studyHighlights.set(studyHighlightKey, new Set())}
+                  />
+                </div>
                 <p className="mt-2 whitespace-pre-wrap text-base font-semibold leading-relaxed text-[#2C3E50]">
-                  {currentItem.questions?.statement || currentItem.statement || 'Item'}
+                  <HighlightableStatement
+                    key={studyHighlightKey}
+                    text={currentItem.questions?.statement || currentItem.statement || 'Item'}
+                    highlighted={studyHighlights.get(studyHighlightKey)}
+                    onChange={(next) => studyHighlights.set(studyHighlightKey, next)}
+                  />
                 </p>
               </div>
 

@@ -4,6 +4,10 @@ import Image from 'next/image'
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
+import HighlightableStatement, {
+  ClearHighlightButton,
+  useSessionHighlights,
+} from '@/components/simulacro/HighlightableStatement'
 import VersusRematch from '@/components/versus/VersusRematch'
 import VersusScoreChart from '@/components/versus/VersusScoreChart'
 import { getAvatarUrl, getSafeAvatarId } from '@/lib/avatar'
@@ -67,6 +71,8 @@ export default function VersusRunner({
   const [answered, setAnswered] = useState(Boolean(restoredHere))
   const [sending, setSending] = useState(false)
   const [continuing, setContinuing] = useState(false)
+  // Subrayado del enunciado, por ronda (solo en memoria).
+  const versusHighlights = useSessionHighlights()
 
   // Última pregunta recibida por el canal. Hoy el enunciado y las opciones
   // viajan también en 'picks' y 'reveal' (ver `contenido` más abajo), así que
@@ -447,12 +453,31 @@ export default function VersusRunner({
       {/* Enunciado */}
       {question ? (
         <article className="mb-6 rounded-2xl border-2 border-[#EAE4E2] bg-white p-6">
-          {question.subject ? (
-            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-[#E8A598]">
-              {question.subject}
-            </p>
-          ) : null}
-          <p className="text-base leading-relaxed text-[#2c3e50]">{question.statement}</p>
+          {/* h-5 fija: el botón compacto sobresale sin mover el enunciado. */}
+          <div className="mb-2 flex h-5 items-center justify-between gap-3">
+            {question.subject ? (
+              <p className="text-xs font-bold uppercase tracking-wider text-[#E8A598]">
+                {question.subject}
+              </p>
+            ) : (
+              <span />
+            )}
+            <ClearHighlightButton
+              compact
+              visible={versusHighlights.get(question.statement).size > 0}
+              onClear={() => versusHighlights.set(question.statement, new Set())}
+            />
+          </div>
+          <p className="text-base leading-relaxed text-[#2c3e50]">
+            {/* La ronda no trae id: el enunciado sirve de clave (no se repite
+                dentro de una partida). */}
+            <HighlightableStatement
+              key={question.statement}
+              text={question.statement}
+              highlighted={versusHighlights.get(question.statement)}
+              onChange={(next) => versusHighlights.set(question.statement, next)}
+            />
+          </p>
           {/* Sin el "revelar con espacio" del simulacro: aquí el reloj corre y
               esconder la imagen solo penalizaría. Se muestra y se puede ampliar. */}
           {question.hasImage && question.imageUrl ? (

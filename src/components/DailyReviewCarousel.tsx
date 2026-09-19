@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 import SaveToDeckButton from '@/components/simulacro/SaveToDeckButton'
+import HighlightableStatement from '@/components/simulacro/HighlightableStatement'
 
 // El carrusel puede vivir dentro de un contenedor con su propio scroll interno
 // (p. ej. la vista de resultados del daily es un overlay `fixed inset-0
@@ -87,9 +88,11 @@ interface Question {
 
 interface Props {
   questions: Question[]
+  /** Subrayado hecho al responder el daily, por id de pregunta (solo sesión). */
+  highlights?: Record<string, ReadonlySet<number>>
 }
 
-function DailyReviewCarousel({ questions }: Props) {
+function DailyReviewCarousel({ questions, highlights }: Props) {
   const [index, setIndex] = useState(0)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   // Imagen de la pregunta activa: oculta por defecto (evita tarjetas enormes y
@@ -369,7 +372,15 @@ function DailyReviewCarousel({ questions }: Props) {
                       {q.category}
                     </p>
                     <h3 className="text-xl sm:text-2xl font-semibold text-gray-800 mt-2 leading-snug">
-                      {q.question}
+                      {q.questionId != null && highlights?.[String(q.questionId)]?.size ? (
+                        // Lo subrayado al responder, en solo lectura.
+                        <HighlightableStatement
+                          text={q.question}
+                          highlighted={highlights[String(q.questionId)]}
+                        />
+                      ) : (
+                        q.question
+                      )}
                     </h3>
                   </div>
                   <div className="flex shrink-0 flex-row-reverse flex-wrap items-center justify-start gap-1.5 sm:flex-col sm:items-end">

@@ -40,6 +40,10 @@ import { useNotificationsContext } from '@/providers/NotificationsProvider'
 import DailyReviewCarousel from '@/components/DailyReviewCarousel'
 import ZScoreComparisonCard from '@/components/ZScoreComparisonCard'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
+import HighlightableStatement, {
+  ClearHighlightButton,
+  useSessionHighlights,
+} from '@/components/simulacro/HighlightableStatement'
 
 type DailyQuestion = {
   id: string | number
@@ -493,6 +497,10 @@ export default function DashboardPage() {
   const questions = dailyQuestions.length ? dailyQuestions : fallbackQuestions
   const currentQuestion = questions[currentQuestionIndex]
   const currentQuestionId = currentQuestion ? String(currentQuestion.id) : null
+  // Subrayado del enunciado por pregunta: dura mientras el daily está abierto
+  // (volver con "Anterior" lo conserva) y se ve en la revisión de resultados.
+  const dailyHighlights = useSessionHighlights()
+  const currentHighlights = dailyHighlights.get(currentQuestionId)
   const currentSelection = selectedAnswers[currentQuestionIndex]
   const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
   const currentQuestionDeckMap = currentQuestionId
@@ -4200,7 +4208,10 @@ export default function DashboardPage() {
                   </div>
                   <div ref={reviewSectionRef} className="w-full">
                     <LazyCard className="w-full" once>
-                      <DailyReviewCarousel questions={reviewQuestions} />
+                      <DailyReviewCarousel
+                        questions={reviewQuestions}
+                        highlights={dailyHighlights.byKey}
+                      />
                     </LazyCard>
                   </div>
                   <LazyCard className="w-full flex justify-center pt-1 pb-2">
@@ -4262,14 +4273,26 @@ export default function DashboardPage() {
               </div>
 
               <div className="space-y-8 [@media(max-height:850px)]:space-y-5 w-full">
-                <div className="relative pr-14">
-                  {showSubjects && (
-                    <span className="inline-block px-4 py-1.5 rounded-full bg-white border border-[#E9E4E1] text-[11px] font-bold tracking-[0.1em] text-[#7D8A96] uppercase mb-6 [@media(max-height:850px)]:mb-3">
+                <div className="relative">
+                  {/* Cabecera: asignatura (si se muestra) a la izquierda y
+                      acciones a la derecha, como en el simulacro. Antes las
+                      acciones le quitaban ancho al enunciado (pr-14). */}
+                  <div className="mb-6 [@media(max-height:850px)]:mb-3 flex min-h-11 items-center justify-between gap-3">
+                  {showSubjects ? (
+                    <span className="inline-block px-4 py-1.5 rounded-full bg-white border border-[#E9E4E1] text-[11px] font-bold tracking-[0.1em] text-[#7D8A96] uppercase">
                       {currentQuestion?.subject}
                     </span>
+                  ) : (
+                    <span />
                   )}
                   {currentQuestionId ? (
-                    <div className="absolute right-0 top-0">
+                    <div className="relative flex shrink-0 items-center gap-2">
+                      {/* Limpiar subrayado, a la izquierda del marcador para no
+                          moverlo al aparecer. */}
+                      <ClearHighlightButton
+                        visible={currentHighlights.size > 0}
+                        onClear={() => dailyHighlights.set(currentQuestionId, new Set())}
+                      />
                       <button
                         type="button"
                         onClick={() => void handleToggleQuestionDeckSelector(currentQuestionId)}
@@ -4286,7 +4309,7 @@ export default function DashboardPage() {
                       </button>
 
                       {showSelectorFor === currentQuestionId ? (
-                        <div className="absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-[#E9E4E1] bg-white p-2 shadow-xl shadow-[#2D3748]/8">
+                        <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-2xl border border-[#E9E4E1] bg-white p-2 shadow-xl shadow-[#2D3748]/8">
                           <p className="px-2 pb-2 pt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[#7D8A96]">
                             Guardar en mazo
                           </p>
@@ -4529,13 +4552,21 @@ export default function DashboardPage() {
                       ) : null}
                     </div>
                   ) : null}
+                  </div>
                   {/* El enunciado era 32px fijos de 640px en adelante: en un
                       portatil son 9 lineas y solo caben 2 opciones sin bajar.
                       Ahora crece con el ancho — ~23px a 1024, ~26px a 1152,
                       32px a partir de 1440, que es el tamano de siempre. El
                       tope de 2rem lo deja clavado en monitor grande. */}
                   <h1 className="text-[1.75rem] md:text-[clamp(1.6rem,2.22vw,2rem)] font-bold leading-tight text-[#2D3748] tracking-tight">
-                    {currentQuestion?.statement}
+                    {currentQuestion && currentQuestionId ? (
+                      <HighlightableStatement
+                        key={currentQuestionId}
+                        text={currentQuestion.statement}
+                        highlighted={currentHighlights}
+                        onChange={(next) => dailyHighlights.set(currentQuestionId, next)}
+                      />
+                    ) : null}
                   </h1>
                 </div>
 

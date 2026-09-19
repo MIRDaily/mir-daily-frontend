@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { motion, useReducedMotion, useSpring, useTransform } from 'framer-motion'
 import { fetchSubjects, fetchTopics } from '@/lib/simulacro/queries'
 import SimulacroTopicPicker from '@/components/simulacro/SimulacroTopicPicker'
@@ -19,8 +19,8 @@ type SimulacroBuilderProps = {
   generationError: string | null
 }
 
-// El orden importa: primero la que imita al examen real, que es la opción por
-// defecto y la que conviene la mayoría de las veces.
+// El orden importa: primero la que imita al examen real. La que viene marcada
+// es la última que eligió el usuario (o la inmediata, la primera vez).
 const MODE_OPTIONS: ReadonlyArray<{
   value: SimulacroMode
   title: string
@@ -41,9 +41,24 @@ const MODE_OPTIONS: ReadonlyArray<{
   },
 ] as const
 
-/** Atajos de tamaño; 210 son las preguntas de un MIR real. */
-const COUNT_PRESETS = [10, 25, 50, 100, 210] as const
+/** Atajos de tamaño; 210 son las preguntas de un MIR real. El 150 rellena el
+ *  salto de 100 a 210, que era el más grande (como en la app). */
+const COUNT_PRESETS = [10, 25, 50, 100, 150, 210] as const
 const MAX_COUNT = 210
+
+/** Último modo de corrección elegido, para no tener que volver a marcarlo. */
+const MODE_STORAGE_KEY = 'mirdaily.simulacro.mode'
+
+const noopSubscribe = () => () => {}
+
+function readStoredMode(): SimulacroMode | null {
+  try {
+    const v = localStorage.getItem(MODE_STORAGE_KEY)
+    return v === 'immediate' || v === 'deferred' ? v : null
+  } catch {
+    return null
+  }
+}
 
 export default function SimulacroBuilder({
   onSubmit,
@@ -65,8 +80,24 @@ export default function SimulacroBuilder({
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<number[]>([])
   const [selectedTopicIds, setSelectedTopicIds] = useState<number[]>([])
   const [count, setCount] = useState(10)
-  // Por defecto, corrección al final: es como se hace un simulacro de verdad.
-  const [mode, setMode] = useState<SimulacroMode>('deferred')
+  // Se recuerda el último modo elegido. La primera vez, corrección inmediata,
+  // como en la app: explica sobre la marcha, que es para lo que se usa más.
+  // Se lee con useSyncExternalStore: en el servidor no hay localStorage y así
+  // no hay desajuste de hidratación.
+  const storedMode = useSyncExternalStore(noopSubscribe, readStoredMode, () => null)
+  const [chosenMode, setChosenMode] = useState<SimulacroMode | null>(null)
+  const mode: SimulacroMode = chosenMode ?? storedMode ?? 'immediate'
+  const setMode = (next: SimulacroMode) => {
+    setChosenMode(next)
+    try {
+      localStorage.setItem(MODE_STORAGE_KEY, next)
+    } catch {
+      /* sin almacenamiento (modo privado): simplemente no se recuerda */
+    }
+  }
+  // Mostrar la asignatura en cada pregunta. Apagado por defecto y sin
+  // recordar: saberla acota la respuesta y el simulacro imita al examen.
+  const [showSubject, setShowSubject] = useState(false)
   // Reparto ponderado por peso en el MIR (botón "MIR").
   const [weighted, setWeighted] = useState(false)
 
@@ -271,6 +302,7 @@ export default function SimulacroBuilder({
       topicIds: weighted ? [] : effectiveTopicIds,
       count,
       mode,
+      showSubject,
       weights: weighted ? allocateByWeight(count, chosen) : undefined,
     })
   }
@@ -569,6 +601,38 @@ export default function SimulacroBuilder({
               )
             })}
           </div>
+
+          {/* Asignatura visible u oculta durante el test */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showSubject}
+            onClick={() => setShowSubject((v) => !v)}
+            className="mt-4 flex w-full items-center gap-3 rounded-2xl border-2 border-[#EAE4E2] bg-white p-4 text-left transition-colors hover:border-[#2c3e50]"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F2EFED] text-[#7D8A96]">
+              <span className="material-symbols-outlined text-xl">
+                {showSubject ? 'label' : 'label_off'}
+              </span>
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-black text-[#2c3e50]">Mostrar la asignatura</span>
+              <span className="mt-0.5 block text-xs text-[#7D8A96]">
+                Saberla acota la respuesta antes de leer el caso. En el MIR no la ves.
+              </span>
+            </span>
+            <span
+              className={`relative h-7 w-12 shrink-0 rounded-full border-2 border-[#2c3e50] transition-colors ${
+                showSubject ? 'bg-[#8BA888]' : 'bg-[#F2EFED]'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full border-2 border-[#2c3e50] bg-white transition-all ${
+                  showSubject ? 'left-[calc(100%-1.375rem)]' : 'left-0.5'
+                }`}
+              />
+            </span>
+          </button>
         </StickerCard>
         </div>
 
@@ -616,6 +680,12 @@ export default function SimulacroBuilder({
                   <dt className="text-[#7D8A96]">Corrección</dt>
                   <dd className="text-right font-black text-[#2c3e50]">
                     {mode === 'immediate' ? 'Inmediata' : 'Al final'}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[#7D8A96]">Asignatura</dt>
+                  <dd className="text-right font-black text-[#2c3e50]">
+                    {showSubject ? 'Visible' : 'Oculta'}
                   </dd>
                 </div>
               </dl>

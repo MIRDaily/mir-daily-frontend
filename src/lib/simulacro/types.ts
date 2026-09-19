@@ -21,6 +21,8 @@ export interface SimulacroConfig {
   topicIds: number[]
   count: number
   mode: SimulacroMode
+  /** Mostrar la asignatura en cada pregunta (apagado por defecto). */
+  showSubject?: boolean
   /**
    * Cuota de preguntas por asignatura (botón "MIR"). Si viene, manda sobre
    * `count` y `topicIds`: el simulacro se compone pidiendo cada asignatura por

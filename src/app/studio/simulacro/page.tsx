@@ -93,10 +93,24 @@ export default function SimulacroPage() {
   const [showExitModal, setShowExitModal] = useState(false)
   const exitResolverRef = useRef<((confirmed: boolean) => void) | null>(null)
   const [mode, setMode] = useState<SimulacroConfig['mode']>('immediate')
+  // Asignatura visible en el runner (elegido en el creador; oculta por defecto).
+  const [showSubject, setShowSubject] = useState(false)
   const [questions, setQuestions] = useState<SimulacroQuestion[]>([])
   const [answers, setAnswers] = useState<SimulacroAnswer[]>([])
   // Correcciones alineadas por índice de pregunta (null hasta que llegan).
   const [results, setResults] = useState<(SimulacroResult | null)[]>([])
+  // Subrayado del enunciado, por índice de pregunta. Solo en memoria: dura
+  // la sesión (volver a una pregunta, repaso de resultados) y se pierde al
+  // salir o recargar. No se envía al backend ni sale en el historial.
+  const [highlights, setHighlights] = useState<Record<number, ReadonlySet<number>>>({})
+  const handleHighlightChange = (questionIndex: number, next: Set<number>) => {
+    setHighlights((prev) => {
+      const copy = { ...prev }
+      if (next.size > 0) copy[questionIndex] = next
+      else delete copy[questionIndex]
+      return copy
+    })
+  }
   const [generating, setGenerating] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
   // Config del simulacro que se está generando, para que el pase pueda contar
@@ -139,7 +153,9 @@ export default function SimulacroPage() {
       setQuestions(fetched)
       updateAnswers(() => fetched.map(() => ({ selectedIndex: null })))
       setResults(fetched.map(() => null))
+      setHighlights({})
       setMode(config.mode)
+      setShowSubject(config.showSubject === true)
       sessionIdRef.current = crypto.randomUUID()
 
       // La transición tapa el cambio de fase, pero solo si llega a verse: si el
@@ -177,7 +193,9 @@ export default function SimulacroPage() {
     setQuestions(smartQuestions)
     updateAnswers(() => smartQuestions.map(() => ({ selectedIndex: null })))
     setResults(smartQuestions.map(() => null))
+    setHighlights({})
     setMode(smartMode)
+    setShowSubject(false)
     sessionIdRef.current = crypto.randomUUID()
     setPendingConfig({ subjectIds: [], topicIds: [], count: smartQuestions.length, mode: smartMode })
     setGenerating(true)
@@ -317,6 +335,7 @@ export default function SimulacroPage() {
     setQuestions([])
     updateAnswers(() => [])
     setResults([])
+    setHighlights({})
     setGenerationError(null)
     setPendingConfig(null)
     setWasSmart(false)
@@ -491,6 +510,9 @@ export default function SimulacroPage() {
                 onCheck={handleCheck}
                 onFinish={handleFinish}
                 onExit={handleExitClick}
+                highlights={highlights}
+                onHighlightChange={handleHighlightChange}
+                showSubject={showSubject}
               />
             </motion.div>
           ) : (
@@ -505,6 +527,7 @@ export default function SimulacroPage() {
                 questions={questions}
                 answers={answers}
                 results={results}
+                highlights={highlights}
                 onRestart={handleResultsRestart}
               />
             </motion.div>

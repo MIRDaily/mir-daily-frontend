@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import QuestionImage from '@/components/simulacro/QuestionImage'
 import SaveToDeckButton from '@/components/simulacro/SaveToDeckButton'
-import HighlightableStatement from '@/components/simulacro/HighlightableStatement'
+import HighlightableStatement, { ClearHighlightButton } from '@/components/simulacro/HighlightableStatement'
 import type {
   SimulacroAnswer,
   SimulacroMode,
@@ -24,7 +24,16 @@ type SimulacroRunnerProps = {
   onCheck: (questionIndex: number, timeSpent?: number) => Promise<void>
   onFinish: () => void
   onExit: () => void
+  /** Subrayado de cada pregunta, por índice. Vive en la página para que dure
+   *  toda la sesión (volver con "Anterior", repaso de resultados). */
+  highlights: Record<number, ReadonlySet<number>>
+  onHighlightChange: (questionIndex: number, next: Set<number>) => void
+  /** Mostrar la asignatura sobre el enunciado. Apagado por defecto: saberla
+   *  acota la respuesta antes de leer el caso (como en la app). */
+  showSubject: boolean
 }
+
+const NO_HIGHLIGHTS: ReadonlySet<number> = new Set()
 
 export default function SimulacroRunner({
   questions,
@@ -37,6 +46,9 @@ export default function SimulacroRunner({
   onCheck,
   onFinish,
   onExit,
+  highlights,
+  onHighlightChange,
+  showSubject,
 }: SimulacroRunnerProps) {
   const [index, setIndex] = useState(0)
 
@@ -68,9 +80,10 @@ export default function SimulacroRunner({
   const [checking, setChecking] = useState(false)
   const [checkError, setCheckError] = useState(false)
 
-  // Palabras subrayadas del enunciado (índices). Como en la app, no se
-  // conserva al cambiar de pregunta.
-  const [highlighted, setHighlighted] = useState<Set<number>>(() => new Set())
+  // Palabras subrayadas del enunciado actual (índices). Se conservan toda la
+  // sesión: al volver a una pregunta sigue lo que subrayaste.
+  const highlighted = highlights[index] ?? NO_HIGHLIGHTS
+  const setHighlighted = (next: Set<number>) => onHighlightChange(index, next)
 
   // Si "Comprobar" falla (sin red, servidor caído) no se deja al usuario
   // atascado: el botón vuelve a "Siguiente" y esa pregunta se corrige al
@@ -88,7 +101,6 @@ export default function SimulacroRunner({
     setPlayHint(false)
     setChecking(false)
     setCheckError(false)
-    setHighlighted(new Set()) // el subrayado no se conserva entre preguntas
   }, [index])
 
   // Pista de barra espaciadora: solo la primera vez que aparece una pregunta con imagen.
@@ -195,7 +207,7 @@ export default function SimulacroRunner({
               derecha. Antes las acciones iban en una columna junto al
               enunciado y le quitaban ancho (pr-14) en todo su alto. */}
           <div className="mb-6 [@media(max-height:850px)]:mb-3 flex min-h-11 items-center justify-between gap-3">
-            {current?.subject ? (
+            {showSubject && current?.subject ? (
               <span className="inline-block rounded-full border-2 border-[#EAE4E2] bg-white px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#7D8A96]">
                 {current.subject}
               </span>
@@ -207,23 +219,10 @@ export default function SimulacroRunner({
               {/* Limpiar el subrayado, a la IZQUIERDA del marcador: el
                   marcador va pegado al borde y no se mueve cuando esto
                   aparece o desaparece. */}
-              <AnimatePresence>
-                {highlighted.size > 0 ? (
-                  <motion.button
-                    type="button"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ duration: 0.15 }}
-                    onClick={() => setHighlighted(new Set())}
-                    className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#E9E4E1] bg-white text-[#7D8A96] shadow-sm transition-colors hover:border-[#E8A598]/40 hover:text-[#C4655A]"
-                    aria-label="Limpiar subrayado"
-                    title="Limpiar subrayado"
-                  >
-                    <span className="material-symbols-outlined text-[20px]">format_clear</span>
-                  </motion.button>
-                ) : null}
-              </AnimatePresence>
+              <ClearHighlightButton
+                visible={highlighted.size > 0}
+                onClear={() => setHighlighted(new Set())}
+              />
               <SaveToDeckButton questionId={current.id} />
             </div>
           ) : null}

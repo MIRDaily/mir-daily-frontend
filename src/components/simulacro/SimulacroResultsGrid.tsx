@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 import SaveToDeckButton from '@/components/simulacro/SaveToDeckButton'
+import HighlightableStatement from '@/components/simulacro/HighlightableStatement'
 import type {
   SimulacroAnswer,
   SimulacroQuestion,
@@ -16,6 +17,9 @@ type SimulacroResultsGridProps = {
   questions: SimulacroQuestion[]
   answers: SimulacroAnswer[]
   results: (SimulacroResult | null)[]
+  /** Subrayado hecho durante el simulacro, por índice de pregunta. Solo existe
+   *  en la sesión en curso: el historial no lo tiene y no lo pasa. */
+  highlights?: Record<number, ReadonlySet<number>>
   onRestart: () => void
 }
 
@@ -89,6 +93,7 @@ export default function SimulacroResultsGrid({
   questions,
   answers,
   results,
+  highlights,
   onRestart,
 }: SimulacroResultsGridProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
@@ -397,7 +402,15 @@ export default function SimulacroResultsGrid({
                       </p>
                     ) : null}
                     <h2 className="mb-4 text-xl font-black leading-snug text-[#2C3E50]">
-                      {activeQuestion.statement}
+                      {/* Con lo que se subrayó al responder, en solo lectura. */}
+                      {highlights?.[activeIndex ?? -1]?.size ? (
+                        <HighlightableStatement
+                          text={activeQuestion.statement}
+                          highlighted={highlights[activeIndex ?? -1]}
+                        />
+                      ) : (
+                        activeQuestion.statement
+                      )}
                     </h2>
 
                     {activeQuestion.has_image && activeQuestion.image_url ? (
