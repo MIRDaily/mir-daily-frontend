@@ -19,6 +19,8 @@ type SimulacroRunnerProps = {
   finishing: boolean
   onSelect: (questionIndex: number, optionIndex: number, timeSpent?: number) => void
   onBlank: (questionIndex: number, timeSpent?: number) => void
+  /** Corrige la pregunta en el servidor (modo inmediato). Rechaza si falla. */
+  onCheck: (questionIndex: number, timeSpent?: number) => Promise<void>
   onFinish: () => void
   onExit: () => void
 }
@@ -31,6 +33,7 @@ export default function SimulacroRunner({
   finishing,
   onSelect,
   onBlank,
+  onCheck,
   onFinish,
   onExit,
 }: SimulacroRunnerProps) {
@@ -52,12 +55,22 @@ export default function SimulacroRunner({
   const secondsOnQuestion = () =>
     Math.max(0, Math.round((Date.now() - shownAtRef.current) / 1000))
 
-  // En modo inmediato, al responder (o dejar en blanco) se bloquea la pregunta.
-  // La corrección llega del servidor: mientras no está, mostramos "comprobando";
-  // cuando llega, se revela el resultado.
-  const locked = mode === 'immediate' && (selected != null || blanked)
-  const revealed = locked && result != null
-  const checking = locked && result == null
+  // Elegir no compromete: en modo inmediato la pregunta se bloquea cuando se
+  // corrige (botón "Comprobar"), no al tocar una opción. Hasta entonces se
+  // puede cambiar de opción, o pasar del blanco a una opción, como en la app.
+  const immediate = mode === 'immediate'
+  const answered = selected != null || blanked
+  const locked = immediate && result != null
+  const revealed = locked
+
+  // Cierto mientras se espera la corrección del servidor.
+  const [checking, setChecking] = useState(false)
+  const [checkError, setCheckError] = useState(false)
+
+  // Si "Comprobar" falla (sin red, servidor caído) no se deja al usuario
+  // atascado: el botón vuelve a "Siguiente" y esa pregunta se corrige al
+  // finalizar, junto con las que falten (ver handleFinish en la página).
+  const mustCheck = immediate && answered && result == null && !checkError
 
   // Imagen de la pregunta: revelar/ocultar con barra espaciadora (o tocando).
   const [imageRevealed, setImageRevealed] = useState(false)
@@ -68,6 +81,8 @@ export default function SimulacroRunner({
   useEffect(() => {
     setImageRevealed(false)
     setPlayHint(false)
+    setChecking(false)
+    setCheckError(false)
   }, [index])
 
   // Pista de barra espaciadora: solo la primera vez que aparece una pregunta con imagen.
@@ -82,6 +97,10 @@ export default function SimulacroRunner({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.key === ' ' || e.key === 'Spacebar') && current?.has_image && current?.image_url) {
+        // Si se está escribiendo (p. ej. el nombre de un mazo nuevo), el
+        // espacio es un espacio, no el atajo de la imagen.
+        const tag = document.activeElement?.tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return
         e.preventDefault()
         setImageRevealed((v) => !v)
       }
@@ -91,12 +110,28 @@ export default function SimulacroRunner({
   }, [current])
 
   const goPrev = () => setIndex((i) => Math.max(0, i - 1))
+
+  const check = async () => {
+    if (checking) return
+    setChecking(true)
+    setCheckError(false)
+    try {
+      await onCheck(index, secondsOnQuestion())
+    } catch {
+      setCheckError(true)
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  // El botón principal cambia según el estado. Sin responder no hace nada: el
+  // blanco tiene que ser una decisión ("Dejar en blanco"), no un clic de más
+  // en "Siguiente".
   const goNext = () => {
-    // Avanzar sin responder = dejar la pregunta en blanco (como en el MIR).
-    if (selected == null && !blanked) {
-      onBlank(index, secondsOnQuestion())
-      // En modo inmediato nos quedamos para mostrar la corrección revelada.
-      if (mode === 'immediate') return
+    if (!answered) return
+    if (mustCheck) {
+      void check()
+      return
     }
     if (isLast) {
       onFinish()
@@ -297,6 +332,26 @@ export default function SimulacroRunner({
           ) : null}
         </div>
 
+        {/* La corrección falló (red, servidor): la pregunta sigue abierta */}
+        {checkError && !checking ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border-2 border-[#C4655A]/40 bg-[#FDF2F0] px-5 py-4 text-sm font-bold text-[#C4655A]">
+            <span className="material-symbols-outlined text-base">wifi_off</span>
+            <span>
+              No se pudo comprobar tu respuesta.
+              <span className="block text-xs font-semibold text-[#C4655A]/80">
+                Puedes seguir: se corregirá al finalizar.
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => void check()}
+              className="ml-auto rounded-xl border-2 border-[#C4655A] bg-white px-3 py-1.5 text-xs font-black uppercase tracking-wide text-[#C4655A] transition-colors hover:bg-[#C4655A] hover:text-white"
+            >
+              Reintentar
+            </button>
+          </div>
+        ) : null}
+
         {/* Comprobando (modo inmediato, esperando corrección del servidor) */}
         {checking ? (
           <div className="flex items-center gap-2 rounded-2xl border-2 border-[#EAE4E2] bg-[#FAF7F4] px-5 py-4 text-sm font-bold text-[#7D8A96]">
@@ -346,16 +401,21 @@ export default function SimulacroRunner({
           <button
             type="button"
             onClick={goNext}
-            disabled={checking || finishing}
+            disabled={!answered || checking || finishing}
             className="flex items-center gap-3 rounded-2xl border-2 border-[#2c3e50] bg-[#E8A598] px-8 py-4 font-black text-white transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
             style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
           >
-            {isLast && finishing ? (
+            {checking || (isLast && finishing) ? (
               <>
-                Corrigiendo
+                {checking ? 'Comprobando' : 'Corrigiendo'}
                 <span className="material-symbols-outlined animate-spin">
                   progress_activity
                 </span>
+              </>
+            ) : mustCheck ? (
+              <>
+                Comprobar
+                <span className="material-symbols-outlined">check</span>
               </>
             ) : (
               <>

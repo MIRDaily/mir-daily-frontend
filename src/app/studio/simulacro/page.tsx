@@ -206,33 +206,10 @@ export default function SimulacroPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Corrección inmediata de una pregunta en el servidor (respuesta o blanco).
-  const checkImmediate = (
-    questionIndex: number,
-    selectedIndex: number | null,
-    timeSpent?: number,
-  ) => {
-    const question = questions[questionIndex]
-    if (!question) return
-    checkSimulacroAnswers(
-      [{ questionId: question.id, selectedIndex, timeSpent }],
-      sessionIdRef.current ?? undefined,
-    )
-      .then((res) => {
-        const result = res[0]
-        if (!result) return
-        setResults((prev) => {
-          const next = [...prev]
-          next[questionIndex] = result
-          return next
-        })
-      })
-      .catch(() => {
-        /* Si falla la corrección, la pregunta queda sin revelar pero el
-           usuario puede continuar. */
-      })
-  }
-
+  // Apunta la opción elegida. NO corrige, ni siquiera en modo inmediato: eso
+  // lo hace handleCheck cuando el usuario pulsa "Comprobar". Así se puede
+  // cambiar de idea antes de comprometerse, como en la app. Elegir una opción
+  // quita el blanco, si lo había.
   const handleSelect = (
     questionIndex: number,
     optionIndex: number,
@@ -243,31 +220,57 @@ export default function SimulacroPage() {
       next[questionIndex] = { selectedIndex: optionIndex, timeSpent }
       return next
     })
-
-    if (mode === 'immediate') {
-      checkImmediate(questionIndex, optionIndex, timeSpent)
-    }
   }
 
   // Dejar la pregunta en blanco (no puntúa ni penaliza, pero se registra).
+  // Como al elegir, se apunta y ya: la corrección espera a "Comprobar".
   const handleBlank = (questionIndex: number, timeSpent?: number) => {
     updateAnswers((prev) => {
       const next = [...prev]
       next[questionIndex] = { selectedIndex: null, blank: true, timeSpent }
       return next
     })
+  }
 
-    if (mode === 'immediate') {
-      checkImmediate(questionIndex, null, timeSpent)
-    }
+  // Corrección inmediata de UNA pregunta en el servidor, al pulsar
+  // "Comprobar". Rechaza si falla, para que el runner ofrezca reintentar.
+  const handleCheck = async (questionIndex: number, timeSpent?: number) => {
+    if (mode !== 'immediate' || results[questionIndex] != null) return
+    const question = questions[questionIndex]
+    const answer = answersRef.current[questionIndex]
+    if (!question || !answer) return
+    // El tiempo cuenta hasta que se comprueba, no hasta que se elige: es lo
+    // que de verdad ha tardado en decidirse (igual que en la app).
+    const spent = timeSpent ?? answer.timeSpent
+    updateAnswers((prev) => {
+      const next = [...prev]
+      next[questionIndex] = { ...next[questionIndex], timeSpent: spent }
+      return next
+    })
+    const res = await checkSimulacroAnswers(
+      [{ questionId: question.id, selectedIndex: answer.selectedIndex, timeSpent: spent }],
+      sessionIdRef.current ?? undefined,
+    )
+    const result = res[0]
+    if (!result) throw new Error('Sin corrección')
+    setResults((prev) => {
+      const next = [...prev]
+      next[questionIndex] = result
+      return next
+    })
   }
 
   const handleFinish = async () => {
-    // En diferido corregimos todo de una vez al terminar.
-    if (mode === 'deferred') {
+    // En diferido corregimos todo de una vez al terminar. En inmediato solo lo
+    // que se quedó sin corregir (p. ej. si "Comprobar" falló por la red): así
+    // la rejilla sale completa y el historial recibe todas las respuestas.
+    const pending = questions
+      .map((q, i) => ({ q, i }))
+      .filter(({ i }) => mode === 'deferred' || results[i] == null)
+    if (pending.length > 0) {
       setFinishing(true)
       try {
-        const payload = questions.map((q, i) => ({
+        const payload = pending.map(({ q, i }) => ({
           questionId: q.id,
           selectedIndex: answersRef.current[i]?.selectedIndex ?? null,
           timeSpent: answersRef.current[i]?.timeSpent,
@@ -277,7 +280,7 @@ export default function SimulacroPage() {
           sessionIdRef.current ?? undefined,
         )
         const byId = new Map(res.map((r) => [r.questionId, r]))
-        setResults(questions.map((q) => byId.get(q.id) ?? null))
+        setResults((prev) => questions.map((q, i) => prev[i] ?? byId.get(q.id) ?? null))
       } catch {
         // Si falla, mostramos la rejilla igualmente (sin corrección).
       } finally {
@@ -485,6 +488,7 @@ export default function SimulacroPage() {
                 finishing={finishing}
                 onSelect={handleSelect}
                 onBlank={handleBlank}
+                onCheck={handleCheck}
                 onFinish={handleFinish}
                 onExit={handleExitClick}
               />

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
+import SaveToDeckButton from '@/components/simulacro/SaveToDeckButton'
 import type {
   SimulacroAnswer,
   SimulacroQuestion,
@@ -133,6 +134,9 @@ export default function SimulacroResultsGrid({
   useEffect(() => {
     if (activeIndex == null) return
     const onKeyDown = (e: KeyboardEvent) => {
+      // Escribiendo el nombre de un mazo nuevo, flechas y espacio son texto.
+      const tag = document.activeElement?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
       if (e.key === 'ArrowRight') navigate(1)
       else if (e.key === 'ArrowLeft') navigate(-1)
       else if (e.key === 'Escape') setActiveIndex(null)
@@ -352,14 +356,19 @@ export default function SimulacroResultsGrid({
                     Pregunta {(activeIndex ?? 0) + 1} de {questions.length}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveIndex(null)}
-                  className="rounded-lg p-1.5 text-[#7D8A96] transition-colors hover:bg-[#F2EFED] hover:text-[#C4655A]"
-                  aria-label="Cerrar"
-                >
-                  <span className="material-symbols-outlined">close</span>
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  {/* Guardar desde el repaso: es justo cuando se ve el fallo
+                      y se decide que hay que volver a ella (como en la app). */}
+                  <SaveToDeckButton questionId={activeQuestion.id} />
+                  <button
+                    type="button"
+                    onClick={() => setActiveIndex(null)}
+                    className="rounded-lg p-1.5 text-[#7D8A96] transition-colors hover:bg-[#F2EFED] hover:text-[#C4655A]"
+                    aria-label="Cerrar"
+                  >
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                </div>
               </div>
               {/* Barra de color según estado */}
               <div className={`h-1 w-full ${STATUS_META[activeStatus].bar}`} />
