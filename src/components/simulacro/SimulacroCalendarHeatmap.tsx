@@ -8,6 +8,7 @@
 // (alto acierto).
 
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { fetchSimulacroCalendar } from '@/lib/simulacro/queries'
 import { accuracyToColor, buildMonthWeeks, isoDateLocal } from '@/lib/simulacro/calendarView'
 import type { SimulacroCalendarDay } from '@/lib/simulacro/types'
@@ -218,9 +219,11 @@ export default function SimulacroCalendarHeatmap({
         <span>Más aciertos</span>
       </div>
 
-      {picker ? (
+      {/* En un portal: dentro del <main relative z-10> del historial, el z-50
+          quedaba por debajo de la cabecera global. */}
+      {picker && typeof document !== 'undefined' ? createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#2D3748]/40 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#2D3748]/40 p-4 backdrop-blur-sm"
           onClick={() => setPicker(null)}
         >
           <div
@@ -257,7 +260,8 @@ export default function SimulacroCalendarHeatmap({
               Cancelar
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   )

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
@@ -292,11 +293,15 @@ export default function SimulacroResultsGrid({
         </Link>
       </div>
 
-      {/* Modal de detalle */}
+      {/* Modal de detalle. Va en un portal a <body>: las páginas que usan la
+          rejilla envuelven el contenido en un <main relative z-10>, y dentro
+          de ese contexto el z-50 del modal quedaba por DEBAJO de la cabecera
+          global (sticky z-50), que tapaba la parte de arriba del detalle. */}
+      {typeof document !== 'undefined' ? createPortal(
       <AnimatePresence>
         {activeQuestion ? (
           <motion.div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-[#2D3748]/40 p-4 backdrop-blur-sm sm:items-center"
+            className="fixed inset-0 z-[100] flex items-end justify-center bg-[#2D3748]/40 p-4 backdrop-blur-sm sm:items-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -555,7 +560,9 @@ export default function SimulacroResultsGrid({
             </div>
           </motion.div>
         ) : null}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+      ) : null}
     </div>
   )
 }

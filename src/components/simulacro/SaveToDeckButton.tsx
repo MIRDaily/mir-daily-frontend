@@ -303,7 +303,7 @@ export default function SaveToDeckButton({ questionId, className }: SaveToDeckBu
           ref={popoverRef}
           role="dialog"
           aria-label="Guardar en mazo"
-          className="fixed z-[70] w-72 max-w-[calc(100vw-16px)] rounded-2xl border border-[#E9E4E1] bg-white p-2 shadow-xl shadow-[#2D3748]/8"
+          className="fixed z-[110] w-72 max-w-[calc(100vw-16px)] rounded-2xl border border-[#E9E4E1] bg-white p-2 shadow-xl shadow-[#2D3748]/8"
           style={{
             top: popoverPos?.top ?? 0,
             left: popoverPos?.left ?? 0,
