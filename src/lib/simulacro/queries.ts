@@ -13,6 +13,7 @@ import type {
   SimulacroMode,
   SimulacroQuestion,
   SimulacroResult,
+  SimulacroSavedHighlights,
   SmartSimulacroPlan,
   Subject,
   Topic,
@@ -153,10 +154,11 @@ export async function checkSimulacroAnswers(
 export async function finishSimulacroSession(
   sessionId: string,
   mode: SimulacroMode,
+  highlights?: SimulacroSavedHighlights,
 ): Promise<{ saved: boolean; total: number }> {
   return apiFetch<{ saved: boolean; total: number }>('/finish', {
     method: 'POST',
-    body: JSON.stringify({ sessionId, mode }),
+    body: JSON.stringify({ sessionId, mode, highlights }),
   })
 }
 

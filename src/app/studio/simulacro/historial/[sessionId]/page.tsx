@@ -7,9 +7,10 @@
 // repaso, se salía de golpe del historial. Al ser una ruta real (mismo
 // patrón que `/decks/[deckId]/trash`), ambas cosas funcionan solas.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import SimulacroResultsGrid from '@/components/simulacro/SimulacroResultsGrid'
+import { countWords, rangesToSet } from '@/components/simulacro/HighlightableStatement'
 import { fetchSimulacroHistoryDetail } from '@/lib/simulacro/queries'
 import type { SimulacroHistoryDetail } from '@/lib/simulacro/types'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
@@ -23,6 +24,21 @@ export default function SimulacroHistoryDetailPage() {
   const [detail, setDetail] = useState<SimulacroHistoryDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Subrayado guardado al finalizar, pasado a índices de pregunta. Si el
+  // enunciado de una pregunta ha cambiado desde entonces (otro nº de
+  // palabras), su subrayado se descarta para no pintarlo desplazado.
+  const savedHighlights = useMemo(() => {
+    const saved = detail?.highlights
+    if (!detail || !saved) return undefined
+    const out: Record<number, ReadonlySet<number>> = {}
+    detail.questions.forEach((q, i) => {
+      const entry = saved[String(q.id)]
+      if (!entry || entry.w !== countWords(q.statement)) return
+      out[i] = rangesToSet(entry.r)
+    })
+    return out
+  }, [detail])
 
   useEffect(() => {
     // El "current" (nº de preguntas) solo se conoce una vez llega el repaso;
@@ -76,6 +92,7 @@ export default function SimulacroHistoryDetailPage() {
             questions={detail.questions}
             answers={detail.answers}
             results={detail.results}
+            highlights={savedHighlights}
             onRestart={() => router.push('/studio/simulacro/historial')}
           />
         ) : null}

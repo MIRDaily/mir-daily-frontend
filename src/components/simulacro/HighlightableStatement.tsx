@@ -291,3 +291,32 @@ export function useSessionHighlights() {
   const reset = useCallback(() => setByKey({}), [])
   return { byKey, get, set, reset }
 }
+
+// ── Subrayado guardado en el historial ──────────────────────────────────────
+// Se guarda por tramos de palabras (mucho más pequeño que palabra a palabra)
+// junto con el nº de palabras del enunciado: si luego se edita la pregunta y
+// ya no cuadra, ese subrayado se descarta en vez de pintarse desplazado.
+
+/** Nº de palabras del enunciado, contadas igual que las pinta el componente. */
+export function countWords(text: string): number {
+  return text.split(/\s+/).filter((t) => t.length > 0).length
+}
+
+/** {3,4,5,9} → [[3,5],[9,9]] */
+export function setToRanges(set: ReadonlySet<number>): [number, number][] {
+  const sorted = [...set].sort((a, b) => a - b)
+  const out: [number, number][] = []
+  for (const n of sorted) {
+    const last = out[out.length - 1]
+    if (last && n === last[1] + 1) last[1] = n
+    else out.push([n, n])
+  }
+  return out
+}
+
+/** Inverso de setToRanges. */
+export function rangesToSet(ranges: ReadonlyArray<readonly [number, number]>): Set<number> {
+  const out = new Set<number>()
+  for (const [a, b] of ranges) for (let i = a; i <= b; i++) out.add(i)
+  return out
+}

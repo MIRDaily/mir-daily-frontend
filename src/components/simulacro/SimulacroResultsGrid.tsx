@@ -18,8 +18,8 @@ type SimulacroResultsGridProps = {
   questions: SimulacroQuestion[]
   answers: SimulacroAnswer[]
   results: (SimulacroResult | null)[]
-  /** Subrayado hecho durante el simulacro, por índice de pregunta. Solo existe
-   *  en la sesión en curso: el historial no lo tiene y no lo pasa. */
+  /** Subrayado del enunciado, por índice de pregunta: el de la sesión en curso
+   *  o, en el historial, el que se guardó al finalizar. */
   highlights?: Record<number, ReadonlySet<number>>
   onRestart: () => void
 }

@@ -94,11 +94,20 @@ export interface SimulacroHistorySession {
   subjects: string[]
 }
 
+/**
+ * Subrayado guardado con un simulacro del historial, por id de pregunta:
+ * `w` = nº de palabras del enunciado al subrayar (si ya no cuadra, se
+ * descarta) y `r` = tramos de índices de palabra, inclusivos.
+ */
+export type SimulacroSavedHighlights = Record<string, { w: number; r: [number, number][] }>
+
 /** Repaso completo de un simulacro guardado: misma forma que consume SimulacroResultsGrid. */
 export interface SimulacroHistoryDetail {
   questions: SimulacroQuestion[]
   answers: SimulacroAnswer[]
   results: SimulacroResult[]
+  /** Solo si se subrayó algo (y la migración del subrayado está aplicada). */
+  highlights?: SimulacroSavedHighlights
 }
 
 /** Un día agregado del heatmap-calendario (puede mezclar varias sesiones del mismo día). */

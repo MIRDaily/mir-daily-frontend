@@ -17,6 +17,7 @@ import SimulacroBuilder from '@/components/simulacro/SimulacroBuilder'
 import SimulacroRunner from '@/components/simulacro/SimulacroRunner'
 import SimulacroResultsGrid from '@/components/simulacro/SimulacroResultsGrid'
 import SimulacroTransition from '@/components/simulacro/SimulacroTransition'
+import { countWords, setToRanges } from '@/components/simulacro/HighlightableStatement'
 import { SMART_SIM_STORAGE_KEY } from '@/components/simulacro/SmartSimulacroModal'
 import {
   checkSimulacroAnswers,
@@ -31,6 +32,7 @@ import type {
   SimulacroPhase,
   SimulacroQuestion,
   SimulacroResult,
+  SimulacroSavedHighlights,
 } from '@/lib/simulacro/types'
 
 // Mensaje único reutilizado en el modal propio (botón "Salir", atrás del
@@ -99,9 +101,9 @@ export default function SimulacroPage() {
   const [answers, setAnswers] = useState<SimulacroAnswer[]>([])
   // Correcciones alineadas por índice de pregunta (null hasta que llegan).
   const [results, setResults] = useState<(SimulacroResult | null)[]>([])
-  // Subrayado del enunciado, por índice de pregunta. Solo en memoria: dura
-  // la sesión (volver a una pregunta, repaso de resultados) y se pierde al
-  // salir o recargar. No se envía al backend ni sale en el historial.
+  // Subrayado del enunciado, por índice de pregunta. En memoria durante la
+  // sesión (volver a una pregunta, repaso de resultados); al finalizar se
+  // manda con el cierre y, si el simulacro entra al historial, se guarda.
   const [highlights, setHighlights] = useState<Record<number, ReadonlySet<number>>>({})
   // Preguntas marcadas "para revisar" durante el test (solo en memoria).
   const [flagged, setFlagged] = useState<ReadonlySet<number>>(() => new Set())
@@ -334,7 +336,19 @@ export default function SimulacroPage() {
     // primero dejaría fuera justo el logro que acaba de ganarse. Si la llamada
     // falla, se recarga igual: el XP de las preguntas ya está puesto.
     if (sessionIdRef.current) {
-      finishSimulacroSession(sessionIdRef.current, mode)
+      // El subrayado viaja con el cierre: si el simulacro entra al historial
+      // (>=50 preguntas), el backend lo guarda para poder repasarlo después.
+      const savedHighlights: SimulacroSavedHighlights = {}
+      for (const [i, set] of Object.entries(highlights)) {
+        const q = questions[Number(i)]
+        if (!q || set.size === 0) continue
+        savedHighlights[String(q.id)] = { w: countWords(q.statement), r: setToRanges(set) }
+      }
+      finishSimulacroSession(
+        sessionIdRef.current,
+        mode,
+        Object.keys(savedHighlights).length > 0 ? savedHighlights : undefined,
+      )
         .catch(() => {})
         .finally(cerrarProgreso)
     } else {
