@@ -20,7 +20,7 @@ import {
 } from '@/lib/studioDecks'
 
 type SaveToDeckButtonProps = {
-  questionId: number
+  questionId: number | string
   className?: string
 }
 

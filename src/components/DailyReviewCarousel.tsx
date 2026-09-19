@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
+import SaveToDeckButton from '@/components/simulacro/SaveToDeckButton'
 
 // El carrusel puede vivir dentro de un contenedor con su propio scroll interno
 // (p. ej. la vista de resultados del daily es un overlay `fixed inset-0
@@ -57,6 +58,14 @@ function animateScrollTopTo(
     requestAnimationFrame(step)
   }
   requestAnimationFrame(step)
+}
+
+// Sin id de pregunta (el dashboard lo deja en null si la respuesta no lo trae)
+// no hay nada que guardar. Los ids reales son enteros positivos.
+function isRealQuestionId(value: string | number | null | undefined): boolean {
+  if (value == null) return false
+  const n = Number(value)
+  return Number.isInteger(n) && n > 0
 }
 
 interface Question {
@@ -351,8 +360,11 @@ function DailyReviewCarousel({ questions }: Props) {
                   zIndex: isActive ? 2 : isSide ? 1 : 0,
                 }}
               >
-                <header className="flex items-start justify-between gap-4">
-                  <div>
+                {/* En móvil las etiquetas y el marcador van en una fila encima
+                    del enunciado: en columna al lado lo estrujaban a dos
+                    palabras por línea. */}
+                <header className="flex flex-col-reverse gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                  <div className="min-w-0">
                     <p className="text-xs uppercase tracking-[0.25em] text-[#7D8A96] font-semibold">
                       {q.category}
                     </p>
@@ -360,11 +372,20 @@ function DailyReviewCarousel({ questions }: Props) {
                       {q.question}
                     </h3>
                   </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#F3E7E3] px-3 py-1 text-xs font-semibold text-[#C45B4B]">
-                      <span className="material-symbols-outlined text-sm">history</span>
-                      Daily
-                    </span>
+                  <div className="flex shrink-0 flex-row-reverse flex-wrap items-center justify-start gap-1.5 sm:flex-col sm:items-end">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#F3E7E3] px-3 py-1 text-xs font-semibold text-[#C45B4B]">
+                        <span className="material-symbols-outlined text-sm">history</span>
+                        Daily
+                      </span>
+                      {/* Guardar desde la revisión, como en la app: es cuando
+                          se ve el fallo y se decide volver a ella. Solo en la
+                          tarjeta activa (las laterales se tocan para ir a
+                          ellas) y solo con un id de pregunta real. */}
+                      {isActive && isRealQuestionId(q.questionId) ? (
+                        <SaveToDeckButton questionId={String(q.questionId)} />
+                      ) : null}
+                    </div>
                     {(q.result === 'blank' ||
                       (q.result == null && q.selectedAnswer == null && q.isCorrect == null)) && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-[#7D8A96]/10 px-3 py-1 text-xs font-semibold text-[#7D8A96]">

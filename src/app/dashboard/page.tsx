@@ -25,6 +25,11 @@ import {
   isAutoFailedDeck,
   removeQuestionFromDeck,
 } from '@/lib/studioDecks'
+import {
+  markQuestionInDeck,
+  setQuestionDecks,
+  unmarkQuestionInDeck,
+} from '@/lib/studio/savedQuestionsStore'
 import { parseApiError } from '@/lib/profile'
 import { getOnboardingDeferredFlag } from '@/lib/onboarding'
 import { useTutorialReady } from '@/providers/TutorialProvider'
@@ -566,6 +571,8 @@ export default function DashboardPage() {
           }
 
           await removeQuestionFromDeck(session.access_token, deckId, itemId)
+          // Para que la revisión de resultados (SaveToDeckButton) lo sepa.
+          unmarkQuestionInDeck(questionId, deckId)
 
           setQuestionDeckMembership((prev) => ({
             ...prev,
@@ -596,6 +603,8 @@ export default function DashboardPage() {
         // El POST ya devuelve el id de la fila guardada, asi que no hace falta
         // volver a leerse el mazo entero solo para poder deshacer.
         const savedItemId = await addQuestionToDeck(session.access_token, deckId, questionId)
+        // Lo guardado respondiendo sale ya marcado en la revisión del daily.
+        markQuestionInDeck(questionId, deckId, savedItemId ?? null)
 
         setSavedQuestionIds((prev) => ({ ...prev, [questionId]: true }))
         setQuestionDeckMembership((prev) => ({
@@ -672,6 +681,7 @@ export default function DashboardPage() {
           ...prev,
           [questionId]: membershipMap,
         }))
+        setQuestionDecks(questionId, itemIdMap)
         setQuestionDeckItemIds((prev) => ({
           ...prev,
           [questionId]: itemIdMap,
@@ -1183,7 +1193,12 @@ export default function DashboardPage() {
 
     return {
       reviewId: String(item?.reviewId ?? `${item?.questionId ?? item?.id ?? index}`),
-      questionId: String(item?.questionId ?? item?.id ?? index),
+      // Sin id real se deja en null (no el índice): el carrusel lo usa para
+      // guardar la pregunta en un mazo y un índice guardaría otra pregunta.
+      questionId:
+        item?.questionId != null || item?.id != null
+          ? String(item?.questionId ?? item?.id)
+          : null,
       id: String(item?.reviewId ?? item?.questionId ?? item?.id ?? index),
       category: String(item?.subject ?? item?.category ?? 'Daily'),
       question: String(item?.statement ?? item?.question ?? ''),
