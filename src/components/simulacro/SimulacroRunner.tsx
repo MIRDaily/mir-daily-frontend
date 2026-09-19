@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import QuestionImage from '@/components/simulacro/QuestionImage'
 import SaveToDeckButton from '@/components/simulacro/SaveToDeckButton'
+import HighlightableStatement from '@/components/simulacro/HighlightableStatement'
 import type {
   SimulacroAnswer,
   SimulacroMode,
@@ -67,6 +68,10 @@ export default function SimulacroRunner({
   const [checking, setChecking] = useState(false)
   const [checkError, setCheckError] = useState(false)
 
+  // Palabras subrayadas del enunciado (índices). Como en la app, no se
+  // conserva al cambiar de pregunta.
+  const [highlighted, setHighlighted] = useState<Set<number>>(() => new Set())
+
   // Si "Comprobar" falla (sin red, servidor caído) no se deja al usuario
   // atascado: el botón vuelve a "Siguiente" y esa pregunta se corrige al
   // finalizar, junto con las que falten (ver handleFinish en la página).
@@ -83,6 +88,7 @@ export default function SimulacroRunner({
     setPlayHint(false)
     setChecking(false)
     setCheckError(false)
+    setHighlighted(new Set()) // el subrayado no se conserva entre preguntas
   }, [index])
 
   // Pista de barra espaciadora: solo la primera vez que aparece una pregunta con imagen.
@@ -186,8 +192,27 @@ export default function SimulacroRunner({
       <div className="w-full space-y-8 [@media(max-height:850px)]:space-y-5">
         <div className="relative pr-14">
           {current ? (
-            <div className="absolute right-0 top-0">
+            <div className="absolute right-0 top-0 flex flex-col items-center gap-2">
               <SaveToDeckButton questionId={current.id} />
+              {/* Limpiar el subrayado. Va bajo el marcador, fuera del flujo,
+                  para que aparecer y desaparecer no mueva el enunciado. */}
+              <AnimatePresence>
+                {highlighted.size > 0 ? (
+                  <motion.button
+                    type="button"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={() => setHighlighted(new Set())}
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#E9E4E1] bg-white text-[#7D8A96] shadow-sm transition-colors hover:border-[#E8A598]/40 hover:text-[#C4655A]"
+                    aria-label="Limpiar subrayado"
+                    title="Limpiar subrayado"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">format_clear</span>
+                  </motion.button>
+                ) : null}
+              </AnimatePresence>
             </div>
           ) : null}
           {current?.subject ? (
@@ -196,7 +221,14 @@ export default function SimulacroRunner({
             </span>
           ) : null}
           <h1 className="text-[1.75rem] font-black leading-tight tracking-tight text-[#2C3E50] md:text-[clamp(1.6rem,2.22vw,2rem)]">
-            {current?.statement}
+            {current ? (
+              <HighlightableStatement
+                key={current.id}
+                text={current.statement}
+                highlighted={highlighted}
+                onChange={setHighlighted}
+              />
+            ) : null}
           </h1>
           {current?.has_image && current?.image_url ? (
             <div>
