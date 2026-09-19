@@ -190,12 +190,23 @@ export default function SimulacroRunner({
       </div>
 
       <div className="w-full space-y-8 [@media(max-height:850px)]:space-y-5">
-        <div className="relative pr-14">
+        <div className="relative">
+          {/* Fila de cabecera: asignatura a la izquierda, acciones a la
+              derecha. Antes las acciones iban en una columna junto al
+              enunciado y le quitaban ancho (pr-14) en todo su alto. */}
+          <div className="mb-6 [@media(max-height:850px)]:mb-3 flex min-h-11 items-center justify-between gap-3">
+            {current?.subject ? (
+              <span className="inline-block rounded-full border-2 border-[#EAE4E2] bg-white px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#7D8A96]">
+                {current.subject}
+              </span>
+            ) : (
+              <span />
+            )}
           {current ? (
-            <div className="absolute right-0 top-0 flex flex-col items-center gap-2">
-              <SaveToDeckButton questionId={current.id} />
-              {/* Limpiar el subrayado. Va bajo el marcador, fuera del flujo,
-                  para que aparecer y desaparecer no mueva el enunciado. */}
+            <div className="flex shrink-0 items-center gap-2">
+              {/* Limpiar el subrayado, a la IZQUIERDA del marcador: el
+                  marcador va pegado al borde y no se mueve cuando esto
+                  aparece o desaparece. */}
               <AnimatePresence>
                 {highlighted.size > 0 ? (
                   <motion.button
@@ -213,13 +224,10 @@ export default function SimulacroRunner({
                   </motion.button>
                 ) : null}
               </AnimatePresence>
+              <SaveToDeckButton questionId={current.id} />
             </div>
           ) : null}
-          {current?.subject ? (
-            <span className="mb-6 [@media(max-height:850px)]:mb-3 inline-block rounded-full border-2 border-[#EAE4E2] bg-white px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#7D8A96]">
-              {current.subject}
-            </span>
-          ) : null}
+          </div>
           <h1 className="text-[1.75rem] font-black leading-tight tracking-tight text-[#2C3E50] md:text-[clamp(1.6rem,2.22vw,2rem)]">
             {current ? (
               <HighlightableStatement
