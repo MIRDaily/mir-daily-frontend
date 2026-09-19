@@ -66,6 +66,8 @@ export interface SimulacroResult {
   explanation: string | null
   isCorrect: boolean
   result: SimulacroOutcome
+  /** Pregunta anulada en el MIR: no puntúa (ni acierto, ni fallo, ni blanco). */
+  anulada?: boolean
 }
 
 /** Respuesta del usuario por posición de pregunta. */

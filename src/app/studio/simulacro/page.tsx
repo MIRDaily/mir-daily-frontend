@@ -103,6 +103,15 @@ export default function SimulacroPage() {
   // la sesión (volver a una pregunta, repaso de resultados) y se pierde al
   // salir o recargar. No se envía al backend ni sale en el historial.
   const [highlights, setHighlights] = useState<Record<number, ReadonlySet<number>>>({})
+  // Preguntas marcadas "para revisar" durante el test (solo en memoria).
+  const [flagged, setFlagged] = useState<ReadonlySet<number>>(() => new Set())
+  const handleToggleFlag = (questionIndex: number) => {
+    setFlagged((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(questionIndex)) next.add(questionIndex)
+      return next
+    })
+  }
   const handleHighlightChange = (questionIndex: number, next: Set<number>) => {
     setHighlights((prev) => {
       const copy = { ...prev }
@@ -154,6 +163,7 @@ export default function SimulacroPage() {
       updateAnswers(() => fetched.map(() => ({ selectedIndex: null })))
       setResults(fetched.map(() => null))
       setHighlights({})
+      setFlagged(new Set())
       setMode(config.mode)
       setShowSubject(config.showSubject === true)
       sessionIdRef.current = crypto.randomUUID()
@@ -194,6 +204,7 @@ export default function SimulacroPage() {
     updateAnswers(() => smartQuestions.map(() => ({ selectedIndex: null })))
     setResults(smartQuestions.map(() => null))
     setHighlights({})
+    setFlagged(new Set())
     setMode(smartMode)
     setShowSubject(false)
     sessionIdRef.current = crypto.randomUUID()
@@ -336,6 +347,7 @@ export default function SimulacroPage() {
     updateAnswers(() => [])
     setResults([])
     setHighlights({})
+    setFlagged(new Set())
     setGenerationError(null)
     setPendingConfig(null)
     setWasSmart(false)
@@ -513,6 +525,8 @@ export default function SimulacroPage() {
                 highlights={highlights}
                 onHighlightChange={handleHighlightChange}
                 showSubject={showSubject}
+                flagged={flagged}
+                onToggleFlag={handleToggleFlag}
               />
             </motion.div>
           ) : (

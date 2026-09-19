@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import QuestionImage from '@/components/simulacro/QuestionImage'
 import SaveToDeckButton from '@/components/simulacro/SaveToDeckButton'
+import { AnnulledNotice } from '@/components/simulacro/SimulacroResultsGrid'
 import HighlightableStatement, { ClearHighlightButton } from '@/components/simulacro/HighlightableStatement'
 import type {
   SimulacroAnswer,
@@ -31,6 +33,9 @@ type SimulacroRunnerProps = {
   /** Mostrar la asignatura sobre el enunciado. Apagado por defecto: saberla
    *  acota la respuesta antes de leer el caso (como en la app). */
   showSubject: boolean
+  /** Preguntas marcadas "para revisar" (por índice). Viven en la página. */
+  flagged: ReadonlySet<number>
+  onToggleFlag: (questionIndex: number) => void
 }
 
 const NO_HIGHLIGHTS: ReadonlySet<number> = new Set()
@@ -49,6 +54,8 @@ export default function SimulacroRunner({
   highlights,
   onHighlightChange,
   showSubject,
+  flagged,
+  onToggleFlag,
 }: SimulacroRunnerProps) {
   const [index, setIndex] = useState(0)
 
@@ -129,6 +136,46 @@ export default function SimulacroRunner({
 
   const goPrev = () => setIndex((i) => Math.max(0, i - 1))
 
+  // Mapa de preguntas (panel desplegable en la barra de sesión) y aviso antes
+  // de finalizar si quedan preguntas sin responder o marcadas.
+  const [mapOpen, setMapOpen] = useState(false)
+  const [confirmFinish, setConfirmFinish] = useState(false)
+
+  const isAnswered = (i: number) =>
+    answers[i]?.selectedIndex != null || answers[i]?.blank === true
+  const unansweredIndexes = questions.map((_, i) => i).filter((i) => !isAnswered(i))
+  const flaggedIndexes = [...flagged].filter((i) => i < total).sort((a, b) => a - b)
+
+  const goTo = (i: number) => {
+    setMapOpen(false)
+    setConfirmFinish(false)
+    if (i !== index) setIndex(i)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // Estado de cada casilla del mapa. En inmediata, las ya corregidas enseñan
+  // su resultado (el usuario ya lo ha visto); en diferida solo si se respondió.
+  const mapCellState = (i: number): MapCellState => {
+    const r = results[i]
+    if (immediate && r) {
+      if (r.anulada) return 'annulled'
+      return r.result === 'correct' ? 'correct' : r.result === 'blank' ? 'blank' : 'wrong'
+    }
+    if (answers[i]?.blank) return 'blank'
+    if (answers[i]?.selectedIndex != null) return 'answered'
+    return 'pending'
+  }
+
+  // Finalizar pasa por aquí: si queda algo pendiente, primero se avisa.
+  const requestFinish = () => {
+    setMapOpen(false)
+    if (unansweredIndexes.length > 0 || flaggedIndexes.length > 0) {
+      setConfirmFinish(true)
+      return
+    }
+    onFinish()
+  }
+
   const check = async () => {
     if (checking) return
     setChecking(true)
@@ -152,7 +199,7 @@ export default function SimulacroRunner({
       return
     }
     if (isLast) {
-      onFinish()
+      requestFinish()
       return
     }
     setIndex((i) => Math.min(total - 1, i + 1))
@@ -186,7 +233,26 @@ export default function SimulacroRunner({
             </span>
             {mode === 'immediate' ? 'Inmediata' : 'Al final'}
           </span>
-          <span className="ml-auto text-sm font-black tabular-nums text-[#2c3e50]">
+          <button
+            type="button"
+            onClick={() => setMapOpen((v) => !v)}
+            aria-expanded={mapOpen}
+            className={`ml-auto flex items-center gap-1.5 rounded-xl border-2 px-2.5 py-1 text-xs font-black transition-colors ${
+              mapOpen
+                ? 'border-[#2c3e50] bg-[#2c3e50] text-white'
+                : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2c3e50]'
+            }`}
+          >
+            <span className="material-symbols-outlined text-base">grid_view</span>
+            Mapa
+            {flaggedIndexes.length > 0 ? (
+              <span className="flex items-center text-[#C9A24A]">
+                <span className="material-symbols-outlined text-sm">flag</span>
+                {flaggedIndexes.length}
+              </span>
+            ) : null}
+          </button>
+          <span className="text-sm font-black tabular-nums text-[#2c3e50]">
             {index + 1}
             <span className="text-[#7D8A96]/60"> / {total}</span>
           </span>
@@ -199,6 +265,47 @@ export default function SimulacroRunner({
             transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
           />
         </div>
+
+        {/* Mapa de preguntas: saltar a cualquiera y ver qué falta */}
+        <AnimatePresence initial={false}>
+          {mapOpen ? (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="overflow-hidden"
+            >
+              <QuestionMap
+                total={total}
+                current={index}
+                stateOf={(i) => mapCellState(i)}
+                flagged={flagged}
+                onJump={goTo}
+              />
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-semibold text-[#7D8A96]">
+                  {unansweredIndexes.length === 0
+                    ? 'Todas respondidas.'
+                    : `${unansweredIndexes.length} sin responder`}
+                  {flaggedIndexes.length > 0
+                    ? ` · ${flaggedIndexes.length} ${flaggedIndexes.length === 1 ? 'marcada' : 'marcadas'}`
+                    : ''}
+                </p>
+                <button
+                  type="button"
+                  onClick={requestFinish}
+                  disabled={finishing || checking}
+                  className="flex items-center gap-1.5 rounded-xl border-2 border-[#2c3e50] bg-[#E8A598] px-3 py-1.5 text-xs font-black text-white disabled:opacity-40"
+                  style={{ boxShadow: '3px 3px 0 0 #2c3e50' }}
+                >
+                  <span className="material-symbols-outlined text-base">done_all</span>
+                  Finalizar simulacro
+                </button>
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
 
       <div className="w-full space-y-8 [@media(max-height:850px)]:space-y-5">
@@ -223,6 +330,26 @@ export default function SimulacroRunner({
                 visible={highlighted.size > 0}
                 onClear={() => setHighlighted(new Set())}
               />
+              {/* Marcar para revisar: sale en el mapa y en el aviso final. */}
+              <button
+                type="button"
+                onClick={() => onToggleFlag(index)}
+                aria-pressed={flagged.has(index)}
+                aria-label={flagged.has(index) ? 'Quitar marca de revisar' : 'Marcar para revisar'}
+                title={flagged.has(index) ? 'Quitar marca de revisar' : 'Marcar para revisar'}
+                className={`flex h-11 w-11 items-center justify-center rounded-2xl border shadow-sm transition-colors ${
+                  flagged.has(index)
+                    ? 'border-[#C9A24A]/50 bg-[#FFF7E0] text-[#A9821F]'
+                    : 'border-[#E9E4E1] bg-white text-[#7D8A96] hover:border-[#C9A24A]/50 hover:text-[#A9821F]'
+                }`}
+              >
+                <span
+                  className="material-symbols-outlined text-[20px]"
+                  style={flagged.has(index) ? { fontVariationSettings: "'FILL' 1" } : undefined}
+                >
+                  flag
+                </span>
+              </button>
               <SaveToDeckButton questionId={current.id} />
             </div>
           ) : null}
@@ -401,6 +528,9 @@ export default function SimulacroRunner({
           </div>
         ) : null}
 
+        {/* Anulada: solo se dice al corregir (antes sería una pista). */}
+        {revealed && result?.anulada ? <AnnulledNotice /> : null}
+
         {/* Explicación (modo inmediato, una vez corregida en el servidor) */}
         <AnimatePresence initial={false}>
           {revealed ? (
@@ -466,6 +596,178 @@ export default function SimulacroRunner({
             )}
           </button>
         </div>
+      </div>
+
+      {/* Aviso antes de finalizar: preguntas sin responder o marcadas */}
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <AnimatePresence>
+              {confirmFinish ? (
+                <motion.div
+                  className="fixed inset-0 z-[100] flex items-center justify-center bg-[#2c3e50]/45 p-4 backdrop-blur-sm"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setConfirmFinish(false)}
+                >
+                  <motion.div
+                    className="w-full max-w-md rounded-3xl border-2 border-[#2c3e50] bg-white p-6"
+                    style={{ boxShadow: '7px 7px 0 0 #2c3e50' }}
+                    initial={{ y: 16, scale: 0.98 }}
+                    animate={{ y: 0, scale: 1 }}
+                    exit={{ y: 16, scale: 0.98 }}
+                    onClick={(e) => e.stopPropagation()}
+                    role="dialog"
+                    aria-label="Antes de finalizar"
+                  >
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-2xl text-[#C9A24A]">error</span>
+                      <p className="text-base font-black text-[#2C3E50]">¿Finalizar ya?</p>
+                    </div>
+                    <ul className="mb-4 space-y-1.5 text-sm text-[#2C3E50]">
+                      {unansweredIndexes.length > 0 ? (
+                        <li>
+                          <span className="font-black">{unansweredIndexes.length}</span>{' '}
+                          {unansweredIndexes.length === 1 ? 'pregunta sin responder' : 'preguntas sin responder'}
+                          <span className="text-[#7D8A96]"> — contarán como en blanco.</span>
+                        </li>
+                      ) : null}
+                      {flaggedIndexes.length > 0 ? (
+                        <li>
+                          <span className="font-black">{flaggedIndexes.length}</span>{' '}
+                          {flaggedIndexes.length === 1 ? 'marcada para revisar' : 'marcadas para revisar'}.
+                        </li>
+                      ) : null}
+                    </ul>
+                    <div className="flex flex-col gap-2">
+                      {unansweredIndexes.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => goTo(unansweredIndexes[0])}
+                          className="flex items-center justify-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-white px-4 py-2.5 text-sm font-black text-[#2c3e50] transition-transform hover:-translate-y-0.5"
+                        >
+                          <span className="material-symbols-outlined text-lg">arrow_forward</span>
+                          Ir a la primera sin responder ({unansweredIndexes[0] + 1})
+                        </button>
+                      ) : null}
+                      {flaggedIndexes.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => goTo(flaggedIndexes[0])}
+                          className="flex items-center justify-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-white px-4 py-2.5 text-sm font-black text-[#2c3e50] transition-transform hover:-translate-y-0.5"
+                        >
+                          <span className="material-symbols-outlined text-lg text-[#C9A24A]">flag</span>
+                          Revisar marcadas (empieza por la {flaggedIndexes[0] + 1})
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmFinish(false)
+                          onFinish()
+                        }}
+                        className="flex items-center justify-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-[#E8A598] px-4 py-2.5 text-sm font-black text-white transition-transform hover:-translate-y-0.5"
+                        style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
+                      >
+                        <span className="material-symbols-outlined text-lg">done_all</span>
+                        Finalizar igualmente
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>,
+            document.body,
+          )
+        : null}
+    </div>
+  )
+}
+
+type MapCellState = 'pending' | 'answered' | 'blank' | 'correct' | 'wrong' | 'annulled'
+
+const MAP_CELL_STYLE: Record<MapCellState, string> = {
+  pending: 'border-[#EAE4E2] bg-white text-[#7D8A96]',
+  answered: 'border-[#2c3e50] bg-[#E8A598] text-white',
+  blank: 'border-[#2c3e50] bg-[#C9C2BC] text-white',
+  correct: 'border-[#2c3e50] bg-[#8BA888] text-white',
+  wrong: 'border-[#2c3e50] bg-[#C4655A] text-white',
+  annulled:
+    'border-[#2c3e50] bg-[repeating-linear-gradient(135deg,#EDE6F3_0,#EDE6F3_4px,#DCD0E8_4px,#DCD0E8_8px)] text-[#6B5A80]',
+}
+
+const MAP_LEGEND: ReadonlyArray<{ state: MapCellState; label: string; immediateOnly?: boolean }> = [
+  { state: 'pending', label: 'Sin responder' },
+  { state: 'answered', label: 'Respondida' },
+  { state: 'blank', label: 'En blanco' },
+  { state: 'correct', label: 'Acierto', immediateOnly: true },
+  { state: 'wrong', label: 'Fallo', immediateOnly: true },
+  { state: 'annulled', label: 'Anulada', immediateOnly: true },
+]
+
+/** Rejilla de todas las preguntas del simulacro: saltar a cualquiera. */
+function QuestionMap({
+  total,
+  current,
+  stateOf,
+  flagged,
+  onJump,
+}: {
+  total: number
+  current: number
+  stateOf: (i: number) => MapCellState
+  flagged: ReadonlySet<number>
+  onJump: (i: number) => void
+}) {
+  const states = Array.from({ length: total }, (_, i) => stateOf(i))
+  const showsResults = states.some((s) => s === 'correct' || s === 'wrong' || s === 'annulled')
+  return (
+    <div className="mt-3 border-t border-[#F0EBE8] pt-3">
+      {/* Con 210 preguntas son 21 filas: se limita el alto y se hace scroll. */}
+      <div className="grid max-h-[45vh] grid-cols-8 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-10 md:grid-cols-15">
+        {states.map((state, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onJump(i)}
+            aria-label={`Ir a la pregunta ${i + 1}`}
+            aria-current={i === current ? 'step' : undefined}
+            className={`relative flex h-8 items-center justify-center rounded-lg border-2 text-[11px] font-black tabular-nums transition-transform hover:-translate-y-0.5 ${
+              MAP_CELL_STYLE[state]
+            } ${i === current ? 'ring-2 ring-[#2c3e50] ring-offset-2' : ''}`}
+          >
+            {i + 1}
+            {flagged.has(i) ? (
+              <span
+                className="material-symbols-outlined absolute -right-1.5 -top-1.5 rounded-full bg-white text-[13px] text-[#C9A24A]"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                flag
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-bold text-[#7D8A96]">
+        {MAP_LEGEND.filter((l) =>
+          l.state === 'annulled'
+            ? states.includes('annulled')
+            : !l.immediateOnly || showsResults,
+        ).map((l) => (
+          <span key={l.state} className="flex items-center gap-1.5">
+            <span className={`h-3 w-3 rounded border-2 ${MAP_CELL_STYLE[l.state]}`} />
+            {l.label}
+          </span>
+        ))}
+        <span className="flex items-center gap-1">
+          <span
+            className="material-symbols-outlined text-[13px] text-[#C9A24A]"
+            style={{ fontVariationSettings: "'FILL' 1" }}
+          >
+            flag
+          </span>
+          Marcada
+        </span>
       </div>
     </div>
   )

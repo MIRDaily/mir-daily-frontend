@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 import SaveToDeckButton from '@/components/simulacro/SaveToDeckButton'
 import HighlightableStatement from '@/components/simulacro/HighlightableStatement'
+import SaveQuestionsToDeck from '@/components/simulacro/SaveQuestionsToDeck'
 import type {
   SimulacroAnswer,
   SimulacroQuestion,
@@ -23,12 +24,14 @@ type SimulacroResultsGridProps = {
   onRestart: () => void
 }
 
-type Status = 'correct' | 'incorrect' | 'empty'
+type Status = 'correct' | 'incorrect' | 'empty' | 'annulled'
 
 function statusOf(
   answer: SimulacroAnswer | undefined,
   result: SimulacroResult | null | undefined,
 ): Status {
+  // Anulada en el MIR: no puntúa, respondiera lo que respondiera.
+  if (result?.anulada) return 'annulled'
   const selected = answer?.selectedIndex ?? null
   if (selected == null) return 'empty'
   if (!result) return 'incorrect'
@@ -39,7 +42,20 @@ const CELL_STYLE: Record<Status, string> = {
   correct: 'bg-[#8BA888] text-white',
   incorrect: 'bg-[#C4655A] text-white',
   empty: 'bg-[#EDE8E5] text-[#7D8A96]',
+  // Rayado: se distingue del blanco sin depender solo del color.
+  annulled:
+    'bg-[repeating-linear-gradient(135deg,#EDE6F3_0,#EDE6F3_4px,#DCD0E8_4px,#DCD0E8_8px)] text-[#6B5A80]',
 }
+
+type Filter = 'all' | Status
+
+const FILTERS: ReadonlyArray<{ value: Filter; label: string }> = [
+  { value: 'all', label: 'Todas' },
+  { value: 'incorrect', label: 'Fallos' },
+  { value: 'empty', label: 'En blanco' },
+  { value: 'correct', label: 'Aciertos' },
+  { value: 'annulled', label: 'Anuladas' },
+]
 
 const STATUS_META: Record<
   Status,
@@ -62,6 +78,12 @@ const STATUS_META: Record<
     icon: 'radio_button_unchecked',
     chip: 'bg-[#EDE8E5] text-[#7D8A96]',
     bar: 'bg-[#C9C2BC]',
+  },
+  annulled: {
+    label: 'Anulada',
+    icon: 'do_not_disturb_on',
+    chip: 'bg-[#EDE6F3] text-[#6B5A80]',
+    bar: 'bg-[#B9A6CF]',
   },
 }
 
@@ -111,21 +133,6 @@ export default function SimulacroResultsGrid({
     setActiveIndex(index)
   }, [])
 
-  const navigate = useCallback(
-    (delta: number) => {
-      setActiveIndex((prev) => {
-        if (prev == null) return prev
-        const next = prev + delta
-        if (next < 0 || next >= questions.length) return prev
-        setDirection(delta)
-        setShowImage(false)
-        setPlayHint(false)
-        return next
-      })
-    },
-    [questions.length],
-  )
-
   // Dispara la pista de barra espaciadora la primera vez que se ve una pregunta con imagen.
   useEffect(() => {
     if (activeIndex == null) return
@@ -135,6 +142,62 @@ export default function SimulacroResultsGrid({
       setPlayHint(true)
     }
   }, [activeIndex, questions])
+
+  const statuses = useMemo(
+    () => questions.map((_, i) => statusOf(answers[i], results[i])),
+    [questions, answers, results],
+  )
+
+  const stats = useMemo(() => {
+    const count = { correct: 0, incorrect: 0, empty: 0, annulled: 0 }
+    for (const s of statuses) count[s] += 1
+    // Las anuladas no puntúan: el total y el % son sobre las puntuables (igual
+    // que el historial, ver sql/2026-09-simulacro-anuladas.sql).
+    const total = statuses.length - count.annulled
+    const pct = total > 0 ? Math.round((count.correct / total) * 100) : 0
+    return { ...count, total, pct }
+  }, [statuses])
+
+  // Filtros del repaso: por resultado y por asignatura. Numeración original.
+  const [filter, setFilter] = useState<Filter>('all')
+  const [subjectFilter, setSubjectFilter] = useState<string>('all')
+  const subjects = useMemo(
+    () =>
+      [...new Set(questions.map((q) => q.subject).filter((s): s is string => Boolean(s)))].sort(
+        (a, b) => a.localeCompare(b, 'es'),
+      ),
+    [questions],
+  )
+  const visibleIndexes = useMemo(
+    () =>
+      questions
+        .map((q, i) => i)
+        .filter(
+          (i) =>
+            (filter === 'all' || statuses[i] === filter) &&
+            (subjectFilter === 'all' || questions[i].subject === subjectFilter),
+        ),
+    [questions, statuses, filter, subjectFilter],
+  )
+  const activePos = activeIndex != null ? visibleIndexes.indexOf(activeIndex) : -1
+
+  // El detalle navega dentro de lo filtrado: con "Fallos" puesto, las flechas
+  // pasan de fallo en fallo.
+  const navigate = useCallback(
+    (delta: number) => {
+      setActiveIndex((prev) => {
+        if (prev == null) return prev
+        const pos = visibleIndexes.indexOf(prev)
+        const next = pos < 0 ? undefined : visibleIndexes[pos + delta]
+        if (next == null) return prev
+        setDirection(delta)
+        setShowImage(false)
+        setPlayHint(false)
+        return next
+      })
+    },
+    [visibleIndexes],
+  )
 
   // Flechas del teclado y Escape mientras el detalle está abierto.
   useEffect(() => {
@@ -158,20 +221,15 @@ export default function SimulacroResultsGrid({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [activeIndex, navigate, questions])
 
-  const stats = useMemo(() => {
-    let correct = 0
-    let incorrect = 0
-    let empty = 0
-    questions.forEach((_, i) => {
-      const status = statusOf(answers[i], results[i])
-      if (status === 'correct') correct += 1
-      else if (status === 'incorrect') incorrect += 1
-      else empty += 1
-    })
-    const total = questions.length
-    const pct = total > 0 ? Math.round((correct / total) * 100) : 0
-    return { correct, incorrect, empty, total, pct }
-  }, [questions, answers, results])
+  // Lo que se guarda con "Guardar falladas" (anuladas fuera: no son fallos).
+  const failedIds = useMemo(
+    () => questions.filter((_, i) => statuses[i] === 'incorrect').map((q) => String(q.id)),
+    [questions, statuses],
+  )
+  const blankIds = useMemo(
+    () => questions.filter((_, i) => statuses[i] === 'empty').map((q) => String(q.id)),
+    [questions, statuses],
+  )
 
   const activeQuestion = activeIndex != null ? questions[activeIndex] : null
   const activeAnswer = activeIndex != null ? answers[activeIndex] : undefined
@@ -202,16 +260,26 @@ export default function SimulacroResultsGrid({
             <p className="mt-2 text-base font-light text-[#7D8A96]">
               {scoreMessage(stats.pct)}
             </p>
+            {stats.annulled > 0 ? (
+              <p className="mt-1 text-xs font-semibold text-[#6B5A80]">
+                {stats.annulled === 1
+                  ? '1 pregunta anulada no puntúa.'
+                  : `${stats.annulled} preguntas anuladas no puntúan.`}
+              </p>
+            ) : null}
           </div>
         </div>
       </motion.header>
 
       {/* Resumen */}
-      <div className="mb-6 grid grid-cols-3 gap-3">
+      <div className={`mb-6 grid gap-3 ${stats.annulled > 0 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
         {[
           { v: stats.correct, label: 'Aciertos', color: '#8BA888', text: '#5f7d5c' },
           { v: stats.incorrect, label: 'Fallos', color: '#C4655A', text: '#C4655A' },
           { v: stats.empty, label: 'En blanco', color: '#7D8A96', text: '#7D8A96' },
+          ...(stats.annulled > 0
+            ? [{ v: stats.annulled, label: 'Anuladas', color: '#B9A6CF', text: '#6B5A80' }]
+            : []),
         ].map((box, i) => (
           <motion.div
             key={box.label}
@@ -236,13 +304,66 @@ export default function SimulacroResultsGrid({
         className="rounded-3xl border-2 border-[#2c3e50] bg-white p-6"
         style={{ boxShadow: '5px 5px 0 0 #2c3e50' }}
       >
-        <h3 className="mb-1 text-lg font-black text-[#2c3e50]">Repaso de preguntas</h3>
-        <p className="mb-4 text-xs text-[#7D8A96]">
-          Toca una pregunta para ver la respuesta correcta y su explicación.
-        </p>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="mb-1 text-lg font-black text-[#2c3e50]">Repaso de preguntas</h3>
+            <p className="text-xs text-[#7D8A96]">
+              Toca una pregunta para ver la respuesta correcta y su explicación.
+            </p>
+          </div>
+          <SaveQuestionsToDeck failedIds={failedIds} blankIds={blankIds} />
+        </div>
+
+        {/* Filtros: por resultado (con su cuenta) y por asignatura */}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {FILTERS.filter((f) => f.value !== 'annulled' || stats.annulled > 0).map((f) => {
+            const n = f.value === 'all' ? statuses.length : stats[f.value]
+            const active = filter === f.value
+            return (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => setFilter(f.value)}
+                aria-pressed={active}
+                className={`rounded-full border-2 px-3 py-1 text-xs font-black transition-all ${
+                  active
+                    ? 'border-[#2c3e50] bg-[#2c3e50] text-white'
+                    : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2c3e50]'
+                }`}
+              >
+                {f.label}
+                <span className={`ml-1.5 tabular-nums ${active ? 'text-white/70' : 'text-[#7D8A96]/60'}`}>
+                  {n}
+                </span>
+              </button>
+            )
+          })}
+          {subjects.length > 1 ? (
+            <select
+              value={subjectFilter}
+              onChange={(e) => setSubjectFilter(e.target.value)}
+              aria-label="Filtrar por asignatura"
+              className="ml-auto max-w-full rounded-full border-2 border-[#EAE4E2] bg-white px-3 py-1 text-xs font-bold text-[#2c3e50] outline-none transition-colors hover:border-[#2c3e50] focus:border-[#2c3e50]"
+            >
+              <option value="all">Todas las asignaturas</option>
+              {subjects.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </div>
+
+        {visibleIndexes.length === 0 ? (
+          <p className="rounded-2xl bg-[#FAF7F4] px-4 py-6 text-center text-sm font-semibold text-[#7D8A96]">
+            Ninguna pregunta con este filtro.
+          </p>
+        ) : null}
         <div className="grid grid-cols-8 gap-2 sm:grid-cols-10">
-          {questions.map((question, i) => {
-            const status = statusOf(answers[i], results[i])
+          {visibleIndexes.map((i) => {
+            const question = questions[i]
+            const status = statuses[i]
             return (
               <button
                 key={question.id}
@@ -253,12 +374,7 @@ export default function SimulacroResultsGrid({
               >
                 {i + 1}
                 <span className="pointer-events-none absolute -top-2 left-1/2 z-20 w-max -translate-x-1/2 -translate-y-full rounded-lg bg-[#2c3e50] px-2 py-1 text-[10px] font-bold text-white opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                  Pregunta {i + 1} ·{' '}
-                  {status === 'correct'
-                    ? 'Acierto'
-                    : status === 'incorrect'
-                      ? 'Fallo'
-                      : 'En blanco'}
+                  Pregunta {i + 1} · {STATUS_META[status].label}
                 </span>
               </button>
             )
@@ -276,6 +392,12 @@ export default function SimulacroResultsGrid({
           <span className="flex items-center gap-1.5">
             <span className="h-3.5 w-3.5 rounded border-2 border-[#2c3e50] bg-[#EDE8E5]" /> En blanco
           </span>
+          {stats.annulled > 0 ? (
+            <span className="flex items-center gap-1.5">
+              <span className={`h-3.5 w-3.5 rounded border-2 border-[#2c3e50] ${CELL_STYLE.annulled}`} /> Anulada
+              (no puntúa)
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -319,7 +441,7 @@ export default function SimulacroResultsGrid({
                 e.stopPropagation()
                 navigate(-1)
               }}
-              disabled={(activeIndex ?? 0) === 0}
+              disabled={activePos <= 0}
               className="absolute left-2 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#F0EBE8] bg-white text-[#7D8A96] shadow-md transition-all hover:bg-[#FAF7F4] hover:text-[#2D3748] disabled:cursor-not-allowed disabled:opacity-30 sm:left-6 md:left-10"
               aria-label="Pregunta anterior"
             >
@@ -333,7 +455,7 @@ export default function SimulacroResultsGrid({
                 e.stopPropagation()
                 navigate(1)
               }}
-              disabled={(activeIndex ?? 0) === questions.length - 1}
+              disabled={activePos < 0 || activePos >= visibleIndexes.length - 1}
               className="absolute right-2 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#F0EBE8] bg-white text-[#7D8A96] shadow-md transition-all hover:bg-[#FAF7F4] hover:text-[#2D3748] disabled:cursor-not-allowed disabled:opacity-30 sm:right-6 md:right-10"
               aria-label="Pregunta siguiente"
             >
@@ -449,6 +571,8 @@ export default function SimulacroResultsGrid({
                       </div>
                     ) : null}
 
+                    {activeStatus === 'annulled' ? <AnnulledNotice /> : null}
+
                     <div className="space-y-2">
                       {activeQuestion.options.map((option, optionIndex) => {
                         const isCorrect = optionIndex === (activeResult?.correctIndex ?? -1)
@@ -511,7 +635,7 @@ export default function SimulacroResultsGrid({
                 <button
                   type="button"
                   onClick={() => navigate(-1)}
-                  disabled={(activeIndex ?? 0) === 0}
+                  disabled={activePos <= 0}
                   className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-[#7D8A96] transition-colors hover:text-[#2D3748] disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <span className="material-symbols-outlined text-lg">arrow_back</span>
@@ -523,7 +647,7 @@ export default function SimulacroResultsGrid({
                 <button
                   type="button"
                   onClick={() => navigate(1)}
-                  disabled={(activeIndex ?? 0) === questions.length - 1}
+                  disabled={activePos < 0 || activePos >= visibleIndexes.length - 1}
                   className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-[#7D8A96] transition-colors hover:text-[#2D3748] disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   Siguiente
@@ -576,6 +700,19 @@ export default function SimulacroResultsGrid({
       </AnimatePresence>,
       document.body,
       ) : null}
+    </div>
+  )
+}
+
+/** Aviso de pregunta anulada (en el detalle de resultados y en el runner). */
+export function AnnulledNotice() {
+  return (
+    <div className="mb-4 flex items-start gap-2.5 rounded-2xl border-2 border-[#B9A6CF]/60 bg-[#F6F2FA] px-4 py-3 text-sm text-[#5A4A6E]">
+      <span className="material-symbols-outlined mt-px text-lg text-[#8C76A8]">do_not_disturb_on</span>
+      <p>
+        <span className="font-black">Pregunta anulada en el MIR.</span> No puntúa: no cuenta ni como
+        acierto, ni como fallo, ni como blanco.
+      </p>
     </div>
   )
 }

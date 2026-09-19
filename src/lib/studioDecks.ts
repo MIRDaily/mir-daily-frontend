@@ -139,6 +139,43 @@ export async function addQuestionToDeck(
   return itemId != null ? String(itemId) : null
 }
 
+/**
+ * Añade varias preguntas de una vez (p. ej. "guardar las falladas"). El
+ * backend salta las que ya están, respeta el tope del mazo (error con
+ * `limitReached`) y devuelve question_id -> item_id de todo lo guardado.
+ * Máximo 200 por petición: se trocea aquí.
+ */
+export async function addQuestionsToDeck(
+  token: string,
+  deckId: string,
+  questionIds: string[],
+): Promise<{ items: Record<string, string>; added: number; skipped: number }> {
+  const out = { items: {} as Record<string, string>, added: 0, skipped: 0 }
+  for (let i = 0; i < questionIds.length; i += 200) {
+    const chunk = questionIds.slice(i, i + 200)
+    const res = await fetch(`${apiBase()}/api/studio/decks/${deckId}/items`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ questionIds: chunk }),
+    })
+    if (!res.ok) await throwStudioError(res, 'Error saving questions')
+    const payload = (await res.json().catch(() => null)) as {
+      items?: Record<string, string | number>
+      added?: number
+      skipped?: number
+    } | null
+    for (const [qid, itemId] of Object.entries(payload?.items ?? {})) {
+      out.items[qid] = String(itemId)
+    }
+    out.added += payload?.added ?? 0
+    out.skipped += payload?.skipped ?? 0
+  }
+  return out
+}
+
 export async function removeQuestionFromDeck(token: string, deckId: string, itemId: string) {
   const res = await fetch(`${apiBase()}/api/studio/decks/${deckId}/items/${itemId}`, {
     method: 'DELETE',
