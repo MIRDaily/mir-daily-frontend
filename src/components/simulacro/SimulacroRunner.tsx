@@ -158,7 +158,16 @@ export default function SimulacroRunner({
 
   // Mapa de preguntas (panel desplegable en la barra de sesión) y aviso antes
   // de finalizar si quedan preguntas sin responder o marcadas.
-  const [mapOpen, setMapOpen] = useState(false)
+  // Se abre al pasar el ratón por la tarjeta de progreso y se cierra al salir.
+  // El botón "Mapa" lo fija abierto (imprescindible en táctil, donde no hay
+  // hover); volver a pulsarlo lo suelta.
+  const [mapHover, setMapHover] = useState(false)
+  const [mapPinned, setMapPinned] = useState(false)
+  const mapOpen = mapHover || mapPinned
+  const closeMap = () => {
+    setMapHover(false)
+    setMapPinned(false)
+  }
   const [confirmFinish, setConfirmFinish] = useState(false)
 
   const isAnswered = (i: number) =>
@@ -167,7 +176,7 @@ export default function SimulacroRunner({
   const flaggedIndexes = [...flagged].filter((i) => i < total).sort((a, b) => a - b)
 
   const goTo = (i: number) => {
-    setMapOpen(false)
+    closeMap()
     setConfirmFinish(false)
     if (i !== index) setIndex(i)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -188,7 +197,7 @@ export default function SimulacroRunner({
 
   // Finalizar pasa por aquí: si queda algo pendiente, primero se avisa.
   const requestFinish = () => {
-    setMapOpen(false)
+    closeMap()
     if (unansweredIndexes.length > 0 || flaggedIndexes.length > 0) {
       setConfirmFinish(true)
       return
@@ -232,10 +241,18 @@ export default function SimulacroRunner({
 
   return (
     <div className="mx-auto w-full max-w-4xl">
-      {/* Barra superior */}
-      {/* Barra de sesión: salir, modo y progreso en una pieza que acompaña */}
+      {/* Barra de sesión: salir, reloj y progreso en una pieza que acompaña.
+          El mapa cuelga de ella como un desplegable superpuesto (no empuja el
+          enunciado) y forma parte del área de hover, hueco incluido. */}
       <div
-        className="sticky top-4 z-30 mb-8 [@media(max-height:850px)]:mb-5 rounded-2xl border-2 border-[#2c3e50] bg-white px-4 py-3"
+        className="sticky top-4 z-30 mb-8 [@media(max-height:850px)]:mb-5"
+        onPointerEnter={(e) => {
+          if (e.pointerType === 'mouse') setMapHover(true)
+        }}
+        onPointerLeave={() => setMapHover(false)}
+      >
+      <div
+        className="rounded-2xl border-2 border-[#2c3e50] bg-white px-4 py-3"
         style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
       >
         <div className="flex flex-wrap items-center gap-3">
@@ -292,7 +309,7 @@ export default function SimulacroRunner({
           ) : null}
           <button
             type="button"
-            onClick={() => setMapOpen((v) => !v)}
+            onClick={() => setMapPinned((v) => !v)}
             aria-expanded={mapOpen}
             className={`${current ? '' : 'ml-auto '}flex items-center gap-1.5 rounded-xl border-2 px-2.5 py-1 text-xs font-black transition-colors ${
               mapOpen
@@ -337,16 +354,22 @@ export default function SimulacroRunner({
           />
         </div>
 
+      </div>
+
         {/* Mapa de preguntas: saltar a cualquiera y ver qué falta */}
         <AnimatePresence initial={false}>
           {mapOpen ? (
             <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="overflow-hidden"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              className="absolute inset-x-0 top-full pt-2"
             >
+              <div
+                className="rounded-2xl border-2 border-[#2c3e50] bg-white px-4 py-3"
+                style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
+              >
               <QuestionMap
                 total={total}
                 current={index}
@@ -373,6 +396,7 @@ export default function SimulacroRunner({
                   <span className="material-symbols-outlined text-base">done_all</span>
                   Finalizar simulacro
                 </button>
+              </div>
               </div>
             </motion.div>
           ) : null}
@@ -757,7 +781,7 @@ function QuestionMap({
   const states = Array.from({ length: total }, (_, i) => stateOf(i))
   const showsResults = states.some((s) => s === 'correct' || s === 'wrong' || s === 'annulled')
   return (
-    <div className="mt-3 border-t border-[#F0EBE8] pt-3">
+    <div>
       {/* Con 210 preguntas son 21 filas: se limita el alto y se hace scroll.
           El scroll recorta lo que se sale de la caja, así que el relleno (p-2)
           deja sitio al anillo de la pregunta actual y a la banderita de las
