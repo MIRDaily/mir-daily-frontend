@@ -279,12 +279,26 @@ export default function SimulacroRunner({
           >
             <span className="material-symbols-outlined text-base">grid_view</span>
             Mapa
-            {flaggedIndexes.length > 0 ? (
-              <span className="flex items-center text-[#C9A24A]">
-                <span className="material-symbols-outlined text-sm">flag</span>
-                {flaggedIndexes.length}
-              </span>
-            ) : null}
+            {/* El contador de marcadas entra abriendo su hueco (ancho 0 →
+                auto) en vez de aparecer de golpe: así el Mapa y lo que tiene
+                a la izquierda se desplazan de forma gradual. */}
+            <AnimatePresence initial={false}>
+              {flaggedIndexes.length > 0 ? (
+                <motion.span
+                  key="flag-count"
+                  // marginLeft -6 anula el gap-1.5 del botón mientras el hueco
+                  // está cerrado, para que no dé un salto de 6 px al montarse.
+                  initial={{ width: 0, opacity: 0, marginLeft: -6 }}
+                  animate={{ width: 'auto', opacity: 1, marginLeft: 0 }}
+                  exit={{ width: 0, opacity: 0, marginLeft: -6 }}
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                  className="flex items-center overflow-hidden whitespace-nowrap text-[#C9A24A]"
+                >
+                  <span className="material-symbols-outlined text-sm">flag</span>
+                  {flaggedIndexes.length}
+                </motion.span>
+              ) : null}
+            </AnimatePresence>
           </button>
           <span className="text-sm font-black tabular-nums text-[#2c3e50]">
             {index + 1}
@@ -721,8 +735,11 @@ function QuestionMap({
   const showsResults = states.some((s) => s === 'correct' || s === 'wrong' || s === 'annulled')
   return (
     <div className="mt-3 border-t border-[#F0EBE8] pt-3">
-      {/* Con 210 preguntas son 21 filas: se limita el alto y se hace scroll. */}
-      <div className="grid max-h-[45vh] grid-cols-8 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-10 md:grid-cols-15">
+      {/* Con 210 preguntas son 21 filas: se limita el alto y se hace scroll.
+          El scroll recorta lo que se sale de la caja, así que el relleno (p-2)
+          deja sitio al anillo de la pregunta actual y a la banderita de las
+          marcadas, que sobresalen de cada casilla. */}
+      <div className="grid max-h-[45vh] grid-cols-8 gap-2.5 overflow-y-auto p-2 sm:grid-cols-10 md:grid-cols-15">
         {states.map((state, i) => (
           <button
             key={i}
@@ -737,7 +754,7 @@ function QuestionMap({
             {i + 1}
             {flagged.has(i) ? (
               <span
-                className="material-symbols-outlined absolute -right-1.5 -top-1.5 rounded-full bg-white text-[13px] text-[#C9A24A]"
+                className="material-symbols-outlined pointer-events-none absolute -right-2 -top-2 rounded-full bg-white text-[13px] leading-none text-[#C9A24A]"
                 style={{ fontVariationSettings: "'FILL' 1" }}
               >
                 flag
