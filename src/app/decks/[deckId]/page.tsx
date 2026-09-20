@@ -21,6 +21,7 @@ import {
 } from '@/lib/studioDecks'
 import { supabase } from '@/lib/supabaseBrowser'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
+import { useQuestionStopwatch } from '@/lib/useQuestionStopwatch'
 import HighlightableStatement, {
   ClearHighlightButton,
   useSessionHighlights,
@@ -108,6 +109,8 @@ type LogDeckItemStudyQuestionPayload = {
   selectedOption?: number
   /** true = dejada en blanco: cuenta como fallo en el repaso, blank en analítica. */
   blank?: boolean
+  /** Segundos que tardó en responder (analítica de tiempos). */
+  timeSpent?: number
   sessionId: string
 }
 
@@ -763,6 +766,13 @@ export default function StudioDeckDetailPage() {
     })
     return () => setBackAction(null)
   }, [studyMode, deck, setBackAction])
+
+  // Cronómetro de la pregunta en pantalla: arranca al llegar cada una y se lee
+  // al responder. La clave es el id del item (estable aunque el progreso se
+  // parchee), y solo corre en modo estudio.
+  const studyTimerKey =
+    studyMode && studyItem ? String(resolveDeckItemId(studyItem) ?? '') : null
+  const readStudySeconds = useQuestionStopwatch(studyTimerKey)
 
   // Respondiendo preguntas la cabecera global sobra, como en el daily.
   useEffect(() => {
@@ -1808,6 +1818,7 @@ export default function StudioDeckDetailPage() {
       void logDeckItemStudy(deckId, {
         deckItemId: resolvedDeckItemId,
         selectedOption,
+        timeSpent: readStudySeconds(),
         sessionId: studySessionId,
       })
         .then((result) => {
@@ -1871,6 +1882,7 @@ export default function StudioDeckDetailPage() {
       void logDeckItemStudy(deckId, {
         deckItemId: resolvedDeckItemId,
         blank: true,
+        timeSpent: readStudySeconds(),
         sessionId: studySessionId,
       })
         .then((result) => {
