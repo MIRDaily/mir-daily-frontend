@@ -163,6 +163,11 @@ export async function finishSimulacroSession(
     elapsedSeconds?: number
     /** Preguntas marcadas "para revisar" al terminar (array vacío = ninguna). */
     flaggedQuestionIds?: number[]
+    /** Preguntas que tenía el simulacro (para saber cuánto hizo de cuánto). */
+    totalQuestions?: number
+    /** true = el usuario salió sin terminar: se guarda para analítica, sin
+     *  historial ni bono. */
+    abandoned?: boolean
   },
 ): Promise<{ saved: boolean; total: number }> {
   return apiFetch<{ saved: boolean; total: number }>('/finish', {

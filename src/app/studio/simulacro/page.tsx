@@ -358,17 +358,7 @@ export default function SimulacroPage() {
         sessionIdRef.current,
         mode,
         Object.keys(savedHighlights).length > 0 ? savedHighlights : undefined,
-        {
-          startedAt: startedAtRef.current
-            ? new Date(startedAtRef.current).toISOString()
-            : undefined,
-          elapsedSeconds: startedAtRef.current
-            ? Math.round((Date.now() - startedAtRef.current) / 1000)
-            : undefined,
-          flaggedQuestionIds: [...flagged]
-            .map((i) => questions[i]?.id)
-            .filter((id): id is number => typeof id === 'number'),
-        },
+        buildSessionExtra(),
       )
         .catch(() => {})
         .finally(cerrarProgreso)
@@ -376,6 +366,54 @@ export default function SimulacroPage() {
       cerrarProgreso()
     }
   }
+
+  // Datos de la sesión que viajan a /finish, terminada o no.
+  const buildSessionExtra = () => ({
+    startedAt: startedAtRef.current ? new Date(startedAtRef.current).toISOString() : undefined,
+    elapsedSeconds: startedAtRef.current
+      ? Math.round((Date.now() - startedAtRef.current) / 1000)
+      : undefined,
+    flaggedQuestionIds: [...flagged]
+      .map((i) => questions[i]?.id)
+      .filter((id): id is number => typeof id === 'number'),
+    totalQuestions: questions.length,
+  })
+
+  // Salir sin terminar. Para la analítica no basta con perder la sesión: en
+  // diferido las respuestas solo se envían al finalizar, así que sin esto un
+  // simulacro abandonado a mitad no dejaría NI las respuestas NI los tiempos.
+  // Se mandan las respondidas (las que aún no estén corregidas en el servidor)
+  // y el cierre marcado "abandoned". Best-effort: nunca bloquea la salida.
+  const recordAbandoned = () => {
+    const sessionId = sessionIdRef.current
+    if (!sessionId || questions.length === 0) return
+    const extra = { ...buildSessionExtra(), abandoned: true as const }
+    const pending = questions
+      .map((q, i) => ({ q, i }))
+      .filter(({ i }) => {
+        const a = answersRef.current[i]
+        const answered = a?.selectedIndex != null || a?.blank === true
+        return answered && (mode === 'deferred' || results[i] == null)
+      })
+      .map(({ q, i }) => ({
+        questionId: q.id,
+        selectedIndex: answersRef.current[i]?.selectedIndex ?? null,
+        timeSpent: timesRef.current[i] ?? answersRef.current[i]?.timeSpent,
+      }))
+    const send =
+      pending.length > 0
+        ? checkSimulacroAnswers(pending, sessionId).catch(() => {})
+        : Promise.resolve()
+    void send
+      .then(() => finishSimulacroSession(sessionId, mode, undefined, extra))
+      .catch(() => {})
+  }
+  // Los manejadores de salida se registran una vez por fase y verían un estado
+  // viejo: se llega a la versión actual a través de esta referencia.
+  const recordAbandonedRef = useRef(recordAbandoned)
+  useEffect(() => {
+    recordAbandonedRef.current = recordAbandoned
+  })
 
   const handleRestart = () => {
     setQuestions([])
@@ -420,6 +458,7 @@ export default function SimulacroPage() {
   // El botón "Salir" del runner ya no descarta el progreso sin avisar.
   const handleExitClick = async () => {
     if (await askToLeave()) {
+      recordAbandonedRef.current()
       handleRestart()
     }
   }
@@ -475,6 +514,7 @@ export default function SimulacroPage() {
     const onPopState = () => {
       askToLeave().then((confirmed) => {
         if (confirmed) {
+          recordAbandonedRef.current()
           handleRestart()
           window.history.back()
         } else {
@@ -512,6 +552,7 @@ export default function SimulacroPage() {
       e.preventDefault()
       askToLeave().then((confirmed) => {
         if (confirmed) {
+          recordAbandonedRef.current()
           handleRestart()
           router.push(url.pathname + url.search + url.hash)
         }
