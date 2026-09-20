@@ -237,6 +237,14 @@ export default function SimulacroPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Segundos acumulados por pregunta (índice → s), que publica el runner. Son
+  // la fuente del tiempo que se manda al servidor: incluye las visitas
+  // repetidas y las preguntas sin responder, que la respuesta sola no recoge.
+  const timesRef = useRef<number[]>([])
+  const handleTime = (questionIndex: number, seconds: number) => {
+    timesRef.current[questionIndex] = seconds
+  }
+
   // Apunta la opción elegida. NO corrige, ni siquiera en modo inmediato: eso
   // lo hace handleCheck cuando el usuario pulsa "Comprobar". Así se puede
   // cambiar de idea antes de comprometerse, como en la app. Elegir una opción
@@ -272,7 +280,7 @@ export default function SimulacroPage() {
     if (!question || !answer) return
     // El tiempo cuenta hasta que se comprueba, no hasta que se elige: es lo
     // que de verdad ha tardado en decidirse (igual que en la app).
-    const spent = timeSpent ?? answer.timeSpent
+    const spent = timeSpent ?? timesRef.current[questionIndex] ?? answer.timeSpent
     updateAnswers((prev) => {
       const next = [...prev]
       next[questionIndex] = { ...next[questionIndex], timeSpent: spent }
@@ -304,7 +312,7 @@ export default function SimulacroPage() {
         const payload = pending.map(({ q, i }) => ({
           questionId: q.id,
           selectedIndex: answersRef.current[i]?.selectedIndex ?? null,
-          timeSpent: answersRef.current[i]?.timeSpent,
+          timeSpent: timesRef.current[i] ?? answersRef.current[i]?.timeSpent,
         }))
         const res = await checkSimulacroAnswers(
           payload,
@@ -406,6 +414,8 @@ export default function SimulacroPage() {
   // Respondiendo, la cabecera global sobra: el runner trae su propia barra.
   useEffect(() => {
     setHidden(phase === 'running')
+    // Cada simulacro empieza con los tiempos a cero.
+    if (phase === 'running') timesRef.current = []
     return () => setHidden(false)
   }, [phase, setHidden])
 
@@ -541,6 +551,7 @@ export default function SimulacroPage() {
                 onBlank={handleBlank}
                 onCheck={handleCheck}
                 onFinish={handleFinish}
+                onTime={handleTime}
                 onExit={handleExitClick}
                 highlights={highlights}
                 onHighlightChange={handleHighlightChange}

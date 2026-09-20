@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import QuestionImage from '@/components/simulacro/QuestionImage'
@@ -25,6 +25,9 @@ type SimulacroRunnerProps = {
   /** Corrige la pregunta en el servidor (modo inmediato). Rechaza si falla. */
   onCheck: (questionIndex: number, timeSpent?: number) => Promise<void>
   onFinish: () => void
+  /** Segundos acumulados en una pregunta (se llama cada segundo con la
+   *  visible). La página los guarda para mandarlos al corregir. */
+  onTime: (questionIndex: number, seconds: number) => void
   onExit: () => void
   /** Subrayado de cada pregunta, por índice. Vive en la página para que dure
    *  toda la sesión (volver con "Anterior", repaso de resultados). */
@@ -39,6 +42,11 @@ type SimulacroRunnerProps = {
 }
 
 const NO_HIGHLIGHTS: ReadonlySet<number> = new Set()
+
+/** Un hueco mayor entre dos avisos del temporizador se toma por suspensión. */
+const SLEEP_GAP_MS = 30_000
+/** Tope de tiempo contado por pregunta: el MIR da ~77 s; más es abandono. */
+const MAX_SECONDS_PER_QUESTION = 600
 
 /** 83 → "1:23"; 3725 → "1:02:05". */
 function formatClock(totalSeconds: number): string {
@@ -59,6 +67,7 @@ export default function SimulacroRunner({
   onBlank,
   onCheck,
   onFinish,
+  onTime,
   onExit,
   highlights,
   onHighlightChange,
@@ -76,13 +85,45 @@ export default function SimulacroRunner({
   const correctIndex = result?.correctIndex ?? -1
   const isLast = index === total - 1
 
-  // Tiempo dedicado a la pregunta visible (para la analítica de rendimiento).
-  const shownAtRef = useRef(Date.now())
+  // Tiempo dedicado a CADA pregunta, para la analítica de rendimiento. Se
+  // acumula entre visitas (volver con "Anterior" o desde el mapa suma, no
+  // reinicia) y cuenta también las preguntas que nunca se responden. Se va
+  // publicando a la página con onTime, que es quien lo manda al servidor.
+  //
+  // Cada segundo se suma lo transcurrido a la pregunta visible. Un hueco de
+  // más de SLEEP_GAP_MS entre dos avisos no es tiempo de estudio (portátil
+  // suspendido, pestaña dormida): se descarta. Y por pregunta hay un tope.
+  const spentMsRef = useRef<number[]>([])
+  const lastTickRef = useRef(Date.now())
+  const onTimeRef = useRef(onTime)
   useEffect(() => {
-    shownAtRef.current = Date.now()
-  }, [index])
-  const secondsOnQuestion = () =>
-    Math.max(0, Math.round((Date.now() - shownAtRef.current) / 1000))
+    onTimeRef.current = onTime
+  }, [onTime])
+  const accrueTime = useCallback((i: number): number => {
+    const now = Date.now()
+    const delta = now - lastTickRef.current
+    lastTickRef.current = now
+    if (delta <= SLEEP_GAP_MS) {
+      spentMsRef.current[i] = (spentMsRef.current[i] ?? 0) + delta
+    }
+    const seconds = Math.min(
+      MAX_SECONDS_PER_QUESTION,
+      Math.round((spentMsRef.current[i] ?? 0) / 1000),
+    )
+    onTimeRef.current(i, seconds)
+    return seconds
+  }, [])
+  // El cleanup también cierra la cuenta al cambiar de pregunta (con el índice
+  // de la que se deja) y al desmontar.
+  useEffect(() => {
+    lastTickRef.current = Date.now()
+    const id = window.setInterval(() => accrueTime(index), 1000)
+    return () => {
+      window.clearInterval(id)
+      accrueTime(index)
+    }
+  }, [index, accrueTime])
+  const secondsOnQuestion = () => accrueTime(index)
 
   // Reloj de la sesión. Se calcula contra la hora de inicio (no sumando
   // ticks), así que no se desfasa si la pestaña se duerme en segundo plano.
@@ -202,6 +243,7 @@ export default function SimulacroRunner({
       setConfirmFinish(true)
       return
     }
+    accrueTime(index)
     onFinish()
   }
 
@@ -723,6 +765,7 @@ export default function SimulacroRunner({
                         type="button"
                         onClick={() => {
                           setConfirmFinish(false)
+                          accrueTime(index)
                           onFinish()
                         }}
                         className="flex items-center justify-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-[#E8A598] px-4 py-2.5 text-sm font-black text-white transition-transform hover:-translate-y-0.5"
