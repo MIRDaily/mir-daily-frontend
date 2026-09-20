@@ -241,6 +241,8 @@ export default function SimulacroPage() {
   // la fuente del tiempo que se manda al servidor: incluye las visitas
   // repetidas y las preguntas sin responder, que la respuesta sola no recoge.
   const timesRef = useRef<number[]>([])
+  // Cuándo empezó la sesión (reloj de pared), para el historial.
+  const startedAtRef = useRef<number | null>(null)
   const handleTime = (questionIndex: number, seconds: number) => {
     timesRef.current[questionIndex] = seconds
   }
@@ -356,6 +358,17 @@ export default function SimulacroPage() {
         sessionIdRef.current,
         mode,
         Object.keys(savedHighlights).length > 0 ? savedHighlights : undefined,
+        {
+          startedAt: startedAtRef.current
+            ? new Date(startedAtRef.current).toISOString()
+            : undefined,
+          elapsedSeconds: startedAtRef.current
+            ? Math.round((Date.now() - startedAtRef.current) / 1000)
+            : undefined,
+          flaggedQuestionIds: [...flagged]
+            .map((i) => questions[i]?.id)
+            .filter((id): id is number => typeof id === 'number'),
+        },
       )
         .catch(() => {})
         .finally(cerrarProgreso)
@@ -415,7 +428,10 @@ export default function SimulacroPage() {
   useEffect(() => {
     setHidden(phase === 'running')
     // Cada simulacro empieza con los tiempos a cero.
-    if (phase === 'running') timesRef.current = []
+    if (phase === 'running') {
+      timesRef.current = []
+      startedAtRef.current = Date.now()
+    }
     return () => setHidden(false)
   }, [phase, setHidden])
 

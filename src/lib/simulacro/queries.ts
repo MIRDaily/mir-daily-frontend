@@ -155,10 +155,19 @@ export async function finishSimulacroSession(
   sessionId: string,
   mode: SimulacroMode,
   highlights?: SimulacroSavedHighlights,
+  extra?: {
+    /** Cuándo empezó de verdad (ISO). En diferido las respuestas se guardan
+     *  todas al final, así que el servidor no puede deducirlo de ellas. */
+    startedAt?: string
+    /** Reloj de pared de la sesión, suspensiones incluidas. */
+    elapsedSeconds?: number
+    /** Preguntas marcadas "para revisar" al terminar (array vacío = ninguna). */
+    flaggedQuestionIds?: number[]
+  },
 ): Promise<{ saved: boolean; total: number }> {
   return apiFetch<{ saved: boolean; total: number }>('/finish', {
     method: 'POST',
-    body: JSON.stringify({ sessionId, mode, highlights }),
+    body: JSON.stringify({ sessionId, mode, highlights, ...extra }),
   })
 }
 
