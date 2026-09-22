@@ -8,7 +8,7 @@ if (!API_URL) {
 }
 
 export type ProgressSummary = {
-  /** 1..50 */
+  /** 1..100 (el tope se subió de 50 a 100 el 07/09/2026) */
   level: number;
   xpTotal: number;
   /** XP conseguido dentro del nivel actual */
@@ -49,6 +49,16 @@ export type Challenge = {
   xpReward: number;
   completed: boolean;
   sortOrder: number;
+  /**
+   * A qué periodo pertenece: la fecha en Madrid si es diario, el año-semana
+   * ISO si es semanal. Es el `period_key` de `user_challenges`.
+   *
+   * Hace falta para no confundir "Haz el Daily" de hoy con el de ayer: la
+   * referencia de logros guardaba solo el código, así que un desafío que se
+   * repite todos los días solo se celebraba el primero. Puede faltar si el
+   * backend es anterior a septiembre de 2026.
+   */
+  periodKey?: string;
   meta: Record<string, unknown> | null;
 };
 

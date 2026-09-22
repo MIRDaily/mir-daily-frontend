@@ -6,14 +6,20 @@ import { useAuthContext } from '@/providers/AuthProvider'
 import { fetchProgress, type ProgressResponse } from '@/services/progressService'
 import {
   detectarLogros,
+  fotoAnomala,
+  fusionarSaltos,
   guardarPendientes,
   guardarReferencia,
   leerPendientes,
   leerReferencia,
   nuevoId,
+  purgarSinDuenno,
   referenciaDe,
   type Logro,
 } from '@/lib/logros'
+
+/** Cuánto se queda abierto el permiso cuando se concede sin nada que enseñar. */
+const VENTANA_PERMISO_MS = 8000
 
 type ProgressContextValue = {
   data: ProgressResponse | null
@@ -34,6 +40,8 @@ type ProgressContextValue = {
    * olvida de declararse, interrumpe al usuario en mitad de una pregunta. Así,
    * lo peor que pasa si alguien olvida llamar es que la celebración espera al
    * siguiente momento seguro.
+   *
+   * Y CADUCA: ver la nota de la implementación.
    */
   permitirCelebracion: () => void
   /** Se ha visto: fuera de la cola. */
@@ -62,6 +70,11 @@ const ProgressContext = createContext<ProgressContextValue | null>(null)
  * página, y el bloque del Studio). Con un hook por consumidor serían dos
  * peticiones idénticas en cada navegación, y cada una arrastra una
  * sincronización de desafíos en el servidor.
+ *
+ * ─── Lo que cambió tras el incidente del 21/09/2026 ────────────────────
+ * Entrar al perfil disparó varios avisos de subida de nivel seguidos, con el
+ * servidor perfectamente sano. La especificación completa, compartida con la
+ * app de Flutter, está en `src/lib/logros.ts`.
  */
 export function ProgressProvider({ children }: { children: React.ReactNode }) {
   // El provider envuelve la app entera, landings incluidas. Sin esto pedía el
@@ -73,13 +86,46 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<ProgressResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Arranca con lo que quedara pendiente de una sesión anterior. El
-  // inicializador perezoso evita tocar localStorage en el render del servidor.
-  const [logros, setLogros] = useState<Logro[]>(() =>
-    typeof window === 'undefined' ? [] : leerPendientes(),
-  )
+  const [logros, setLogros] = useState<Logro[]>([])
   const [permitido, setPermitido] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const cierrePermisoRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Espejo de `logros` para consultarlo desde temporizadores y callbacks sin
+  // meterlos en las dependencias (lo que los reiniciaría en cada render).
+  const logrosRef = useRef<Logro[]>(logros)
+  logrosRef.current = logros
+
+  /**
+   * Sube con cada cambio de cuenta.
+   *
+   * Una carga guarda la generación con la que empezó y, al volver, comprueba
+   * que siga siendo la misma. El `AbortController` ya cubría el caso normal,
+   * pero esto lo hace explícito y protege del orden en que React aplica los
+   * efectos al cambiar de usuario.
+   */
+  const generacionRef = useRef(0)
+
+  // Las claves globales de antes de que esto fuera por usuario: se tiran una
+  // vez y para siempre. No llevan dueño, así que no se pueden adoptar sin
+  // arriesgar celebrarle a una cuenta lo que consiguió otra.
+  useEffect(() => {
+    purgarSinDuenno()
+  }, [])
+
+  // Al cambiar de cuenta, la pantalla se vacía y se recoge lo que esa cuenta
+  // dejara pendiente. Lo que hay en localStorage NO se borra: ya va bajo el id
+  // de su dueño, así que no puede colarse en la cuenta siguiente.
+  useEffect(() => {
+    generacionRef.current += 1
+    abortRef.current?.abort()
+    if (cierrePermisoRef.current) clearTimeout(cierrePermisoRef.current)
+    cierrePermisoRef.current = null
+    setPermitido(false)
+    setData(null)
+    setError(null)
+    setLogros(userId ? fusionarSaltos(leerPendientes(userId)) : [])
+  }, [userId])
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -89,32 +135,51 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
+    const gen = generacionRef.current
     setLoading(true)
     setError(null)
     try {
       const nuevo = await fetchProgress(controller.signal)
+      // Otra cuenta ha entrado mientras esto volaba: esta respuesta ya no es
+      // de nadie que esté mirando.
+      if (gen !== generacionRef.current) return
+
+      const ref = leerReferencia(userId)
+
+      if (fotoAnomala(ref, nuevo)) {
+        // Ni se pinta ni se guarda. Un nivel 1 con cero XP encima de una
+        // referencia de nivel 12 es el servidor tragándose un error, y
+        // guardarlo como referencia es exactamente lo que hacía celebrar el
+        // nivel entero en la siguiente lectura buena. Se conserva lo que ya
+        // había en pantalla: es viejo, pero es verdad.
+        setError('Tu progreso no está disponible ahora mismo.')
+        return
+      }
+
       setData(nuevo)
 
       // La primera vez que se ve a este usuario no se celebra nada: solo se
       // toma la foto. Si no, entrar por primera vez dispararía un aluvión de
       // avisos por cosas que no acaba de conseguir.
-      const ref = leerReferencia()
       if (ref) {
         const nuevos = detectarLogros(ref, nuevo)
         if (nuevos.length > 0) {
           setLogros((prev) => {
-            const cola = [...prev, ...nuevos]
-            guardarPendientes(cola)
+            // Una subida de tres peldaños repartida en tres recargas es UNA
+            // subida, no tres modales.
+            const cola = fusionarSaltos([...prev, ...nuevos])
+            guardarPendientes(userId, cola)
             return cola
           })
         }
       }
-      guardarReferencia(referenciaDe(nuevo))
+      guardarReferencia(userId, referenciaDe(nuevo))
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
+      if (gen !== generacionRef.current) return
       setError(err instanceof Error ? err.message : 'No se pudo cargar tu progreso.')
     } finally {
-      if (!controller.signal.aborted) setLoading(false)
+      if (!controller.signal.aborted && gen === generacionRef.current) setLoading(false)
     }
   }, [userId])
 
@@ -123,11 +188,41 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     return () => abortRef.current?.abort()
   }, [load])
 
-  const permitirCelebracion = useCallback(() => setPermitido(true), [])
+  /**
+   * El permiso CADUCA.
+   *
+   * Antes no: quien lo concede es el montaje de `/profile` o la salida de la
+   * pantalla de resultados, y ninguno de los dos puede saber si hay algo que
+   * enseñar. Un daily sin logros dejaba el permiso abierto para siempre, y lo
+   * siguiente que detectara cualquier recarga salía de golpe: es lo que se vio
+   * el 21/09/2026, varios avisos de subida de nivel encadenados al entrar al
+   * perfil.
+   *
+   * La rendija existe porque la recarga que dispara esa misma pantalla suele
+   * llegar un instante DESPUÉS del permiso; cerrar el grifo del todo se
+   * comería la celebración legítima.
+   */
+  const permitirCelebracion = useCallback(() => {
+    if (cierrePermisoRef.current) clearTimeout(cierrePermisoRef.current)
+    cierrePermisoRef.current = null
+    setPermitido(true)
+    // La cuenta atrás se consulta con una ref y no con el estado: programar un
+    // temporizador DENTRO del updater de `setLogros` es justo lo que
+    // StrictMode ejecuta dos veces en desarrollo, y ya costó encontrar un
+    // fallo parecido en `AvisosDesafio`.
+    if (logrosRef.current.length > 0) return
+    cierrePermisoRef.current = setTimeout(() => {
+      cierrePermisoRef.current = null
+      // Si en la rendija llegó algo, el permiso se queda: ya hay una tanda en
+      // marcha y la cierra `descartarLogros` al vaciarse.
+      if (logrosRef.current.length === 0) setPermitido(false)
+    }, VENTANA_PERMISO_MS)
+  }, [])
 
-  // La cola de mentira NO se persiste: es para mirar la animación, no para que
-  // reaparezca en la próxima visita. Se ACUMULA en vez de reemplazar, para
-  // poder pulsar varias veces y ver cómo se apilan.
+  useEffect(() => () => {
+    if (cierrePermisoRef.current) clearTimeout(cierrePermisoRef.current)
+  }, [])
+
   /* ─── Simulador de logros, solo para poder mirarlos ────────────────────
      La cola de mentira NO se persiste: es para ver la animación, no para que
      reaparezca en la próxima visita. Cubre TODOS los tipos porque el modal de
@@ -171,41 +266,46 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
               ? [racha]
               : [rango, racha, ...desafios]
 
+    if (cierrePermisoRef.current) clearTimeout(cierrePermisoRef.current)
+    cierrePermisoRef.current = null
     setLogros((prev) => [...prev, ...tanda])
     setPermitido(true)
   }, [])
 
   // Al vaciarse la cola se vuelve a cerrar el grifo del permiso: vale para una
   // tanda, no para siempre.
-  const descartarLogro = useCallback((id: string) => {
-    setLogros((prev) => {
-      const cola = prev.filter((l) => l.id !== id)
-      guardarPendientes(cola)
-      if (cola.length === 0) setPermitido(false)
-      return cola
-    })
-  }, [])
+  const quitar = useCallback(
+    (fuera: Set<string>) => {
+      setLogros((prev) => {
+        const cola = prev.filter((l) => !fuera.has(l.id))
+        if (cola.length === prev.length) return prev
+        if (userId) guardarPendientes(userId, cola)
+        // El permiso solo se cierra si NO queda nada. Si al cerrar el modal
+        // quedan desafíos, siguen teniendo vía libre para salir como avisos.
+        if (cola.length === 0) {
+          if (cierrePermisoRef.current) clearTimeout(cierrePermisoRef.current)
+          cierrePermisoRef.current = null
+          setPermitido(false)
+        }
+        return cola
+      })
+    },
+    [userId],
+  )
 
-  const descartarLogros = useCallback((ids: string[]) => {
-    const fuera = new Set(ids)
-    setLogros((prev) => {
-      const cola = prev.filter((l) => !fuera.has(l.id))
-      guardarPendientes(cola)
-      // El permiso solo se cierra si NO queda nada. Si al cerrar el modal
-      // quedan desafíos, siguen teniendo vía libre para salir como avisos.
-      if (cola.length === 0) setPermitido(false)
-      return cola
-    })
-  }, [])
+  const descartarLogro = useCallback((id: string) => quitar(new Set([id])), [quitar])
+  const descartarLogros = useCallback((ids: string[]) => quitar(new Set(ids)), [quitar])
 
   const cerrarCelebracion = useCallback(() => {
     setLogros([])
-    guardarPendientes([])
+    if (userId) guardarPendientes(userId, [])
+    if (cierrePermisoRef.current) clearTimeout(cierrePermisoRef.current)
+    cierrePermisoRef.current = null
     // Se vuelve a cerrar el grifo: el permiso vale para una tanda, no para
     // siempre. Si el usuario entra luego en otra pregunta, no queremos que la
     // siguiente meta le salte encima.
     setPermitido(false)
-  }, [])
+  }, [userId])
 
   const value = useMemo<ProgressContextValue>(
     () => ({
