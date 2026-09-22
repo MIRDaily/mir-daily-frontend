@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type UIEvent } from 'react'
-import { AnimatePresence, motion, useInView } from 'framer-motion'
+import { AnimatePresence, motion, useInView, type Variants } from 'framer-motion'
 import Image from 'next/image'
 import { List, type RowComponentProps } from 'react-window'
 import { useRouter } from 'next/navigation'
@@ -44,6 +44,50 @@ import HighlightableStatement, {
   ClearHighlightButton,
   useSessionHighlights,
 } from '@/components/simulacro/HighlightableStatement'
+
+// Misma curva/duracion que las burbujas del modal de revision de simulacro
+// (SimulacroResultsGrid) y el panel de imagen del daily, para que la tarjeta
+// de "mas fallada" se sienta igual.
+const BUBBLE_TRANSITION = { duration: 0.42, ease: [0.22, 1, 0.36, 1] as const }
+
+// Opciones de "La más fallada": salen de una en una (A→D) al abrir la imagen y
+// vuelven en cascada inversa (D→A) al cerrarla.
+const STAGGER_LIST: Variants = {
+  hidden: { transition: { staggerChildren: 0.045, staggerDirection: 1 } },
+  visible: { transition: { staggerChildren: 0.045, staggerDirection: -1 } },
+}
+
+const STAGGER_ITEM: Variants = {
+  hidden: { opacity: 0, x: -24, transition: { duration: 0.26, ease: [0.4, 0, 1, 1] } },
+  visible: { opacity: 1, x: 0, transition: BUBBLE_TRANSITION },
+}
+
+// Anima la altura hacia la de su contenido; sin esto la tarjeta pega un salto
+// al alternar entre las opciones y la imagen, que miden distinto.
+function AutoHeight({ children, className }: { children: ReactNode; className?: string }) {
+  const innerRef = useRef<HTMLDivElement | null>(null)
+  const [height, setHeight] = useState<number | 'auto'>('auto')
+
+  useEffect(() => {
+    const el = innerRef.current
+    if (!el) return
+    const observer = new ResizeObserver(() => setHeight(el.offsetHeight))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <motion.div
+      className={className}
+      initial={false}
+      animate={{ height }}
+      transition={BUBBLE_TRANSITION}
+      style={{ overflow: 'hidden' }}
+    >
+      <div ref={innerRef}>{children}</div>
+    </motion.div>
+  )
+}
 
 type DailyQuestion = {
   id: string | number
@@ -102,6 +146,8 @@ type MostFailedWeekStats = {
   youWereCorrect: boolean | null
   answeredAt: string | null
   explanation?: string | null
+  hasImage?: boolean
+  imageUrl?: string | null
   // El backend devuelve true cuando la semana no llego al minimo de respuestas
   // y la tarjeta se ha rellenado con cifras de ejemplo sobre una pregunta real.
   isPlaceholder?: boolean
@@ -437,6 +483,8 @@ export default function DashboardPage() {
   const [mostFailedWeekLoading, setMostFailedWeekLoading] = useState(true)
   const [mostFailedWeekError, setMostFailedWeekError] = useState<string | null>(null)
   const [mostFailedWeekMessage, setMostFailedWeekMessage] = useState<string | null>(null)
+  const [mostFailedImageRevealed, setMostFailedImageRevealed] = useState(false)
+  const mostFailedCardRef = useRef<HTMLDivElement | null>(null)
   const [mostFailedSimulatedAnswer, setMostFailedSimulatedAnswer] = useState<number | null>(null)
   const [isMostFailedRevealed, setIsMostFailedRevealed] = useState(false)
   const [mostFailedStatementExpanded, setMostFailedStatementExpanded] = useState(false)
@@ -840,7 +888,6 @@ export default function DashboardPage() {
     mostFailedWeekLastAnswerIndex !== null && Boolean(mostFailedWeek?.youWereCorrect)
   const isMostFailedAnsweredAndWrong =
     mostFailedWeekLastAnswerIndex !== null && mostFailedWeek?.youWereCorrect === false
-  const shouldShowMostFailedDetails = isMostFailedRevealed
   const shouldClampMostFailedStatement =
     !mostFailedStatementExpanded &&
     (mostFailedWeek?.statement?.length ?? 0) > 220
@@ -879,6 +926,7 @@ export default function DashboardPage() {
           setIsMostFailedRevealed(false)
           setMostFailedStatementExpanded(false)
           setMostFailedExplanationExpanded(false)
+          setMostFailedImageRevealed(false)
           setMostFailedWeekLoading(false)
           return
         }
@@ -889,6 +937,7 @@ export default function DashboardPage() {
         setIsMostFailedRevealed(false)
         setMostFailedStatementExpanded(false)
         setMostFailedExplanationExpanded(false)
+        setMostFailedImageRevealed(false)
         setMostFailedWeekLoading(false)
         return
       } catch (err) {
@@ -911,6 +960,7 @@ export default function DashboardPage() {
     setIsMostFailedRevealed(false)
     setMostFailedStatementExpanded(false)
     setMostFailedExplanationExpanded(false)
+    setMostFailedImageRevealed(false)
     setMostFailedWeekLoading(false)
   }, [API_URL, authenticatedFetch])
 
@@ -923,6 +973,7 @@ export default function DashboardPage() {
 
   const revealMostFailed = () => {
     setIsMostFailedRevealed(true)
+    setMostFailedImageRevealed(false)
   }
 
   const rawPercentile = scoreDistribution?.percentile ?? null
@@ -2201,6 +2252,28 @@ export default function DashboardPage() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [showQuiz, showResults, currentQuestion?.hasImage, currentQuestion?.imageUrl])
 
+  // Barra espaciadora en "La más fallada": alterna imagen/opciones, como en el
+  // quiz, si la tarjeta se ve al menos a medias y su pregunta tiene imagen. Si
+  // no, el espacio desplaza la página como siempre. Durante el quiz la tarjeta
+  // está oculta (mide 0), así que no compite con el atajo del quiz.
+  useEffect(() => {
+    if (!mostFailedWeek?.hasImage || !mostFailedWeek?.imageUrl) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== ' ' && e.key !== 'Spacebar') return
+      const tag = document.activeElement?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      const card = mostFailedCardRef.current
+      if (!card) return
+      const rect = card.getBoundingClientRect()
+      const visible = Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0)
+      if (rect.height === 0 || visible < Math.min(rect.height, window.innerHeight) / 2) return
+      e.preventDefault()
+      setMostFailedImageRevealed((v) => !v)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [mostFailedWeek?.hasImage, mostFailedWeek?.imageUrl])
+
   useEffect(() => {
     if (!authMessage) return
     const timer = setTimeout(() => {
@@ -2879,6 +2952,7 @@ export default function DashboardPage() {
           ) : (
             <div className="relative grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">
               <div
+                ref={mostFailedCardRef}
                 className={`relative overflow-hidden rounded-3xl border border-white/60 ring-1 ring-white/70 bg-white p-6 shadow-[0_18px_40px_rgba(125,138,150,0.16)] z-20 ${
                   isMostFailedRevealed
                     ? 'lg:col-start-1 lg:col-end-2'
@@ -2919,10 +2993,59 @@ export default function DashboardPage() {
                         Ese día no hiciste el Daily. Pero no te preocupes... ¿la habrías acertado?
                       </p>
                     )}
+                    {mostFailedWeek.hasImage && mostFailedWeek.imageUrl && (
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setMostFailedImageRevealed((v) => !v)}
+                          onKeyDown={(e) => {
+                            // El espacio ya lo gestiona el atajo global; sin esto
+                            // el botón con foco se pulsaría otra vez y lo desharía.
+                            if (e.key === ' ' || e.key === 'Spacebar') e.preventDefault()
+                          }}
+                          className="inline-flex items-center gap-2 rounded-xl border border-[#E8A598]/40 bg-white px-4 py-2.5 text-sm font-bold text-[#d18d80] transition-colors hover:bg-[#fff0ec]"
+                        >
+                          <span className="material-symbols-outlined text-lg">
+                            {mostFailedImageRevealed ? 'format_list_bulleted' : 'image'}
+                          </span>
+                          {mostFailedImageRevealed ? 'Ver opciones' : 'Ver imagen'}
+                        </button>
+                        <span className="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-[#7D8A96]">
+                          o pulsa
+                          <span className="rounded border border-[#E9E4E1] bg-[#FAF7F4] px-1.5 py-0.5 font-mono text-[10px] text-[#2D3748]">
+                            Espacio
+                          </span>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </header>
 
-                <div className="mt-6 space-y-2">
+                <AutoHeight className="mt-6">
+                <AnimatePresence mode="wait" initial={false}>
+                {mostFailedImageRevealed && mostFailedWeek.hasImage && mostFailedWeek.imageUrl ? (
+                  <motion.div
+                    key="most-failed-image"
+                    initial={{ opacity: 0, scale: 0.55 }}
+                    animate={{ opacity: 1, scale: 1, transition: BUBBLE_TRANSITION }}
+                    exit={{ opacity: 0, scale: 0.55, transition: { duration: 0.28, ease: [0.4, 0, 1, 1] } }}
+                    style={{ transformOrigin: '24px 0' }}
+                    className="flex justify-center rounded-2xl border border-[#F0EBE8] bg-[#FAF7F4] p-3"
+                  >
+                    <ZoomableImage
+                      url={mostFailedWeek.imageUrl}
+                      className="mx-auto block max-h-[360px] w-auto max-w-full rounded-xl object-contain"
+                    />
+                  </motion.div>
+                ) : (
+                <motion.div
+                  key="most-failed-options"
+                  variants={STAGGER_LIST}
+                  initial="hidden"
+                  animate="visible"
+                  exit="hidden"
+                  className="space-y-2"
+                >
                   {mostFailedWeekOptions.map((option, optionIndex) => {
                     const correctIndex = mostFailedWeekCorrectIndex
                     const isCorrect = correctIndex === optionIndex
@@ -2968,8 +3091,9 @@ export default function DashboardPage() {
                     }
 
                     return (
-                      <button
+                      <motion.button
                         key={`${option}-${optionIndex}`}
+                        variants={STAGGER_ITEM}
                         type="button"
                         disabled={!selectable}
                         onClick={() => {
@@ -2987,10 +3111,13 @@ export default function DashboardPage() {
                           {option}
                         </span>
                         {badge}
-                      </button>
+                      </motion.button>
                     )
                   })}
-                </div>
+                </motion.div>
+                )}
+                </AnimatePresence>
+                </AutoHeight>
 
                 {!isMostFailedRevealed && (
                   <div className="mt-6 flex flex-col gap-3">
@@ -3044,7 +3171,7 @@ export default function DashboardPage() {
                   transition: 'opacity 420ms ease-out, transform 420ms ease-out',
                 }}
               >
-                {shouldShowMostFailedDetails ? (
+                {isMostFailedRevealed ? (
                   <>
                     <div className="flex items-start gap-3">
                       <div className="size-12 shrink-0 rounded-full bg-[#FFF8F6] text-[#C45B4B] shadow-sm border border-[#E8A598]/20 flex items-center justify-center">
