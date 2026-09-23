@@ -8,7 +8,8 @@ export type GuideHotspot = {
 
 export type GuideTopic = {
   id: string
-  number: number
+  /** Siglas propias del bloque (2-3 letras), sin relación con la numeración de ningún manual */
+  code: string
   name: string
   shortName: string
   tier: GuideTier

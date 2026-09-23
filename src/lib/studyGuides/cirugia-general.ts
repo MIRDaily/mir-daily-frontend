@@ -1,6 +1,6 @@
 import type { StudyGuide } from '@/types/studyGuide'
 
-// Pesos: preguntas MIR 2015-2025 por tema (52 temas agrupados en 17 bloques) + clasificación propia del MIR 2026
+// Pesos: preguntas MIR 2015-2025 agrupadas en 17 bloques temáticos propios + clasificación propia del MIR 2026
 // (cuaderno oficial, versión 0). Respuestas del 2026 contrastadas con las definitivas publicadas tras las impugnaciones.
 export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
   subjectId: 'cirugia-general',
@@ -28,7 +28,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
   topics: [
     {
       id: 'esofago',
-      number: 36,
+      code: 'ESO',
       name: 'Esófago: ERGE, esofagitis, motilidad y cáncer',
       shortName: 'Esófago',
       tier: 'imprescindible',
@@ -58,7 +58,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'ccr',
-      number: 30,
+      code: 'CCR',
       name: 'Tumores del intestino delgado y grueso',
       shortName: 'Colorrectal',
       tier: 'imprescindible',
@@ -88,7 +88,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'plastica',
-      number: 52,
+      code: 'PLA',
       name: 'Cirugía plástica',
       shortName: 'Plástica',
       tier: 'imprescindible',
@@ -117,7 +117,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'eii',
-      number: 28,
+      code: 'EII',
       name: 'Enfermedad inflamatoria intestinal y colon irritable',
       shortName: 'EII',
       tier: 'imprescindible',
@@ -147,7 +147,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'biliar',
-      number: 15,
+      code: 'BIL',
       name: 'Vesícula y vía biliar',
       shortName: 'Vía biliar',
       tier: 'imprescindible',
@@ -176,7 +176,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'pancreas-tumores',
-      number: 34,
+      code: 'PAN',
       name: 'Tumores pancreáticos',
       shortName: 'Tumor páncreas',
       tier: 'alta',
@@ -203,7 +203,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'cirrosis',
-      number: 11,
+      code: 'CIR',
       name: 'Cirrosis y sus complicaciones (alcohol, MASLD, otras causas)',
       shortName: 'Cirrosis',
       tier: 'alta',
@@ -233,7 +233,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'higado-tumores',
-      number: 12,
+      code: 'HCC',
       name: 'Abscesos, tumores hepáticos y trasplante',
       shortName: 'Hepatocarcinoma',
       tier: 'alta',
@@ -260,7 +260,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'estomago',
-      number: 19,
+      code: 'EST',
       name: 'Estómago: hemorragia digestiva, úlcera, H. pylori y tumores',
       shortName: 'Estómago',
       tier: 'media',
@@ -289,7 +289,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'hepatopatias',
-      number: 5,
+      code: 'HEP',
       name: 'Hepatitis y otras hepatopatías (virales, autoinmune, fármacos, metabólicas)',
       shortName: 'Hepatitis',
       tier: 'media',
@@ -317,7 +317,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'intestino',
-      number: 26,
+      code: 'MAL',
       name: 'Intestino: malabsorción, diarrea y anatomía',
       shortName: 'Malabsorción',
       tier: 'media',
@@ -346,7 +346,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'abdomen-agudo',
-      number: 40,
+      code: 'ABD',
       name: 'Abdomen agudo: apendicitis, diverticulitis e isquemia intestinal',
       shortName: 'Abdomen agudo',
       tier: 'alta',
@@ -374,7 +374,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'complicaciones',
-      number: 48,
+      code: 'CPL',
       name: 'Complicaciones de la cirugía y cirugía mínimamente invasiva',
       shortName: 'Complicaciones',
       tier: 'alta',
@@ -400,7 +400,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'pared',
-      number: 49,
+      code: 'HER',
       name: 'Patología de la pared abdominal',
       shortName: 'Hernias',
       tier: 'alta',
@@ -427,7 +427,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'anal',
-      number: 50,
+      code: 'PRO',
       name: 'Patología anal y perianal',
       shortName: 'Proctología',
       tier: 'media',
@@ -451,7 +451,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'obstruccion',
-      number: 43,
+      code: 'OBS',
       name: 'Obstrucción intestinal y vólvulos',
       shortName: 'Obstrucción',
       tier: 'media',
@@ -476,7 +476,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
     {
       id: 'pancreatitis',
-      number: 32,
+      code: 'PCT',
       name: 'Pancreatitis aguda y crónica',
       shortName: 'Pancreatitis',
       tier: 'baja',
@@ -1104,5 +1104,5 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     },
   ],
   sourcesNote:
-    'Pesos calculados con el recuento de preguntas MIR de Digestivo y Cirugía General de 2015 a 2025 (52 temas agrupados en 17 bloques) y con la clasificación de las preguntas del MIR 2026 (cuaderno oficial, versión 0). Las respuestas del MIR 2026 están contrastadas con las definitivas publicadas tras las impugnaciones: la 13 fue anulada y la 208 (reserva) impugnada; según las normas del examen, las reservas sustituyen por orden a las anuladas, así que la 206 acabó puntuando. La previsión para el MIR 2027 es una media ponderada (70 % los últimos 5 MIR, 30 % los anteriores): orientativa, no una predicción exacta. La extensión de cada tema es aproximada.',
+    'Pesos calculados con el recuento de preguntas MIR de Digestivo y Cirugía General de 2015 a 2025, agrupadas en 17 bloques temáticos propios, y con la clasificación de las preguntas del MIR 2026 (cuaderno oficial, versión 0). Las respuestas del MIR 2026 están contrastadas con las definitivas publicadas tras las impugnaciones: la 13 fue anulada y la 208 (reserva) impugnada; según las normas del examen, las reservas sustituyen por orden a las anuladas, así que la 206 acabó puntuando. La previsión para el MIR 2027 es una media ponderada (70 % los últimos 5 MIR, 30 % los anteriores): orientativa, no una predicción exacta. La extensión de cada tema es aproximada.',
 }

@@ -28,7 +28,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
   topics: [
     {
       id: 'neurocirugia',
-      number: 3,
+      code: 'NCX',
       name: 'Neurocirugía',
       shortName: 'Neurocirugía',
       tier: 'imprescindible',
@@ -61,7 +61,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
     {
       id: 'ictus',
-      number: 2,
+      code: 'ICT',
       name: 'Enfermedad cerebrovascular',
       shortName: 'Ictus',
       tier: 'imprescindible',
@@ -92,7 +92,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
     {
       id: 'semiologia',
-      number: 1,
+      code: 'SEM',
       name: 'Semiología',
       shortName: 'Semiología',
       tier: 'imprescindible',
@@ -122,7 +122,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
     {
       id: 'movimiento',
-      number: 4,
+      code: 'MOV',
       name: 'Trastornos del movimiento',
       shortName: 'Movimiento',
       tier: 'alta',
@@ -150,7 +150,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
     {
       id: 'epilepsia',
-      number: 9,
+      code: 'EPI',
       name: 'Epilepsia',
       shortName: 'Epilepsia',
       tier: 'alta',
@@ -180,7 +180,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
     {
       id: 'autoinmunes-snc',
-      number: 5,
+      code: 'AUT',
       name: 'Enfermedades autoinmunes del SNC',
       shortName: 'EM y autoinmunes',
       tier: 'alta',
@@ -208,7 +208,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
     {
       id: 'demencias',
-      number: 11,
+      code: 'DEM',
       name: 'Trastornos de la memoria y demencias',
       shortName: 'Demencias',
       tier: 'media',
@@ -238,7 +238,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
     {
       id: 'cefalea',
-      number: 10,
+      code: 'CEF',
       name: 'Cefalea',
       shortName: 'Cefalea',
       tier: 'media',
@@ -266,7 +266,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
     {
       id: 'miopatias',
-      number: 14,
+      code: 'MIO',
       name: 'Miopatías',
       shortName: 'Miopatías',
       tier: 'baja',
@@ -287,7 +287,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
     {
       id: 'placa-motora',
-      number: 6,
+      code: 'PLM',
       name: 'Enfermedades de la placa motora',
       shortName: 'Placa motora',
       tier: 'baja',
@@ -309,7 +309,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
     {
       id: 'neuropatias',
-      number: 8,
+      code: 'NRP',
       name: 'Neuropatías',
       shortName: 'Neuropatías',
       tier: 'baja',
@@ -329,7 +329,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
     {
       id: 'nutricionales',
-      number: 7,
+      code: 'NUT',
       name: 'Enfermedades nutricionales y metabólicas',
       shortName: 'Nutricionales',
       tier: 'baja',
@@ -349,7 +349,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
     {
       id: 'coma',
-      number: 15,
+      code: 'COM',
       name: 'Coma y muerte encefálica',
       shortName: 'Coma',
       tier: 'baja',
@@ -371,7 +371,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
     {
       id: 'motoneurona',
-      number: 12,
+      code: 'MTN',
       name: 'Enfermedades de motoneurona',
       shortName: 'ELA',
       tier: 'baja',
@@ -387,7 +387,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
     {
       id: 'ataxia',
-      number: 13,
+      code: 'ATX',
       name: 'Ataxia',
       shortName: 'Ataxia',
       tier: 'baja',

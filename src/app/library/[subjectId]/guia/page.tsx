@@ -84,7 +84,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
       icon: 'menu_book',
       children: topicsByPriority.map((topic) => ({
         id: `tema-${topic.id}`,
-        label: `T${topic.number} · ${topic.shortName}`,
+        label: topic.shortName,
         color: TIER_STYLES[topic.tier].color,
       })),
     },

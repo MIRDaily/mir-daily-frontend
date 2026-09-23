@@ -38,7 +38,7 @@ export default function GuideTopicCard({
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-black text-white"
           style={{ backgroundColor: tier.color }}
         >
-          T{topic.number}
+          {topic.code}
         </span>
 
         <span className="flex min-w-0 flex-1 flex-col gap-1">
