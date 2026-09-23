@@ -1,3 +1,6 @@
+'use client'
+
+import { useState } from 'react'
 import type { GuideTopicWithStats } from '@/lib/studyGuides/stats'
 import { TIER_STYLES, cssVars } from '@/components/library/guide/guideStyles'
 import GuideReveal from '@/components/library/guide/GuideReveal'
@@ -57,6 +60,8 @@ function overlaps(a: Box, b: Box) {
 }
 
 export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
+  // Tema bajo el cursor (o con el foco): su nombre se resalta encima de todo.
+  const [activeId, setActiveId] = useState<string | null>(null)
   const maxPages = Math.max(MIN_MAX_PAGES, Math.ceil(Math.max(...topics.map((topic) => topic.pages)) / 7) * 7)
   const maxQuestions = Math.max(MIN_MAX_QUESTIONS, Math.ceil(Math.max(...topics.map((topic) => topic.stats.historyCount)) / 10) * 10)
   const x = (pages: number) => PAD.left + (pages / maxPages) * (WIDTH - PAD.left - PAD.right)
@@ -107,7 +112,9 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
     textBox(splitX - 10, pasadaRapidaY, 'Pasada rápida', 'end'),
   ]
   const inside = (box: Box) => box.x1 >= PAD.left + 2 && box.x2 <= WIDTH - PAD.right && box.y1 >= PAD.top && box.y2 <= HEIGHT - PAD.bottom
-  for (const p of [...points].filter((point) => point.major).sort((a, b) => b.topic.stats.historyCount - a.topic.stats.historyCount)) {
+  // Primero los temas con nombre visible; los menores solo lo muestran al pasar el cursor.
+  const byWeight = [...points].sort((a, b) => Number(b.major) - Number(a.major) || b.topic.stats.historyCount - a.topic.stats.historyCount)
+  for (const p of byWeight) {
     const manual = LABEL_OFFSETS[p.topic.id]
     const options = manual ? [manual] : CANDIDATES
     // Número de choques de cada posición; se queda con la primera sin choques o, si no hay, con la que menos tenga.
@@ -182,22 +189,60 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
             Recompensa → preguntas 2015–2025
           </text>
 
-          {points.map(({ topic, cx, cy, r }, index) => {
-            const offset = labels.get(topic.id)
-            return (
-              <g key={topic.id}>
-                <a href={`#tema-${topic.id}`}>
-                  <title>{`${topic.name}: ${topic.stats.historyCount} preguntas, ~${topic.pages} páginas`}</title>
-                  <circle className="guia-pop cursor-pointer hover:[r:11]" style={cssVars({ '--i': index * 5 })} cx={cx} cy={cy} r={r} fill={TIER_STYLES[topic.tier].color} stroke="#fff" strokeWidth={2} />
-                </a>
-                {offset ? (
-                  <text x={cx + offset.dx} y={cy + offset.dy} textAnchor={offset.anchor} className="fill-[#2C3E50] text-[12px] font-semibold">
+          {points.map(({ topic, cx, cy, r }, index) => (
+            <a
+              key={topic.id}
+              href={`#tema-${topic.id}`}
+              onMouseEnter={() => setActiveId(topic.id)}
+              onMouseLeave={() => setActiveId((current) => (current === topic.id ? null : current))}
+              onFocus={() => setActiveId(topic.id)}
+              onBlur={() => setActiveId((current) => (current === topic.id ? null : current))}
+            >
+              <title>{`${topic.name}: ${topic.stats.historyCount} preguntas, ~${topic.pages} páginas`}</title>
+              <circle className="guia-pop cursor-pointer hover:[r:11]" style={cssVars({ '--i': index * 5 })} cx={cx} cy={cy} r={r} fill={TIER_STYLES[topic.tier].color} stroke="#fff" strokeWidth={2} />
+            </a>
+          ))}
+
+          {/* Nombres semitransparentes en reposo; el del tema activo se pinta al final, opaco y con halo. */}
+          <g className="pointer-events-none">
+            {points.map(({ topic, cx, cy, major }) => {
+              const offset = labels.get(topic.id)
+              if (!offset || !major || topic.id === activeId) return null
+              return (
+                <text
+                  key={topic.id}
+                  x={cx + offset.dx}
+                  y={cy + offset.dy}
+                  textAnchor={offset.anchor}
+                  opacity={activeId ? 0.2 : 0.5}
+                  className="fill-[#2C3E50] text-[12px] font-semibold transition-opacity duration-200"
+                >
+                  {topic.shortName}
+                </text>
+              )
+            })}
+            {points
+              .filter(({ topic }) => topic.id === activeId)
+              .map(({ topic, cx, cy }) => {
+                const offset = labels.get(topic.id)
+                if (!offset) return null
+                return (
+                  <text
+                    key={topic.id}
+                    x={cx + offset.dx}
+                    y={cy + offset.dy}
+                    textAnchor={offset.anchor}
+                    stroke="#fff"
+                    strokeWidth={4}
+                    strokeLinejoin="round"
+                    paintOrder="stroke"
+                    className="fill-[#2C3E50] text-[12.5px] font-bold"
+                  >
                     {topic.shortName}
                   </text>
-                ) : null}
-              </g>
-            )
-          })}
+                )
+              })}
+          </g>
 
           {minorCount > 0 ? (
             <text x={x(6.8)} y={y(2) + 4} className="fill-[#7D8A96] text-[11px]">
