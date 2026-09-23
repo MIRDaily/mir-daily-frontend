@@ -5,6 +5,7 @@ import TopicCard from '@/components/library/TopicCard'
 import type { Resource, Subject, Topic } from '@/types/library'
 import { LIBRARY_SUBJECT_OVERVIEW_BY_ID, LIBRARY_SUBJECTS_BY_ID } from '@/mocks/library'
 import { getUserAndToken } from '@/lib/supabase/server'
+import { getStudyGuide } from '@/lib/studyGuides'
 
 type LibrarySubjectDetailPageProps = {
   params: Promise<{ subjectId: string }>
@@ -97,6 +98,7 @@ export default async function LibrarySubjectDetailPage({ params }: LibrarySubjec
   const isDevelopment = process.env.NODE_ENV !== 'production'
   const mockSubject = LIBRARY_SUBJECTS_BY_ID[subjectId]
   const mockOverview = LIBRARY_SUBJECT_OVERVIEW_BY_ID[subjectId]
+  const studyGuide = getStudyGuide(subjectId)
 
   if (!mockSubject || !mockOverview) {
     notFound()
@@ -186,7 +188,20 @@ export default async function LibrarySubjectDetailPage({ params }: LibrarySubjec
           <section className="rounded-2xl border border-[#EAE4E2] bg-white p-5">
             <h3 className="mb-3 font-semibold text-[#2C3E50]">Recursos clave</h3>
             <div className="flex flex-col gap-3 text-sm">
-              <div className="rounded-xl bg-[#F9F8F7] p-3">Guia de alto rendimiento</div>
+              {studyGuide ? (
+                <Link
+                  href={`/library/${subjectId}/guia`}
+                  className="flex items-center justify-between gap-3 rounded-xl bg-[#E8A598]/15 p-3 font-semibold text-[#2C3E50] transition-colors hover:bg-[#E8A598]/25"
+                >
+                  <span className="flex flex-col gap-0.5">
+                    Guía de estudio {studyGuide.targetExam}
+                    <span className="text-xs font-normal text-[#7D8A96]">Pesos, plan y {studyGuide.lastExam} comentado</span>
+                  </span>
+                  <span className="material-symbols-outlined text-[#B5655A]">arrow_forward</span>
+                </Link>
+              ) : (
+                <div className="rounded-xl bg-[#F9F8F7] p-3">Guia de alto rendimiento</div>
+              )}
               <div className="rounded-xl bg-[#F9F8F7] p-3">Mapa mental</div>
             </div>
           </section>
