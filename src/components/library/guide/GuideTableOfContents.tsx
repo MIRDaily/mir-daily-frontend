@@ -77,7 +77,7 @@ function readSpyState(items: GuideTocItem[]): SpyState {
   return { active, activeChild, fraction, progress, headerHeight }
 }
 
-function goTo(id: string) {
+export function goTo(id: string) {
   const element = document.getElementById(id)
   if (!element) return
   if (element instanceof HTMLDetailsElement) element.open = true
@@ -295,5 +295,27 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
           </AnimatePresence>
         </div>
       </div>
+  )
+}
+
+// Accesos rápidos del banner: los mismos apartados que el índice, con desplazamiento suave.
+export function GuideSectionChips({ items }: { items: GuideTocItem[] }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {items.map((item) => (
+        <a
+          key={item.id}
+          href={`#${item.id}`}
+          onClick={(event) => {
+            event.preventDefault()
+            goTo(item.id)
+          }}
+          className="flex items-center gap-1.5 rounded-full border border-[#EAE4E2] bg-white/80 px-3 py-1.5 text-xs font-semibold text-[#2C3E50] transition-colors hover:border-[#E8A598] hover:text-[#B5655A]"
+        >
+          <span className="material-symbols-outlined text-[15px] text-[#E8A598]">{item.icon}</span>
+          {item.label}
+        </a>
+      ))}
+    </div>
   )
 }

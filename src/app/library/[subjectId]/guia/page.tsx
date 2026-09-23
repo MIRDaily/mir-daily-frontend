@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import GuideEffortMatrix from '@/components/library/guide/GuideEffortMatrix'
 import GuideHeatmap from '@/components/library/guide/GuideHeatmap'
@@ -12,25 +11,16 @@ import GuideTrendShift from '@/components/library/guide/GuideTrendShift'
 import { TIER_STYLES, cssVars } from '@/components/library/guide/guideStyles'
 import GuideCountUp from '@/components/library/guide/GuideCountUp'
 import GuideReveal from '@/components/library/guide/GuideReveal'
-import GuideTableOfContents, { type GuideTocItem } from '@/components/library/guide/GuideTableOfContents'
+import GuideHeaderCrumbs from '@/components/library/guide/GuideHeaderCrumbs'
+import GuideTableOfContents, { GuideSectionChips, type GuideTocItem } from '@/components/library/guide/GuideTableOfContents'
 import { getStudyGuide } from '@/lib/studyGuides'
+import { LIBRARY_SUBJECT_OVERVIEW_BY_ID } from '@/mocks/library'
 import { RECENT_WINDOW, withStats } from '@/lib/studyGuides/stats'
 import type { GuideQuestionKind, GuideTier } from '@/types/studyGuide'
 
 type LibraryGuidePageProps = {
   params: Promise<{ subjectId: string }>
 }
-
-const SECTIONS = [
-  { id: 'tendencia', label: 'Tendencia' },
-  { id: 'tendencias', label: 'Qué sube y qué baja' },
-  { id: 'prioridades', label: 'Prioridades' },
-  { id: 'evolucion', label: 'Evolución por tema' },
-  { id: 'rentabilidad', label: 'Rentabilidad' },
-  { id: 'plan', label: 'Plan de estudio' },
-  { id: 'temas', label: 'Tema a tema' },
-  { id: 'ultimo-mir', label: 'Último MIR comentado' },
-]
 
 const QUESTION_GROUPS: Array<{ kind: GuideQuestionKind; title: string; description: string }> = [
   { kind: 'bloque', title: 'Bloque de la asignatura', description: 'Las preguntas que el Ministerio agrupó en este bloque.' },
@@ -116,19 +106,18 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
         </aside>
 
         <div className="flex min-w-0 flex-col gap-10">
+          <GuideHeaderCrumbs
+            subjectId={guide.subjectId}
+            subjectName={LIBRARY_SUBJECT_OVERVIEW_BY_ID[guide.subjectId]?.name ?? guide.title}
+            current={`Guía de estudio ${guide.targetExam}`}
+          />
+
           {/* Cabecera */}
           <section className="relative overflow-hidden rounded-3xl border border-[#EAE4E2] bg-white p-6 shadow-sm sm:p-8">
             <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-[#E8A598]/15 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-24 left-1/3 h-64 w-64 rounded-full bg-[#8BA888]/10 blur-3xl" />
 
             <div className="relative flex flex-col gap-6">
-              <nav className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[#E8A598]">
-                <span className="material-symbols-outlined text-base">arrow_back</span>
-                <Link href={`/library/${guide.subjectId}`} className="hover:text-[#d18d80]">
-                  Volver a {guide.title.split(' ')[0]}
-                </Link>
-              </nav>
-
               <div className="flex flex-col gap-3">
                 <span className="w-fit rounded-full bg-[#2C3E50] px-3 py-1 text-xs font-bold tracking-wide text-white uppercase">
                   Guía de estudio · {guide.targetExam}
@@ -150,17 +139,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
                 <StatTile value={<>1 de <GuideCountUp to={Math.round(210 / average)} /></>} label="preguntas del MIR es de esta asignatura" />
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                {SECTIONS.map((section) => (
-                  <a
-                    key={section.id}
-                    href={`#${section.id}`}
-                    className="rounded-full border border-[#EAE4E2] bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-[#2C3E50] transition-colors hover:border-[#E8A598] hover:text-[#B5655A]"
-                  >
-                    {section.label}
-                  </a>
-                ))}
-              </div>
+              <GuideSectionChips items={toc} />
             </div>
           </section>
 

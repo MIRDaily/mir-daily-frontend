@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { LayoutGroup, motion, useReducedMotion } from 'framer-motion'
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useProfile } from '@/hooks/useProfile'
 import { getAvatarUrl } from '@/lib/avatar'
 import { getOnboardingDeferredFlag } from '@/lib/onboarding'
@@ -346,6 +346,17 @@ export default function AppHeader({
             <span className="material-symbols-outlined text-base">arrow_back</span>
             {backAction.label}
           </Link>
+          {backAction.trail?.map((crumb) => (
+            <Fragment key={crumb.href}>
+              <span className="text-[#7D8A96]/30">/</span>
+              <Link
+                className="text-sm font-semibold text-[#7D8A96] transition-colors hover:text-[#E8A598]"
+                href={crumb.href}
+              >
+                {crumb.label}
+              </Link>
+            </Fragment>
+          ))}
           {backAction.current && (
             <>
               <span className="text-[#7D8A96]/30">/</span>

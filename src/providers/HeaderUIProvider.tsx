@@ -6,6 +6,8 @@ export type HeaderBackAction = {
   /** Texto junto a la flecha, ej. "Minijuegos" */
   label: string
   href: string
+  /** Niveles intermedios opcionales, enlazables, entre `label` y `current` */
+  trail?: Array<{ label: string; href: string }>
   /** Segundo crumb opcional, ej. "GramSwipe" (la página actual) */
   current?: string
 }
