@@ -30,7 +30,7 @@ export const TIER_STYLES: Record<GuideTier, { label: string; chip: string; bar: 
 }
 
 export const QUESTION_KIND_STYLES: Record<GuideQuestionKind, { label: string; chip: string }> = {
-  bloque: { label: 'Bloque Neuro', chip: 'bg-[#2C3E50] text-white' },
+  bloque: { label: 'Bloque', chip: 'bg-[#2C3E50] text-white' },
   reserva: { label: 'Reserva', chip: 'bg-[#D9B26F]/20 text-[#946C2C]' },
   frontera: { label: 'Otra asignatura', chip: 'bg-[#EAE4E2] text-[#6B7884]' },
 }
