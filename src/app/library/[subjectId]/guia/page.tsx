@@ -12,6 +12,7 @@ import { TIER_STYLES, cssVars } from '@/components/library/guide/guideStyles'
 import GuideCountUp from '@/components/library/guide/GuideCountUp'
 import GuideReveal from '@/components/library/guide/GuideReveal'
 import GuideHeaderCrumbs from '@/components/library/guide/GuideHeaderCrumbs'
+import { GuideQuizProvider, GuideQuizScore } from '@/components/library/guide/GuideQuiz'
 import GuideTableOfContents, { GuideSectionChips, type GuideTocItem } from '@/components/library/guide/GuideTableOfContents'
 import { getStudyGuide } from '@/lib/studyGuides'
 import { LIBRARY_SUBJECT_OVERVIEW_BY_ID } from '@/mocks/library'
@@ -101,7 +102,8 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
   return (
     <main className="min-h-screen bg-[#FAF7F4] px-4 py-8 text-[#7D8A96] sm:px-6">
       <div className="mx-auto max-w-6xl xl:grid xl:max-w-[88rem] xl:grid-cols-[15rem_minmax(0,1fr)] xl:gap-10">
-        <aside className="hidden xl:block">
+        {/* Sin anclaje de scroll: si no, al plegarse el subíndice el navegador "corrige" el scroll y corta los saltos */}
+        <aside className="hidden [overflow-anchor:none] xl:block">
           <GuideTableOfContents items={toc} variant="sidebar" />
         </aside>
 
@@ -143,7 +145,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
             </div>
           </section>
 
-          <div className="-my-4">
+          <div className="-my-4 [overflow-anchor:none]">
             <GuideTableOfContents items={toc} variant="bar" />
           </div>
 
@@ -278,12 +280,14 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
           </section>
 
           {/* MIR 2026 */}
+          <GuideQuizProvider>
           <section id="ultimo-mir" className="flex scroll-mt-24 flex-col gap-8">
             <SectionHeading
               icon="quiz"
               title={`${guide.lastExam} comentado`}
-              subtitle="Intenta contestarlas antes de mirar la respuesta. Las respuestas están razonadas por MIRDaily; no son la plantilla oficial."
+              subtitle="Marca tu respuesta y corrígete. Las respuestas están razonadas por MIRDaily; no son la plantilla oficial."
             />
+            <GuideQuizScore total={guide.questions.length} />
             {QUESTION_GROUPS.map((group) => {
               const questions = guide.questions.filter((question) => question.kind === group.kind)
               if (questions.length === 0) return null
@@ -304,6 +308,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
               )
             })}
           </section>
+          </GuideQuizProvider>
 
           <p className="border-t border-[#EAE4E2] pt-6 text-xs leading-relaxed">{guide.sourcesNote}</p>
         </div>

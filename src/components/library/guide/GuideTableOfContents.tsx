@@ -29,10 +29,31 @@ const LINE_INSET = 4
 // de la zona visible (0 = justo bajo la cabecera, 1 = borde inferior de la pantalla).
 const READING_LINE = 0.35
 
+// Salto en curso desde el índice o el banner. Mientras dura, el índice marca directamente el
+// destino en vez de ir recorriendo (y desplegando) cada apartado por el que pasa el scroll.
+let jumpLock: { id: string; until: number } | null = null
+const JUMP_EVENT = 'guia-toc-jump'
+const JUMP_MAX_MS = 1500
+
 function readSpyState(items: GuideTocItem[]): SpyState {
   // La cabecera global es un nav sticky top-0 (GlobalHeader/AppHeader).
   const header = document.querySelector('.sticky.top-0')
   const headerHeight = header ? header.getBoundingClientRect().height : 0
+
+  if (jumpLock && performance.now() < jumpLock.until) {
+    const target = jumpLock.id
+    const parent = items.find((item) => item.id === target || item.children?.some((child) => child.id === target))
+    if (parent) {
+      const scrollable = document.documentElement.scrollHeight - window.innerHeight
+      return {
+        active: [parent.id],
+        activeChild: parent.id === target ? null : target,
+        fraction: 0,
+        progress: scrollable > 0 ? Math.min(1, Math.max(0, window.scrollY / scrollable)) : 0,
+        headerHeight,
+      }
+    }
+  }
   const line = headerHeight + (window.innerHeight - headerHeight) * READING_LINE
   const atBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 4
 
@@ -86,6 +107,23 @@ export function goTo(id: string) {
   const element = document.getElementById(id)
   if (!element) return
   if (element instanceof HTMLDetailsElement) element.open = true
+
+  const lock = { id, until: performance.now() + JUMP_MAX_MS }
+  jumpLock = lock
+  let released = false
+  const release = () => {
+    if (released) return
+    released = true
+    // Si ya hay otro salto en marcha (dos clics seguidos), ese lleva su propio bloqueo.
+    if (jumpLock === lock) jumpLock = null
+    window.removeEventListener('scrollend', release)
+    window.dispatchEvent(new Event(JUMP_EVENT))
+  }
+  // scrollend no existe en todos los navegadores, ni salta si no hay que desplazarse: plazo de reserva.
+  window.addEventListener('scrollend', release)
+  window.setTimeout(release, JUMP_MAX_MS)
+  window.dispatchEvent(new Event(JUMP_EVENT))
+
   element.scrollIntoView({ behavior: 'smooth', block: 'start' })
   history.replaceState(null, '', `#${id}`)
 }
@@ -98,21 +136,63 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
   const timelineRef = useRef<HTMLDivElement>(null)
   const fillRef = useRef<HTMLDivElement>(null)
   const highlightRef = useRef<HTMLDivElement>(null)
+  const barRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const update = () => setSpy(readSpyState(items))
     const initial = window.setTimeout(update, 0)
+    // Enlace directo a un tema (#tema-…): abrirlo, que el navegador ya ha bajado hasta él.
+    const hashTarget = window.location.hash ? document.getElementById(decodeURIComponent(window.location.hash.slice(1))) : null
+    if (hashTarget instanceof HTMLDetailsElement) hashTarget.open = true
     window.addEventListener('scroll', update, { passive: true })
     window.addEventListener('resize', update)
     // Abrir o cerrar un tema cambia la posición de lo que viene detrás.
     document.addEventListener('toggle', update, true)
+    window.addEventListener(JUMP_EVENT, update)
     return () => {
       window.clearTimeout(initial)
       window.removeEventListener('scroll', update)
       window.removeEventListener('resize', update)
       document.removeEventListener('toggle', update, true)
+      window.removeEventListener(JUMP_EVENT, update)
     }
   }, [items])
+
+  // Todos los enlaces internos de la guía (mapa de calor, prioridades, matriz, plan, chips de
+  // preguntas…) usan goTo: bajada suave, abren el tema si es un desplegable y bloquean el índice.
+  // Lo hace solo la instancia "bar", que está siempre montada, para no duplicarlo.
+  useEffect(() => {
+    if (variant !== 'bar') return
+    const handleClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey) return
+      const link = (event.target as Element | null)?.closest?.('a[href^="#"]')
+      const href = link?.getAttribute('href')
+      if (!href || href.length < 2) return
+      const id = decodeURIComponent(href.slice(1))
+      if (!document.getElementById(id)) return
+      event.preventDefault()
+      goTo(id)
+    }
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [variant])
+
+  // El desplegable del móvil se cierra al tocar fuera o con Escape.
+  useEffect(() => {
+    if (!mobileOpen) return
+    const handlePointer = (event: PointerEvent) => {
+      if (!barRef.current?.contains(event.target as Node)) setMobileOpen(false)
+    }
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileOpen(false)
+    }
+    document.addEventListener('pointerdown', handlePointer)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointer)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [mobileOpen])
 
   const current = items.find((item) => spy.active.includes(item.id)) ?? items[0]
   const firstActiveIndex = items.findIndex((item) => spy.active.includes(item.id))
@@ -272,7 +352,7 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
   // Móvil y tablet: barra flotante con la sección actual
   return (
       <div className="sticky z-40 -mx-4 px-4 xl:hidden" style={{ top: spy.headerHeight + 8 }}>
-        <div className="relative">
+        <div ref={barRef} className="relative">
           <button
             type="button"
             onClick={() => setMobileOpen((open) => !open)}
