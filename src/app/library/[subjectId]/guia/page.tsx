@@ -2,12 +2,15 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import GuideEffortMatrix from '@/components/library/guide/GuideEffortMatrix'
+import GuideHeatmap from '@/components/library/guide/GuideHeatmap'
 import GuidePriorityMap from '@/components/library/guide/GuidePriorityMap'
 import GuideQuestionCard from '@/components/library/guide/GuideQuestionCard'
 import GuideTopicCard from '@/components/library/guide/GuideTopicCard'
 import GuideTrendChart from '@/components/library/guide/GuideTrendChart'
+import GuideTrendShift from '@/components/library/guide/GuideTrendShift'
 import { TIER_STYLES } from '@/components/library/guide/guideStyles'
 import { getStudyGuide } from '@/lib/studyGuides'
+import { RECENT_WINDOW, withStats } from '@/lib/studyGuides/stats'
 import type { GuideQuestionKind, GuideTier } from '@/types/studyGuide'
 
 type LibraryGuidePageProps = {
@@ -16,7 +19,9 @@ type LibraryGuidePageProps = {
 
 const SECTIONS = [
   { id: 'tendencia', label: 'Tendencia' },
+  { id: 'tendencias', label: 'Qué sube y qué baja' },
   { id: 'prioridades', label: 'Prioridades' },
+  { id: 'evolucion', label: 'Evolución por tema' },
   { id: 'rentabilidad', label: 'Rentabilidad' },
   { id: 'plan', label: 'Plan de estudio' },
   { id: 'temas', label: 'Tema a tema' },
@@ -50,16 +55,23 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
   const history = guide.perYear.filter((item) => item.year !== guide.perYear.at(-1)?.year)
   const lastYear = guide.perYear.at(-1)?.year ?? 0
   const average = history.reduce((acc, item) => acc + item.count, 0) / history.length
-  const topicsByPriority = [...guide.topics].sort((a, b) => b.historyCount - a.historyCount)
-  const maxCount = topicsByPriority[0]?.historyCount ?? 1
-  const topicsById = Object.fromEntries(guide.topics.map((topic) => [topic.id, topic]))
+  const years = guide.perYear.map((item) => item.year)
+  const topics = withStats(guide.topics)
+  const topicsByPriority = [...topics].sort((a, b) => b.stats.historyCount - a.stats.historyCount)
+  const topicsByForecast = [...topics].sort(
+    (a, b) => b.stats.forecast - a.stats.forecast || b.stats.historyCount - a.stats.historyCount,
+  )
+  const maxTopicYearCount = Math.max(...topics.flatMap((topic) => topic.perYear))
+  const earlierLabel = `${years[0]}–${years[years.length - RECENT_WINDOW - 1]}`
+  const recentLabel = `${years[years.length - RECENT_WINDOW]}–${lastYear}`
+  const topicsById = Object.fromEntries(topics.map((topic) => [topic.id, topic]))
   const minCount = Math.min(...history.map((item) => item.count))
   const maxYearCount = Math.max(...history.map((item) => item.count))
   const planDays = guide.plan.reduce((acc, step) => acc + step.days, 0)
   const topThree = topicsByPriority.slice(0, 3)
   const topThreeShare = Math.round(
-    (topThree.reduce((acc, topic) => acc + topic.historyCount, 0) /
-      guide.topics.reduce((acc, topic) => acc + topic.historyCount, 0)) *
+    (topThree.reduce((acc, topic) => acc + topic.stats.historyCount, 0) /
+      topics.reduce((acc, topic) => acc + topic.stats.historyCount, 0)) *
       100,
   )
 
@@ -146,17 +158,37 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
             </p>
           </section>
 
-          <section id="prioridades" className="flex scroll-mt-24 flex-col gap-5 rounded-2xl border border-[#EAE4E2] bg-white p-5 sm:p-6">
-            <SectionHeading icon="format_list_numbered" title="Mapa de prioridades" subtitle="Temas ordenados por lo que se pregunta. Pulsa uno para ver su resumen." />
-            <GuidePriorityMap topics={guide.topics} lastExamLabel={guide.lastExam} />
+          <section id="tendencias" className="flex scroll-mt-24 flex-col gap-5 rounded-2xl border border-[#EAE4E2] bg-white p-5 sm:p-6">
+            <SectionHeading
+              icon="swap_vert"
+              title="Qué sube y qué baja"
+              subtitle={`Preguntas por año: ${earlierLabel} frente a los últimos ${RECENT_WINDOW} MIR (${recentLabel}).`}
+            />
+            <GuideTrendShift topics={topics} earlierLabel={earlierLabel} recentLabel={recentLabel} />
           </section>
         </div>
+
+        {/* Prioridades */}
+        <section id="prioridades" className="flex scroll-mt-24 flex-col gap-5 rounded-2xl border border-[#EAE4E2] bg-white p-5 sm:p-6">
+          <SectionHeading
+            icon="format_list_numbered"
+            title="Mapa de prioridades"
+            subtitle={`Ordenado por la previsión para el ${guide.targetExam}, que pesa más lo reciente. Pulsa un tema para ver su resumen.`}
+          />
+          <GuidePriorityMap topics={topicsByForecast} recentYears={years.slice(-RECENT_WINDOW)} targetExam={guide.targetExam} />
+        </section>
+
+        {/* Evolución por tema */}
+        <section id="evolucion" className="flex scroll-mt-24 flex-col gap-5 rounded-2xl border border-[#EAE4E2] bg-white p-5 sm:p-6">
+          <SectionHeading icon="grid_on" title="Evolución tema a tema" subtitle={`Preguntas de cada tema en cada MIR, ${years[0]}–${lastYear}.`} />
+          <GuideHeatmap topics={topicsByForecast} years={years} />
+        </section>
 
         {/* Rentabilidad + plan */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <section id="rentabilidad" className="flex scroll-mt-24 flex-col gap-5 rounded-2xl border border-[#EAE4E2] bg-white p-5 sm:p-6">
             <SectionHeading icon="scatter_plot" title="Esfuerzo frente a recompensa" subtitle="Dónde rinde más cada hora de estudio." />
-            <GuideEffortMatrix topics={guide.topics} />
+            <GuideEffortMatrix topics={topics} />
             <TierLegend />
           </section>
 
@@ -206,14 +238,16 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
           <SectionHeading
             icon="menu_book"
             title="Tema a tema"
-            subtitle="De más a menos preguntado. Cada tema dice dónde se concentran las preguntas y lo que hay que llevar sabido."
+            subtitle="De más a menos preguntado (2015–2025). Cada tema dice dónde se concentran las preguntas y lo que hay que llevar sabido."
           />
           <div className="flex flex-col gap-3">
             {topicsByPriority.map((topic, index) => (
               <GuideTopicCard
                 key={topic.id}
                 topic={topic}
-                maxCount={maxCount}
+                years={years}
+                maxYearCount={maxTopicYearCount}
+                targetExam={guide.targetExam}
                 lastExamLabel={guide.lastExam}
                 questions={guide.questions.filter((question) => question.topicId === topic.id)}
                 defaultOpen={index === 0}

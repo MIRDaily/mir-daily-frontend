@@ -1,8 +1,8 @@
-import type { GuideTopic } from '@/types/studyGuide'
+import type { GuideTopicWithStats } from '@/lib/studyGuides/stats'
 import { TIER_STYLES } from '@/components/library/guide/guideStyles'
 
 type GuideEffortMatrixProps = {
-  topics: GuideTopic[]
+  topics: GuideTopicWithStats[]
 }
 
 const WIDTH = 640
@@ -44,7 +44,7 @@ function y(questions: number) {
 export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
   const splitX = x(12)
   const splitY = y(10)
-  const minorCount = topics.filter((topic) => topic.historyCount < LABEL_MIN_QUESTIONS).length
+  const minorCount = topics.filter((topic) => topic.stats.historyCount < LABEL_MIN_QUESTIONS).length
 
   return (
     <figure className="flex flex-col gap-3">
@@ -57,7 +57,7 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
         >
           <rect x={PAD.left} y={PAD.top} width={splitX - PAD.left} height={splitY - PAD.top} fill="#8BA888" fillOpacity={0.08} rx={10} />
           <rect x={splitX} y={PAD.top} width={WIDTH - PAD.right - splitX} height={splitY - PAD.top} fill="#E8A598" fillOpacity={0.07} rx={10} />
-  
+
           <text x={PAD.left + 10} y={PAD.top + 18} className="fill-[#5E7D5B] text-[12px] font-bold">
             Máxima rentabilidad
           </text>
@@ -76,10 +76,10 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
           <text x={splitX - 10} y={splitY + 22} textAnchor="end" className="fill-[#7D8A96] text-[12px] font-bold">
             Pasada rápida
           </text>
-  
+
           <line x1={PAD.left} y1={HEIGHT - PAD.bottom} x2={WIDTH - PAD.right} y2={HEIGHT - PAD.bottom} stroke="#2C3E50" strokeOpacity={0.25} />
           <line x1={PAD.left} y1={PAD.top} x2={PAD.left} y2={HEIGHT - PAD.bottom} stroke="#2C3E50" strokeOpacity={0.25} />
-  
+
           {[0, 7, 14, 21, 28].map((tick) => (
             <text key={`x-${tick}`} x={x(tick)} y={HEIGHT - PAD.bottom + 16} textAnchor="middle" className="fill-[#7D8A96] text-[10.5px]">
               {tick}
@@ -102,17 +102,17 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
           >
             Recompensa → preguntas 2015–2025
           </text>
-  
+
           {topics.map((topic) => {
             const cx = x(topic.pages + (POINT_NUDGE[topic.id] ?? 0))
-            const cy = y(topic.historyCount)
+            const cy = y(topic.stats.historyCount)
             const offset = LABEL_OFFSETS[topic.id]
-            const showLabel = topic.historyCount >= LABEL_MIN_QUESTIONS && offset
+            const showLabel = topic.stats.historyCount >= LABEL_MIN_QUESTIONS && offset
             return (
               <g key={topic.id}>
                 <a href={`#tema-${topic.id}`}>
-                  <title>{`${topic.name}: ${topic.historyCount} preguntas, ~${topic.pages} páginas`}</title>
-                  <circle cx={cx} cy={cy} r={topic.historyCount >= LABEL_MIN_QUESTIONS ? 8 : 5.5} fill={TIER_STYLES[topic.tier].color} stroke="#fff" strokeWidth={2} />
+                  <title>{`${topic.name}: ${topic.stats.historyCount} preguntas, ~${topic.pages} páginas`}</title>
+                  <circle cx={cx} cy={cy} r={topic.stats.historyCount >= LABEL_MIN_QUESTIONS ? 8 : 5.5} fill={TIER_STYLES[topic.tier].color} stroke="#fff" strokeWidth={2} />
                 </a>
                 {showLabel ? (
                   <text x={cx + offset.dx} y={cy + offset.dy} textAnchor={offset.anchor} className="fill-[#2C3E50] text-[12px] font-semibold">
@@ -122,7 +122,7 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
               </g>
             )
           })}
-  
+
           <text x={x(6.8)} y={y(2) + 4} className="fill-[#7D8A96] text-[11px]">
             {`← ${minorCount} temas menores`}
           </text>

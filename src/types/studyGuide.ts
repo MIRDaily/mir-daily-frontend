@@ -12,10 +12,8 @@ export type GuideTopic = {
   name: string
   shortName: string
   tier: GuideTier
-  /** Preguntas en el periodo histórico (ver StudyGuide.historyRange) */
-  historyCount: number
-  /** Preguntas del bloque principal en el último MIR */
-  lastExamCount: number
+  /** Preguntas por año, alineadas con StudyGuide.perYear (el último valor es el último MIR) */
+  perYear: number[]
   /** Preguntas de reserva del último MIR asignadas al tema */
   lastExamReserve: number
   /** Extensión aproximada del tema en páginas de un manual de referencia */
