@@ -22,6 +22,16 @@ type SpyState = {
   headerHeight: number
 }
 
+type Fade = { top: boolean; bottom: boolean }
+
+// Máscara que difumina el borde superior y/o inferior del índice cuando hay contenido oculto.
+function fadeMask({ top, bottom }: Fade) {
+  if (!top && !bottom) return undefined
+  const start = top ? 'transparent 0, #000 28px' : '#000 0'
+  const end = bottom ? '#000 calc(100% - 40px), transparent 100%' : '#000 100%'
+  return `linear-gradient(to bottom, ${start}, ${end})`
+}
+
 // Separación entre el borde del índice y el inicio de la línea vertical (top-1 / bottom-1).
 const LINE_INSET = 4
 
@@ -137,6 +147,29 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
   const fillRef = useRef<HTMLDivElement>(null)
   const highlightRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
+  const navRef = useRef<HTMLElement>(null)
+  const [fade, setFade] = useState<Fade>({ top: false, bottom: false })
+
+  // Estado de los difuminados: si queda índice oculto por arriba o por abajo.
+  useEffect(() => {
+    const nav = navRef.current
+    if (!nav) return
+    const update = () => {
+      const top = nav.scrollTop > 2
+      const bottom = nav.scrollTop + nav.clientHeight < nav.scrollHeight - 2
+      setFade((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }))
+    }
+    const initial = window.setTimeout(update, 0)
+    nav.addEventListener('scroll', update, { passive: true })
+    const observer = new ResizeObserver(update)
+    observer.observe(nav)
+    Array.from(nav.children).forEach((child) => observer.observe(child))
+    return () => {
+      window.clearTimeout(initial)
+      nav.removeEventListener('scroll', update)
+      observer.disconnect()
+    }
+  }, [variant])
 
   useEffect(() => {
     const update = () => setSpy(readSpyState(items))
@@ -231,7 +264,23 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
     highlight.style.top = `${top}px`
     highlight.style.height = `${bottom - top}px`
     highlight.style.opacity = '1'
-  }, [lastActiveIndex, spy.fraction, spy.active, layoutTick])
+
+    // El índice sigue a la lectura: si el tema (o apartado) en curso queda fuera de la parte
+    // visible del índice, lo desplaza. Solo mueve el índice (nav.scrollTo), nunca la página.
+    const nav = navRef.current
+    if (!nav || nav.scrollHeight <= nav.clientHeight) return
+    const target =
+      (spy.activeChild ? timeline.querySelector<HTMLElement>(`a[href="#${CSS.escape(spy.activeChild)}"]`) : null) ??
+      timeline.querySelector<HTMLElement>(`[data-toc-row="${CSS.escape(spy.active[0] ?? '')}"]`)
+    if (!target) return
+    const navRect = nav.getBoundingClientRect()
+    const rect = target.getBoundingClientRect()
+    const margin = 56
+    if (rect.top < navRect.top + margin || rect.bottom > navRect.bottom - margin) {
+      const offset = rect.top - navRect.top - nav.clientHeight / 2 + rect.height / 2
+      nav.scrollTo({ top: nav.scrollTop + offset, behavior: 'smooth' })
+    }
+  }, [lastActiveIndex, spy.fraction, spy.active, spy.activeChild, layoutTick])
   const percent = Math.round(spy.progress * 100)
 
   const handleClick = (event: React.MouseEvent, id: string) => {
@@ -243,9 +292,17 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
   if (variant === 'sidebar') {
     return (
       <nav
+        ref={navRef}
         aria-label="Índice de la guía"
-        className="sticky hidden max-h-[calc(100vh-7rem)] flex-col gap-4 overflow-y-auto pt-1 pr-1 pb-6 pl-2 xl:flex"
-        style={{ top: spy.headerHeight + 24 }}
+        className="sticky hidden flex-col gap-4 overflow-y-auto pt-1 pr-1 pb-6 pl-2 [scrollbar-width:none] xl:flex [&::-webkit-scrollbar]:hidden"
+        style={{
+          top: spy.headerHeight + 24,
+          // Cabe entero entre la cabecera y el borde inferior de la pantalla.
+          maxHeight: `calc(100vh - ${spy.headerHeight + 40}px)`,
+          // Sin barra de scroll: los bordes se difuminan cuando hay más índice por ese lado.
+          maskImage: fadeMask(fade),
+          WebkitMaskImage: fadeMask(fade),
+        }}
       >
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-bold tracking-wider text-[#7D8A96] uppercase">Índice</span>
@@ -316,7 +373,7 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
                                 href={`#${child.id}`}
                                 onClick={(event) => handleClick(event, child.id)}
                                 aria-current={childActive ? 'location' : undefined}
-                                className={`-ml-px flex items-center gap-2 border-l-2 py-1 pr-2 pl-3 text-xs transition-colors ${
+                                className={`-ml-px flex items-center gap-2 border-l-2 py-[3px] pr-2 pl-3 text-xs transition-colors ${
                                   childActive
                                     ? 'border-[#2C3E50] font-semibold text-[#2C3E50]'
                                     : 'border-transparent text-[#7D8A96] hover:text-[#2C3E50]'
