@@ -294,16 +294,20 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
                     <span className="relative">{item.label}</span>
                   </a>
 
-                  <AnimatePresence initial={false}>
-                    {showChildren ? (
-                      <motion.ol
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.25, ease: 'easeOut' }}
-                        onAnimationComplete={() => setLayoutTick((tick) => tick + 1)}
-                        className="ml-4 flex flex-col overflow-hidden border-l border-[#EAE4E2] py-1"
-                      >
+                  {/* Subíndice con CSS puro (grid 0fr → 1fr). NO usar height: 'auto' de framer-motion:
+                      para medirlo llama a window.scrollTo(0, y) y eso cancela el scroll suave de los
+                      saltos (el subíndice se abre/cierra justo mientras la página se desplaza). */}
+                  {item.children && item.children.length > 0 ? (
+                    <div
+                      className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
+                        showChildren ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                      }`}
+                      inert={!showChildren}
+                      onTransitionEnd={(event) => {
+                        if (event.propertyName === 'grid-template-rows') setLayoutTick((tick) => tick + 1)
+                      }}
+                    >
+                      <ol className="ml-4 flex min-h-0 flex-col overflow-hidden border-l border-[#EAE4E2]">
                         {item.children?.map((child) => {
                           const childActive = spy.activeChild === child.id
                           return (
@@ -326,9 +330,9 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
                             </li>
                           )
                         })}
-                      </motion.ol>
-                    ) : null}
-                  </AnimatePresence>
+                      </ol>
+                    </div>
+                  ) : null}
                 </li>
               )
             })}
