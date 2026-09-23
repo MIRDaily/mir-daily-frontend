@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 export type GuideTocChild = { id: string; label: string; color?: string }
@@ -16,9 +16,14 @@ type SpyState = {
   /** Secciones activas (más de una si están lado a lado en la misma fila) */
   active: string[]
   activeChild: string | null
+  /** Cuánto se ha recorrido (0-1) del último apartado activo hasta el siguiente */
+  fraction: number
   progress: number
   headerHeight: number
 }
+
+// Separación entre el borde del índice y el inicio de la línea vertical (top-1 / bottom-1).
+const LINE_INSET = 4
 
 // Un bloque cuenta como "en curso" cuando su borde superior ha pasado esta línea bajo la cabecera.
 const SPY_OFFSET = 48
@@ -57,7 +62,19 @@ function readSpyState(items: GuideTocItem[]): SpyState {
   const scrollable = document.documentElement.scrollHeight - window.innerHeight
   const progress = scrollable > 0 ? Math.min(1, Math.max(0, window.scrollY / scrollable)) : 0
 
-  return { active, activeChild, progress, headerHeight }
+  // Avance dentro del apartado en curso: de su borde superior al del siguiente (o al final de la página).
+  const lastIndex = items.findLastIndex((item) => active.includes(item.id))
+  let fraction = 0
+  const current = lastIndex >= 0 ? document.getElementById(items[lastIndex].id) : null
+  if (current) {
+    const top = current.getBoundingClientRect().top
+    const next = items[lastIndex + 1] ? document.getElementById(items[lastIndex + 1].id) : null
+    const end = next ? next.getBoundingClientRect().top : top + current.getBoundingClientRect().height
+    fraction = end > top ? Math.min(1, Math.max(0, (line - top) / (end - top))) : 0
+    if (!next && progress >= 0.999) fraction = 1
+  }
+
+  return { active, activeChild, fraction, progress, headerHeight }
 }
 
 function goTo(id: string) {
@@ -69,8 +86,12 @@ function goTo(id: string) {
 }
 
 export default function GuideTableOfContents({ items, variant }: GuideTableOfContentsProps) {
-  const [spy, setSpy] = useState<SpyState>({ active: [], activeChild: null, progress: 0, headerHeight: 0 })
+  const [spy, setSpy] = useState<SpyState>({ active: [], activeChild: null, fraction: 0, progress: 0, headerHeight: 0 })
   const [mobileOpen, setMobileOpen] = useState(false)
+  // Se incrementa al terminar de desplegar un subíndice para volver a medir la línea.
+  const [layoutTick, setLayoutTick] = useState(0)
+  const timelineRef = useRef<HTMLDivElement>(null)
+  const fillRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const update = () => setSpy(readSpyState(items))
@@ -88,6 +109,27 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
   }, [items])
 
   const current = items.find((item) => spy.active.includes(item.id)) ?? items[0]
+  const firstActiveIndex = items.findIndex((item) => spy.active.includes(item.id))
+  const lastActiveIndex = items.findLastIndex((item) => spy.active.includes(item.id))
+
+  // La línea llega al punto del apartado en curso y avanza hacia el siguiente según lo leído.
+  useLayoutEffect(() => {
+    const timeline = timelineRef.current
+    const fill = fillRef.current
+    if (!timeline || !fill) return
+    const base = timeline.getBoundingClientRect().top + LINE_INSET
+    const centers = Array.from(timeline.querySelectorAll<HTMLElement>('[data-toc-dot]')).map((dot) => {
+      const rect = dot.getBoundingClientRect()
+      return rect.top + rect.height / 2 - base
+    })
+    if (lastActiveIndex < 0 || centers.length === 0) {
+      fill.style.height = '0px'
+      return
+    }
+    const from = centers[lastActiveIndex]
+    const to = centers[lastActiveIndex + 1] ?? timeline.getBoundingClientRect().height - LINE_INSET * 2
+    fill.style.height = `${Math.max(0, from + (to - from) * spy.fraction)}px`
+  }, [lastActiveIndex, spy.fraction, layoutTick])
   const percent = Math.round(spy.progress * 100)
 
   const handleClick = (event: React.MouseEvent, id: string) => {
@@ -100,7 +142,7 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
     return (
       <nav
         aria-label="Índice de la guía"
-        className="sticky hidden max-h-[calc(100vh-7rem)] flex-col gap-4 overflow-y-auto pr-1 pb-6 xl:flex"
+        className="sticky hidden max-h-[calc(100vh-7rem)] flex-col gap-4 overflow-y-auto pt-1 pr-1 pb-6 pl-2 xl:flex"
         style={{ top: spy.headerHeight + 24 }}
       >
         <div className="flex items-center justify-between">
@@ -108,20 +150,26 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
           <span className="text-[11px] font-semibold text-[#7D8A96] tabular-nums">{percent}%</span>
         </div>
 
-        <div className="relative pl-5">
+        <div ref={timelineRef} className="relative pl-5">
           <div className="absolute top-1 bottom-1 left-[5px] w-0.5 overflow-hidden rounded-full bg-[#EAE4E2]" aria-hidden>
-            <div className="w-full rounded-full bg-[#E8A598] transition-[height] duration-150" style={{ height: `${percent}%` }} />
+            <div ref={fillRef} className="h-0 w-full rounded-full bg-[#E8A598] transition-[height] duration-200 ease-out" />
           </div>
 
           <ol className="flex flex-col gap-0.5">
-            {items.map((item) => {
+            {items.map((item, index) => {
               const isActive = spy.active.includes(item.id)
+              const isPassed = firstActiveIndex >= 0 && index < firstActiveIndex
               const showChildren = isActive && item.children && item.children.length > 0
               return (
                 <li key={item.id} className="relative">
                   <span
-                    className={`absolute top-[13px] -left-5 h-3 w-3 rounded-full border-2 transition-all duration-300 ${
-                      isActive ? 'scale-110 border-[#E8A598] bg-[#E8A598] shadow-[0_0_0_4px_rgba(232,165,152,0.2)]' : 'border-[#D5CFCB] bg-[#FAF7F4]'
+                    data-toc-dot
+                    className={`absolute top-[13px] -left-5 z-10 h-3 w-3 rounded-full border-2 transition-all duration-300 ${
+                      isActive
+                        ? 'scale-110 border-[#E8A598] bg-[#E8A598] shadow-[0_0_0_4px_rgba(232,165,152,0.2)]'
+                        : isPassed
+                          ? 'border-[#E8A598] bg-white'
+                          : 'border-[#D5CFCB] bg-[#FAF7F4]'
                     }`}
                     aria-hidden
                   />
@@ -151,6 +199,7 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.25, ease: 'easeOut' }}
+                        onAnimationComplete={() => setLayoutTick((tick) => tick + 1)}
                         className="ml-4 flex flex-col overflow-hidden border-l border-[#EAE4E2] py-1"
                       >
                         {item.children?.map((child) => {
