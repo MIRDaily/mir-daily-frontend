@@ -1,17 +1,17 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useRevealOnce } from '@/components/library/guide/GuideReveal'
+import { useReveal } from '@/components/library/guide/GuideReveal'
 
 type GuideCountUpProps = {
   to: number
   durationMs?: number
 }
 
-// Cuenta de 0 a `to` al entrar en pantalla. Sin JS o con movimiento reducido muestra el valor final.
+// Cuenta de 0 a `to` cada vez que entra en pantalla. Sin JS o con movimiento reducido muestra el valor final.
 export default function GuideCountUp({ to, durationMs = 1100 }: GuideCountUpProps) {
   const ref = useRef<HTMLSpanElement>(null)
-  const visible = useRevealOnce(ref, 0.4)
+  const visible = useReveal(ref, 0.4)
   const [value, setValue] = useState(to)
 
   useEffect(() => {

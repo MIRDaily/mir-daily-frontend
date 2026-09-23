@@ -1924,6 +1924,10 @@ textarea:disabled {
   left: var(--from);
   transition: left 1s cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--i, 0) * 70ms + 200ms);
 }
+/* Al rearmarse (bloque ya fuera de pantalla) vuelve al estado inicial sin transición */
+.guia-reveal:not(.guia-visible) :is(.guia-grow-y, .guia-grow-x, .guia-pop, .guia-fade-up, .guia-fade, .guia-slide) {
+  transition: none;
+}
 .guia-reveal.guia-visible .guia-grow-y,
 .guia-reveal.guia-visible .guia-grow-x,
 .guia-reveal.guia-visible .guia-pop,
