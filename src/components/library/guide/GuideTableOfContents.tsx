@@ -25,14 +25,16 @@ type SpyState = {
 // Separación entre el borde del índice y el inicio de la línea vertical (top-1 / bottom-1).
 const LINE_INSET = 4
 
-// Un bloque cuenta como "en curso" cuando su borde superior ha pasado esta línea bajo la cabecera.
-const SPY_OFFSET = 48
+// Línea de lectura: un bloque cuenta como "en curso" cuando su borde superior pasa este punto
+// de la zona visible (0 = justo bajo la cabecera, 1 = borde inferior de la pantalla).
+const READING_LINE = 0.35
 
 function readSpyState(items: GuideTocItem[]): SpyState {
   // La cabecera global es un nav sticky top-0 (GlobalHeader/AppHeader).
   const header = document.querySelector('.sticky.top-0')
   const headerHeight = header ? header.getBoundingClientRect().height : 0
-  const line = headerHeight + SPY_OFFSET
+  const line = headerHeight + (window.innerHeight - headerHeight) * READING_LINE
+  const atBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 4
 
   let bestTop = -Infinity
   let active: string[] = []
@@ -49,6 +51,9 @@ function readSpyState(items: GuideTocItem[]): SpyState {
     }
   }
   if (active.length === 0 && items[0]) active = [items[0].id]
+  // Al tocar fondo el último apartado ya no puede llegar a la línea de lectura: se marca igualmente.
+  const lastItem = items.at(-1)
+  if (atBottom && lastItem && document.getElementById(lastItem.id)) active = [lastItem.id]
 
   let activeChild: string | null = null
   for (const item of items) {
@@ -92,6 +97,7 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
   const [layoutTick, setLayoutTick] = useState(0)
   const timelineRef = useRef<HTMLDivElement>(null)
   const fillRef = useRef<HTMLDivElement>(null)
+  const highlightRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const update = () => setSpy(readSpyState(items))
@@ -129,7 +135,23 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
     const from = centers[lastActiveIndex]
     const to = centers[lastActiveIndex + 1] ?? timeline.getBoundingClientRect().height - LINE_INSET * 2
     fill.style.height = `${Math.max(0, from + (to - from) * spy.fraction)}px`
-  }, [lastActiveIndex, spy.fraction, layoutTick])
+
+    const highlight = highlightRef.current
+    if (!highlight) return
+    const timelineTop = timeline.getBoundingClientRect().top
+    const rows = Array.from(timeline.querySelectorAll<HTMLElement>('[data-toc-row]'))
+      .filter((row) => spy.active.includes(row.dataset.tocRow ?? ''))
+      .map((row) => row.getBoundingClientRect())
+    if (rows.length === 0) {
+      highlight.style.opacity = '0'
+      return
+    }
+    const top = Math.min(...rows.map((rect) => rect.top)) - timelineTop
+    const bottom = Math.max(...rows.map((rect) => rect.bottom)) - timelineTop
+    highlight.style.top = `${top}px`
+    highlight.style.height = `${bottom - top}px`
+    highlight.style.opacity = '1'
+  }, [lastActiveIndex, spy.fraction, spy.active, layoutTick])
   const percent = Math.round(spy.progress * 100)
 
   const handleClick = (event: React.MouseEvent, id: string) => {
@@ -154,6 +176,12 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
           <div className="absolute top-1 bottom-1 left-[5px] w-0.5 overflow-hidden rounded-full bg-[#EAE4E2]" aria-hidden>
             <div ref={fillRef} className="h-0 w-full rounded-full bg-[#E8A598] transition-[height] duration-200 ease-out" />
           </div>
+          {/* Un solo recuadro que abarca todos los apartados en curso (pueden ser dos lado a lado) */}
+          <div
+            ref={highlightRef}
+            className="pointer-events-none absolute right-0 left-5 rounded-xl bg-white opacity-0 shadow-sm ring-1 ring-[#EAE4E2] transition-[top,height,opacity] duration-300 ease-out"
+            aria-hidden
+          />
 
           <ol className="flex flex-col gap-0.5">
             {items.map((item, index) => {
@@ -176,18 +204,12 @@ export default function GuideTableOfContents({ items, variant }: GuideTableOfCon
                   <a
                     href={`#${item.id}`}
                     onClick={(event) => handleClick(event, item.id)}
+                    data-toc-row={item.id}
                     aria-current={isActive ? 'location' : undefined}
                     className={`relative flex items-center gap-2 rounded-xl px-2.5 py-2 text-[13px] leading-tight transition-colors ${
                       isActive ? 'font-bold text-[#2C3E50]' : 'text-[#7D8A96] hover:text-[#2C3E50]'
                     }`}
                   >
-                    {spy.active[0] === item.id ? (
-                      <motion.span
-                        layoutId="guia-toc-active"
-                        className="absolute inset-0 rounded-xl bg-white shadow-sm ring-1 ring-[#EAE4E2]"
-                        transition={{ type: 'spring', stiffness: 400, damping: 36 }}
-                      />
-                    ) : null}
                     <span className={`material-symbols-outlined relative text-[17px] ${isActive ? 'text-[#E8A598]' : ''}`}>{item.icon}</span>
                     <span className="relative">{item.label}</span>
                   </a>
