@@ -182,7 +182,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       id: 'autoinmunes-snc',
       code: 'AUT',
       name: 'Enfermedades autoinmunes del SNC',
-      shortName: 'EM y autoinmunes',
+      shortName: 'Autoinmunes SNC',
       tier: 'alta',
       perYear: [1, 1, 1, 1, 1, 1, 1, 0, 1, 2, 1, 1],
       lastExamReserve: 0,
