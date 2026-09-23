@@ -1,7 +1,7 @@
 import type { StudyGuide } from '@/types/studyGuide'
 
 // Pesos: preguntas MIR 2015-2025 por tema + clasificación propia del MIR 2026
-// (cuaderno oficial, versión 0). Respuestas del 2026 razonadas, no plantilla oficial.
+// (cuaderno oficial, versión 0). Respuestas del 2026 contrastadas con las definitivas publicadas tras las impugnaciones.
 export const NEUROLOGIA_GUIDE: StudyGuide = {
   subjectId: 'neurologia',
   title: 'Neurología y Neurocirugía',
@@ -642,6 +642,23 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
         'Mujer joven y obesa, con presión de LCR alta y composición normal. El papiledema mantenido puede dejar pérdida visual. Se trata con pérdida de peso y acetazolamida.',
     },
     {
+      number: 15,
+      kind: 'frontera',
+      topicId: 'neuropatias',
+      tag: 'Nefrología · Amiloidosis',
+      stem: 'Se muestra la biopsia (IMAGEN 15) de un paciente con una enfermedad sistémica que puede afectar a múltiples órganos. Prestando atención a la posible afectación neurológica, ¿qué hallazgo le parece más probable?',
+      imageUrl: 'https://pub-a0af2de03fec4dd2b89a37964efd1716.r2.dev/questions/2026/15.png',
+      options: [
+        'Hipotensión ortostática sin respuesta cronotrópica adecuada.',
+        'Nistagmo horizontal.',
+        'Edema de papila.',
+        'Debilidad muscular proximal sin alteraciones sensitivas.',
+      ],
+      correct: 1,
+      explanation:
+        'La biopsia muestra un glomérulo ocupado por material rosado, amorfo y sin células: amiloide (se confirma con rojo Congo). La amiloidosis afecta al sistema nervioso periférico, sobre todo al autónomo: hipotensión ortostática sin taquicardia compensadora. Nistagmo y papiledema serían del sistema nervioso central; la debilidad proximal pura, de una miopatía.',
+    },
+    {
       number: 101,
       kind: 'frontera',
       topicId: 'neurocirugia',
@@ -708,5 +725,5 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     },
   ],
   sourcesNote:
-    'Pesos calculados con el recuento de preguntas MIR de Neurología y Neurocirugía de 2015 a 2025 y con la clasificación de las preguntas del MIR 2026 (cuaderno oficial, versión 0). Las respuestas del MIR 2026 están razonadas por MIRDaily; no son la plantilla oficial. La previsión para el MIR 2027 es una media ponderada (70 % los últimos 5 MIR, 30 % los anteriores): orientativa, no una predicción exacta. La extensión de cada tema es aproximada.',
+    'Pesos calculados con el recuento de preguntas MIR de Neurología y Neurocirugía de 2015 a 2025 y con la clasificación de las preguntas del MIR 2026 (cuaderno oficial, versión 0). Las respuestas del MIR 2026 están contrastadas con las definitivas publicadas tras las impugnaciones (ninguna de estas preguntas fue anulada). La previsión para el MIR 2027 es una media ponderada (70 % los últimos 5 MIR, 30 % los anteriores): orientativa, no una predicción exacta. La extensión de cada tema es aproximada.',
 }

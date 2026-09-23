@@ -5,6 +5,7 @@ import type { GuideQuestion } from '@/types/studyGuide'
 import { QUESTION_KIND_STYLES } from '@/components/library/guide/guideStyles'
 import { useGuideQuiz } from '@/components/library/guide/GuideQuiz'
 import { goTo } from '@/components/library/guide/GuideTableOfContents'
+import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 
 type GuideQuestionCardProps = {
   question: GuideQuestion
@@ -56,6 +57,16 @@ export default function GuideQuestionCard({ question, lastExamLabel }: GuideQues
       </header>
 
       <p className="text-sm leading-relaxed font-medium text-[#2C3E50]">{question.stem}</p>
+
+      {question.imageUrl ? (
+        <div className="flex justify-center rounded-xl bg-[#F9F8F7] p-3">
+          <ZoomableImage
+            url={question.imageUrl}
+            alt={`Imagen de la pregunta ${question.number} del ${lastExamLabel}`}
+            className="max-h-64 w-auto rounded-lg object-contain"
+          />
+        </div>
+      ) : null}
 
       <ol className="flex flex-col gap-1.5" role={revealed ? undefined : 'radiogroup'} aria-label="Opciones">
         {question.options.map((option, index) => {

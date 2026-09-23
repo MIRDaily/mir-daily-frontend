@@ -285,7 +285,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
             <SectionHeading
               icon="quiz"
               title={`${guide.lastExam} comentado`}
-              subtitle="Marca tu respuesta y corrígete. Las respuestas están razonadas por MIRDaily; no son la plantilla oficial."
+              subtitle="Marca tu respuesta y corrígete. Respuestas contrastadas con las definitivas publicadas tras las impugnaciones."
             />
             <GuideQuizScore total={guide.questions.length} />
             {QUESTION_GROUPS.map((group) => {

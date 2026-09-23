@@ -36,6 +36,8 @@ export type GuideQuestion = {
   options: [string, string, string, string]
   correct: 1 | 2 | 3 | 4
   explanation: string
+  /** Imagen de la pregunta (cuadernillo de imágenes), si la tiene */
+  imageUrl?: string
 }
 
 export type GuideInsight = {
