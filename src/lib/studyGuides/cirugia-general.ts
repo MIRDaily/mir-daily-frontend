@@ -600,7 +600,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
       ],
       correct: 2,
       explanation:
-        'Cólico, ictericia con bilirrubina directa, sin fiebre ni leucocitosis: coledocolitiasis (litiasis en la ecografía y defecto en el colédoco en la colangio-RM). CPRE con extracción y colecistectomía después. Sin fiebre no hay colangitis.',
+        'Cólico, ictericia con bilirrubina directa, sin fiebre ni leucocitosis: coledocolitiasis. La clave es la clínica; la ecografía muestra la litiasis vesicular y la colangio-RM es la prueba para confirmarla en el colédoco. CPRE con extracción y colecistectomía después. Sin fiebre no hay colangitis.',
     },
     {
       number: 13,
@@ -617,7 +617,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
       ],
       correct: 4,
       explanation:
-        'ANULADA. Cirrótico alcohólico con hemólisis (bilirrubina indirecta, haptoglobina indetectable) y acantocitos en el frotis: anemia por "células en espuela" de la hepatopatía avanzada. La oficial provisional era la 4, pero "acantocitosis" es un hallazgo más que un diagnóstico y la hepatitis alcohólica también encajaba.',
+        'ANULADA. Cirrótico alcohólico con hemólisis (bilirrubina indirecta, haptoglobina indetectable): la oficial provisional era la 4, anemia por acantocitos ("células en espuela") de la hepatopatía avanzada. Pero el frotis del cuadernillo no permite distinguir bien los acantocitos, "acantocitosis" es un hallazgo más que un diagnóstico y la hepatitis alcohólica también encajaba.',
     },
     {
       number: 14,
@@ -668,7 +668,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
       ],
       correct: 2,
       explanation:
-        'Epigastralgia que evoluciona a abdomen en tabla y aire libre en la radiografía en decúbito lateral con rayo horizontal: neumoperitoneo por perforación (típicamente úlcera péptica). Cirugía urgente.',
+        'Epigastralgia que evoluciona a abdomen en tabla: perforación de víscera hueca (típicamente úlcera péptica). La radiografía en decúbito lateral con rayo horizontal busca aire libre; en la imagen no es muy llamativo, así que pesa la clínica (la TC es más sensible). Cirugía urgente.',
     },
     {
       number: 76,
