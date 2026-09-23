@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import GuideEffortMatrix from '@/components/library/guide/GuideEffortMatrix'
@@ -8,7 +9,9 @@ import GuideQuestionCard from '@/components/library/guide/GuideQuestionCard'
 import GuideTopicCard from '@/components/library/guide/GuideTopicCard'
 import GuideTrendChart from '@/components/library/guide/GuideTrendChart'
 import GuideTrendShift from '@/components/library/guide/GuideTrendShift'
-import { TIER_STYLES } from '@/components/library/guide/guideStyles'
+import { TIER_STYLES, cssVars } from '@/components/library/guide/guideStyles'
+import GuideCountUp from '@/components/library/guide/GuideCountUp'
+import GuideReveal from '@/components/library/guide/GuideReveal'
 import { getStudyGuide } from '@/lib/studyGuides'
 import { RECENT_WINDOW, withStats } from '@/lib/studyGuides/stats'
 import type { GuideQuestionKind, GuideTier } from '@/types/studyGuide'
@@ -102,14 +105,14 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
             </div>
 
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatTile value={average.toLocaleString('es-ES', { maximumFractionDigits: 0 })} label={`preguntas por año de media (${guide.historyRange})`} />
+              <StatTile value={<GuideCountUp to={Math.round(average)} />} label={`preguntas por año de media (${guide.historyRange})`} />
               <StatTile
-                value={`${guide.lastExamTotal}+${guide.lastExamReserveTotal}`}
+                value={<><GuideCountUp to={guide.lastExamTotal} />+<GuideCountUp to={guide.lastExamReserveTotal} /></>}
                 label={`en el ${guide.lastExam} (bloque + reserva)`}
                 accent
               />
-              <StatTile value={`${topThreeShare}%`} label={`de las preguntas salen de ${topThree.map((topic) => topic.shortName).join(', ')}`} />
-              <StatTile value={`1 de ${Math.round(210 / average)}`} label="preguntas del MIR es de esta asignatura" />
+              <StatTile value={<><GuideCountUp to={topThreeShare} />%</>} label={`de las preguntas salen de ${topThree.map((topic) => topic.shortName).join(', ')}`} />
+              <StatTile value={<>1 de <GuideCountUp to={Math.round(210 / average)} /></>} label="preguntas del MIR es de esta asignatura" />
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -129,9 +132,9 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
         {/* Lecciones del último MIR */}
         <section className="flex flex-col gap-4">
           <SectionHeading icon="insights" title={`Qué nos dice el ${guide.lastExam}`} subtitle="Lo que cambia (y lo que no) de cara a tu examen." />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {guide.insights.map((insight) => (
-              <article key={insight.title} className="flex flex-col gap-2 rounded-2xl border border-[#EAE4E2] bg-white p-5">
+          <GuideReveal className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {guide.insights.map((insight, index) => (
+              <article key={insight.title} style={cssVars({ '--i': index })} className="guia-fade-up flex flex-col gap-2 rounded-2xl border border-[#EAE4E2] bg-white p-5 transition-shadow duration-300 hover:shadow-lg hover:shadow-[#E8A598]/10">
                 <span className="material-symbols-outlined flex h-10 w-10 items-center justify-center rounded-xl bg-[#E8A598]/15 text-[#B5655A]">
                   {insight.icon}
                 </span>
@@ -139,7 +142,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
                 <p className="text-sm leading-relaxed">{insight.body}</p>
               </article>
             ))}
-          </div>
+          </GuideReveal>
         </section>
 
         {/* Tendencia + prioridades */}
@@ -194,7 +197,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
 
           <section id="plan" className="flex scroll-mt-24 flex-col gap-5 rounded-2xl border border-[#EAE4E2] bg-white p-5 sm:p-6">
             <SectionHeading icon="route" title={`Si tienes ${planDays} días para esta asignatura`} subtitle="Reparto por vueltas según el peso real de cada tema." />
-            <ol className="flex flex-col gap-4">
+            <GuideReveal><ol className="flex flex-col gap-4">
               {guide.plan.map((step, index) => (
                 <li key={step.title} className="flex flex-col gap-3 rounded-xl bg-[#F9F8F7] p-4">
                   <div className="flex items-start justify-between gap-3">
@@ -208,8 +211,8 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-white">
                     <div
-                      className={`h-full rounded-full ${index === 0 ? 'bg-[#E8A598]' : index === 1 ? 'bg-[#8BA888]' : 'bg-[#BFC7CE]'}`}
-                      style={{ width: `${(step.days / planDays) * 100}%` }}
+                      className={`guia-grow-x h-full rounded-full ${index === 0 ? 'bg-[#E8A598]' : index === 1 ? 'bg-[#8BA888]' : 'bg-[#BFC7CE]'}`}
+                      style={{ width: `${(step.days / planDays) * 100}%`, ...cssVars({ '--i': index * 3 + 2 }) }}
                     />
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -229,7 +232,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
                   </div>
                 </li>
               ))}
-            </ol>
+            </ol></GuideReveal>
           </section>
         </div>
 
@@ -290,7 +293,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
   )
 }
 
-function StatTile({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
+function StatTile({ value, label, accent }: { value: ReactNode; label: string; accent?: boolean }) {
   return (
     <div className={`flex flex-col gap-1 rounded-2xl p-4 ${accent ? 'bg-[#E8A598]/15' : 'bg-[#F9F8F7]'}`}>
       <span className={`text-2xl font-black sm:text-3xl ${accent ? 'text-[#B5655A]' : 'text-[#2C3E50]'}`}>{value}</span>

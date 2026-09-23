@@ -31,7 +31,7 @@ export default function GuideQuestionCard({ question, lastExamLabel }: GuideQues
           return (
             <li
               key={option}
-              className={`flex gap-2.5 rounded-lg bg-[#F9F8F7] px-3 py-2 text-sm leading-snug text-[#2C3E50] transition-colors ${
+              className={`flex gap-2.5 rounded-lg bg-[#F9F8F7] px-3 py-2 text-sm leading-snug text-[#2C3E50] transition-all duration-300 ${
                 isCorrect
                   ? 'group-has-[details[open]]/q:bg-[#8BA888]/15 group-has-[details[open]]/q:font-semibold group-has-[details[open]]/q:text-[#3F5E3C]'
                   : 'group-has-[details[open]]/q:opacity-55'
@@ -50,7 +50,7 @@ export default function GuideQuestionCard({ question, lastExamLabel }: GuideQues
           <span className="group-open/a:hidden">Ver respuesta</span>
           <span className="hidden group-open/a:inline">Ocultar respuesta</span>
         </summary>
-        <div className="mt-3 flex flex-col gap-2 rounded-xl border-l-4 border-[#8BA888] bg-[#8BA888]/10 p-4">
+        <div className="guia-answer mt-3 flex flex-col gap-2 rounded-xl border-l-4 border-[#8BA888] bg-[#8BA888]/10 p-4">
           <p className="text-sm font-bold text-[#3F5E3C]">Respuesta: {question.correct}</p>
           <p className="text-sm leading-relaxed text-[#2C3E50]">{question.explanation}</p>
           {question.topicId ? (

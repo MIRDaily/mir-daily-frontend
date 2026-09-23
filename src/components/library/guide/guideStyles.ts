@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { GuideQuestionKind, GuideTier } from '@/types/studyGuide'
 import type { GuideTrend } from '@/lib/studyGuides/stats'
 
@@ -47,4 +48,9 @@ export function heatCellClass(count: number) {
   if (count === 2) return 'bg-[#E8A598]/55 text-[#8F4A40]'
   if (count === 3) return 'bg-[#E8A598] text-white'
   return 'bg-[#C97B6D] text-white'
+}
+
+/** Variables CSS (p. ej. --i para escalonar animaciones) tipadas para `style`. */
+export function cssVars(vars: Record<`--${string}`, string | number>): CSSProperties {
+  return vars as CSSProperties
 }

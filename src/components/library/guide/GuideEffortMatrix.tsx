@@ -1,5 +1,6 @@
 import type { GuideTopicWithStats } from '@/lib/studyGuides/stats'
-import { TIER_STYLES } from '@/components/library/guide/guideStyles'
+import { TIER_STYLES, cssVars } from '@/components/library/guide/guideStyles'
+import GuideReveal from '@/components/library/guide/GuideReveal'
 
 type GuideEffortMatrixProps = {
   topics: GuideTopicWithStats[]
@@ -47,7 +48,7 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
   const minorCount = topics.filter((topic) => topic.stats.historyCount < LABEL_MIN_QUESTIONS).length
 
   return (
-    <figure className="flex flex-col gap-3">
+    <GuideReveal className="flex flex-col gap-3">
       <div className="-mx-1 overflow-x-auto px-1">
         <svg
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
@@ -103,7 +104,7 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
             Recompensa → preguntas 2015–2025
           </text>
 
-          {topics.map((topic) => {
+          {topics.map((topic, index) => {
             const cx = x(topic.pages + (POINT_NUDGE[topic.id] ?? 0))
             const cy = y(topic.stats.historyCount)
             const offset = LABEL_OFFSETS[topic.id]
@@ -112,7 +113,7 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
               <g key={topic.id}>
                 <a href={`#tema-${topic.id}`}>
                   <title>{`${topic.name}: ${topic.stats.historyCount} preguntas, ~${topic.pages} páginas`}</title>
-                  <circle cx={cx} cy={cy} r={topic.stats.historyCount >= LABEL_MIN_QUESTIONS ? 8 : 5.5} fill={TIER_STYLES[topic.tier].color} stroke="#fff" strokeWidth={2} />
+                  <circle className="guia-pop cursor-pointer hover:[r:11]" style={cssVars({ '--i': index * 5 })} cx={cx} cy={cy} r={topic.stats.historyCount >= LABEL_MIN_QUESTIONS ? 8 : 5.5} fill={TIER_STYLES[topic.tier].color} stroke="#fff" strokeWidth={2} />
                 </a>
                 {showLabel ? (
                   <text x={cx + offset.dx} y={cy + offset.dy} textAnchor={offset.anchor} className="fill-[#2C3E50] text-[12px] font-semibold">
@@ -128,9 +129,9 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
           </text>
         </svg>
       </div>
-      <figcaption className="text-xs text-[#7D8A96]">
+      <p className="text-xs text-[#7D8A96]">
         Cada punto es un tema. Cuanto más arriba y a la izquierda, más preguntas da por cada página que estudias.
-      </figcaption>
-    </figure>
+      </p>
+    </GuideReveal>
   )
 }

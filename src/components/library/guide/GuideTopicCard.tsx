@@ -1,7 +1,8 @@
 import type { GuideQuestion } from '@/types/studyGuide'
 import type { GuideTopicWithStats } from '@/lib/studyGuides/stats'
 import { RECENT_WINDOW, formatAvg, formatForecast } from '@/lib/studyGuides/stats'
-import { QUESTION_KIND_STYLES, TIER_STYLES, TREND_STYLES } from '@/components/library/guide/guideStyles'
+import { QUESTION_KIND_STYLES, TIER_STYLES, TREND_STYLES, cssVars } from '@/components/library/guide/guideStyles'
+import GuideReveal from '@/components/library/guide/GuideReveal'
 
 type GuideTopicCardProps = {
   topic: GuideTopicWithStats
@@ -30,7 +31,7 @@ export default function GuideTopicCard({
     <details
       id={`tema-${topic.id}`}
       open={defaultOpen}
-      className="group scroll-mt-24 rounded-2xl border border-[#EAE4E2] bg-white shadow-sm open:shadow-md"
+      className="guia-details group scroll-mt-24 rounded-2xl border border-[#EAE4E2] bg-white shadow-sm open:shadow-md"
     >
       <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-3 p-5 [&::-webkit-details-marker]:hidden">
         <span
@@ -151,7 +152,7 @@ function TopicTimeline({
   const scale = Math.max(maxYearCount, 1)
 
   return (
-    <div className="grid grid-cols-1 gap-5 rounded-2xl bg-[#F9F8F7] p-4 md:grid-cols-[minmax(0,1fr)_16rem]">
+    <GuideReveal className="grid grid-cols-1 gap-5 rounded-2xl bg-[#F9F8F7] p-4 md:grid-cols-[minmax(0,1fr)_16rem]">
       <div className="flex flex-col gap-2">
         <h4 className="text-xs font-bold tracking-wider text-[#7D8A96] uppercase">Evolución en el MIR</h4>
         <div className="relative flex h-28 items-end gap-1 sm:gap-1.5">
@@ -165,10 +166,10 @@ function TopicTimeline({
             const isLast = index === years.length - 1
             return (
               <div key={years[index]} className="relative flex h-full flex-1 flex-col items-center justify-end gap-0.5">
-                <span className={`text-[10px] font-bold ${count === 0 ? 'text-[#7D8A96]/50' : 'text-[#2C3E50]/80'}`}>{count}</span>
+                <span style={cssVars({ '--i': index })} className={`guia-fade text-[10px] font-bold ${count === 0 ? 'text-[#7D8A96]/50' : 'text-[#2C3E50]/80'}`}>{count}</span>
                 <div
-                  className={`w-full rounded-t ${isLast ? 'bg-[#2C3E50]' : isRecent ? 'bg-[#E8A598]' : 'bg-[#2C3E50]/15'}`}
-                  style={{ height: count === 0 ? '2px' : `${(count / scale) * 78}%` }}
+                  className={`guia-grow-y w-full rounded-t ${isLast ? 'bg-[#2C3E50]' : isRecent ? 'bg-[#E8A598]' : 'bg-[#2C3E50]/15'}`}
+                  style={{ height: count === 0 ? '2px' : `${(count / scale) * 78}%`, ...cssVars({ '--i': index }) }}
                   title={`MIR ${years[index]}: ${count}`}
                 />
               </div>
@@ -203,7 +204,7 @@ function TopicTimeline({
         <div className="flex items-center gap-2">
           <span className="flex gap-1">
             {topic.perYear.slice(-RECENT_WINDOW).map((count, index) => (
-              <span key={index} className={`h-3 w-3 rounded-full ${count > 0 ? 'bg-[#E8A598]' : 'border-2 border-[#D5CFCB]'}`} />
+              <span key={index} style={cssVars({ '--i': index * 3 + 12 })} className={`guia-pop h-3 w-3 rounded-full ${count > 0 ? 'bg-[#E8A598]' : 'border-2 border-[#D5CFCB]'}`} />
             ))}
           </span>
           <span className="text-xs">
@@ -215,7 +216,7 @@ function TopicTimeline({
           <span className="text-xl font-black text-[#2C3E50]">{formatForecast(stats.forecast)}</span>
         </div>
       </div>
-    </div>
+    </GuideReveal>
   )
 }
 

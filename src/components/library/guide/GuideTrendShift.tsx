@@ -1,6 +1,7 @@
 import type { GuideTopicWithStats } from '@/lib/studyGuides/stats'
 import { formatAvg } from '@/lib/studyGuides/stats'
-import { TREND_STYLES } from '@/components/library/guide/guideStyles'
+import { TREND_STYLES, cssVars } from '@/components/library/guide/guideStyles'
+import GuideReveal from '@/components/library/guide/GuideReveal'
 
 type GuideTrendShiftProps = {
   topics: GuideTopicWithStats[]
@@ -19,9 +20,9 @@ export default function GuideTrendShift({ topics, earlierLabel, recentLabel, min
   const pct = (value: number) => `${(value / max) * 100}%`
 
   return (
-    <div className="flex flex-col gap-4">
+    <GuideReveal className="flex flex-col gap-4">
       <ul className="flex flex-col gap-3">
-        {rows.map((topic) => {
+        {rows.map((topic, index) => {
           const { earlierAvg, recentAvg, trend } = topic.stats
           const low = Math.min(earlierAvg, recentAvg)
           const high = Math.max(earlierAvg, recentAvg)
@@ -32,15 +33,23 @@ export default function GuideTrendShift({ topics, earlierLabel, recentLabel, min
                 <span className="truncate text-sm font-semibold text-[#2C3E50]">{topic.shortName}</span>
                 <span className="relative h-5">
                   <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[#EAE4E2]" />
-                  <span className={`absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full ${lineColor}`} style={{ left: pct(low), width: `calc(${pct(high)} - ${pct(low)})` }} />
                   <span
-                    className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#BFC7CE]"
-                    style={{ left: pct(earlierAvg) }}
+                    className={`guia-grow-x absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full ${lineColor}`}
+                    style={{
+                      left: pct(low),
+                      width: `calc(${pct(high)} - ${pct(low)})`,
+                      ...cssVars({ '--i': index + 4 }),
+                      transformOrigin: recentAvg >= earlierAvg ? 'left' : 'right',
+                    }}
+                  />
+                  <span
+                    className="guia-pop absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#BFC7CE]"
+                    style={{ left: pct(earlierAvg), ...cssVars({ '--i': index * 4 }) }}
                     title={`${earlierLabel}: ${formatAvg(earlierAvg)}/año`}
                   />
                   <span
-                    className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#2C3E50] shadow"
-                    style={{ left: pct(recentAvg) }}
+                    className="guia-slide absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#2C3E50] shadow transition-transform hover:scale-125"
+                    style={cssVars({ '--from': pct(earlierAvg), '--to': pct(recentAvg), '--i': index })}
                     title={`${recentLabel}: ${formatAvg(recentAvg)}/año`}
                   />
                 </span>
@@ -72,6 +81,6 @@ export default function GuideTrendShift({ topics, earlierLabel, recentLabel, min
           <span className="h-3.5 w-3.5 rounded-full bg-[#2C3E50]" /> {recentLabel}
         </span>
       </div>
-    </div>
+    </GuideReveal>
   )
 }
