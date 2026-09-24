@@ -27,6 +27,7 @@ export const LIBRARY_SUBJECT_OVERVIEWS: ReadonlyArray<SubjectOverview> = [
   { id: 'nefrologia', name: 'Nefrología', description: 'Riñón y vías urinarias', progress: 75, topicsDone: 15, totalTopics: 20, type: 'MÉDICA', icon: 'water_drop' },
   { id: 'neurologia', name: 'Neurología', description: 'Sistema nervioso y sentidos', progress: 54, topicsDone: 15, totalTopics: 28, type: 'MÉDICA', icon: 'neurology' },
   { id: 'pediatria', name: 'Pediatría', description: 'Desarrollo y neonatología', progress: 91, topicsDone: 20, totalTopics: 22, type: 'MÉDICA', icon: 'child_care' },
+  { id: 'reumatologia', name: 'Reumatología', description: 'Articulaciones y enfermedades autoinmunes', progress: 0, topicsDone: 0, totalTopics: 16, type: 'MÉDICA', icon: 'rheumatology' },
 ]
 
 export const LIBRARY_SUBJECT_OVERVIEW_BY_ID: Record<string, SubjectOverview> = Object.fromEntries(
