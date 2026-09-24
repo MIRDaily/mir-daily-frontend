@@ -9,11 +9,13 @@ import GuideReveal from '@/components/library/guide/GuideReveal'
 type GuideHeatmapProps = {
   topics: GuideTopicWithStats[]
   years: number[]
+  /** Nota en letra pequeña sobre el orden de las filas */
+  orderNote?: string
 }
 
 type Focus = { row: number | null; col: number | null }
 
-export default function GuideHeatmap({ topics, years }: GuideHeatmapProps) {
+export default function GuideHeatmap({ topics, years, orderNote }: GuideHeatmapProps) {
   const [focus, setFocus] = useState<Focus>({ row: null, col: null })
   const recentStart = years.length - RECENT_WINDOW
   const columns = `minmax(7.5rem,11rem) repeat(${years.length}, minmax(1.75rem,1fr)) 2.75rem`
@@ -142,6 +144,7 @@ export default function GuideHeatmap({ topics, years }: GuideHeatmapProps) {
         <span className="flex items-center gap-1.5">
           <span className="h-3.5 w-5 rounded border-2 border-dashed border-[#2C3E50]/25" /> últimos {RECENT_WINDOW} MIR
         </span>
+        {orderNote ? <span className="text-[11px]">{orderNote}</span> : null}
       </div>
     </div>
   )

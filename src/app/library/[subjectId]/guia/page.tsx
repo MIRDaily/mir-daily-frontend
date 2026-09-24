@@ -205,7 +205,11 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
           {/* Evolución por tema */}
           <section id="evolucion" className="flex scroll-mt-24 flex-col gap-5 rounded-2xl border border-[#EAE4E2] bg-white p-5 sm:p-6">
             <SectionHeading icon="grid_on" title="Evolución tema a tema" subtitle={`Preguntas de cada tema en cada MIR, ${years[0]}–${lastYear}.`} />
-            <GuideHeatmap topics={topicsByForecast} years={years} />
+            <GuideHeatmap
+              topics={topicsByForecast}
+              years={years}
+              orderNote={`Temas ordenados por la previsión para el ${guide.targetExam}.`}
+            />
           </section>
 
           {/* Rentabilidad + plan */}
