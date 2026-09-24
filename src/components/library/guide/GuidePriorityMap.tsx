@@ -6,27 +6,7 @@ import type { GuideTopicWithStats } from '@/lib/studyGuides/stats'
 import { RECENT_WINDOW, formatForecast } from '@/lib/studyGuides/stats'
 import { TIER_STYLES, TREND_STYLES, cssVars, heatCellClass } from '@/components/library/guide/guideStyles'
 import GuideReveal from '@/components/library/guide/GuideReveal'
-
-type SortKey = 'prevision' | 'historico' | 'tendencia'
-
-const SORT_OPTIONS: Array<{ key: SortKey; label: string; icon: string }> = [
-  { key: 'prevision', label: 'Previsión', icon: 'online_prediction' },
-  { key: 'historico', label: 'Histórico', icon: 'history' },
-  { key: 'tendencia', label: 'Tendencia', icon: 'trending_up' },
-]
-
-function sortTopics(topics: GuideTopicWithStats[], key: SortKey) {
-  const byHistory = (a: GuideTopicWithStats, b: GuideTopicWithStats) => b.stats.historyCount - a.stats.historyCount
-  return [...topics].sort((a, b) => {
-    if (key === 'historico') return byHistory(a, b)
-    if (key === 'tendencia') {
-      const shiftA = a.stats.recentAvg - a.stats.earlierAvg
-      const shiftB = b.stats.recentAvg - b.stats.earlierAvg
-      return shiftB - shiftA || byHistory(a, b)
-    }
-    return b.stats.forecast - a.stats.forecast || byHistory(a, b)
-  })
-}
+import GuideSortToggle, { sortGuideTopics, type GuideSortKey } from '@/components/library/guide/GuideSortToggle'
 
 type GuidePriorityMapProps = {
   topics: GuideTopicWithStats[]
@@ -35,8 +15,8 @@ type GuidePriorityMapProps = {
 }
 
 export default function GuidePriorityMap({ topics, recentYears, targetExam }: GuidePriorityMapProps) {
-  const [sortKey, setSortKey] = useState<SortKey>('prevision')
-  const sorted = useMemo(() => sortTopics(topics, sortKey), [topics, sortKey])
+  const [sortKey, setSortKey] = useState<GuideSortKey>('prevision')
+  const sorted = useMemo(() => sortGuideTopics(topics, sortKey), [topics, sortKey])
   const max = Math.max(...topics.map((topic) => topic.stats.historyCount), 1)
   const total = topics.reduce((acc, topic) => acc + topic.stats.historyCount, 0)
   const shortYear = (year: number | undefined) => `'${String(year ?? '').slice(2)}`
@@ -44,36 +24,7 @@ export default function GuidePriorityMap({ topics, recentYears, targetExam }: Gu
 
   return (
     <GuideReveal className="flex flex-col">
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold text-[#7D8A96]">Ordenar por</span>
-        <div className="flex rounded-full bg-[#F2EFED] p-1" role="radiogroup" aria-label="Ordenar temas">
-          {SORT_OPTIONS.map((option) => {
-            const active = option.key === sortKey
-            return (
-              <button
-                key={option.key}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                onClick={() => setSortKey(option.key)}
-                className={`relative flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  active ? 'text-white' : 'text-[#2C3E50] hover:text-[#B5655A]'
-                }`}
-              >
-                {active ? (
-                  <motion.span
-                    layoutId="guia-sort-pill"
-                    className="absolute inset-0 rounded-full bg-[#2C3E50]"
-                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                  />
-                ) : null}
-                <span className="material-symbols-outlined relative text-[15px]">{option.icon}</span>
-                <span className="relative">{option.label}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <GuideSortToggle value={sortKey} onChange={setSortKey} className="mb-4" />
 
       <div className="hidden grid-cols-[1.5rem_minmax(0,10rem)_minmax(0,1fr)_auto_6.5rem_4rem] items-end gap-4 border-b border-[#EAE4E2] pb-2 text-[11px] font-semibold tracking-wider text-[#7D8A96] uppercase md:grid">
         <span>#</span>

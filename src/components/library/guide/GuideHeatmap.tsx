@@ -1,21 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
 import type { GuideTopicWithStats } from '@/lib/studyGuides/stats'
 import { RECENT_WINDOW } from '@/lib/studyGuides/stats'
 import { cssVars, heatCellClass } from '@/components/library/guide/guideStyles'
 import GuideReveal from '@/components/library/guide/GuideReveal'
+import GuideSortToggle, { sortGuideTopics, type GuideSortKey } from '@/components/library/guide/GuideSortToggle'
 
 type GuideHeatmapProps = {
   topics: GuideTopicWithStats[]
   years: number[]
-  /** Nota en letra pequeña sobre el orden de las filas */
-  orderNote?: string
 }
 
 type Focus = { row: number | null; col: number | null }
 
-export default function GuideHeatmap({ topics, years, orderNote }: GuideHeatmapProps) {
+export default function GuideHeatmap({ topics: unsortedTopics, years }: GuideHeatmapProps) {
+  const [sortKey, setSortKey] = useState<GuideSortKey>('prevision')
+  const topics = useMemo(() => sortGuideTopics(unsortedTopics, sortKey), [unsortedTopics, sortKey])
   const [focus, setFocus] = useState<Focus>({ row: null, col: null })
   const recentStart = years.length - RECENT_WINDOW
   const columns = `minmax(7.5rem,11rem) repeat(${years.length}, minmax(1.75rem,1fr)) 2.75rem`
@@ -34,6 +36,8 @@ export default function GuideHeatmap({ topics, years, orderNote }: GuideHeatmapP
 
   return (
     <div className="flex flex-col gap-4">
+      <GuideSortToggle value={sortKey} onChange={setSortKey} />
+
       <div className="-mx-1 overflow-x-auto px-1 pb-1">
         <GuideReveal className="min-w-[560px]">
           <div
@@ -73,8 +77,10 @@ export default function GuideHeatmap({ topics, years, orderNote }: GuideHeatmapP
 
             <div className="relative flex flex-col gap-1 py-1">
               {topics.map((topic, row) => (
-                <a
+                <motion.a
                   key={topic.id}
+                  layout="position"
+                  transition={{ type: 'spring', stiffness: 380, damping: 36 }}
                   href={`#tema-${topic.id}`}
                   className="grid items-center gap-1 rounded-lg"
                   style={{ gridTemplateColumns: columns }}
@@ -106,7 +112,7 @@ export default function GuideHeatmap({ topics, years, orderNote }: GuideHeatmapP
                   <span className={`text-right text-xs font-bold transition-colors ${focus.row === row ? 'text-[#B5655A]' : 'text-[#2C3E50]'}`}>
                     {topic.perYear.reduce((acc, count) => acc + count, 0)}
                   </span>
-                </a>
+                </motion.a>
               ))}
             </div>
           </div>
@@ -144,7 +150,6 @@ export default function GuideHeatmap({ topics, years, orderNote }: GuideHeatmapP
         <span className="flex items-center gap-1.5">
           <span className="h-3.5 w-5 rounded border-2 border-dashed border-[#2C3E50]/25" /> últimos {RECENT_WINDOW} MIR
         </span>
-        {orderNote ? <span className="text-[11px]">{orderNote}</span> : null}
       </div>
     </div>
   )

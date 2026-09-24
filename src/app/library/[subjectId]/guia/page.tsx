@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { notFound } from 'next/navigation'
 import GuideEffortMatrix from '@/components/library/guide/GuideEffortMatrix'
 import GuideHeatmap from '@/components/library/guide/GuideHeatmap'
+import GuideMasonry from '@/components/library/guide/GuideMasonry'
 import GuidePriorityMap from '@/components/library/guide/GuidePriorityMap'
 import GuideQuestionCard from '@/components/library/guide/GuideQuestionCard'
 import GuideTopicCard from '@/components/library/guide/GuideTopicCard'
@@ -152,12 +153,13 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
 
           {/* Lecciones del último MIR */}
           <section id="conclusiones" className="flex scroll-mt-24 flex-col gap-4">
-            <SectionHeading icon="insights" title={`Qué nos dice el ${guide.lastExam}`} subtitle="Lo que cambia (y lo que no) de cara a tu examen." />
+            <SectionHeading major icon="insights" title={`Qué nos dice el ${guide.lastExam}`} subtitle="Lo que cambia (y lo que no) de cara a tu examen." />
             <GuideReveal className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {guide.insights.map((insight, index) => (
                 <article key={insight.title} style={cssVars({ '--i': index })} className="guia-fade-up flex flex-col gap-2 rounded-2xl border border-[#EAE4E2] bg-white p-5 transition-shadow duration-300 hover:shadow-lg hover:shadow-[#E8A598]/10">
-                  <span className="material-symbols-outlined flex h-10 w-10 items-center justify-center rounded-xl bg-[#E8A598]/15 text-[#B5655A]">
-                    {insight.icon}
+                  {/* El glifo va en su propio span: la hoja de Material Symbols fuerza display:inline-block y anula el flex */}
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E8A598]/15 text-[#B5655A]">
+                    <span className="material-symbols-outlined">{insight.icon}</span>
                   </span>
                   <h3 className="font-bold text-[#2C3E50]">{insight.title}</h3>
                   <p className="text-sm leading-relaxed">{insight.body}</p>
@@ -205,11 +207,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
           {/* Evolución por tema */}
           <section id="evolucion" className="flex scroll-mt-24 flex-col gap-5 rounded-2xl border border-[#EAE4E2] bg-white p-5 sm:p-6">
             <SectionHeading icon="grid_on" title="Evolución tema a tema" subtitle={`Preguntas de cada tema en cada MIR, ${years[0]}–${lastYear}.`} />
-            <GuideHeatmap
-              topics={topicsByForecast}
-              years={years}
-              orderNote={`Temas ordenados por la previsión para el ${guide.targetExam}.`}
-            />
+            <GuideHeatmap topics={topics} years={years} />
           </section>
 
           {/* Rentabilidad + plan */}
@@ -264,6 +262,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
           {/* Temas */}
           <section id="temas" className="flex scroll-mt-24 flex-col gap-4">
             <SectionHeading
+              major
               icon="menu_book"
               title="Tema a tema"
               subtitle="De más a menos preguntado (2015–2025). Cada tema dice dónde se concentran las preguntas y lo que hay que llevar sabido."
@@ -288,6 +287,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
           <GuideQuizProvider>
           <section id="ultimo-mir" className="flex scroll-mt-24 flex-col gap-8">
             <SectionHeading
+              major
               icon="quiz"
               title={`${guide.lastExam} comentado`}
               subtitle="Marca tu respuesta y corrígete. Respuestas contrastadas con las definitivas publicadas tras las impugnaciones."
@@ -304,11 +304,11 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
                     </h3>
                     <p className="text-sm">{group.description}</p>
                   </div>
-                  <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+                  <GuideMasonry>
                     {questions.map((question) => (
                       <GuideQuestionCard key={question.number} question={question} lastExamLabel={guide.lastExam} />
                     ))}
-                  </div>
+                  </GuideMasonry>
                 </div>
               )
             })}
@@ -331,10 +331,29 @@ function StatTile({ value, label, accent }: { value: ReactNode; label: string; a
   )
 }
 
-function SectionHeading({ icon, title, subtitle }: { icon: string; title: string; subtitle: string }) {
+type SectionHeadingProps = { icon: string; title: string; subtitle: string; major?: boolean }
+
+// major: apartados sueltos (fuera de tarjeta), que necesitan marcar bien dónde empieza cada uno.
+// El glifo va en su propio span: la hoja de Material Symbols fuerza display:inline-block y anula el flex.
+function SectionHeading({ icon, title, subtitle, major = false }: SectionHeadingProps) {
+  if (major) {
+    return (
+      <div className="flex items-center gap-4 border-t border-[#E3DCD9] pt-8">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2C3E50] text-white shadow-sm">
+          <span className="material-symbols-outlined text-[26px]">{icon}</span>
+        </span>
+        <div className="flex flex-col gap-1">
+          <h2 className="text-2xl font-black tracking-tight text-[#2C3E50] sm:text-3xl">{title}</h2>
+          <p className="text-sm sm:text-base">{subtitle}</p>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="flex items-start gap-3">
-      <span className="material-symbols-outlined mt-0.5 text-[#E8A598]">{icon}</span>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#E8A598]/15 text-[#B5655A]">
+        <span className="material-symbols-outlined text-[20px]">{icon}</span>
+      </span>
       <div className="flex flex-col gap-0.5">
         <h2 className="text-xl font-bold text-[#2C3E50]">{title}</h2>
         <p className="text-sm">{subtitle}</p>

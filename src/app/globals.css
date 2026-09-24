@@ -1902,7 +1902,6 @@ textarea:disabled {
 .guia-reveal .guia-pop {
   opacity: 0;
   transform: scale(0.55);
-  transform-box: fill-box;
   transform-origin: center;
   transition:
     opacity 0.35s ease calc(var(--i, 0) * 16ms),
@@ -1918,6 +1917,11 @@ textarea:disabled {
 .guia-reveal .guia-fade {
   opacity: 0;
   transition: opacity 0.6s ease calc(var(--i, 0) * 60ms + 350ms);
+}
+/* En SVG la escala va sobre la caja del propio elemento. En HTML no: fill-box haría que translate(-50%)
+   se calcule sin el borde y descentraría los puntos de "Qué sube y qué baja". */
+.guia-reveal svg .guia-pop {
+  transform-box: fill-box;
 }
 /* Punto que viaja de "antes" a "ahora" en el gráfico de tendencias */
 .guia-reveal .guia-slide {
