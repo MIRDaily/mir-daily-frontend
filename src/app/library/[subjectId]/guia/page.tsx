@@ -23,12 +23,13 @@ type LibraryGuidePageProps = {
   params: Promise<{ subjectId: string }>
 }
 
-const QUESTION_GROUPS: Array<{ kind: GuideQuestionKind; title: string; description: string }> = [
+const QUESTION_GROUPS: Array<{ kind: GuideQuestionKind; title: string; tocLabel?: string; description: string }> = [
   { kind: 'bloque', title: 'Bloque de la asignatura', description: 'Las preguntas que el Ministerio agrupó en este bloque.' },
   { kind: 'reserva', title: 'Preguntas de reserva', description: 'Solo puntúan si se anula alguna, pero dicen qué tenía en mente el tribunal.' },
   {
     kind: 'frontera',
     title: 'También en otras asignaturas',
+    tocLabel: 'Otras asignaturas',
     description: 'Preguntas de otros bloques que se contestan con lo que estudias aquí.',
   },
 ]
@@ -94,7 +95,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
       icon: 'quiz',
       children: QUESTION_GROUPS.filter((group) => guide.questions.some((question) => question.kind === group.kind)).map((group) => ({
         id: `ultimo-mir-${group.kind}`,
-        label: group.title,
+        label: group.tocLabel ?? group.title,
       })),
     },
   ]

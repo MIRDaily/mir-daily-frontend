@@ -137,7 +137,7 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
       <div className="-mx-1 overflow-x-auto px-1">
         <svg
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-          className="h-auto w-full min-w-[520px]"
+          className="h-auto w-full min-w-[480px]"
           role="img"
           aria-label="Esfuerzo (páginas) frente a recompensa (preguntas MIR) de cada tema"
         >

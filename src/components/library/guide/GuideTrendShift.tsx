@@ -29,8 +29,8 @@ export default function GuideTrendShift({ topics, earlierLabel, recentLabel, min
           const lineColor = trend === 'sube' ? 'bg-[#E8A598]' : trend === 'baja' ? 'bg-[#8FA9C2]' : 'bg-[#D5CFCB]'
           return (
             <li key={topic.id}>
-              <a href={`#tema-${topic.id}`} className="grid grid-cols-[6.5rem_minmax(0,1fr)_4.5rem] items-center gap-3 sm:grid-cols-[8rem_minmax(0,1fr)_5.5rem]">
-                <span className="truncate text-sm font-semibold text-[#2C3E50]">{topic.shortName}</span>
+              <a href={`#tema-${topic.id}`} className="grid grid-cols-[7.5rem_minmax(0,1fr)_4.5rem] items-center gap-3 sm:grid-cols-[8rem_minmax(0,1fr)_5.5rem]">
+                <span className="truncate text-xs font-semibold text-[#2C3E50] sm:text-sm">{topic.shortName}</span>
                 <span className="relative h-5">
                   <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[#EAE4E2]" />
                   <span
@@ -63,7 +63,7 @@ export default function GuideTrendShift({ topics, earlierLabel, recentLabel, min
         })}
       </ul>
 
-      <div className="grid grid-cols-[6.5rem_minmax(0,1fr)_4.5rem] gap-3 text-[10px] text-[#7D8A96] sm:grid-cols-[8rem_minmax(0,1fr)_5.5rem]">
+      <div className="grid grid-cols-[7.5rem_minmax(0,1fr)_4.5rem] gap-3 text-[10px] text-[#7D8A96] sm:grid-cols-[8rem_minmax(0,1fr)_5.5rem]">
         <span />
         <span className="flex justify-between">
           {Array.from({ length: max + 1 }, (_, value) => (
