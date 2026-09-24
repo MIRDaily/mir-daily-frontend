@@ -66,7 +66,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
       lastExamReserve: 1,
       pages: 12,
       focus:
-        'El tema más preguntado de la asignatura desde 2015, con 9 preguntas solo entre 2024 y 2025. Cribado, Lynch, cirugía oncológica y tratamiento según biomarcadores.',
+        'Empatado con Esófago, Estómago y Hepatopatías como el más preguntado de 2015 a 2025 (21), y el que más ha crecido: 9 preguntas solo entre 2024 y 2025. Cribado, Lynch, cirugía oncológica y tratamiento según biomarcadores.',
       hotspots: [
         { name: 'Síndrome de Lynch: genes MMR, inestabilidad de microsatélites, cribado', heat: 3 },
         { name: 'Cribado poblacional y de familiares; pólipos y vigilancia', heat: 3 },
@@ -502,7 +502,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     {
       icon: 'trending_up',
       title: 'Un año muy cargado',
-      body: 'El MIR 2026 trajo 26 preguntas de Digestivo y Cirugía General (+2 de reserva), frente a una media de 21 desde 2015: la cifra más alta desde 2017.',
+      body: 'El MIR 2026 trajo 26 preguntas de Digestivo y Cirugía General (+2 de reserva), frente a una media de 21 desde 2015: tantas como en 2017 y la cifra más alta desde entonces.',
     },
     {
       icon: 'content_cut',

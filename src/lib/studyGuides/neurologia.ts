@@ -96,7 +96,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       name: 'Semiología',
       shortName: 'Semiología',
       tier: 'imprescindible',
-      perYear: [2, 3, 0, 1, 1, 1, 1, 3, 2, 2, 2, 2],
+      perYear: [2, 3, 0, 1, 1, 1, 1, 3, 2, 2, 2, 3],
       lastExamReserve: 1,
       pages: 22,
       focus:
@@ -425,7 +425,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     {
       icon: 'bedtime',
       title: 'Cayó algo fuera del temario habitual',
-      body: 'La narcolepsia tipo 1 (hipocretina) entró en el bloque de Neuro aunque suele estudiarse con los trastornos del sueño. Repásala junto a esta asignatura.',
+      body: 'La narcolepsia tipo 1 (hipocretina) entró en el bloque de Neuro aunque suele estudiarse con los trastornos del sueño. En esta guía cuenta en Semiología, como en la base de preguntas: repásala junto a esta asignatura.',
     },
     {
       icon: 'hub',
@@ -475,11 +475,11 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       kind: 'bloque',
       topicId: 'neurocirugia',
       tag: 'Neurocirugía · Tumores',
-      stem: 'Sobre los tumores cerebrales metastásicos o secundarios, indique la respuesta CORRECTA:',
+      stem: 'Los tumores cerebrales metastásicos o secundarios son aquellas neoplasias que se diseminan e implantan en el cerebro, pero cuyo origen es un órgano de localización diferente a éste. Indique la respuesta CORRECTA acerca de estos tumores:',
       options: [
-        'Son más infrecuentes que las neoplasias cerebrales primarias: sólo el 10% de los pacientes con diagnóstico de tumor cerebral.',
-        'Típicamente se desarrollan durante la primera y segunda década de la vida.',
-        'Las neoplasias que con más frecuencia dan implantes cerebrales son las de páncreas e hígado.',
+        'Las neoplasias secundarias son más infrecuentes que las neoplasias cerebrales primarias, representan sólo el 10% de los pacientes con diagnóstico de tumor cerebral.',
+        'Son tumores que típicamente se desarrollan durante la primera y segunda década de la vida.',
+        'Las neoplasias que con más frecuencia dan implantes cerebrales son aquellas originadas en el páncreas y en el hígado.',
         'Cuando existen metástasis cerebrales múltiples, el tratamiento quirúrgico para lograr la extirpación completa de todas las lesiones no suele ser una opción posible.',
       ],
       correct: 4,
@@ -493,10 +493,10 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       tag: 'Neurocirugía · Tumores',
       stem: 'Con respecto al meningioma cerebral, indique la afirmación CORRECTA:',
       options: [
-        'Son tumores bien definidos y extraaxiales, por lo que generalmente son extirpables de forma completa y esto puede ser curativo.',
-        'Los pacientes deben hacerse un estudio genético antes de tener descendencia por la herencia autosómica dominante de estos tumores.',
-        'Como son benignos, no hace falta un estudio anatomopatológico completo: el grado no influye en el tratamiento ni en el pronóstico.',
-        'Las recidivas no dependen del grado tumoral y no son frecuentes.',
+        'Son tumores bien definidos y de localización extraaxial, por lo que generalmente son extirpables quirúrgicamente de forma completa y esto puede ser curativo.',
+        'Los pacientes diagnosticados de meningioma deben realizarse un estudio genético a la hora de tener descendencia ante la herencia autosómica dominante de estos tumores.',
+        'Como son tumores de comportamiento benigno, no es necesario realizar un estudio anatomo-patológico completo puesto que el grado tumoral no influye en el tratamiento a realizar ni en el pronóstico posterior.',
+        'Las recidivas en estos tumores no dependen del grado tumoral y no son frecuentes.',
       ],
       correct: 1,
       explanation:
@@ -511,7 +511,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       options: [
         'Presencia de bandas oligoclonales.',
         'Pleocitosis leve linfocitaria.',
-        'Hiperproteinorraquia >100 mg/dl.',
+        'Hiperproteinorraquia>100 mg/dl.',
         'Índice IgG elevado.',
       ],
       correct: 3,
@@ -537,8 +537,8 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     {
       number: 166,
       kind: 'bloque',
-      topicId: null,
-      tag: 'Sueño · Fuera del temario de Neuro',
+      topicId: 'semiologia',
+      tag: 'Semiología · Narcolepsia',
       stem: 'En relación con la narcolepsia tipo 1, ¿cuál de las siguientes afirmaciones es correcta?',
       options: [
         'Se asocia a deficiencia de hipocretina (orexina) en el líquido cefalorraquídeo.',
@@ -558,9 +558,9 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       stem: 'Respecto al diagnóstico diferencial de las crisis epilépticas, ¿cuál de las siguientes afirmaciones es correcta?',
       options: [
         'Los síncopes neuromediados tienen una fase tónica prolongada.',
-        'En las crisis psicógenas el EEG muestra siempre descargas epileptiformes.',
+        'En las crisis psicógenas el electroencefalograma (EEG) muestra siempre descargas epileptiformes.',
         'La amnesia global transitoria cursa con pérdida de conciencia prolongada.',
-        'Los síncopes presentan recuperación rápida sin confusión poscrítica.',
+        'Los síncopes presentan recuperación rápida sin confusión proscritica.',
       ],
       correct: 4,
       explanation:
@@ -619,8 +619,13 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       kind: 'reserva',
       topicId: 'semiologia',
       tag: 'Reserva · Espasticidad',
-      stem: 'En un paciente adulto con lesión medular y espasticidad generalizada, ¿cuál de estos fármacos NO utilizaría como tratamiento?',
-      options: ['Diazepam.', 'Lacosamida.', 'Tizanidina.', 'Baclofeno.'],
+      stem: 'En el abordaje terapéutico de un paciente adulto con lesión medular y presencia de espasticidad generalizada en la exploración, ¿cuál de estos fármacos NO utilizaría como tratamiento?',
+      options: [
+        'Diazepam.',
+        'Lacosamida.',
+        'Tizanidina.',
+        'Baclofeno.',
+      ],
       correct: 2,
       explanation:
         'La lacosamida es un anticrisis bloqueante de canales de sodio, no un antiespástico. Baclofeno, tizanidina y benzodiacepinas sí lo son.',
@@ -630,9 +635,9 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       kind: 'reserva',
       topicId: 'neurocirugia',
       tag: 'Reserva · HII',
-      stem: 'En relación con el pseudotumor cerebri o hipertensión intracraneal idiopática (HII), ¿cuál es correcta?',
+      stem: 'En relación con el pseudotumor cerebri o hipertensión intracraneal idiopática (HII), ¿cuál de las siguientes afirmaciones es correcta?',
       options: [
-        'Es más frecuente en hombres ancianos con IMC bajo.',
+        'Es más frecuente en hombres ancianos con índice de masa corporal (IMC) bajo.',
         'Se caracteriza por aumento de la presión de apertura del LCR con composición anormal.',
         'Afecta preferentemente a mujeres jóvenes obesas y puede causar pérdida visual.',
         'El tratamiento inicial consiste en corticoides a dosis altas y restricción hídrica estricta.',
@@ -646,7 +651,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       kind: 'frontera',
       topicId: 'neuropatias',
       tag: 'Nefrología · Amiloidosis',
-      stem: 'Se muestra la biopsia (IMAGEN 15) de un paciente con una enfermedad sistémica que puede afectar a múltiples órganos. Prestando atención a la posible afectación neurológica, ¿qué hallazgo le parece más probable?',
+      stem: 'Se muestra la biopsia (IMAGEN 15) de un paciente afecto de una enfermedad sistémica que puede afectar a múltiples órganos. En la exploración presta especial atención a la posible afectación neurológica. ¿Cuál de estos hallazgos le parece más probable en esta situación?',
       imageUrl: 'https://pub-a0af2de03fec4dd2b89a37964efd1716.r2.dev/questions/2026/15.png',
       options: [
         'Hipotensión ortostática sin respuesta cronotrópica adecuada.',
@@ -656,15 +661,20 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       ],
       correct: 1,
       explanation:
-        'La biopsia muestra un glomérulo ocupado por material rosado, amorfo y sin células: amiloide (se confirma con rojo Congo). La amiloidosis afecta al sistema nervioso periférico, sobre todo al autónomo: hipotensión ortostática sin taquicardia compensadora. Nistagmo y papiledema serían del sistema nervioso central; la debilidad proximal pura, de una miopatía.',
+        'La biopsia muestra un glomérulo ocupado por material rosado, amorfo y sin células, compatible con amiloide (se confirmaría con rojo Congo, que la imagen no incluye). La amiloidosis afecta al sistema nervioso periférico, sobre todo al autónomo: hipotensión ortostática sin taquicardia compensadora. Nistagmo y papiledema serían del sistema nervioso central; la debilidad proximal pura, de una miopatía.',
     },
     {
       number: 101,
       kind: 'frontera',
       topicId: 'neurocirugia',
       tag: 'ORL · Fístula de LCR',
-      stem: 'En un paciente con rinorrea acuosa unilateral y sospecha de fístula de LCR, ¿cuál es una proteína marcadora de LCR?',
-      options: ['Albúmina.', 'Prealbúmina.', 'Beta 2 transferrina.', 'Mielina.'],
+      stem: 'En un paciente con rinorrea acuosa unilateral y sospecha de fístula de líquido cefalorraquídeo, ¿cuál de las siguientes es una proteína que se considera marcador de líquido cefalorraquídeo?',
+      options: [
+        'Albúmina.',
+        'Prealbúmina.',
+        'Beta 2 transferrina.',
+        'Mielina.',
+      ],
       correct: 3,
       explanation:
         'La beta-2-transferrina solo está en el LCR (y la perilinfa). Es la prueba que confirma una rinolicuorrea, típica de la fractura de base de cráneo.',
@@ -674,8 +684,13 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       kind: 'frontera',
       topicId: 'placa-motora',
       tag: 'Oncología · Miastenia',
-      stem: 'Varón de 63 años con miastenia gravis y melanoma estadio IV BRAF V600E con gran carga tumoral. ¿Tratamiento más razonable según riesgo-beneficio?',
-      options: ['Pembrolizumab.', 'Nivolumab.', 'Dabrafenib-Trametinib.', 'Nivolumab-Ipilimumab.'],
+      stem: 'Paciente varón de 63 años con antecedentes de miastenia gravis. Ha sido diagnosticado recientemente de melanoma estadio IV con extensa carga de enfermedad con afectación hepática múltiple, pulmonar bilateral y adenopatías generalizadas. Se realiza una determinación de BRAF por inmunohistoquímica siendo positiva para V600E. ¿Cuál sería el tratamiento más razonable teniendo en cuenta el riesgo beneficio?',
+      options: [
+        'Pembrolizumab.',
+        'Nivolumab.',
+        'Dabrafenib-Trametinib.',
+        'Nivolumab-Ipilimumab.',
+      ],
       correct: 3,
       explanation:
         'Los inhibidores de checkpoint pueden desencadenar una crisis miasténica grave (a veces con miositis y miocarditis). Si hay BRAF mutado, la terapia dirigida evita ese riesgo.',
@@ -685,18 +700,23 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       kind: 'frontera',
       topicId: 'coma',
       tag: 'Urgencias · Coma',
-      stem: 'Paciente de 23 años encontrado en la calle con bajo nivel de conciencia, bradicardia a 40 lpm, TA 90/60, sin fiebre y pupilas puntiformes. ¿Antídoto más indicado?',
-      options: ['Naloxona.', 'Flumazenilo.', 'Atropina.', 'Pralidoxima.'],
+      stem: 'Paciente de 23 años, que es llevado a un servicio de urgencias hospitalario por haber sido encontrado en calle con bajo nivel de conciencia. A su llegada el paciente responde a estímulos dolorosos intensos, tiene una frecuencia cardiaca de 40 latidos por minuto, unas cifras de presión arterial de 90/60 mmHg, sin fiebre y unas pupilas puntiformes. Ante la sospecha de una intoxicación, ¿cuál de los siguientes antídotos estaría más indicado?',
+      options: [
+        'Naloxona.',
+        'Flumazenilo.',
+        'Atropina.',
+        'Pralidoxima.',
+      ],
       correct: 1,
       explanation:
-        'Coma con miosis puntiforme e hipoventilación = opiáceos → naloxona. Pupilas puntiformes en el coma: opiáceos o lesión protuberancial.',
+        'Coma con pupilas puntiformes, bradicardia e hipotensión en un joven = intoxicación por opiáceos → naloxona. Pupilas puntiformes en el coma: opiáceos o lesión protuberancial.',
     },
     {
       number: 199,
       kind: 'frontera',
       topicId: 'neurocirugia',
       tag: 'Urgencias · TCE',
-      stem: 'Paciente de 76 años inconsciente tras un traumatismo craneal y cervical por caída. Sobre el manejo de la vía aérea, ¿cuál es FALSA?',
+      stem: 'Paciente de 76 años, sin comorbilidad conocida que sufre una caída causal desde una escalera sufriendo un traumatismo craneal y cervical. Atendido inicialmente por un familiar, que le coloca en posición lateral de seguridad mientras espera la llegada de las asistencias sanitarias. A la llegada del personal del SAMU el paciente se encuentra inconsciente. ¿Cuál de las siguientes afirmaciones es FALSA sobre el manejo de la vía aérea?',
       options: [
         'La apertura de la vía aérea mediante tracción mandibular es la maniobra de elección.',
         'Lo prioritario es colocar un collarín cervical rígido.',
@@ -712,7 +732,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       kind: 'frontera',
       topicId: 'neurocirugia',
       tag: 'Trauma · Lumbalgia',
-      stem: '¿Cuál de las siguientes es una red flag durante la anamnesis y exploración de una lumbalgia?',
+      stem: '¿Cuál de las siguientes es una red-flag durante la anamnesis y exploración física de una lumbalgia?',
       options: [
         'Dolor lumbar de patrón mecánico.',
         'Dolor a la palpación de espinosas.',
