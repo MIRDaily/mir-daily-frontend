@@ -81,7 +81,7 @@ export const REUMATOLOGIA_GUIDE: StudyGuide = {
         'Tratamiento axial: ejercicio y AINE a dosis plenas; si no basta, anti-TNF o anti-IL17. El metotrexato y los corticoides orales no sirven para la afectación axial.',
         'Artritis psoriásica: oligoartritis asimétrica, afectación de interfalángicas distales con lesión ungueal, dactilitis, forma axial y artritis mutilante (lápiz en copa). Erosión y neoformación ósea en la misma articulación.',
         'La artritis puede preceder a la psoriasis (en torno a un 15 %): dactilitis, neoformación ósea yuxtaarticular y factor reumatoide negativo bastan para sospecharla. Busca psoriasis oculta (cuero cabelludo, ombligo, pliegue interglúteo) y antecedentes familiares.',
-        'Tratamiento de la artritis psoriásica: metotrexato para la periférica; si fracasa, biológicos (anti-TNF, anti-IL17, anti-IL12/23 o anti-IL23). Los inhibidores de JAK se evitan en mayores de 65 años, fumadores o con riesgo cardiovascular, tromboembólico o de cáncer.',
+        'Tratamiento de la artritis psoriásica: metotrexato para la periférica; si fracasa, biológicos (anti-TNF, anti-IL17, anti-IL12/23 o anti-IL23). Los inhibidores de JAK se reservan, si no hay alternativa, en mayores de 65 años, fumadores o con riesgo cardiovascular o de cáncer, y se usan con precaución si hay riesgo de trombosis.',
         'Artritis reactiva: oligoartritis asimétrica de piernas 1-4 semanas después de una uretritis o una diarrea; la tríada con conjuntivitis y uretritis es solo una forma de presentación. Los cultivos articulares son estériles.',
       ],
       trap: 'Un HLA-B27 negativo no descarta una espondiloartritis, y la ausencia de lesiones cutáneas no descarta una artritis psoriásica (así cayó en 2026).',
@@ -643,7 +643,7 @@ export const REUMATOLOGIA_GUIDE: StudyGuide = {
       ],
       correct: 1,
       explanation:
-        'ANULADA. Lupus con anemia de VCM en el límite bajo, ferritina alta y sideremia baja: la oficial era la 1 (anemia de la inflamación). Pero los reticulocitos (250 x 10⁹/L) están altos y sugieren hemólisis, que en el lupus es frecuente: probable motivo de la anulación.',
+        'ANULADA. Lupus con anemia de VCM en el límite bajo, ferritina alta y sideremia baja: la oficial era la 1 (anemia de la inflamación). Pero los reticulocitos (250 x 10⁹/L) están altos y sugieren hemólisis, una causa conocida de anemia en el lupus: probable motivo de la anulación.',
     },
     {
       number: 138,
@@ -692,7 +692,7 @@ export const REUMATOLOGIA_GUIDE: StudyGuide = {
       ],
       correct: 1,
       explanation:
-        'El glomérulo aparece ocupado por material eosinófilo, amorfo y acelular, compatible con amiloide (la confirmación exige rojo Congo con birrefringencia verde manzana, que la imagen no muestra). La amiloidosis AL da neuropatía autonómica: hipotensión ortostática sin taquicardia compensadora.',
+        'El glomérulo aparece ocupado por material eosinófilo, amorfo y acelular, compatible con amiloide (la confirmación exige rojo Congo con birrefringencia verde manzana, que la imagen no muestra). La amiloidosis, sobre todo la AL, puede dar neuropatía autonómica: hipotensión ortostática sin taquicardia compensadora.',
     },
     {
       number: 90,
