@@ -229,17 +229,7 @@ function SubjectRow({
             </span>
           </span>
 
-          <span className="flex items-center gap-2">
-            <span className="h-[3px] w-full max-w-[9rem] overflow-hidden rounded-full bg-[#EFEAE7]">
-              <span
-                className={`block h-full rounded-full ${domainColorClass(mastery)}`}
-                style={{ width: `${mastery}%` }}
-              />
-            </span>
-            <span className="shrink-0 text-[10px] font-bold tabular-nums text-[#B0B8BF]">
-              {mastery}% · {deck.totalCards}
-            </span>
-          </span>
+          <MasteryBar percent={mastery} total={deck.totalCards} />
         </span>
       </button>
 
@@ -276,7 +266,18 @@ function SubjectRow({
   )
 }
 
-function Count({ value, tone }: { value: number; tone: { fg: string; bg: string; border: string } }) {
+/**
+ * Contador de una columna. El cero se dibuja como una raya en vez de como "0":
+ * en una lista larga, los ceros llenan las columnas de ruido y cuesta encontrar
+ * las cifras que importan.
+ */
+export function Count({
+  value,
+  tone,
+}: {
+  value: number
+  tone: { fg: string; bg: string; border: string }
+}) {
   if (value === 0) {
     return <span className="w-11 text-center text-xs font-bold tabular-nums text-[#D4D9DD]">–</span>
   }
@@ -286,6 +287,23 @@ function Count({ value, tone }: { value: number; tone: { fg: string; bg: string;
       style={{ color: tone.fg, background: tone.bg, borderColor: tone.border }}
     >
       {value}
+    </span>
+  )
+}
+
+/** Barra de dominio con su porcentaje y el total de tarjetas al lado. */
+export function MasteryBar({ percent, total }: { percent: number; total: number }) {
+  return (
+    <span className="flex items-center gap-2">
+      <span className="h-[3px] w-full max-w-[9rem] overflow-hidden rounded-full bg-[#EFEAE7]">
+        <span
+          className={`block h-full rounded-full ${domainColorClass(percent)}`}
+          style={{ width: `${percent}%` }}
+        />
+      </span>
+      <span className="shrink-0 text-[10px] font-bold tabular-nums text-[#B0B8BF]">
+        {percent}% · {total}
+      </span>
     </span>
   )
 }

@@ -27,6 +27,8 @@ import {
   tintedPaper,
 } from '@/components/flashcards/ui'
 import SubjectList, { SORT_LABEL, type SubjectSort } from '@/components/flashcards/SubjectList'
+import TopicList, { groupTopics, type TopicRow } from '@/components/flashcards/TopicList'
+import SubjectSummary from '@/components/flashcards/SubjectSummary'
 import { CATEGORY_ORDER, type SubjectCategory } from '@/lib/subjectVisuals'
 import {
   bulkDeleteFlashcards,
@@ -75,6 +77,9 @@ export default function FlashcardsMindMap() {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SubjectSort>('due')
   const [collapsed, setCollapsed] = useState<Set<SubjectCategory>>(new Set())
+  // Vista de los temas dentro de una asignatura. La lista manda; el mapa mental
+  // se conserva como alternativa porque con pocos temas se lee bien.
+  const [topicView, setTopicView] = useState<'list' | 'map'>('list')
 
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const [size, setSize] = useState({ w: 900, h: 560 })
@@ -117,8 +122,9 @@ export default function FlashcardsMindMap() {
     try {
       const raw = window.localStorage.getItem(PREFS_KEY)
       if (raw) {
-        const saved = JSON.parse(raw) as { sort?: string; collapsed?: string[] }
+        const saved = JSON.parse(raw) as { sort?: string; collapsed?: string[]; topicView?: string }
         if (saved.sort && saved.sort in SORT_LABEL) setSort(saved.sort as SubjectSort)
+        if (saved.topicView === 'map' || saved.topicView === 'list') setTopicView(saved.topicView)
         if (Array.isArray(saved.collapsed)) {
           setCollapsed(
             new Set(
@@ -139,11 +145,14 @@ export default function FlashcardsMindMap() {
   useEffect(() => {
     if (!prefsLoaded.current) return
     try {
-      window.localStorage.setItem(PREFS_KEY, JSON.stringify({ sort, collapsed: [...collapsed] }))
+      window.localStorage.setItem(
+        PREFS_KEY,
+        JSON.stringify({ sort, collapsed: [...collapsed], topicView }),
+      )
     } catch {
       // Sin almacenamiento, las preferencias duran lo que la pestaña.
     }
-  }, [sort, collapsed])
+  }, [sort, collapsed, topicView])
 
   const toggleCategory = useCallback((category: SubjectCategory) => {
     setCollapsed((prev) => {
@@ -164,10 +173,11 @@ export default function FlashcardsMindMap() {
     ro.observe(el)
     setSize({ w: el.clientWidth, h: el.clientHeight })
     return () => ro.disconnect()
-    // El lienzo solo existe dentro de una asignatura, así que hay que volver a
-    // medirlo al entrar y al salir, no solo cuando acaba de cargar la sesión.
+    // El lienzo se monta y desmonta al cambiar de nivel y al conmutar Lista /
+    // Mapa. Si no se vuelve a medir, el ResizeObserver se queda observando el
+    // elemento viejo y los nodos se colocan con un tamaño que ya no existe.
     // (`path.length` es el nivel, que aún no está declarado a esta altura.)
-  }, [status, path.length])
+  }, [status, path.length, topicView])
 
   const loadCardsFor = useCallback(
     async (subjectId: string) => {
@@ -192,20 +202,11 @@ export default function FlashcardsMindMap() {
     [path, cardsBySubject],
   )
 
-  const topics = useMemo(() => {
-    const map = new Map<string, number>()
-    let noTopic = 0
-    currentCards.forEach((c) => {
-      const t = c.topic?.trim()
-      if (t) map.set(t, (map.get(t) ?? 0) + 1)
-      else noTopic += 1
-    })
-    const list = Array.from(map.entries()).map(([label, count]) => ({ key: label, label, count }))
-    list.sort((a, b) => a.label.localeCompare(b.label))
-    return { list, noTopic }
-  }, [currentCards])
+  const topicRows = useMemo(() => groupTopics(currentCards), [currentCards])
 
-  const hasRealTopics = topics.list.length > 0
+  // Un solo grupo "Sin tema" no es una clasificación: en ese caso se salta
+  // directo a la rejilla de tarjetas, como se hacía antes.
+  const hasRealTopics = topicRows.some((t) => t.key !== null)
   const level = path.length
 
   // ¿Mostramos rejilla de tarjetas (hoja) o nodos radiales?
@@ -396,13 +397,60 @@ export default function FlashcardsMindMap() {
 
   // --- Layout radial (solo temas) -------------------------------------------
   const center = { x: size.w / 2, y: size.h / 2 }
-  const radialCount = topics.list.length + (topics.noTopic > 0 ? 1 : 0)
+  const radialCount = topicRows.length
   const radius = Math.max(140, Math.min(Math.min(size.w, size.h) / 2 - 96, 300))
+
+  // Pasados doce nodos el arco por nodo se queda tan corto que se solapan, así
+  // que a partir de ahí se reparten en dos anillos. El interior NO lleva la
+  // mitad: lleva su parte proporcional a la circunferencia, o sus nodos se
+  // apiñan mientras el de fuera va holgado.
+  const RING_RATIO = 0.62
+  const twoRings = radialCount > 12
+  const innerCount = twoRings
+    ? Math.max(1, Math.round((radialCount * RING_RATIO) / (1 + RING_RATIO)))
+    : 0
+
   const positionFor = (i: number, n: number) => {
     if (n <= 0) return center
-    const angle = -Math.PI / 2 + (2 * Math.PI * i) / n
-    return { x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) }
+    if (!twoRings) {
+      const angle = -Math.PI / 2 + (2 * Math.PI * i) / n
+      return { x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) }
+    }
+
+    const isInner = i < innerCount
+    const countInRing = isInner ? innerCount : n - innerCount
+    const indexInRing = isInner ? i : i - innerCount
+    const ringRadius = isInner ? radius * RING_RATIO : radius
+    // El anillo de fuera va girado medio hueco: así cada nodo cae entre dos del
+    // de dentro y no quedan alineados en radios.
+    const offset = isInner ? 0 : Math.PI / countInRing
+    const angle = -Math.PI / 2 + offset + (2 * Math.PI * indexInRing) / countInRing
+    return {
+      x: center.x + ringRadius * Math.cos(angle),
+      y: center.y + ringRadius * Math.sin(angle),
+    }
   }
+
+  // Lo que choca no es el círculo: es la caja del nodo, que lleva la etiqueta
+  // debajo. El hueco disponible lo marcan la cuerda entre dos vecinos del mismo
+  // anillo (a lo ancho) y la separación entre anillos (a lo alto).
+  const chordFor = (ringRadius: number, count: number) =>
+    2 * ringRadius * Math.sin(Math.PI / Math.max(count, 2))
+
+  const LABEL_HEIGHT = 38
+  const slot = twoRings
+    ? Math.min(
+        chordFor(radius * RING_RATIO, innerCount),
+        chordFor(radius, radialCount - innerCount),
+      )
+    : Number.POSITIVE_INFINITY
+  const ringGap = radius * (1 - RING_RATIO)
+
+  const nodeBox = twoRings ? Math.max(72, Math.min(slot - 8, 128)) : 128
+  const nodeMax = twoRings
+    ? Math.max(44, Math.min(nodeBox, ringGap - LABEL_HEIGHT))
+    : 124
+  const nodeMin = Math.min(twoRings ? 44 : 64, nodeMax)
 
   // --- Render de nodos ------------------------------------------------------
   const centerColor = currentSubject ? resolveColor(currentSubject.color) : null
@@ -638,9 +686,54 @@ export default function FlashcardsMindMap() {
             )}
           </>
         ) : (
+          <>
+            {level === 1 && currentSubject ? (
+              <SubjectSummary summary={currentSubject.summary} total={currentSubject.totalCards} />
+            ) : null}
+
+            {level === 1 && hasRealTopics ? (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7D8A96]/70">
+                  {topicRows.length} {topicRows.length === 1 ? 'tema' : 'temas'}
+                </span>
+                <div className="flex items-center gap-1 rounded-2xl border-2 border-[#E4DCD8] bg-white p-1">
+                  {(['list', 'map'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setTopicView(mode)}
+                      aria-pressed={topicView === mode}
+                      className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition-colors ${
+                        topicView === mode
+                          ? 'bg-[#2c3e50] text-white'
+                          : 'text-[#7D8A96] hover:text-[#2C3E50]'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-base">
+                        {mode === 'list' ? 'format_list_bulleted' : 'hub'}
+                      </span>
+                      {mode === 'list' ? 'Lista' : 'Mapa'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {!atLeaf && topicView === 'list' ? (
+              <TopicList
+                topics={topicRows}
+                color={resolveColor(currentSubject?.color)}
+                onOpen={(row: TopicRow) => enterTopic(row.key ?? NO_TOPIC)}
+              />
+            ) : (
           <div
             ref={canvasRef}
-            className="relative h-[64vh] min-h-[520px] w-full overflow-hidden rounded-3xl border-2 border-[#2c3e50]"
+            // Con dos anillos el lienzo crece: el radio sale de la dimensión
+            // menor, y con 520 px de alto no queda separación suficiente entre
+            // los anillos para que quepan las etiquetas.
+            className={`relative w-full overflow-hidden rounded-3xl border-2 border-[#2c3e50] ${
+              twoRings ? 'h-[80vh] min-h-[720px]' : 'h-[64vh] min-h-[520px]'
+            }`}
             style={{
               background: 'radial-gradient(circle at 50% 42%, #ffffff 0%, #F8F3EF 100%)',
               boxShadow: '6px 6px 0 0 #2c3e50',
@@ -683,27 +776,32 @@ export default function FlashcardsMindMap() {
                     {renderCenter()}
                     {/* Nodos de tema. El mapa solo se usa para temas: las
                         asignaturas van en lista, que escala sin solaparse. */}
-                    {[
-                      ...topics.list.map((t) => ({ key: t.key, label: t.label, count: t.count })),
-                      ...(topics.noTopic > 0
-                        ? [{ key: NO_TOPIC, label: 'Sin tema', count: topics.noTopic }]
-                        : []),
-                    ].map((t, i, arr) => {
+                    {topicRows.map((t, i, arr) => {
                       const p = positionFor(i, arr.length)
                       const c = resolveColor(currentSubject?.color)
-                      const maxCount = Math.max(1, ...arr.map((x) => x.count))
-                      // Diámetro escalado por cantidad (64–124 px)
-                      const size = 64 + Math.round((t.count / maxCount) * 60)
+                      const maxCount = Math.max(1, ...arr.map((x) => x.total))
+                      // Diámetro escalado por cantidad, dentro de lo que la
+                      // geometría del anillo permite sin que se toquen.
+                      const size = Math.round(
+                        nodeMin + (t.total / maxCount) * Math.max(0, nodeMax - nodeMin),
+                      )
                       return (
                         <motion.div
-                          key={t.key}
+                          key={t.key ?? NO_TOPIC}
                           initial={{ opacity: 0, scale: 0.5 }}
                           animate={{ opacity: 1, scale: 1 }}
                           transition={{ delay: 0.03 * i, type: 'spring', stiffness: 260, damping: 20 }}
                           style={{ left: p.x, top: p.y }}
                           className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
                         >
-                          <TopicNode label={t.label} count={t.count} size={size} color={c} onOpen={() => enterTopic(t.key)} />
+                          <TopicNode
+                            label={t.label}
+                            count={t.total}
+                            size={size}
+                            boxWidth={nodeBox}
+                            color={c}
+                            onOpen={() => enterTopic(t.key ?? NO_TOPIC)}
+                          />
                         </motion.div>
                       )
                     })}
@@ -712,6 +810,8 @@ export default function FlashcardsMindMap() {
               </motion.div>
             </AnimatePresence>
           </div>
+            )}
+          </>
         )}
       </main>
 
@@ -902,18 +1002,22 @@ function TopicNode({
   label,
   count,
   size,
+  boxWidth,
   color,
   onOpen,
 }: {
   label: string
   count: number
   size: number
+  boxWidth: number
   color: ReturnType<typeof resolveColor>
   onOpen: () => void
 }) {
-  // Burbuja cuyo diámetro refleja la cantidad de tarjetas del tema.
+  // Burbuja cuyo diámetro refleja la cantidad de tarjetas del tema. `boxWidth`
+  // es el hueco real del que dispone el nodo: la etiqueta ocupa más que el
+  // círculo, así que es la caja la que decide si dos nodos se tocan.
   return (
-    <div className="flex w-32 flex-col items-center">
+    <div className="flex flex-col items-center" style={{ width: boxWidth }}>
       <button
         type="button"
         onClick={onOpen}
@@ -936,7 +1040,9 @@ function TopicNode({
           {count}
         </span>
       </button>
-      <span className="mt-2 line-clamp-2 max-w-[8rem] text-center text-xs font-black text-[#2C3E50]">{label}</span>
+      <span className="mt-2 line-clamp-2 w-full text-center text-xs font-black text-[#2C3E50]">
+        {label}
+      </span>
     </div>
   )
 }

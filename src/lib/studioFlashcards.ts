@@ -34,13 +34,6 @@ export type FlashcardDeck = {
   summary: FlashcardSummary
 }
 
-export type FlashcardTopicBreakdown = {
-  topic: string | null
-  count: number
-  dueCards: number
-  summary: FlashcardSummary
-}
-
 export type Flashcard = {
   itemId: number
   flashcardId: string
@@ -113,20 +106,6 @@ export async function fetchFlashcardDecks(token: string): Promise<FlashcardDeck[
   if (!res.ok) throw new Error(await readError(res, 'No se pudieron cargar los grupos de flashcards'))
   const payload = (await res.json().catch(() => null)) as { decks?: FlashcardDeck[] } | null
   return payload?.decks ?? []
-}
-
-export async function fetchFlashcardTopics(
-  token: string,
-  deckId: string,
-): Promise<FlashcardTopicBreakdown[]> {
-  const res = await fetch(`${apiBase()}/api/studio/flashcard-decks/${deckId}/topics`, {
-    headers: authHeaders(token),
-  })
-  if (!res.ok) throw new Error(await readError(res, 'No se pudieron cargar los temas'))
-  const payload = (await res.json().catch(() => null)) as
-    | { topics?: FlashcardTopicBreakdown[] }
-    | null
-  return payload?.topics ?? []
 }
 
 export async function createFlashcardDeck(
