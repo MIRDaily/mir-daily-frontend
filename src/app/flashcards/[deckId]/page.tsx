@@ -29,6 +29,7 @@ import {
   logFlashcard,
   nextFlashcard,
   startFlashcardSession,
+  undoFlashcardReview,
   updateFlashcard,
   type Flashcard,
   type Grade,
@@ -73,6 +74,8 @@ export default function FlashcardDeckPage() {
   const [autoStudy, setAutoStudy] = useState(false)
   // Reparto de respuestas de la sesión, para el resumen del final.
   const [byGrade, setByGrade] = useState<Record<number, number>>({})
+  const [undoStack, setUndoStack] = useState<{ card: StudyFlashcard; grade: Grade }[]>([])
+  const [undoing, setUndoing] = useState(false)
   const [sessionLimit, setSessionLimit] = useState(0)
   // Cuándo se mostró la tarjeta actual: cronómetro de la respuesta y origen
   // desde el que se leen los intervalos previstos.
@@ -230,6 +233,9 @@ export default function FlashcardDeckPage() {
     setStudied(0)
     setFinishState(null)
     setByGrade({})
+    // La pila de deshacer es de la sesión: el servidor solo deshace repasos de
+    // la sesión en curso, así que arrastrarla sería prometer algo que no puede.
+    setUndoStack([])
     try {
       // Con la escalera vieja el tope daba igual, porque una tarjeta acertada no
       // volvía en 3 días. Con FSRS y las repeticiones dentro de la sesión, un
@@ -285,6 +291,9 @@ export default function FlashcardDeckPage() {
         })
         setStudied((n) => n + 1)
         setByGrade((prev) => ({ ...prev, [grade]: (prev[grade] ?? 0) + 1 }))
+        // Pila para deshacer: hay que guardar la tarjeta Y el grado, porque al
+        // deshacer se descuenta del reparto del resumen.
+        setUndoStack((prev) => [...prev, { card: current, grade }])
         await advance(sessionId)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'No se pudo registrar la respuesta.')
@@ -293,6 +302,42 @@ export default function FlashcardDeckPage() {
     },
     [busy, current, sessionId, revealed, token, deckId, advance],
   )
+
+  const handleUndo = useCallback(async () => {
+    if (busy || undoing || !sessionId || undoStack.length === 0) return
+    setUndoing(true)
+    setError(null)
+    try {
+      const restored = await undoFlashcardReview(token, deckId, sessionId)
+      if (!restored) {
+        setError('Ese repaso ya no se puede deshacer.')
+        return
+      }
+
+      const ultimo = undoStack[undoStack.length - 1]
+      setUndoStack((prev) => prev.slice(0, -1))
+      setStudied((n) => Math.max(0, n - 1))
+      setByGrade((prev) => ({
+        ...prev,
+        [ultimo.grade]: Math.max(0, (prev[ultimo.grade] ?? 0) - 1),
+      }))
+
+      // Se vuelve a enseñar la tarjeta ya girada: quien deshace es porque
+      // quiere cambiar la respuesta, no volver a leerse el anverso. Los
+      // intervalos se refrescan con los que devuelve el servidor sobre el
+      // estado ya restaurado.
+      setCurrent({ ...ultimo.card, srs: restored.srs, preview: restored.preview })
+      setRevealed(true)
+      setFinishState(null)
+      const ahora = new Date()
+      shownAtRef.current = ahora.getTime()
+      setShownAt(ahora)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo deshacer el repaso.')
+    } finally {
+      setUndoing(false)
+    }
+  }, [busy, undoing, sessionId, undoStack, token, deckId])
 
   const exitStudy = async () => {
     if (sessionId) void endFlashcardSession(token, sessionId)
@@ -306,10 +351,18 @@ export default function FlashcardDeckPage() {
 
   // Atajos de teclado en modo estudio: Espacio = girar, 1 = fallo, 2 = acierto.
   useEffect(() => {
-    if (mode !== 'study' || finishState || !current) return
+    if (mode !== 'study') return
     const onKey = (e: KeyboardEvent) => {
       const tag = document.activeElement?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      // Deshacer funciona también con la sesión terminada: es justo cuando uno
+      // se da cuenta de que la última respuesta no era la que quería.
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        void handleUndo()
+        return
+      }
+      if (finishState || !current) return
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault()
         setRevealed((v) => !v)
@@ -320,7 +373,7 @@ export default function FlashcardDeckPage() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [mode, finishState, current, revealed, handleRate])
+  }, [mode, finishState, current, revealed, handleRate, handleUndo])
 
   // Indicador de scroll: muestra un degradado al pie de la tarjeta 3D cuando
   // el texto no cabe entero, para avisar de que hay más contenido debajo.
@@ -420,6 +473,16 @@ export default function FlashcardDeckPage() {
               <p className="truncate text-sm font-black leading-tight text-[#2C3E50]">{deckName}</p>
               <p className="text-[10px] font-bold uppercase tracking-wider text-[#7D8A96]/60">Repaso</p>
             </div>
+            <button
+              type="button"
+              onClick={() => void handleUndo()}
+              disabled={undoStack.length === 0 || undoing || busy}
+              title="Deshacer el último repaso (Ctrl+Z)"
+              className="flex items-center gap-1.5 rounded-xl border-2 border-[#E4DCD8] px-2.5 py-1.5 text-xs font-black text-[#7D8A96] transition-colors hover:border-[#2c3e50] hover:text-[#2C3E50] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-[#E4DCD8] disabled:hover:text-[#7D8A96]"
+            >
+              <span className="material-symbols-outlined text-base">undo</span>
+              Deshacer
+            </button>
             <span
               className="rounded-full px-3 py-1.5 text-xs font-black text-white"
               style={{ backgroundColor: resolveColor(deckColor).bg }}
@@ -503,6 +566,11 @@ export default function FlashcardDeckPage() {
                 <StickerButton icon="replay" color="#8BA888" onClick={() => void handleStartStudy()}>
                   Repasar de nuevo
                 </StickerButton>
+                {undoStack.length > 0 ? (
+                  <GhostButton icon="undo" onClick={() => void handleUndo()}>
+                    Deshacer la última
+                  </GhostButton>
+                ) : null}
                 <GhostButton onClick={() => void exitStudy()}>Volver al grupo</GhostButton>
               </div>
             </div>

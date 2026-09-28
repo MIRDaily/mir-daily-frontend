@@ -408,6 +408,37 @@ export async function logFlashcard(
   return { srs: payload?.srs ?? null }
 }
 
+/**
+ * Deshace el ultimo repaso de la sesion y deja la tarjeta pendiente otra vez.
+ * Devuelve `null` si no habia nada que deshacer o si ese repaso es anterior al
+ * sistema de deshacer (el servidor contesta 409 y prefiere negarse a inventarse
+ * un estado).
+ */
+export async function undoFlashcardReview(
+  token: string,
+  deckId: string,
+  sessionId: string,
+): Promise<{ deckItemId: number; srs: FlashcardSrs | null; preview: Record<string, GradePreview> } | null> {
+  const res = await fetch(`${apiBase()}/api/studio/flashcard-decks/${deckId}/undo`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({ sessionId }),
+  })
+  if (res.status === 409) return null
+  if (!res.ok) throw new Error(await readError(res, 'No se pudo deshacer el repaso'))
+  const payload = (await res.json().catch(() => null)) as {
+    deckItemId?: number
+    srs?: FlashcardSrs
+    preview?: Record<string, GradePreview>
+  } | null
+  if (!payload?.deckItemId) return null
+  return {
+    deckItemId: payload.deckItemId,
+    srs: payload.srs ?? null,
+    preview: payload.preview ?? {},
+  }
+}
+
 // Best-effort: cerrar la sesion no debe romper el flujo si falla.
 export async function endFlashcardSession(token: string, sessionId: string): Promise<void> {
   try {
