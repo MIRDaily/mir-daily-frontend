@@ -138,6 +138,45 @@ export async function fetchFlashcardDecks(token: string): Promise<FlashcardDeck[
   return payload?.decks ?? []
 }
 
+export type FlashcardForecast = {
+  /** Vencidas de días anteriores. Van aparte para que no escondan el atasco. */
+  overdue: number
+  days: { date: string; count: number }[]
+}
+
+export type FlashcardStats = {
+  /** Reparto por intervalo asignado, no por racha. */
+  maturity: { new: number; learning: number; young: number; mature: number }
+  retention: {
+    reviews: number
+    passed: number
+    /** Null mientras no haya repasos sobre tarjetas ya programadas. */
+    rate: number | null
+    matureReviews: number
+    matureRate: number | null
+  }
+}
+
+export async function fetchFlashcardForecast(
+  token: string,
+  days = 30,
+): Promise<FlashcardForecast> {
+  const res = await fetch(`${apiBase()}/api/studio/flashcards/forecast?days=${days}`, {
+    headers: authHeaders(token),
+  })
+  if (!res.ok) throw new Error(await readError(res, 'No se pudo cargar la previsión'))
+  const payload = (await res.json().catch(() => null)) as FlashcardForecast | null
+  return payload ?? { overdue: 0, days: [] }
+}
+
+export async function fetchFlashcardStats(token: string): Promise<FlashcardStats | null> {
+  const res = await fetch(`${apiBase()}/api/studio/flashcards/stats`, {
+    headers: authHeaders(token),
+  })
+  if (!res.ok) throw new Error(await readError(res, 'No se pudieron cargar las estadísticas'))
+  return (await res.json().catch(() => null)) as FlashcardStats | null
+}
+
 export async function createFlashcardDeck(
   token: string,
   input: { name: string; color?: string; icon?: string; description?: string },

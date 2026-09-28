@@ -27,6 +27,7 @@ import {
   tintedPaper,
 } from '@/components/flashcards/ui'
 import SubjectList, { SORT_LABEL, type SubjectSort } from '@/components/flashcards/SubjectList'
+import ProgressPanel from '@/components/flashcards/ProgressPanel'
 import TopicList, { groupTopics, type TopicRow } from '@/components/flashcards/TopicList'
 import SubjectSummary from '@/components/flashcards/SubjectSummary'
 import { CATEGORY_ORDER, type SubjectCategory } from '@/lib/subjectVisuals'
@@ -37,11 +38,15 @@ import {
   deleteFlashcard,
   deleteFlashcardDeck,
   fetchFlashcardDecks,
+  fetchFlashcardForecast,
+  fetchFlashcardStats,
   fetchFlashcards,
   moveFlashcards,
   updateFlashcard,
   type Flashcard,
   type FlashcardDeck,
+  type FlashcardForecast,
+  type FlashcardStats,
 } from '@/lib/studioFlashcards'
 
 const NO_TOPIC = '__none__'
@@ -57,6 +62,8 @@ export default function FlashcardsMindMap() {
   const [error, setError] = useState<string | null>(null)
 
   const [subjects, setSubjects] = useState<FlashcardDeck[]>([])
+  const [forecast, setForecast] = useState<FlashcardForecast | null>(null)
+  const [stats, setStats] = useState<FlashcardStats | null>(null)
   const [cardsBySubject, setCardsBySubject] = useState<Record<string, Flashcard[]>>({})
   const [loadingSubject, setLoadingSubject] = useState(false)
 
@@ -93,6 +100,17 @@ export default function FlashcardsMindMap() {
     }
   }, [])
 
+  // El panel es informativo: si falla, la página sigue siendo usable y no se
+  // le enseña un error al usuario por un gráfico.
+  const loadPanel = useCallback(async (authToken: string) => {
+    const [f, s] = await Promise.allSettled([
+      fetchFlashcardForecast(authToken, 30),
+      fetchFlashcardStats(authToken),
+    ])
+    if (f.status === 'fulfilled') setForecast(f.value)
+    if (s.status === 'fulfilled') setStats(s.value)
+  }, [])
+
   useEffect(() => {
     let mounted = true
     ;(async () => {
@@ -108,11 +126,12 @@ export default function FlashcardsMindMap() {
       setToken(accessToken)
       await loadSubjects(accessToken)
       if (mounted) setStatus('ready')
+      void loadPanel(accessToken)
     })()
     return () => {
       mounted = false
     }
-  }, [loadSubjects])
+  }, [loadSubjects, loadPanel])
 
   // Preferencias de la lista. Se leen una vez y solo entonces se empiezan a
   // guardar, para no sobrescribirlas con los valores por defecto del montaje.
@@ -632,6 +651,10 @@ export default function FlashcardsMindMap() {
           </p>
         ) : level === 0 ? (
           <>
+            {subjects.length > 0 ? (
+              <ProgressPanel forecast={forecast} stats={stats} accent={heroAccent} />
+            ) : null}
+
             <div className="flex flex-wrap items-center gap-2">
               <label className="relative flex min-w-[14rem] flex-1 items-center">
                 <span className="material-symbols-outlined pointer-events-none absolute left-3 text-lg text-[#B0B8BF]">
