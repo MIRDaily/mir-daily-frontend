@@ -22,7 +22,10 @@ export const CATEGORY_LABEL: Record<SubjectCategory, string> = {
   'BÁSICA': 'Básicas',
   'MÉDICA': 'Médicas',
   'QUIRÚRGICA': 'Quirúrgicas',
-  PERSONAL: 'Personales',
+  // "Otros" y no "Personales": lo que agrupa es todo lo que no se reconoce como
+  // asignatura del MIR, y leyendo "Personales" cuesta entender por qué está ahí
+  // un mazo que uno considera de una asignatura.
+  PERSONAL: 'Otros',
 }
 
 type SubjectVisualEntry = {

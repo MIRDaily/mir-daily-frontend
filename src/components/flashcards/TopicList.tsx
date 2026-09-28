@@ -6,7 +6,7 @@
 
 import { motion } from 'framer-motion'
 import { STATUS_TONE } from '@/components/studio/deckUi'
-import { Count, MasteryBar } from '@/components/flashcards/SubjectList'
+import { Count, DUE_TONE, MasteryBar } from '@/components/flashcards/SubjectList'
 import type { Flashcard, FlashcardSummary } from '@/lib/studioFlashcards'
 import type { SubjectColor } from '@/lib/flashcardTheme'
 
@@ -71,6 +71,9 @@ export default function TopicList({
       {topics.map((row, i) => {
         const mastery = row.total > 0 ? Math.round((row.summary.mastered / row.total) * 100) : 0
         const idle = row.dueCards === 0
+        // `dueCards` incluye nuevas y falladas; se restan para que ninguna
+        // tarjeta se cuente en dos columnas.
+        const repasos = Math.max(0, row.dueCards - row.summary.new - row.summary.failed)
 
         return (
           <motion.li
@@ -105,14 +108,17 @@ export default function TopicList({
                 </span>
               </button>
 
+              {/* Las mismas tres columnas que las asignaturas, y disjuntas
+                  igual: nuevas, falladas y lo que toca repasar. */}
               <button
                 type="button"
                 onClick={() => onOpen(row)}
                 className="flex shrink-0 items-center gap-1"
-                aria-label={`${row.summary.new} nuevas, ${row.dueCards - row.summary.new} pendientes`}
+                aria-label={`${row.summary.new} nuevas, ${row.summary.failed} falladas, ${repasos} por repasar`}
               >
                 <Count value={row.summary.new} tone={STATUS_TONE.new} />
-                <Count value={Math.max(0, row.dueCards - row.summary.new)} tone={STATUS_TONE.failed} />
+                <Count value={row.summary.failed} tone={STATUS_TONE.failed} />
+                <Count value={repasos} tone={DUE_TONE} />
               </button>
 
               <span className="material-symbols-outlined shrink-0 text-lg text-[#C9CFD5]">

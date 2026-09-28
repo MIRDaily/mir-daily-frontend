@@ -316,26 +316,32 @@ function FlashcardsMindMap() {
   // Sustituye a las migas que llevaba la portada: tenerlas en los dos sitios
   // era decir lo mismo dos veces.
   useEffect(() => {
+    // La ruta se lee entera desde arriba, sin saltarse escalones: Estudio es de
+    // donde se entra, y desde cualquier nivel se puede subir a cualquier padre.
     if (level === 0) {
       setBackAction({ label: 'Estudio', href: '/studio', current: 'Mis flashcards' })
     } else if (level === 1) {
       setBackAction({
-        label: 'Mis flashcards',
-        href: '/flashcards',
+        label: 'Estudio',
+        href: '/studio',
+        trail: [{ label: 'Mis flashcards', href: '/flashcards' }],
         current: currentSubject?.name,
       })
     } else {
       setBackAction({
-        label: 'Mis flashcards',
-        href: '/flashcards',
-        trail: currentSubject
-          ? [
-              {
-                label: currentSubject.name,
-                href: `/flashcards?asignatura=${encodeURIComponent(currentSubject.id)}`,
-              },
-            ]
-          : undefined,
+        label: 'Estudio',
+        href: '/studio',
+        trail: [
+          { label: 'Mis flashcards', href: '/flashcards' },
+          ...(currentSubject
+            ? [
+                {
+                  label: currentSubject.name,
+                  href: `/flashcards?asignatura=${encodeURIComponent(currentSubject.id)}`,
+                },
+              ]
+            : []),
+        ],
         current: humanizeTopic(path[1]),
       })
     }

@@ -90,8 +90,9 @@ export default function FlashcardDeckPage() {
       return () => setBackAction(null)
     }
     setBackAction({
-      label: 'Mis flashcards',
-      href: '/flashcards',
+      label: 'Estudio',
+      href: '/studio',
+      trail: [{ label: 'Mis flashcards', href: '/flashcards' }],
       current: deckName || undefined,
     })
     return () => setBackAction(null)

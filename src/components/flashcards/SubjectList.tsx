@@ -114,9 +114,34 @@ export default function SubjectList({
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Rótulo de las columnas. Sin él, tres cifras de colores junto a cada
+          asignatura no dicen qué es cada una.
+          Repite la estructura de una fila —relleno, hueco flexible y el mismo
+          ancho reservado para los botones (ACTIONS_W)— para que las columnas
+          queden alineadas por construcción y no por un relleno acertado a ojo. */}
+      <div className="-mb-3 flex items-center gap-3 border-2 border-transparent px-3 text-[9px] font-black uppercase tracking-[0.1em]">
+        <span className="min-w-0 flex-1" />
+        <span className="flex shrink-0 items-center gap-1">
+          <span className="w-11 text-center" style={{ color: STATUS_TONE.new.fg }}>
+            Nuevas
+          </span>
+          <span className="w-11 text-center" style={{ color: STATUS_TONE.failed.fg }}>
+            Falladas
+          </span>
+          <span className="w-11 text-center" style={{ color: DUE_TONE.fg }}>
+            Repasos
+          </span>
+        </span>
+        <span className={`${ACTIONS_W} shrink-0`} aria-hidden />
+      </div>
+
       {sections.map((section) => {
         const isCollapsed = collapsed.has(section.category)
-        const due = section.rows.reduce((n, r) => n + r.deck.dueReviewCards, 0)
+        const due = section.rows.reduce(
+          (n, r) => n + Math.max(0, r.deck.dueReviewCards - r.deck.summary.failed),
+          0,
+        )
+        const failed = section.rows.reduce((n, r) => n + r.deck.summary.failed, 0)
         const fresh = section.rows.reduce((n, r) => n + r.deck.summary.new, 0)
 
         return (
@@ -131,7 +156,8 @@ export default function SubjectList({
                 right={
                   <span className="flex items-center gap-3 text-[11px] font-black tabular-nums">
                     <span style={{ color: STATUS_TONE.new.fg }}>{fresh}</span>
-                    <span style={{ color: STATUS_TONE.failed.fg }}>{due}</span>
+                    <span style={{ color: STATUS_TONE.failed.fg }}>{failed}</span>
+                    <span style={{ color: DUE_TONE.fg }}>{due}</span>
                     <span
                       className={`material-symbols-outlined text-base text-[#B8C0C8] transition-transform ${
                         isCollapsed ? '' : 'rotate-180'
@@ -233,18 +259,17 @@ function SubjectRow({
         </span>
       </button>
 
-      {/* Contadores en columnas de ancho fijo, para que se lean en vertical. */}
+      {/* Columnas de ancho fijo, para que se lean en vertical. */}
       <button
         type="button"
         onClick={onOpen}
-        className="flex shrink-0 items-center gap-1 text-right"
-        aria-label={`${deck.summary.new} nuevas, ${deck.dueReviewCards} pendientes`}
+        className="shrink-0"
+        aria-label={`${deck.name}: ${deck.summary.new} nuevas, ${deck.summary.failed} falladas, ${Math.max(0, deck.dueReviewCards - deck.summary.failed)} por repasar`}
       >
-        <Count value={deck.summary.new} tone={STATUS_TONE.new} />
-        <Count value={deck.dueReviewCards} tone={STATUS_TONE.failed} />
+        <WorkCounts deck={deck} />
       </button>
 
-      <div className="flex shrink-0 items-center gap-1">
+      <div className={`${ACTIONS_W} flex shrink-0 items-center justify-end gap-1`}>
         <button
           type="button"
           onClick={onStudy}
@@ -274,19 +299,57 @@ function SubjectRow({
 export function Count({
   value,
   tone,
+  compact,
 }: {
   value: number
   tone: { fg: string; bg: string; border: string }
+  compact?: boolean
 }) {
+  const ancho = compact ? 'w-7' : 'w-11'
   if (value === 0) {
-    return <span className="w-11 text-center text-xs font-bold tabular-nums text-[#D4D9DD]">–</span>
+    return (
+      <span className={`${ancho} text-center text-xs font-bold tabular-nums text-[#D4D9DD]`}>–</span>
+    )
   }
   return (
     <span
-      className="w-11 rounded-lg border py-0.5 text-center text-xs font-black tabular-nums"
+      className={`${ancho} rounded-lg border py-0.5 text-center ${
+        compact ? 'text-[10px]' : 'text-xs'
+      } font-black tabular-nums`}
       style={{ color: tone.fg, background: tone.bg, borderColor: tone.border }}
     >
       {value}
+    </span>
+  )
+}
+
+/** Verde de "toca repasar", el mismo papel que la columna Due de Anki. */
+export const DUE_TONE = { fg: '#5C7A59', bg: '#EAF2E8', border: '#CFE0CC' }
+
+/**
+ * Ancho reservado para los botones del final de cada fila. Lo comparten la fila
+ * y el rótulo de columnas: si solo lo supiera una de las dos, las cifras y sus
+ * títulos se irían desalineando en cuanto cambiara un botón.
+ */
+const ACTIONS_W = 'w-[4.5rem]'
+
+/**
+ * Las tres columnas de trabajo, con la misma lectura que el navegador de mazos
+ * de Anki: nuevas, falladas y repasos que tocan. Son DISJUNTAS —una tarjeta
+ * cuenta en una sola— para que sumarlas dé el trabajo pendiente de verdad.
+ */
+export function WorkCounts({ deck, compact }: { deck: FlashcardDeck; compact?: boolean }) {
+  // `dueReviewCards` son las vencidas ya vistas, falladas incluidas; se restan
+  // para que no aparezcan contadas dos veces.
+  const repasos = Math.max(0, deck.dueReviewCards - deck.summary.failed)
+  return (
+    <span
+      className="flex shrink-0 items-center gap-1"
+      title={`${deck.summary.new} nuevas · ${deck.summary.failed} falladas · ${repasos} por repasar · ${deck.totalCards} en total`}
+    >
+      <Count value={deck.summary.new} tone={STATUS_TONE.new} compact={compact} />
+      <Count value={deck.summary.failed} tone={STATUS_TONE.failed} compact={compact} />
+      <Count value={repasos} tone={DUE_TONE} compact={compact} />
     </span>
   )
 }

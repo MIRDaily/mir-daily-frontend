@@ -13,6 +13,7 @@
 import { useMemo } from 'react'
 import { STATUS_TONE, domainColorClass } from '@/components/studio/deckUi'
 import { groupTopics } from '@/components/flashcards/TopicList'
+import { WorkCounts } from '@/components/flashcards/SubjectList'
 import {
   CATEGORY_LABEL,
   CATEGORY_ORDER,
@@ -112,14 +113,7 @@ export default function SubjectIndex({
                           </span>
                         </span>
                       </span>
-                      {deck.dueCards > 0 ? (
-                        <span
-                          className="shrink-0 rounded-md px-1.5 text-[10px] font-black tabular-nums"
-                          style={{ color: STATUS_TONE.failed.fg, background: STATUS_TONE.failed.bg }}
-                        >
-                          {deck.dueCards}
-                        </span>
-                      ) : null}
+                      <WorkCounts deck={deck} compact />
                     </button>
 
                     <button
