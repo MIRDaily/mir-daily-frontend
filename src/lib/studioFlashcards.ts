@@ -7,6 +7,17 @@
 // propia (`/flashcard-decks/:id/next`). Nada de esto cuenta para las
 // estadisticas globales del usuario.
 
+// Los cuatro cubos del motor SRS, con los mismos nombres que usan los mazos de
+// preguntas (STATUS_TONE en components/studio/deckUi.tsx).
+export type FlashcardSummary = {
+  new: number
+  failed: number
+  learning: number
+  mastered: number
+}
+
+export type FlashcardStatus = keyof FlashcardSummary
+
 export type FlashcardDeck = {
   id: string
   name: string
@@ -16,7 +27,18 @@ export type FlashcardDeck = {
   created_at?: string | null
   position?: number | null
   totalCards: number
+  // Pendientes en total, nuevas incluidas.
   dueCards: number
+  // Vencidas que ya se vieron alguna vez: dueCards menos las nuevas.
+  dueReviewCards: number
+  summary: FlashcardSummary
+}
+
+export type FlashcardTopicBreakdown = {
+  topic: string | null
+  count: number
+  dueCards: number
+  summary: FlashcardSummary
 }
 
 export type Flashcard = {
@@ -28,6 +50,10 @@ export type Flashcard = {
   subject_id?: number | null
   topic_id?: number | null
   added_at?: string | null
+  status: FlashcardStatus
+  isDue: boolean
+  nextDueAt?: string | null
+  totalReviews: number
 }
 
 // Item devuelto por la cola de estudio.
@@ -87,6 +113,20 @@ export async function fetchFlashcardDecks(token: string): Promise<FlashcardDeck[
   if (!res.ok) throw new Error(await readError(res, 'No se pudieron cargar los grupos de flashcards'))
   const payload = (await res.json().catch(() => null)) as { decks?: FlashcardDeck[] } | null
   return payload?.decks ?? []
+}
+
+export async function fetchFlashcardTopics(
+  token: string,
+  deckId: string,
+): Promise<FlashcardTopicBreakdown[]> {
+  const res = await fetch(`${apiBase()}/api/studio/flashcard-decks/${deckId}/topics`, {
+    headers: authHeaders(token),
+  })
+  if (!res.ok) throw new Error(await readError(res, 'No se pudieron cargar los temas'))
+  const payload = (await res.json().catch(() => null)) as
+    | { topics?: FlashcardTopicBreakdown[] }
+    | null
+  return payload?.topics ?? []
 }
 
 export async function createFlashcardDeck(

@@ -41,6 +41,17 @@ export const STATUS_TONE = {
 
 export type StatusKey = keyof typeof STATUS_TONE
 
+/**
+ * Color de la barra de dominio por tramos. Compartido por la galería de mazos y
+ * la lista de flashcards para que un 62 % signifique lo mismo en las dos.
+ */
+export function domainColorClass(percent: number): string {
+  if (percent < 40) return 'bg-red-400'
+  if (percent < 70) return 'bg-orange-400'
+  if (percent < 85) return 'bg-yellow-400'
+  return 'bg-emerald-500'
+}
+
 /** Trama de puntos: como una ficha de seguimiento, en vez de renglones. */
 export function trackerPaper(tint: string = MUTED, opacity = 0.16): CSSProperties {
   return {

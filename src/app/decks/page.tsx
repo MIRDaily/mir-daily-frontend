@@ -16,7 +16,12 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import GooFissionLoader from '@/components/studio/GooFissionLoader'
 import UndoDeleteToast from '@/components/studio/UndoDeleteToast'
-import { DeckBannerGradient, DEFAULT_DECK_GRADIENT, isDeckGradientId } from '@/components/studio/deckUi'
+import {
+  DeckBannerGradient,
+  DEFAULT_DECK_GRADIENT,
+  domainColorClass as getDomainColor,
+  isDeckGradientId,
+} from '@/components/studio/deckUi'
 import { useProfile } from '@/hooks/useProfile'
 import { restoreDeck, softDeleteDeck } from '@/lib/studio/trash'
 import { supabase } from '@/lib/supabaseBrowser'
@@ -69,13 +74,6 @@ function clampPercent(value: unknown): number {
   if (num < 0) return 0
   if (num > 100) return 100
   return Math.round(num)
-}
-
-function getDomainColor(percent: number): string {
-  if (percent < 40) return 'bg-red-400'
-  if (percent < 70) return 'bg-orange-400'
-  if (percent < 85) return 'bg-yellow-400'
-  return 'bg-emerald-500'
 }
 
 function getDeckTheme(subject?: string | null): DeckTheme {

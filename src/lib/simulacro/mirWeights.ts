@@ -16,6 +16,8 @@
 // proporcional entre las que hay.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { matchSubjectKey } from '@/lib/subjectMatch'
+
 // Ordenado de mayor a menor. El código AMIR del gráfico va en el comentario
 // para poder cotejarlo de un vistazo con la fuente.
 export const MIR_WEIGHTS: Record<string, number> = {
@@ -67,44 +69,19 @@ const ALIASES: Record<string, string> = {
 /** Peso para una asignatura que no esté en la tabla. */
 export const DEFAULT_WEIGHT = 3
 
-const normalize = (s: string) =>
-  s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z]/g, '')
-
-/** Palabras sueltas del nombre, ya normalizadas y sin conectores. */
-const wordsOf = (name: string) =>
-  name
-    .split(/[\s,/&·+-]+/)
-    .map(normalize)
-    .filter((w) => w.length > 2 && w !== 'del' && w !== 'las' && w !== 'los')
-
 /**
- * Peso de una asignatura por su nombre.
- *
- * Se compara PALABRA a palabra, no por subcadenas: "urologia" está dentro de
- * "neurologia", así que una comparación laxa cruzaría las dos asignaturas y el
- * reparto saldría mal sin que se note.
+ * Clave canónica de una asignatura CON PESO, o `null`. El emparejador es
+ * compartido (ver `subjectMatch.ts`); aquí solo se le pasa el vocabulario de
+ * las 20 asignaturas que reparten preguntas.
  */
+export function subjectKeyFor(name: string): string | null {
+  return matchSubjectKey(name, Object.keys(MIR_WEIGHTS), ALIASES)
+}
+
+/** Peso de una asignatura por su nombre. */
 export function weightForSubject(name: string): number {
-  const words = wordsOf(name)
-  if (words.length === 0) return DEFAULT_WEIGHT
-
-  for (const word of words) {
-    // Coincidencia exacta de la palabra con una clave o con un alias.
-    const direct = MIR_WEIGHTS[word] ?? MIR_WEIGHTS[ALIASES[word] ?? '']
-    if (direct !== undefined) return direct
-
-    // Abreviaturas y variantes: "neumo" ~ "neumologia", "traumato" ~ ...
-    for (const [candidate, weight] of Object.entries(MIR_WEIGHTS)) {
-      if (word.length >= 5 && (candidate.startsWith(word) || word.startsWith(candidate))) {
-        return weight
-      }
-    }
-  }
-  return DEFAULT_WEIGHT
+  const key = subjectKeyFor(name)
+  return key === null ? DEFAULT_WEIGHT : MIR_WEIGHTS[key]
 }
 
 /**

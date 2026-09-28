@@ -1,9 +1,12 @@
 'use client'
 
-// Mapa mental interactivo de flashcards.
-// Drill-down: Hub -> Asignaturas -> Temas -> Tarjetas. Se navega hacia dentro
-// hasta el nivel deseado y ahí se seleccionan las tarjetas. Las asignaturas y
-// los temas se muestran como nodos radiales; las tarjetas, como rejilla.
+// Flashcards: Hub -> Asignaturas -> Temas -> Tarjetas.
+//
+// Las ASIGNATURAS van en lista (SubjectList), no en el mapa radial: el radial
+// reparte los nodos en un círculo de radio fijo, así que pasadas ~15 asignaturas
+// se solapan y el resto se sale del lienzo recortado. Los TEMAS, que suelen ser
+// pocos, siguen pudiendo verse como mapa con el conmutador Lista/Mapa. Las
+// tarjetas, como rejilla.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -13,7 +16,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { supabase } from '@/lib/supabaseBrowser'
 import SubjectModal from '@/components/studio/SubjectModal'
 import FlashcardCreateModal from '@/components/studio/FlashcardCreateModal'
-import DropdownMenu from '@/components/studio/DropdownMenu'
 import { DEFAULT_COLOR_KEY, MAX_FLASHCARD_CHARS, SUBJECT_COLORS, resolveColor, resolveIcon } from '@/lib/flashcardTheme'
 import CharCounter from '@/components/studio/CharCounter'
 import {
@@ -24,6 +26,8 @@ import {
   StickerButton,
   tintedPaper,
 } from '@/components/flashcards/ui'
+import SubjectList, { SORT_LABEL, type SubjectSort } from '@/components/flashcards/SubjectList'
+import { CATEGORY_ORDER, type SubjectCategory } from '@/lib/subjectVisuals'
 import {
   bulkDeleteFlashcards,
   copyFlashcards,
@@ -39,6 +43,10 @@ import {
 } from '@/lib/studioFlashcards'
 
 const NO_TOPIC = '__none__'
+
+// Preferencias de la lista de asignaturas. Si se pliega una categoría, se espera
+// encontrarla plegada al volver.
+const PREFS_KEY = 'mirdaily.flashcards.listPrefs'
 
 export default function FlashcardsMindMap() {
   const router = useRouter()
@@ -62,6 +70,11 @@ export default function FlashcardsMindMap() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [destCtx, setDestCtx] = useState<null | { mode: 'move' | 'copy' }>(null)
   const [notice, setNotice] = useState<null | { title: string; message: string }>(null)
+
+  // Lista de asignaturas: búsqueda, orden y secciones plegadas.
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<SubjectSort>('due')
+  const [collapsed, setCollapsed] = useState<Set<SubjectCategory>>(new Set())
 
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const [size, setSize] = useState({ w: 900, h: 560 })
@@ -96,6 +109,51 @@ export default function FlashcardsMindMap() {
     }
   }, [loadSubjects])
 
+  // Preferencias de la lista. Se leen una vez y solo entonces se empiezan a
+  // guardar, para no sobrescribirlas con los valores por defecto del montaje.
+  const prefsLoaded = useRef(false)
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(PREFS_KEY)
+      if (raw) {
+        const saved = JSON.parse(raw) as { sort?: string; collapsed?: string[] }
+        if (saved.sort && saved.sort in SORT_LABEL) setSort(saved.sort as SubjectSort)
+        if (Array.isArray(saved.collapsed)) {
+          setCollapsed(
+            new Set(
+              saved.collapsed.filter((c): c is SubjectCategory =>
+                (CATEGORY_ORDER as string[]).includes(c),
+              ),
+            ),
+          )
+        }
+      }
+    } catch {
+      // Un localStorage bloqueado o unas preferencias viejas no deben tumbar la
+      // página: se sigue con los valores por defecto.
+    }
+    prefsLoaded.current = true
+  }, [])
+
+  useEffect(() => {
+    if (!prefsLoaded.current) return
+    try {
+      window.localStorage.setItem(PREFS_KEY, JSON.stringify({ sort, collapsed: [...collapsed] }))
+    } catch {
+      // Sin almacenamiento, las preferencias duran lo que la pestaña.
+    }
+  }, [sort, collapsed])
+
+  const toggleCategory = useCallback((category: SubjectCategory) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(category)) next.delete(category)
+      else next.add(category)
+      return next
+    })
+  }, [])
+
   // Medir el lienzo
   useEffect(() => {
     const el = canvasRef.current
@@ -106,7 +164,10 @@ export default function FlashcardsMindMap() {
     ro.observe(el)
     setSize({ w: el.clientWidth, h: el.clientHeight })
     return () => ro.disconnect()
-  }, [status])
+    // El lienzo solo existe dentro de una asignatura, así que hay que volver a
+    // medirlo al entrar y al salir, no solo cuando acaba de cargar la sesión.
+    // (`path.length` es el nivel, que aún no está declarado a esta altura.)
+  }, [status, path.length])
 
   const loadCardsFor = useCallback(
     async (subjectId: string) => {
@@ -173,8 +234,19 @@ export default function FlashcardsMindMap() {
   // --- Acciones sobre tarjetas ----------------------------------------------
   const applyCardCreated = (subjectId: string, card: Flashcard) => {
     setCardsBySubject((prev) => ({ ...prev, [subjectId]: [card, ...(prev[subjectId] ?? [])] }))
+    // Una tarjeta recién creada nace nueva y pendiente. Sin mover el cubo, la
+    // fila de la lista seguiría enseñando el recuento viejo hasta recargar.
     setSubjects((prev) =>
-      prev.map((s) => (s.id === subjectId ? { ...s, totalCards: s.totalCards + 1, dueCards: s.dueCards + 1 } : s)),
+      prev.map((s) =>
+        s.id === subjectId
+          ? {
+              ...s,
+              totalCards: s.totalCards + 1,
+              dueCards: s.dueCards + 1,
+              summary: { ...s.summary, new: s.summary.new + 1 },
+            }
+          : s,
+      ),
     )
   }
 
@@ -195,6 +267,9 @@ export default function FlashcardsMindMap() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo eliminar la tarjeta.')
     }
+    // Los cubos de la fila dependen del estado SRS de la tarjeta que se fue, así
+    // que se recuentan en el servidor en vez de adivinar aquí cuál bajaba.
+    await loadSubjects(token)
   }
 
   const handleDeleteSubject = async (s: FlashcardDeck) => {
@@ -262,6 +337,7 @@ export default function FlashcardsMindMap() {
         void loadCardsFor(currentSubject.id)
       }
     }
+    await loadSubjects(token)
   }
 
   const performDestination = async (target: FlashcardDeck, mode: 'move' | 'copy') => {
@@ -315,11 +391,12 @@ export default function FlashcardsMindMap() {
           : `No se pudieron ${mode === 'move' ? 'mover' : 'copiar'} las tarjetas.`,
       )
     }
+    await loadSubjects(token)
   }
 
-  // --- Layout radial --------------------------------------------------------
+  // --- Layout radial (solo temas) -------------------------------------------
   const center = { x: size.w / 2, y: size.h / 2 }
-  const radialCount = level === 0 ? subjects.length : topics.list.length + (topics.noTopic > 0 ? 1 : 0)
+  const radialCount = topics.list.length + (topics.noTopic > 0 ? 1 : 0)
   const radius = Math.max(140, Math.min(Math.min(size.w, size.h) / 2 - 96, 300))
   const positionFor = (i: number, n: number) => {
     if (n <= 0) return center
@@ -330,30 +407,31 @@ export default function FlashcardsMindMap() {
   // --- Render de nodos ------------------------------------------------------
   const centerColor = currentSubject ? resolveColor(currentSubject.color) : null
 
-  const renderCenter = () => {
-    const isRoot = level === 0
-    const label = isRoot ? 'Mis flashcards' : level === 1 ? currentSubject?.name ?? '' : humanizeTopic(path[1])
-    const icon = isRoot ? 'hub' : level === 1 ? resolveIcon(currentSubject?.icon) : 'sell'
-    const bg = isRoot ? '#2c3e50' : centerColor?.bg ?? '#2c3e50'
-    return (
-      <button
-        type="button"
-        onClick={isRoot ? undefined : goUp}
-        style={{ left: center.x, top: center.y, background: bg, boxShadow: '5px 5px 0 0 #2c3e50' }}
-        className={`absolute z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-0.5 rounded-full border-[3px] border-[#2c3e50] text-white transition-transform ${
-          isRoot ? 'h-32 w-32 cursor-default' : 'h-28 w-28 cursor-pointer hover:scale-105'
-        }`}
-      >
-        <span className="flex items-center justify-center">
-          <span className="material-symbols-outlined" style={{ fontSize: 30 }}>
-            {icon}
-          </span>
+  // El mapa solo se pinta dentro de una asignatura con temas, así que el centro
+  // es siempre la asignatura y siempre sirve para subir un nivel.
+  const renderCenter = () => (
+    <button
+      type="button"
+      onClick={goUp}
+      style={{
+        left: center.x,
+        top: center.y,
+        background: centerColor?.bg ?? '#2c3e50',
+        boxShadow: '5px 5px 0 0 #2c3e50',
+      }}
+      className="absolute z-20 flex h-28 w-28 -translate-x-1/2 -translate-y-1/2 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-full border-[3px] border-[#2c3e50] text-white transition-transform hover:scale-105"
+    >
+      <span className="flex items-center justify-center">
+        <span className="material-symbols-outlined" style={{ fontSize: 30 }}>
+          {resolveIcon(currentSubject?.icon)}
         </span>
-        <span className="max-w-[7rem] truncate px-2 text-center text-xs font-black">{label}</span>
-        {!isRoot ? <span className="text-[10px] font-bold opacity-75">volver ↑</span> : null}
-      </button>
-    )
-  }
+      </span>
+      <span className="max-w-[7rem] truncate px-2 text-center text-xs font-black">
+        {currentSubject?.name ?? ''}
+      </span>
+      <span className="text-[10px] font-bold opacity-75">volver ↑</span>
+    </button>
+  )
 
   const renderConnectors = (n: number) => (
     <svg className="pointer-events-none absolute inset-0 h-full w-full" style={{ zIndex: 1 }}>
@@ -504,6 +582,61 @@ export default function FlashcardsMindMap() {
           <p className="rounded-2xl border-2 border-[#E8A598]/40 bg-[#FFF8F6] px-4 py-3 text-sm font-semibold text-[#C4655A]">
             No hay sesión activa. Inicia sesión para ver tus flashcards.
           </p>
+        ) : level === 0 ? (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="relative flex min-w-[14rem] flex-1 items-center">
+                <span className="material-symbols-outlined pointer-events-none absolute left-3 text-lg text-[#B0B8BF]">
+                  search
+                </span>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Buscar asignatura…"
+                  className="w-full rounded-2xl border-2 border-[#E4DCD8] bg-white py-2.5 pl-10 pr-3 text-sm font-semibold text-[#2C3E50] outline-none transition-colors placeholder:font-medium placeholder:text-[#B0B8BF] focus:border-[#2c3e50]"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.12em] text-[#7D8A96]/70">
+                Orden
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as SubjectSort)}
+                  className="rounded-2xl border-2 border-[#E4DCD8] bg-white px-3 py-2.5 text-sm font-bold tracking-normal text-[#2C3E50] outline-none transition-colors focus:border-[#2c3e50]"
+                >
+                  {(Object.keys(SORT_LABEL) as SubjectSort[]).map((key) => (
+                    <option key={key} value={key}>
+                      {SORT_LABEL[key]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {subjects.length === 0 ? (
+              <div className="flex flex-col items-center gap-4 rounded-3xl border-2 border-dashed border-[#E0D8D4] bg-white/60 px-6 py-14 text-center">
+                <p className="max-w-sm text-sm font-semibold text-[#7D8A96]">
+                  Cada asignatura es un mazo de tarjetas tuyas. Crea la primera y empieza a
+                  alimentarla.
+                </p>
+                <StickerButton icon="add" onClick={() => setSubjectModal({})}>
+                  Crea tu primera asignatura
+                </StickerButton>
+              </div>
+            ) : (
+              <SubjectList
+                decks={subjects}
+                query={query}
+                sort={sort}
+                collapsed={collapsed}
+                onToggleCategory={toggleCategory}
+                onOpen={enterSubject}
+                onStudy={(deck) => router.push(`/flashcards/${deck.id}?study=1`)}
+                onEdit={(deck) => setSubjectModal({ existing: deck })}
+                onDelete={(deck) => void handleDeleteSubject(deck)}
+              />
+            )}
+          </>
         ) : (
           <div
             ref={canvasRef}
@@ -548,63 +681,32 @@ export default function FlashcardsMindMap() {
                   <>
                     {renderConnectors(radialCount)}
                     {renderCenter()}
-                    {/* Nodos hijos */}
-                    {level === 0
-                      ? subjects.map((s, i) => {
-                          const p = positionFor(i, subjects.length)
-                          const c = resolveColor(s.color)
-                          return (
-                            <motion.div
-                              key={s.id}
-                              initial={{ opacity: 0, scale: 0.5 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              transition={{ delay: 0.03 * i, type: 'spring', stiffness: 260, damping: 20 }}
-                              style={{ left: p.x, top: p.y }}
-                              className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
-                            >
-                              <SubjectNode
-                                subject={s}
-                                color={c}
-                                onOpen={() => enterSubject(s)}
-                                onEdit={() => setSubjectModal({ existing: s })}
-                                onDelete={() => void handleDeleteSubject(s)}
-                              />
-                            </motion.div>
-                          )
-                        })
-                      : [
-                          ...topics.list.map((t) => ({ key: t.key, label: t.label, count: t.count })),
-                          ...(topics.noTopic > 0
-                            ? [{ key: NO_TOPIC, label: 'Sin tema', count: topics.noTopic }]
-                            : []),
-                        ].map((t, i, arr) => {
-                          const p = positionFor(i, arr.length)
-                          const c = resolveColor(currentSubject?.color)
-                          const maxCount = Math.max(1, ...arr.map((x) => x.count))
-                          // Diámetro escalado por cantidad (64–124 px)
-                          const size = 64 + Math.round((t.count / maxCount) * 60)
-                          return (
-                            <motion.div
-                              key={t.key}
-                              initial={{ opacity: 0, scale: 0.5 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              transition={{ delay: 0.03 * i, type: 'spring', stiffness: 260, damping: 20 }}
-                              style={{ left: p.x, top: p.y }}
-                              className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
-                            >
-                              <TopicNode label={t.label} count={t.count} size={size} color={c} onOpen={() => enterTopic(t.key)} />
-                            </motion.div>
-                          )
-                        })}
-                    {level === 0 && subjects.length === 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => setSubjectModal({})}
-                        className="absolute left-1/2 top-[64%] -translate-x-1/2 rounded-xl bg-[#E8A598] px-5 py-3 text-sm font-bold text-white shadow-md transition hover:opacity-90"
-                      >
-                        Crea tu primera asignatura
-                      </button>
-                    ) : null}
+                    {/* Nodos de tema. El mapa solo se usa para temas: las
+                        asignaturas van en lista, que escala sin solaparse. */}
+                    {[
+                      ...topics.list.map((t) => ({ key: t.key, label: t.label, count: t.count })),
+                      ...(topics.noTopic > 0
+                        ? [{ key: NO_TOPIC, label: 'Sin tema', count: topics.noTopic }]
+                        : []),
+                    ].map((t, i, arr) => {
+                      const p = positionFor(i, arr.length)
+                      const c = resolveColor(currentSubject?.color)
+                      const maxCount = Math.max(1, ...arr.map((x) => x.count))
+                      // Diámetro escalado por cantidad (64–124 px)
+                      const size = 64 + Math.round((t.count / maxCount) * 60)
+                      return (
+                        <motion.div
+                          key={t.key}
+                          initial={{ opacity: 0, scale: 0.5 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: 0.03 * i, type: 'spring', stiffness: 260, damping: 20 }}
+                          style={{ left: p.x, top: p.y }}
+                          className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
+                        >
+                          <TopicNode label={t.label} count={t.count} size={size} color={c} onOpen={() => enterTopic(t.key)} />
+                        </motion.div>
+                      )
+                    })}
                   </>
                 )}
               </motion.div>
@@ -625,7 +727,16 @@ export default function FlashcardsMindMap() {
                 const exists = prev.some((s) => s.id === deck.id)
                 return exists
                   ? prev.map((s) => (s.id === deck.id ? { ...s, ...deck } : s))
-                  : [...prev, { ...deck, totalCards: 0, dueCards: 0 }]
+                  : [
+                      ...prev,
+                      {
+                        ...deck,
+                        totalCards: 0,
+                        dueCards: 0,
+                        dueReviewCards: 0,
+                        summary: { new: 0, failed: 0, learning: 0, mastered: 0 },
+                      },
+                    ]
               })
               setSubjectModal(null)
             }}
@@ -786,50 +897,6 @@ function humanizeTopic(key: string): string {
 }
 
 // --- Sub-componentes --------------------------------------------------------
-
-function SubjectNode({
-  subject,
-  color,
-  onOpen,
-  onEdit,
-  onDelete,
-}: {
-  subject: FlashcardDeck
-  color: ReturnType<typeof resolveColor>
-  onOpen: () => void
-  onEdit: () => void
-  onDelete: () => void
-}) {
-  return (
-    <div className="group relative flex w-32 flex-col items-center">
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-3xl border-[3px] border-[#2c3e50] text-white transition-transform hover:-translate-y-1"
-        style={{ background: color.bg, boxShadow: '4px 4px 0 0 #2c3e50' }}
-      >
-        <span className="flex items-center justify-center">
-          <span className="material-symbols-outlined" style={{ fontSize: 30 }}>
-            {resolveIcon(subject.icon)}
-          </span>
-        </span>
-        <span className="rounded-full bg-white/30 px-2 text-[11px] font-black">{subject.totalCards}</span>
-      </button>
-      <div className="mt-2 flex items-center gap-1">
-        <span className="max-w-[7rem] truncate text-center text-xs font-black text-[#2C3E50]">{subject.name}</span>
-      </div>
-      <div className="absolute -right-1 -top-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <DropdownMenu
-          ariaLabel="Acciones de la asignatura"
-          items={[
-            { label: 'Editar', icon: 'edit', onSelect: onEdit },
-            { label: 'Eliminar', icon: 'delete', danger: true, onSelect: onDelete },
-          ]}
-        />
-      </div>
-    </div>
-  )
-}
 
 function TopicNode({
   label,
