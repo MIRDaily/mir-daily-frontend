@@ -35,6 +35,7 @@ import {
   type StudyFlashcard,
 } from '@/lib/studioFlashcards'
 import GradeButtons from '@/components/flashcards/GradeButtons'
+import { useHeaderUI } from '@/providers/HeaderUIProvider'
 
 type Mode = 'manage' | 'study'
 
@@ -77,6 +78,30 @@ export default function FlashcardDeckPage() {
   // desde el que se leen los intervalos previstos.
   const [shownAt, setShownAt] = useState(() => new Date())
   const shownAtRef = useRef(Date.now())
+
+  const { setBackAction, setHidden } = useHeaderUI()
+
+  // Mismo mecanismo que los mazos. En modo estudio se apaga: esta pantalla ya
+  // tiene su propia salida, que cierra la sesión como toca — un "volver" de la
+  // cabecera se la saltaría dejándola abierta.
+  useEffect(() => {
+    if (mode === 'study') {
+      setBackAction(null)
+      return () => setBackAction(null)
+    }
+    setBackAction({
+      label: 'Mis flashcards',
+      href: '/flashcards',
+      current: deckName || undefined,
+    })
+    return () => setBackAction(null)
+  }, [mode, deckName, setBackAction])
+
+  // Respondiendo tarjetas la cabecera global sobra, como en el daily.
+  useEffect(() => {
+    setHidden(mode === 'study')
+    return () => setHidden(false)
+  }, [mode, setHidden])
 
   const load = useCallback(
     async (authToken: string) => {

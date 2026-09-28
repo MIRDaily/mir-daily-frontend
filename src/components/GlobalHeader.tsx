@@ -13,6 +13,7 @@ function shouldShowHeader(pathname: string): boolean {
     pathname.startsWith('/panel') ||
     pathname.startsWith('/studio') ||
     pathname.startsWith('/decks') ||
+    pathname.startsWith('/flashcards') ||
     pathname.startsWith('/session') ||
     pathname.startsWith('/profile') ||
     pathname.startsWith('/configuracion') ||
@@ -31,6 +32,8 @@ function resolveActiveTab(pathname: string): HeaderTab {
   if (
     pathname.startsWith('/studio') ||
     pathname.startsWith('/decks') ||
+    // Las flashcards se entran desde Studio, así que mantienen esa pestaña.
+    pathname.startsWith('/flashcards') ||
     pathname.startsWith('/session') ||
     pathname.startsWith('/zen')
   ) return 'studio'

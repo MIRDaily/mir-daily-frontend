@@ -8,10 +8,10 @@
 // pocos, siguen pudiendo verse como mapa con el conmutador Lista/Mapa. Las
 // tarjetas, como rejilla.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import { AnimatePresence, motion } from 'framer-motion'
 import { supabase } from '@/lib/supabaseBrowser'
 import SubjectModal from '@/components/studio/SubjectModal'
@@ -28,6 +28,7 @@ import {
 } from '@/components/flashcards/ui'
 import SubjectList, { SORT_LABEL, type SubjectSort } from '@/components/flashcards/SubjectList'
 import ProgressPanel from '@/components/flashcards/ProgressPanel'
+import SubjectIndex from '@/components/flashcards/SubjectIndex'
 import TopicList, { groupTopics, type TopicRow } from '@/components/flashcards/TopicList'
 import SubjectSummary from '@/components/flashcards/SubjectSummary'
 import { CATEGORY_ORDER, type SubjectCategory } from '@/lib/subjectVisuals'
@@ -55,8 +56,26 @@ const NO_TOPIC = '__none__'
 // encontrarla plegada al volver.
 const PREFS_KEY = 'mirdaily.flashcards.listPrefs'
 
-export default function FlashcardsMindMap() {
+// `useSearchParams` obliga a un límite de Suspense en una página que Next
+// prerrenderiza. El envoltorio es solo para eso.
+export default function FlashcardsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[60vh] items-center justify-center bg-[#FAF7F4] text-[#7D8A96]">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#E8A598] border-t-transparent" />
+        </div>
+      }
+    >
+      <FlashcardsMindMap />
+    </Suspense>
+  )
+}
+
+function FlashcardsMindMap() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { setBackAction } = useHeaderUI()
   const [token, setToken] = useState('')
   const [status, setStatus] = useState<'loading' | 'no-session' | 'ready'>('loading')
   const [error, setError] = useState<string | null>(null)
@@ -67,8 +86,27 @@ export default function FlashcardsMindMap() {
   const [cardsBySubject, setCardsBySubject] = useState<Record<string, Flashcard[]>>({})
   const [loadingSubject, setLoadingSubject] = useState(false)
 
-  // Ruta de navegación: [] raíz, [subjectId] asignatura, [subjectId, topicKey] tema
-  const [path, setPath] = useState<string[]>([])
+  // Ruta de navegación: [] raíz, [subjectId] asignatura, [subjectId, topicKey]
+  // tema. Vive en la URL, no en el estado: así el botón de atrás del navegador
+  // y el "volver" de la cabecera global funcionan, y una asignatura concreta se
+  // puede enlazar y recargar.
+  const subjectParam = searchParams.get('asignatura')
+  const topicParam = searchParams.get('tema')
+  const path = useMemo(() => {
+    if (!subjectParam) return []
+    return topicParam !== null ? [subjectParam, topicParam] : [subjectParam]
+  }, [subjectParam, topicParam])
+
+  const navegar = useCallback(
+    (next: string[]) => {
+      const qs = new URLSearchParams()
+      if (next[0]) qs.set('asignatura', next[0])
+      if (next.length > 1) qs.set('tema', next[1])
+      const query = qs.toString()
+      router.push(query ? `/flashcards?${query}` : '/flashcards', { scroll: false })
+    },
+    [router],
+  )
 
   const [subjectModal, setSubjectModal] = useState<null | { existing?: FlashcardDeck }>(null)
   const [createCtx, setCreateCtx] = useState<null | { deckId: string; topic?: string }>(null)
@@ -87,6 +125,9 @@ export default function FlashcardsMindMap() {
   // Vista de los temas dentro de una asignatura. La lista manda; el mapa mental
   // se conserva como alternativa porque con pocos temas se lee bien.
   const [topicView, setTopicView] = useState<'list' | 'map'>('list')
+  // Asignatura desplegada en el índice lateral. Solo una a la vez: con veinte
+  // asignaturas, varias abiertas convierten el índice en otra pared de texto.
+  const [expandedIndexId, setExpandedIndexId] = useState<string | null>(null)
 
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const [size, setSize] = useState({ w: 900, h: 560 })
@@ -243,13 +284,63 @@ export default function FlashcardsMindMap() {
   }, [atLeaf, level, path, currentCards])
 
   // --- Navegación -----------------------------------------------------------
-  const enterSubject = (s: FlashcardDeck) => {
-    setPath([s.id])
-    void loadCardsFor(s.id)
-  }
-  const enterTopic = (key: string) => setPath([path[0], key])
-  const goUp = () => setPath((p) => p.slice(0, -1))
-  const goRoot = () => setPath([])
+  const enterSubject = (s: FlashcardDeck) => navegar([s.id])
+  const enterTopic = (key: string) => navegar([path[0], key])
+  const goUp = () => navegar(path.slice(0, -1))
+  const goRoot = () => navegar([])
+
+  // Las tarjetas se cargan al llegar a una asignatura, venga de donde venga:
+  // de un clic, del botón de atrás o de un enlace pegado.
+  useEffect(() => {
+    if (!token || !subjectParam) return
+    void loadCardsFor(subjectParam)
+  }, [token, subjectParam, loadCardsFor])
+
+  // El índice sigue a la navegación: al entrar en una asignatura se despliega
+  // sola, que es lo que se espera encontrar abierto.
+  useEffect(() => {
+    if (subjectParam) setExpandedIndexId(subjectParam)
+  }, [subjectParam])
+
+  const toggleIndexExpand = useCallback(
+    (deckId: string) => {
+      setExpandedIndexId((prev) => (prev === deckId ? null : deckId))
+      // Los temas salen de las tarjetas, que puede que aún no estén cargadas si
+      // esa asignatura no se ha visitado en esta sesión.
+      void loadCardsFor(deckId)
+    },
+    [loadCardsFor],
+  )
+
+  // Barra de "volver" de la cabecera global, el mismo mecanismo que los mazos.
+  // Sustituye a las migas que llevaba la portada: tenerlas en los dos sitios
+  // era decir lo mismo dos veces.
+  useEffect(() => {
+    if (level === 0) {
+      setBackAction({ label: 'Estudio', href: '/studio', current: 'Mis flashcards' })
+    } else if (level === 1) {
+      setBackAction({
+        label: 'Mis flashcards',
+        href: '/flashcards',
+        current: currentSubject?.name,
+      })
+    } else {
+      setBackAction({
+        label: 'Mis flashcards',
+        href: '/flashcards',
+        trail: currentSubject
+          ? [
+              {
+                label: currentSubject.name,
+                href: `/flashcards?asignatura=${encodeURIComponent(currentSubject.id)}`,
+              },
+            ]
+          : undefined,
+        current: humanizeTopic(path[1]),
+      })
+    }
+    return () => setBackAction(null)
+  }, [level, currentSubject, path, setBackAction])
 
   // --- Acciones sobre tarjetas ----------------------------------------------
   const applyCardCreated = (subjectId: string, card: Flashcard) => {
@@ -582,49 +673,6 @@ export default function FlashcardsMindMap() {
             </>
           }
         >
-          {/* Migas: chips en vez de texto suelto, para poder volver de un toque */}
-          <nav className="mt-4 flex flex-wrap items-center gap-1.5 text-xs font-bold" aria-label="Ruta">
-            <Link
-              href="/studio"
-              className="flex items-center gap-1 rounded-full border-2 border-[#EAE4E2] bg-white px-2.5 py-1 text-[#7D8A96] transition-colors hover:border-[#2c3e50] hover:text-[#2C3E50]"
-            >
-              <span className="material-symbols-outlined text-sm">arrow_back</span>
-              Estudio
-            </Link>
-            <span className="text-[#D9D2CE]">/</span>
-            <button
-              type="button"
-              onClick={goRoot}
-              className={`rounded-full px-2.5 py-1 transition-colors ${
-                level === 0 ? 'bg-[#2c3e50] text-white' : 'text-[#7D8A96] hover:text-[#2C3E50]'
-              }`}
-            >
-              Mis flashcards
-            </button>
-            {currentSubject ? (
-              <>
-                <span className="text-[#D9D2CE]">/</span>
-                <button
-                  type="button"
-                  onClick={goUp}
-                  className={`max-w-[12rem] truncate rounded-full px-2.5 py-1 transition-colors ${
-                    level === 1 ? 'bg-[#2c3e50] text-white' : 'text-[#7D8A96] hover:text-[#2C3E50]'
-                  }`}
-                >
-                  {currentSubject.name}
-                </button>
-              </>
-            ) : null}
-            {level === 2 ? (
-              <>
-                <span className="text-[#D9D2CE]">/</span>
-                <span className="max-w-[12rem] truncate rounded-full bg-[#2c3e50] px-2.5 py-1 text-white">
-                  {humanizeTopic(path[1])}
-                </span>
-              </>
-            ) : null}
-          </nav>
-
           {level === 0 && subjects.length > 0 ? (
             <div className="mt-5 flex flex-wrap gap-2">
               <StatChip value={subjects.length} label={subjects.length === 1 ? 'asignatura' : 'asignaturas'} />
@@ -709,7 +757,24 @@ export default function FlashcardsMindMap() {
             )}
           </>
         ) : (
-          <>
+          <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+            {/* Índice lateral: solo dentro de una asignatura. En la raíz sería
+                repetir la lista principal. Se oculta en pantallas estrechas,
+                donde no cabe sin comerse el contenido. */}
+            <aside className="hidden lg:block">
+              <SubjectIndex
+                decks={subjects}
+                cardsBySubject={cardsBySubject}
+                activeSubjectId={path[0] ?? null}
+                activeTopicKey={path[1] ?? null}
+                expandedId={expandedIndexId}
+                onToggleExpand={toggleIndexExpand}
+                onOpenSubject={enterSubject}
+                onOpenTopic={(deck, topicKey) => navegar([deck.id, topicKey ?? NO_TOPIC])}
+              />
+            </aside>
+
+            <div className="flex min-w-0 flex-col gap-4">
             {level === 1 && currentSubject ? (
               <SubjectSummary summary={currentSubject.summary} total={currentSubject.totalCards} />
             ) : null}
@@ -834,7 +899,8 @@ export default function FlashcardsMindMap() {
             </AnimatePresence>
           </div>
             )}
-          </>
+            </div>
+          </div>
         )}
       </main>
 
