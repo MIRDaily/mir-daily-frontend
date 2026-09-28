@@ -31,8 +31,10 @@ import {
   startFlashcardSession,
   updateFlashcard,
   type Flashcard,
+  type Grade,
   type StudyFlashcard,
 } from '@/lib/studioFlashcards'
+import GradeButtons from '@/components/flashcards/GradeButtons'
 
 type Mode = 'manage' | 'study'
 
@@ -68,6 +70,13 @@ export default function FlashcardDeckPage() {
   const [finishState, setFinishState] = useState<null | 'done' | 'limit' | 'expired'>(null)
   // true mientras se prepara el estudio automático (llegada con ?study=1)
   const [autoStudy, setAutoStudy] = useState(false)
+  // Reparto de respuestas de la sesión, para el resumen del final.
+  const [byGrade, setByGrade] = useState<Record<number, number>>({})
+  const [sessionLimit, setSessionLimit] = useState(0)
+  // Cuándo se mostró la tarjeta actual: cronómetro de la respuesta y origen
+  // desde el que se leen los intervalos previstos.
+  const [shownAt, setShownAt] = useState(() => new Date())
+  const shownAtRef = useRef(Date.now())
 
   const load = useCallback(
     async (authToken: string) => {
@@ -168,6 +177,12 @@ export default function FlashcardDeckPage() {
         if (res.kind === 'card') {
           setCurrent(res.card)
           setRevealed(false)
+          // Momento en que llega la tarjeta: sirve para cronometrar la respuesta
+          // y como origen para leer los intervalos, que el servidor calculó
+          // justo al servirla.
+          const ahora = new Date()
+          shownAtRef.current = ahora.getTime()
+          setShownAt(ahora)
         } else {
           setCurrent(null)
           setFinishState(res.kind)
@@ -188,9 +203,14 @@ export default function FlashcardDeckPage() {
     setError(null)
     setStudied(0)
     setFinishState(null)
+    setByGrade({})
     try {
-      const limit = Math.max(20, cards.length)
+      // Con la escalera vieja el tope daba igual, porque una tarjeta acertada no
+      // volvía en 3 días. Con FSRS y las repeticiones dentro de la sesión, un
+      // tope real evita sesiones que no se acaban nunca.
+      const limit = Math.min(200, Math.max(20, cards.length * 2))
       const sid = await startFlashcardSession(token, deckId, limit)
+      setSessionLimit(limit)
       setSessionId(sid)
       setMode('study')
       await advance(sid)
@@ -227,16 +247,18 @@ export default function FlashcardDeckPage() {
   }, [autoStudy, loading, mode, cards.length])
 
   const handleRate = useCallback(
-    async (knew: boolean) => {
+    async (grade: Grade) => {
       if (busy || !current || !sessionId || !revealed) return
       setBusy(true)
       try {
         await logFlashcard(token, deckId, {
           deckItemId: current.id,
-          isCorrect: knew,
+          grade,
           sessionId,
+          timeSpent: Math.round((Date.now() - shownAtRef.current) / 1000),
         })
         setStudied((n) => n + 1)
+        setByGrade((prev) => ({ ...prev, [grade]: (prev[grade] ?? 0) + 1 }))
         await advance(sessionId)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'No se pudo registrar la respuesta.')
@@ -265,12 +287,9 @@ export default function FlashcardDeckPage() {
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault()
         setRevealed((v) => !v)
-      } else if (revealed && e.key === '1') {
+      } else if (revealed && ['1', '2', '3', '4'].includes(e.key)) {
         e.preventDefault()
-        void handleRate(false)
-      } else if (revealed && e.key === '2') {
-        e.preventDefault()
-        void handleRate(true)
+        void handleRate(Number(e.key) as Grade)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -381,6 +400,22 @@ export default function FlashcardDeckPage() {
             >
               {studied} repasadas
             </span>
+
+            {/* Avance de la sesión: antes solo había un contador que subía, sin
+                nada con lo que compararlo. */}
+            {sessionLimit > 0 ? (
+              <div className="w-full" aria-hidden>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#EFEAE7]">
+                  <div
+                    className="h-full rounded-full transition-[width] duration-300"
+                    style={{
+                      width: `${Math.min(100, (studied / sessionLimit) * 100)}%`,
+                      backgroundColor: resolveColor(deckColor).bg,
+                    }}
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {error ? (
@@ -412,6 +447,32 @@ export default function FlashcardDeckPage() {
               <p>
                 Has repasado <span className="font-black text-[#2C3E50]">{studied}</span> tarjetas.
               </p>
+
+              {studied > 0 ? (
+                <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
+                  {(
+                    [
+                      { g: 1, label: 'Otra vez', fg: '#C4655A', bg: '#FFF1EE' },
+                      { g: 2, label: 'Difícil', fg: '#B4831F', bg: '#FBF3E1' },
+                      { g: 3, label: 'Bien', fg: '#5C7A59', bg: '#EAF2E8' },
+                      { g: 4, label: 'Fácil', fg: '#4E7C9B', bg: '#E7F0F6' },
+                    ] as const
+                  ).map((t) => (
+                    <div
+                      key={t.g}
+                      className="flex flex-col items-center rounded-2xl border-2 px-3 py-2"
+                      style={{ background: t.bg, borderColor: t.fg }}
+                    >
+                      <span className="text-xl font-black tabular-nums" style={{ color: t.fg }}>
+                        {byGrade[t.g] ?? 0}
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-[#7D8A96]/80">
+                        {t.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <div className="flex flex-wrap justify-center gap-3">
                 <StickerButton icon="replay" color="#8BA888" onClick={() => void handleStartStudy()}>
                   Repasar de nuevo
@@ -495,30 +556,12 @@ export default function FlashcardDeckPage() {
                   Mostrar respuesta
                 </button>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => void handleRate(false)}
-                    disabled={busy}
-                    className="flex items-center justify-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-white px-6 py-4 text-base font-black text-[#C4655A] transition-transform hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
-                    style={{ boxShadow: '4px 4px 0 0 #C4655A' }}
-                  >
-                    <span className="material-symbols-outlined">close</span>
-                    No la sabía
-                    <kbd className="kbd ml-1">1</kbd>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleRate(true)}
-                    disabled={busy}
-                    className="flex items-center justify-center gap-2 rounded-2xl border-2 border-[#2c3e50] bg-[#8BA888] px-6 py-4 text-base font-black text-white transition-transform hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
-                    style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
-                  >
-                    <span className="material-symbols-outlined">check</span>
-                    La sabía
-                    <kbd className="kbd kbd-on-dark ml-1">2</kbd>
-                  </button>
-                </div>
+                <GradeButtons
+                  preview={current.preview}
+                  now={shownAt}
+                  disabled={busy}
+                  onGrade={(g) => void handleRate(g)}
+                />
               )}
             </div>
           ) : (

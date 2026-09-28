@@ -49,6 +49,34 @@ export type Flashcard = {
   totalReviews: number
 }
 
+/**
+ * Grados de FSRS, los mismos que usa Anki.
+ *
+ * No se calcula nada de esto en el cliente: los cuatro intervalos vienen ya
+ * resueltos desde el servidor con cada tarjeta. Duplicar aquí el planificador
+ * obligaría a mantener los mismos parámetros en los dos lados, y en cuanto
+ * divergieran los botones prometerían fechas que el servidor no cumple.
+ */
+export const GRADE = { again: 1, hard: 2, good: 3, easy: 4 } as const
+export type Grade = (typeof GRADE)[keyof typeof GRADE]
+
+/** Lo que pasaría con la tarjeta si se respondiera con cada grado. */
+export type GradePreview = {
+  scheduledDays: number
+  due: string
+}
+
+export type FlashcardSrs = {
+  stability: number | null
+  difficulty: number | null
+  state: number | null
+  reps: number | null
+  lapses: number | null
+  scheduledDays: number | null
+  lastReview: string | null
+  dueAt: string | null
+}
+
 // Item devuelto por la cola de estudio.
 export type StudyFlashcard = {
   id: number // deck_item_id
@@ -60,6 +88,8 @@ export type StudyFlashcard = {
     subject_id?: number | null
     topic_id?: number | null
   }
+  srs?: FlashcardSrs | null
+  preview?: Record<string, GradePreview>
 }
 
 export type NextFlashcardResult =
@@ -314,21 +344,29 @@ export async function nextFlashcard(
   return { kind: 'done' }
 }
 
+/**
+ * Registra un repaso con su grado. Va a la ruta propia de flashcards, no a la
+ * generica de mazos: aquella sigue esperando un booleano y planifica con la
+ * escalera de tres intervalos fijos de siempre.
+ */
 export async function logFlashcard(
   token: string,
   deckId: string,
-  input: { deckItemId: number; isCorrect: boolean; sessionId: string },
-): Promise<void> {
-  const res = await fetch(`${apiBase()}/api/studio/decks/${deckId}/log`, {
+  input: { deckItemId: number; grade: Grade; sessionId: string; timeSpent?: number },
+): Promise<{ srs: FlashcardSrs | null }> {
+  const res = await fetch(`${apiBase()}/api/studio/flashcard-decks/${deckId}/log`, {
     method: 'POST',
     headers: authHeaders(token, true),
     body: JSON.stringify({
       deckItemId: input.deckItemId,
-      isCorrect: input.isCorrect,
+      grade: input.grade,
       sessionId: input.sessionId,
+      timeSpent: input.timeSpent ?? 0,
     }),
   })
   if (!res.ok) throw new Error(await readError(res, 'No se pudo registrar la respuesta'))
+  const payload = (await res.json().catch(() => null)) as { srs?: FlashcardSrs } | null
+  return { srs: payload?.srs ?? null }
 }
 
 // Best-effort: cerrar la sesion no debe romper el flujo si falla.
