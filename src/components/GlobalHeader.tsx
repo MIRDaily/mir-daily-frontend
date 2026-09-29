@@ -21,6 +21,9 @@ function shouldShowHeader(pathname: string): boolean {
     pathname.startsWith('/zen') ||
     pathname.startsWith('/versus') ||
     pathname.startsWith('/library') ||
+    // La lista de mapas conserva la cabecera; el editor (/mapas/<id>) no: es un lienzo a
+    // pantalla completa y solo lleva el logo en una esquina.
+    pathname === '/mapas' ||
     pathname.startsWith('/medguess')
   )
 }
@@ -35,6 +38,8 @@ function resolveActiveTab(pathname: string): HeaderTab {
     // Las flashcards se entran desde Studio, así que mantienen esa pestaña.
     pathname.startsWith('/flashcards') ||
     pathname.startsWith('/session') ||
+    // Los mapas mentales se entran desde Studio.
+    pathname.startsWith('/mapas') ||
     pathname.startsWith('/zen')
   ) return 'studio'
   if (pathname.startsWith('/library')) return 'library'

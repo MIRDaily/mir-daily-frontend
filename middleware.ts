@@ -84,9 +84,13 @@ export async function middleware(request: NextRequest) {
     return redirigirA('/auth')
   }
 
+  if (pathname.startsWith('/mapas') && !session) {
+    return redirigirA('/auth')
+  }
+
   return response
 }
 
 export const config = {
-  matcher: ['/auth/:path*', '/dashboard/:path*', '/panel/:path*', '/complete-profile', '/onboarding'],
+  matcher: ['/auth/:path*', '/dashboard/:path*', '/panel/:path*', '/mapas/:path*', '/complete-profile', '/onboarding'],
 }
