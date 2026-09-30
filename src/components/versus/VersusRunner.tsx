@@ -9,6 +9,7 @@ import HighlightableStatement, {
   useSessionHighlights,
 } from '@/components/simulacro/HighlightableStatement'
 import VersusRematch from '@/components/versus/VersusRematch'
+import ReportButton from '@/components/report/ReportButton'
 import VersusScoreChart from '@/components/versus/VersusScoreChart'
 import { getAvatarUrl, getSafeAvatarId } from '@/lib/avatar'
 import { advanceRoom, submitAnswer, voteContinue } from '@/lib/versus/queries'
@@ -462,11 +463,28 @@ export default function VersusRunner({
             ) : (
               <span />
             )}
-            <ClearHighlightButton
-              compact
-              visible={versusHighlights.get(question.statement).size > 0}
-              onClear={() => versusHighlights.set(question.statement, new Set())}
-            />
+            <div className="flex items-center gap-2">
+              <ClearHighlightButton
+                compact
+                visible={versusHighlights.get(question.statement).size > 0}
+                onClear={() => versusHighlights.set(question.statement, new Set())}
+              />
+              {/* Solo en el revelado: es cuando llega el id de la pregunta.
+                  Las opciones van barajadas, así que no se manda cuál eligió. */}
+              {phase.event === 'reveal' && phase.questionId ? (
+                <ReportButton
+                  compact
+                  target={{ type: 'question', questionId: phase.questionId }}
+                  context={{
+                    origin: 'versus',
+                    sessionRef: pin,
+                    answered: true,
+                    isCorrect: myResult?.isCorrect ?? null,
+                  }}
+                  optionCount={question.options.length}
+                />
+              ) : null}
+            </div>
           </div>
           <p className="text-base leading-relaxed text-[#2c3e50]">
             {/* La ronda no trae id: el enunciado sirve de clave (no se repite

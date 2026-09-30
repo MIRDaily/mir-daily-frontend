@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 import SaveToDeckButton from '@/components/simulacro/SaveToDeckButton'
+import ReportButton from '@/components/report/ReportButton'
 import HighlightableStatement from '@/components/simulacro/HighlightableStatement'
 
 // El carrusel puede vivir dentro de un contenedor con su propio scroll interno
@@ -394,7 +395,19 @@ function DailyReviewCarousel({ questions, highlights }: Props) {
                           tarjeta activa (las laterales se tocan para ir a
                           ellas) y solo con un id de pregunta real. */}
                       {isActive && isRealQuestionId(q.questionId) ? (
-                        <SaveToDeckButton questionId={String(q.questionId)} />
+                        <>
+                          <ReportButton
+                            target={{ type: 'question', questionId: String(q.questionId) }}
+                            context={{
+                              origin: 'daily_review',
+                              answered: true,
+                              userAnswer: resolveSelectedOptionIndex(q) >= 0 ? resolveSelectedOptionIndex(q) + 1 : null,
+                              isCorrect: q.isCorrect ?? null,
+                            }}
+                            optionCount={q.options.length}
+                          />
+                          <SaveToDeckButton questionId={String(q.questionId)} />
+                        </>
                       ) : null}
                     </div>
                     {(q.result === 'blank' ||

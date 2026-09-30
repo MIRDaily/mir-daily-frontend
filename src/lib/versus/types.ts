@@ -108,6 +108,8 @@ export type VersusRevealEvent = Partial<VersusRoundContent> & {
   continueTotal: number
   correctIndex: number
   explanation: string | null
+  /** Para reportar la pregunta. Solo en el revelado (antes delataría la clave). */
+  questionId?: number
   results: {
     playerId: string
     selected: number | null

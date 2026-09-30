@@ -38,6 +38,7 @@ import { getUserSummary } from '@/services/resultsService'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
 import DailyReviewCarousel from '@/components/DailyReviewCarousel'
+import ReportButton from '@/components/report/ReportButton'
 import ZScoreComparisonCard from '@/components/ZScoreComparisonCard'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 import HighlightableStatement, {
@@ -4779,12 +4780,19 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="pt-8 [@media(max-height:850px)]:pt-4 flex flex-wrap justify-between items-center gap-4">
-                  <button className="flex items-center gap-2 text-[#9CA3AF] hover:text-[#7D8A96] text-sm font-semibold transition-colors">
-                    <span className="material-symbols-outlined text-lg">
-                      flag
-                    </span>
-                    Reportar pregunta
-                  </button>
+                  {currentQuestion && Number.isInteger(Number(currentQuestion.id)) && Number(currentQuestion.id) > 0 ? (
+                    // El daily se corrige al final: aquí aún no ha visto la
+                    // clave, así que cuenta como "sin responder" (la ventana
+                    // oculta "respuesta errónea" y "explicación").
+                    <ReportButton
+                      variant="text"
+                      target={{ type: 'question', questionId: currentQuestion.id }}
+                      context={{ origin: 'daily', sessionRef: sessionId, answered: false }}
+                      optionCount={currentQuestion.options.length}
+                    />
+                  ) : (
+                    <span />
+                  )}
                   <div className="flex items-center gap-3">
                     <button
                       type="button"

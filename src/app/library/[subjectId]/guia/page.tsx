@@ -6,6 +6,7 @@ import GuideHeatmap from '@/components/library/guide/GuideHeatmap'
 import GuideMasonry from '@/components/library/guide/GuideMasonry'
 import GuidePriorityMap from '@/components/library/guide/GuidePriorityMap'
 import GuideQuestionCard from '@/components/library/guide/GuideQuestionCard'
+import ReportButton from '@/components/report/ReportButton'
 import GuideTopicCard from '@/components/library/guide/GuideTopicCard'
 import GuideTrendChart from '@/components/library/guide/GuideTrendChart'
 import GuideTrendShift from '@/components/library/guide/GuideTrendShift'
@@ -306,7 +307,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
                   </div>
                   <GuideMasonry>
                     {questions.map((question) => (
-                      <GuideQuestionCard key={question.number} question={question} lastExamLabel={guide.lastExam} />
+                      <GuideQuestionCard key={question.number} question={question} lastExamLabel={guide.lastExam} guideId={guide.subjectId} />
                     ))}
                   </GuideMasonry>
                 </div>
@@ -315,7 +316,17 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
           </section>
           </GuideQuizProvider>
 
-          <p className="border-t border-[#EAE4E2] pt-6 text-xs leading-relaxed">{guide.sourcesNote}</p>
+          <div className="flex flex-col gap-3 border-t border-[#EAE4E2] pt-6 sm:flex-row sm:items-start sm:justify-between">
+            <p className="text-xs leading-relaxed">{guide.sourcesNote}</p>
+            <ReportButton
+              variant="text"
+              label="¿Has visto un error en esta guía?"
+              className="shrink-0"
+              target={{ type: 'guide', guideRef: `${guide.subjectId}/general`, snapshot: { title: guide.title } }}
+              context={{ origin: 'guide', answered: true }}
+              subtitle={guide.title}
+            />
+          </div>
         </div>
       </div>
     </main>

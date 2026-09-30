@@ -6,15 +6,18 @@ import { QUESTION_KIND_STYLES } from '@/components/library/guide/guideStyles'
 import { useGuideQuiz } from '@/components/library/guide/GuideQuiz'
 import { goTo } from '@/components/library/guide/GuideTableOfContents'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
+import ReportButton from '@/components/report/ReportButton'
 
 type GuideQuestionCardProps = {
   question: GuideQuestion
   lastExamLabel: string
+  /** Id de la guía (p. ej. 'neurologia'), para reportar la pregunta. */
+  guideId: string
 }
 
 // El usuario marca una opción y corrige; al corregir ve qué marcó frente a la correcta.
 // La elección solo vive en esta sesión (no se guarda).
-export default function GuideQuestionCard({ question, lastExamLabel }: GuideQuestionCardProps) {
+export default function GuideQuestionCard({ question, lastExamLabel, guideId }: GuideQuestionCardProps) {
   const kind = QUESTION_KIND_STYLES[question.kind]
   const quiz = useGuideQuiz()
   const [selected, setSelected] = useState<number | null>(null)
@@ -54,6 +57,31 @@ export default function GuideQuestionCard({ question, lastExamLabel }: GuideQues
         </span>
         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase ${kind.chip}`}>{kind.label}</span>
         <span className="text-xs text-[#7D8A96]">{question.tag}</span>
+        {/* La guía vive en el código: la foto la manda el cliente. */}
+        <ReportButton
+          compact
+          className="ml-auto"
+          target={{
+            type: 'guide',
+            guideRef: `${guideId}/q${question.number}`,
+            snapshot: {
+              number: question.number,
+              stem: question.stem,
+              options: question.options,
+              correct: question.correct,
+              explanation: question.explanation,
+              imageUrl: question.imageUrl ?? null,
+            },
+          }}
+          context={{
+            origin: 'guide',
+            answered: revealed,
+            userAnswer: revealed ? selected : null,
+            isCorrect: revealed && selected !== null ? isRight : null,
+          }}
+          optionCount={question.options.length}
+          subtitle={`${lastExamLabel} · P${question.number}`}
+        />
       </header>
 
       <p className="text-sm leading-relaxed font-medium text-[#2C3E50]">{question.stem}</p>

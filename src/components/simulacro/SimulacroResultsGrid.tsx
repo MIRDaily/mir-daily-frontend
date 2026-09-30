@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 import SaveToDeckButton from '@/components/simulacro/SaveToDeckButton'
+import ReportButton from '@/components/report/ReportButton'
 import HighlightableStatement from '@/components/simulacro/HighlightableStatement'
 import SaveQuestionsToDeck from '@/components/simulacro/SaveQuestionsToDeck'
 import type {
@@ -492,6 +493,16 @@ export default function SimulacroResultsGrid({
                   {/* Guardar desde el repaso: es justo cuando se ve el fallo
                       y se decide que hay que volver a ella (como en la app). */}
                   <SaveToDeckButton questionId={activeQuestion.id} />
+                  <ReportButton
+                    target={{ type: 'question', questionId: activeQuestion.id }}
+                    context={{
+                      origin: 'simulacro_review',
+                      answered: activeResult != null,
+                      userAnswer: activeAnswer?.selectedIndex != null ? activeAnswer.selectedIndex + 1 : null,
+                      isCorrect: activeResult?.isCorrect ?? null,
+                    }}
+                    optionCount={activeQuestion.options.length}
+                  />
                   <button
                     type="button"
                     onClick={() => setActiveIndex(null)}

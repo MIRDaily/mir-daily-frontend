@@ -26,6 +26,7 @@ import HighlightableStatement, {
   ClearHighlightButton,
   useSessionHighlights,
 } from '@/components/simulacro/HighlightableStatement'
+import ReportButton from '@/components/report/ReportButton'
 import {
   DeckBannerGradient,
   DECK_GRADIENT_IDS,
@@ -64,6 +65,7 @@ type QuestionOption = {
 }
 
 type ItemQuestion = {
+  id?: number | string | null
   statement?: string | null
   correct_answer?: number | string | null
   explanation?: string | null
@@ -92,6 +94,8 @@ type Item = {
   id: string | number
   deckItemId?: string | number | null
   deck_item_id?: string | number | null
+  /** Pregunta oficial detrás del item (lo trae /next); sirve para reportarla. */
+  question_id?: number | string | null
   statement?: string | null
   questions?: ItemQuestion | null
   progress?: ItemProgress | null
@@ -1780,6 +1784,11 @@ export default function StudioDeckDetailPage() {
       : ''
     const currentOptions = currentItem ? getSortedQuestionOptions(currentItem) : []
     const currentCorrectIndex = currentItem ? getQuestionCorrectIndex(currentItem) : null
+    const rawQuestionId = currentItem?.question_id ?? currentItem?.questions?.id ?? null
+    const currentQuestionId =
+      rawQuestionId != null && Number.isInteger(Number(rawQuestionId)) && Number(rawQuestionId) > 0
+        ? Number(rawQuestionId)
+        : null
     const isStudyBusy = studyLoading || studyClosing || isLoadingNext
     const isInitialStudyLoading = !studyClosing && studyLoading && !currentItem
     const handleSelectOption = (option: QuestionOption, optionIndex: number) => {
@@ -2041,11 +2050,30 @@ export default function StudioDeckDetailPage() {
                     el enunciado cuando aparece. */}
                 <div className="flex h-5 items-center justify-between gap-3">
                   <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#C99A8D]">Pregunta</span>
-                  <ClearHighlightButton
-                    compact
-                    visible={studyHighlights.get(studyHighlightKey).size > 0}
-                    onClear={() => studyHighlights.set(studyHighlightKey, new Set())}
-                  />
+                  <div className="flex items-center gap-2">
+                    <ClearHighlightButton
+                      compact
+                      visible={studyHighlights.get(studyHighlightKey).size > 0}
+                      onClear={() => studyHighlights.set(studyHighlightKey, new Set())}
+                    />
+                    {currentQuestionId ? (
+                      <ReportButton
+                        compact
+                        target={{ type: 'question', questionId: currentQuestionId }}
+                        context={{
+                          origin: 'deck',
+                          sessionRef: studySessionId,
+                          answered: isAnswered,
+                          userAnswer: isAnswered ? selectedOption : null,
+                          isCorrect:
+                            isAnswered && currentCorrectIndex != null && selectedOption != null
+                              ? selectedOption === currentCorrectIndex
+                              : null,
+                        }}
+                        optionCount={currentOptions.length || 4}
+                      />
+                    ) : null}
+                  </div>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-base font-semibold leading-relaxed text-[#2C3E50]">
                   <HighlightableStatement

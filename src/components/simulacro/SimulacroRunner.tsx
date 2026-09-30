@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { MAX_SECONDS_PER_QUESTION, SLEEP_GAP_MS } from '@/lib/useQuestionStopwatch'
 import QuestionImage from '@/components/simulacro/QuestionImage'
 import SaveToDeckButton from '@/components/simulacro/SaveToDeckButton'
+import ReportButton from '@/components/report/ReportButton'
 import { AnnulledNotice } from '@/components/simulacro/SimulacroResultsGrid'
 import HighlightableStatement, { ClearHighlightButton } from '@/components/simulacro/HighlightableStatement'
 import type {
@@ -349,6 +350,19 @@ export default function SimulacroRunner({
                 </span>
               </button>
               <SaveToDeckButton questionId={current.id} compact />
+              {/* Hasta corregirla no ha visto la clave: en modo examen, o
+                  antes de "Comprobar", cuenta como sin responder. */}
+              <ReportButton
+                compact
+                target={{ type: 'question', questionId: current.id }}
+                context={{
+                  origin: 'simulacro',
+                  answered: revealed,
+                  userAnswer: revealed && selected != null ? selected + 1 : null,
+                  isCorrect: revealed ? result?.isCorrect ?? null : null,
+                }}
+                optionCount={current.options.length}
+              />
             </div>
           ) : null}
           <button
