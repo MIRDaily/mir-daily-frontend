@@ -13,11 +13,13 @@ type GuideQuestionCardProps = {
   lastExamLabel: string
   /** Id de la guía (p. ej. 'neurologia'), para reportar la pregunta. */
   guideId: string
+  /** Título de la guía: sale en la notificación cuando se resuelve el reporte. */
+  guideTitle: string
 }
 
 // El usuario marca una opción y corrige; al corregir ve qué marcó frente a la correcta.
 // La elección solo vive en esta sesión (no se guarda).
-export default function GuideQuestionCard({ question, lastExamLabel, guideId }: GuideQuestionCardProps) {
+export default function GuideQuestionCard({ question, lastExamLabel, guideId, guideTitle }: GuideQuestionCardProps) {
   const kind = QUESTION_KIND_STYLES[question.kind]
   const quiz = useGuideQuiz()
   const [selected, setSelected] = useState<number | null>(null)
@@ -65,6 +67,7 @@ export default function GuideQuestionCard({ question, lastExamLabel, guideId }: 
             type: 'guide',
             guideRef: `${guideId}/q${question.number}`,
             snapshot: {
+              guide_title: guideTitle,
               number: question.number,
               stem: question.stem,
               options: question.options,

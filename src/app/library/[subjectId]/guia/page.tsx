@@ -307,7 +307,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
                   </div>
                   <GuideMasonry>
                     {questions.map((question) => (
-                      <GuideQuestionCard key={question.number} question={question} lastExamLabel={guide.lastExam} guideId={guide.subjectId} />
+                      <GuideQuestionCard key={question.number} question={question} lastExamLabel={guide.lastExam} guideId={guide.subjectId} guideTitle={guide.title} />
                     ))}
                   </GuideMasonry>
                 </div>
@@ -322,7 +322,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
               variant="text"
               label="¿Has visto un error en esta guía?"
               className="shrink-0"
-              target={{ type: 'guide', guideRef: `${guide.subjectId}/general`, snapshot: { title: guide.title } }}
+              target={{ type: 'guide', guideRef: `${guide.subjectId}/general`, snapshot: { guide_title: guide.title } }}
               context={{ origin: 'guide', answered: true }}
               subtitle={guide.title}
             />
