@@ -296,6 +296,12 @@ export default function AppHeader({
                 <Link className="block px-4 py-2 text-sm text-[#7D8A96] hover:bg-[#FAF7F4] hover:text-[#E8A598]" href="/configuracion" onClick={() => setIsProfileMenuOpen(false)}>
                   Configuración
                 </Link>
+                {profile?.is_admin ? (
+                  <Link className="flex items-center gap-2 px-4 py-2 text-sm text-[#7D8A96] hover:bg-[#FAF7F4] hover:text-[#E8A598]" href="/admin/reportes" onClick={() => setIsProfileMenuOpen(false)}>
+                    <span className="material-symbols-outlined text-[16px]">report</span>
+                    Reportes
+                  </Link>
+                ) : null}
                 <div className="border-t border-[#7D8A96]/10 my-1"></div>
                 <button
                   onClick={async () => {

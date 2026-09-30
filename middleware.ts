@@ -88,9 +88,14 @@ export async function middleware(request: NextRequest) {
     return redirigirA('/auth')
   }
 
+  // Solo exige sesión: si es admin o no lo decide el backend en cada petición.
+  if (pathname.startsWith('/admin') && !session) {
+    return redirigirA('/auth')
+  }
+
   return response
 }
 
 export const config = {
-  matcher: ['/auth/:path*', '/dashboard/:path*', '/panel/:path*', '/mapas/:path*', '/complete-profile', '/onboarding'],
+  matcher: ['/auth/:path*', '/dashboard/:path*', '/panel/:path*', '/mapas/:path*', '/admin/:path*', '/complete-profile', '/onboarding'],
 }

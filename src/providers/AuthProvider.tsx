@@ -43,6 +43,8 @@ export type AuthUser = {
   onboarding_completed: boolean
   /** Claves versionadas de los tutoriales de la mascota ya vistos. */
   tutorials_seen: string[]
+  /** Enseña el enlace al panel de reportes. El backend valida el permiso aparte. */
+  is_admin?: boolean
   /** Si la app de Android/iOS está publicada ya. Lo dice el backend. */
   mobile_app_available: boolean
   mustUpdateDisplayName: boolean
