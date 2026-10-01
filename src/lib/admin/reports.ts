@@ -31,6 +31,8 @@ export type QueueItem = {
   data_supports: boolean
   image_broken: boolean
   messages: string[]
+  /** Solo guías: lo añade el backend desde la foto del reporte. */
+  guide_title?: string | null
   first_at: string
   last_at: string
 }

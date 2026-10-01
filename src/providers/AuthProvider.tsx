@@ -189,6 +189,8 @@ function coerceAuthUser(payload: unknown, fallbackSession: Session): AuthUser | 
     onboarding_completed: onboardingCompleted,
     tutorials_seen: tutorialsSeen,
     mobile_app_available: mobileAppAvailable,
+    // Solo enseña el enlace al panel; el permiso lo valida el backend.
+    is_admin: source.is_admin === true,
     mustUpdateDisplayName,
     created_at: createdAt,
   }
