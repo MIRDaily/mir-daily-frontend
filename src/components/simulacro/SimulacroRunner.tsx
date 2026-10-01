@@ -199,9 +199,10 @@ export default function SimulacroRunner({
 
   // Mapa de preguntas (panel desplegable en la barra de sesión) y aviso antes
   // de finalizar si quedan preguntas sin responder o marcadas.
-  // Se abre al pasar el ratón por la tarjeta de progreso y se cierra al salir.
-  // El botón "Mapa" lo fija abierto (imprescindible en táctil, donde no hay
-  // hover); volver a pulsarlo lo suelta.
+  // Con ratón es SOLO hover (decisión del usuario, 01-10-2026): se abre al
+  // pasar por la tarjeta de progreso y se cierra al salir; hacer clic en
+  // "Mapa" no hace nada. En táctil no hay hover, así que ahí tocar "Mapa" lo
+  // fija abierto y volver a tocarlo lo suelta; también con el teclado (Enter).
   const [mapHover, setMapHover] = useState(false)
   const [mapPinned, setMapPinned] = useState(false)
   const mapOpen = mapHover || mapPinned
@@ -389,9 +390,14 @@ export default function SimulacroRunner({
           ) : null}
           <button
             type="button"
-            onClick={() => setMapPinned((v) => !v)}
+            onClick={(e) => {
+              // El clic de ratón llega como PointerEvent con pointerType
+              // 'mouse'; el de teclado, con pointerType vacío.
+              if ((e.nativeEvent as PointerEvent).pointerType === 'mouse') return
+              setMapPinned((v) => !v)
+            }}
             aria-expanded={mapOpen}
-            className={`${current ? '' : 'ml-auto '}flex items-center gap-1.5 rounded-xl border-2 px-2.5 py-1 text-xs font-black transition-colors ${
+            className={`${current ? '' : 'ml-auto '}flex items-center gap-1.5 rounded-xl border-2 px-2.5 py-1 text-xs font-black transition-colors [@media(hover:hover)]:cursor-default ${
               mapOpen
                 ? 'border-[#2c3e50] bg-[#2c3e50] text-white'
                 : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2c3e50]'
