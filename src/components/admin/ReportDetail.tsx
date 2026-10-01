@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ZoomableImage } from '@/components/simulacro/QuestionImage'
 import { categoryLabel } from '@/lib/reports/categories'
+import QuestionEditor from '@/components/admin/QuestionEditor'
+import QuestionRevisions from '@/components/admin/QuestionRevisions'
 import {
+  FIELD_LABEL,
   ORIGIN_LABEL,
   STATUS_META,
   SUBCATEGORY_LABEL,
@@ -15,6 +18,7 @@ import {
   timeAgo,
   toAnswerNumber,
   type AdminReport,
+  type EditResult,
   type Outcome,
   type QuestionSnapshot,
   type ReportDetailData,
@@ -45,6 +49,9 @@ export default function ReportDetail({ contentKey, onChanged, onBack }: ReportDe
   // Resultado de la última acción. Vive aquí y no en la caja de resolver
   // porque esa caja desaparece en cuanto no quedan reportes abiertos.
   const [flash, setFlash] = useState<{ key: string; text: string } | null>(null)
+  // Por clave, no booleano: al cambiar de pregunta el editor se cierra solo.
+  const [editingKey, setEditingKey] = useState<string | null>(null)
+  const editing = editingKey === contentKey
 
   useEffect(() => {
     let alive = true
@@ -143,6 +150,16 @@ export default function ReportDetail({ contentKey, onChanged, onBack }: ReportDe
             {[data.current?.subject, data.current?.topic, `id ${contentKey.slice(2)}`].filter(Boolean).join(' · ')}
           </p>
         </div>
+        {isQuestion && data.current && !editing ? (
+          <button
+            type="button"
+            onClick={() => setEditingKey(contentKey)}
+            className="flex items-center gap-1 rounded-xl border border-[#5B7D99] px-3 py-1.5 text-xs font-bold text-[#5B7D99] hover:bg-[#F3F7FA]"
+          >
+            <span className="material-symbols-outlined text-[16px]">edit</span>
+            Editar
+          </button>
+        ) : null}
         {!isQuestion && data.reports[0]?.guide_ref ? (
           <a
             href={guideHref(data.reports[0].guide_ref)}
@@ -156,7 +173,20 @@ export default function ReportDetail({ contentKey, onChanged, onBack }: ReportDe
         ) : null}
       </header>
 
-      {isQuestion && data.current ? (
+      {isQuestion && data.current && editing && questionId ? (
+        <QuestionEditor
+          key={`${contentKey}#${reloadToken}`}
+          questionId={questionId}
+          current={data.current}
+          openReports={open.length}
+          onCancel={() => setEditingKey(null)}
+          onSaved={(r) => {
+            setEditingKey(null)
+            reload(editMessage(r))
+          }}
+        />
+      ) : null}
+      {isQuestion && data.current && !editing ? (
         <QuestionView current={data.current} stats={data.stats} suggested={data.queue?.suggested_answers ?? null} />
       ) : null}
       {isQuestion && !data.current ? (
@@ -171,13 +201,16 @@ export default function ReportDetail({ contentKey, onChanged, onBack }: ReportDe
         </p>
       ) : null}
 
-      {open.length > 0 ? (
+      {/* Mientras se edita, el editor lleva su propio "guardar y aceptar". */}
+      {open.length > 0 && !editing ? (
         <ResolveBox contentKey={contentKey} openCount={open.length} onDone={reload} />
       ) : null}
 
       {questionId && data.current ? (
         <AnuladaToggle questionId={questionId} anulada={!!data.current.anulada} onDone={reload} />
       ) : null}
+
+      {questionId ? <QuestionRevisions questionId={questionId} version={reloadToken} onReverted={reload} /> : null}
 
       <section className="flex flex-col gap-3">
         <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-[#7D8A96]">
@@ -202,6 +235,17 @@ export default function ReportDetail({ contentKey, onChanged, onBack }: ReportDe
       ) : null}
     </div>
   )
+}
+
+function editMessage(r: EditResult): string {
+  if (r.unchanged) return 'No había cambios que guardar'
+  let text = `Guardado (${r.changedFields.map((f) => FIELD_LABEL[f]).join(', ')}) · revisión #${r.revisionId}`
+  if (r.resolved) {
+    text += ` · ${r.resolved.resolved} reporte${r.resolved.resolved === 1 ? '' : 's'} aceptado${r.resolved.resolved === 1 ? '' : 's'}`
+    if (r.resolved.xp_awarded) text += ` · ${r.resolved.xp_awarded} XP`
+  }
+  if (r.resolveError) text += ` · ⚠ ${r.resolveError}`
+  return text
 }
 
 function guideHref(guideRef: string): string {
@@ -534,8 +578,8 @@ function ResolveBox({
         ))}
       </div>
       <p className="text-[11px] text-[#7D8A96]">
-        Aceptar = tenía razón (aviso + XP). Rechazar = el contenido está bien. Ya estaba = ya lo teníamos corregido o en marcha. Corrige la pregunta
-        en Supabase <b>antes</b> de aceptar: el aviso dice «hemos corregido».
+        Aceptar = tenía razón (aviso + XP). Rechazar = el contenido está bien. Ya estaba = ya lo teníamos corregido o en marcha. Si hay que corregir
+        algo, usa <b>Editar</b> y «Guardar y aceptar»: el aviso dice «hemos corregido».
       </p>
       {error ? <p className="text-sm font-semibold text-[#C4655A]">{error}</p> : null}
     </section>

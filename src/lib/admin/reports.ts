@@ -126,6 +126,70 @@ export type HistoryItem = {
   guide_title: string | null
 }
 
+export type EditableField = 'statement' | 'options' | 'correct_answer' | 'explanation' | 'image_url'
+
+export type QuestionChanges = Partial<{
+  statement: string
+  options: string[]
+  correct_answer: number
+  explanation: string | null
+  image_url: string | null
+}>
+
+export type QuestionState = {
+  statement: string
+  options: string[]
+  correct_answer: number
+  explanation: string | null
+  image_url: string | null
+  has_image: boolean
+}
+
+export type Revision = {
+  id: number
+  edited_by: string | null
+  editor: string | null
+  edited_at: string
+  changed_fields: EditableField[]
+  before: QuestionState
+  after: QuestionState
+  note: string | null
+}
+
+export type EditResult = {
+  ok: true
+  unchanged: boolean
+  revisionId: number | null
+  changedFields: EditableField[]
+  resolved: { resolved: number; notified: number; xp_awarded: number } | null
+  resolveError?: string
+}
+
+export const FIELD_LABEL: Record<EditableField, string> = {
+  statement: 'enunciado',
+  options: 'opciones',
+  correct_answer: 'clave',
+  explanation: 'explicación',
+  image_url: 'imagen',
+}
+
+// Igual que notaAutomatica del backend: lo que leerá el usuario si no se
+// escribe una nota al "corregir y aceptar".
+export function autoNote(
+  fields: EditableField[],
+  before: { correct_answer?: unknown },
+  after: { correct_answer?: unknown },
+): string {
+  const parts = fields.map((f) =>
+    f === 'correct_answer'
+      ? `clave (${letter(toAnswerNumber(before.correct_answer))} → ${letter(toAnswerNumber(after.correct_answer))})`
+      : FIELD_LABEL[f],
+  )
+  if (parts.length === 0) return ''
+  const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}`
+  return `Cambios: ${list}.`
+}
+
 export class AdminError extends Error {
   constructor(
     message: string,
@@ -171,6 +235,20 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify({ anulada }),
     }),
+  editQuestion: (
+    questionId: number,
+    changes: QuestionChanges,
+    note: string,
+    resolve: { note: string; xp: number } | null,
+  ) =>
+    adminFetch<EditResult>(`/questions/${questionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ changes, note, resolve }),
+    }),
+  revisions: (questionId: number) =>
+    adminFetch<{ items: Revision[] }>(`/questions/${questionId}/revisions`).then((r) => r.items),
+  revertRevision: (questionId: number, revisionId: number) =>
+    adminFetch<EditResult>(`/questions/${questionId}/revisions/${revisionId}/revert`, { method: 'POST' }),
   suspicious: (min: number, maxPct: number) =>
     adminFetch<{ items: SuspiciousItem[] }>(`/suspicious?min=${min}&maxPct=${maxPct}`).then(
       (r) => r.items,
