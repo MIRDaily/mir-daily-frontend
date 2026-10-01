@@ -205,6 +205,25 @@ export default function SimulacroRunner({
   const [mapHover, setMapHover] = useState(false)
   const [mapPinned, setMapPinned] = useState(false)
   const mapOpen = mapHover || mapPinned
+  const sessionBarRef = useRef<HTMLDivElement | null>(null)
+
+  // El hover se decide con el DOM, no con el árbol de React. La ventana de
+  // reportar (y el popup de Guardar en mazo) van en un portal a <body>, pero
+  // para React son hijos de la barra: pasar a ellos no era "salir", y al
+  // cerrarse la ventana su nodo desaparece sin que llegue ningún pointerleave.
+  // El mapa se quedaba abierto hasta volver a entrar y salir de la barra.
+  // Mientras está abierto por hover, cualquier movimiento real del ratón
+  // fuera de la barra lo cierra.
+  useEffect(() => {
+    if (!mapHover) return
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse') return
+      const bar = sessionBarRef.current
+      if (bar && !bar.contains(e.target as Node)) setMapHover(false)
+    }
+    document.addEventListener('pointermove', onMove)
+    return () => document.removeEventListener('pointermove', onMove)
+  }, [mapHover])
   const closeMap = () => {
     setMapHover(false)
     setMapPinned(false)
@@ -290,9 +309,12 @@ export default function SimulacroRunner({
           El mapa cuelga de ella como un desplegable superpuesto (no empuja el
           enunciado) y forma parte del área de hover, hueco incluido. */}
       <div
+        ref={sessionBarRef}
         className="sticky top-4 z-30 mb-8 [@media(max-height:850px)]:mb-5"
         onPointerEnter={(e) => {
-          if (e.pointerType === 'mouse') setMapHover(true)
+          // Solo si el puntero está de verdad sobre la barra: los eventos de
+          // las ventanas en portal también llegan aquí por el árbol de React.
+          if (e.pointerType === 'mouse' && e.currentTarget.contains(e.target as Node)) setMapHover(true)
         }}
         onPointerLeave={() => setMapHover(false)}
       >
