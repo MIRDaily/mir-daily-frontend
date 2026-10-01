@@ -146,15 +146,25 @@ export default function ReportModal({
   return createPortal(
     // Los eventos de un portal suben por el árbol de React: sin cortarlos, un
     // clic aquí llegaría a la tarjeta de la pregunta que contiene el botón.
-    <motion.div
+    //
+    // Sin backdrop-filter y con el fundido en el propio fondo, no en el
+    // contenedor. Antes: contenedor con fundido + hijo con backdrop-blur. Chrome
+    // no aplica un desenfoque cuyo padre tiene opacidad < 1, así que saltaba de
+    // golpe al acabar el fundido, y encima recalculaba el desenfoque de toda la
+    // página (con las capas blur-3xl fijas del simulacro): parpadeo al abrir.
+    <div
       className="fixed inset-0 z-[300] flex items-end justify-center p-3 sm:items-center sm:p-4"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
     >
-      <div className="absolute inset-0 bg-[#2c3e50]/45 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        className="absolute inset-0 bg-[#2c3e50]/55"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.18 }}
+        onClick={onClose}
+      />
       <motion.div
         role="dialog"
         aria-modal="true"
@@ -335,7 +345,7 @@ export default function ReportModal({
           </>
         )}
       </motion.div>
-    </motion.div>,
+    </div>,
     document.body,
   )
 }

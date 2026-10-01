@@ -83,7 +83,11 @@ function Lightbox({ url, onClose }: { url: string; onClose: () => void }) {
 
   return (
     <motion.div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-[#1F2937]/85 backdrop-blur-sm"
+      // Sin backdrop-blur (antes backdrop-blur-sm): con el fondo al 85 % apenas
+      // se notaba, y un backdrop-filter que aparece con fundido sobre una página
+      // con capas fijas desenfocadas (los círculos blur-3xl del simulacro) hacía
+      // parpadear la pantalla en Chrome al abrir la imagen.
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-[#1F2937]/85"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
