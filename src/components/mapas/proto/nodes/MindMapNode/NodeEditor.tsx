@@ -7,9 +7,13 @@ interface NodeEditorProps {
   style: NodeStyle
   onSave: (text: string) => void
   onExit: () => void
+  /** Tab mientras se escribe: guardar y seguir (crear un hijo). */
+  onTab?: () => void
+  /** Seleccionar todo el texto al empezar (nodo recién creado: se escribe encima). */
+  selectAll?: boolean
 }
 
-export function NodeEditor({ label, style, onSave, onExit }: NodeEditorProps) {
+export function NodeEditor({ label, style, onSave, onExit, onTab, selectAll }: NodeEditorProps) {
   const ref = useRef<HTMLDivElement>(null)
   const savedRef = useRef(false)
 
@@ -20,15 +24,28 @@ export function NodeEditor({ label, style, onSave, onExit }: NodeEditorProps) {
     // Set initial HTML content (supports rich formatting from previous edits)
     el.innerHTML = label
 
-    el.focus()
-
-    // Place cursor at end
-    const range = document.createRange()
-    range.selectNodeContents(el)
-    range.collapse(false)
-    const sel = window.getSelection()
-    sel?.removeAllRanges()
-    sel?.addRange(range)
+    // Un nodo recién creado está oculto (visibility: hidden) hasta que React Flow lo mide, y
+    // focus() no funciona sobre algo oculto: se reintenta durante un momento (con temporizador, no
+    // con requestAnimationFrame, que se para si la pestaña no se pinta). Sin esto,
+    // al crear con Tab/Enter lo que se escribía se perdía.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let tries = 0
+    const focusNow = () => {
+      el.focus()
+      if (document.activeElement !== el) {
+        if (tries++ < 30) timer = setTimeout(focusNow, 16)
+        return
+      }
+      // Cursor al final; en un nodo recién creado, todo el texto seleccionado para escribir encima.
+      const range = document.createRange()
+      range.selectNodeContents(el)
+      if (!selectAll) range.collapse(false)
+      const sel = window.getSelection()
+      sel?.removeAllRanges()
+      sel?.addRange(range)
+    }
+    focusNow()
+    return () => clearTimeout(timer)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSaveAndExit = (el: HTMLDivElement) => {
@@ -51,6 +68,11 @@ export function NodeEditor({ label, style, onSave, onExit }: NodeEditorProps) {
         if (e.key === 'Escape') {
           e.preventDefault()
           handleSaveAndExit(e.currentTarget as HTMLDivElement)
+        }
+        if (e.key === 'Tab' && onTab) {
+          e.preventDefault()
+          handleSaveAndExit(e.currentTarget as HTMLDivElement)
+          onTab()
         }
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault()

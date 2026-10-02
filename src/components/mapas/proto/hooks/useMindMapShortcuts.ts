@@ -7,6 +7,21 @@ import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
 import { applyCategoryToNodes } from '@/components/mapas/proto/utils/categories'
 import { categoryForKey } from '@/lib/mapas/types'
+import { parentMap } from '@/components/mapas/proto/utils/tree'
+import {
+  addChildAndEdit,
+  addSiblingAndEdit,
+  navigate,
+  selectOnly,
+  type Direction,
+} from '@/components/mapas/proto/utils/keyboard'
+
+const ARROWS: Record<string, Direction> = {
+  ArrowUp: 'up',
+  ArrowDown: 'down',
+  ArrowLeft: 'left',
+  ArrowRight: 'right',
+}
 
 interface Clipboard {
   nodes: MindMapNode[]
@@ -34,14 +49,48 @@ export function useMindMapShortcuts() {
       const history = useHistoryStore.getState()
       const ui      = useUIStore.getState()
 
+      // ── Teclado tipo XMind: Tab = hijo, Enter = hermano, F2 = editar, flechas = moverse ──
+      // Solo con exactamente un nodo seleccionado y el foco en el lienzo (o en ninguna parte): con
+      // el foco en un botón de la barra, Enter debe pulsar ese botón.
+      const inCanvas = target === document.body || !!target.closest?.('.react-flow')
+      if (!isMod && !e.altKey && inCanvas && !store.editingNodeId) {
+        const sel = getNodes().filter((n) => n.selected)
+        const one = sel.length === 1 ? sel[0].id : null
+        if (one && e.key === 'Tab' && !e.shiftKey) {
+          e.preventDefault()
+          addChildAndEdit(one)
+          return
+        }
+        if (one && e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault()
+          addSiblingAndEdit(one)
+          return
+        }
+        if (one && e.key === 'F2') {
+          e.preventDefault()
+          store.setEditing(one)
+          return
+        }
+        const dir = ARROWS[e.key]
+        if (one && dir) {
+          e.preventDefault()
+          navigate(one, dir)
+          return
+        }
+      }
+
       // ── Delete / Backspace ──────────────────────────────────────────────────
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const selectedNodes = getNodes().filter((n) => n.selected)
         const selectedEdges = getEdges().filter((edge) => edge.selected)
         if (selectedNodes.length > 0 || selectedEdges.length > 0) {
+          // Al borrar un solo nodo, la selección pasa a su padre: se puede seguir con el teclado.
+          const parent =
+            selectedNodes.length === 1 ? parentMap(store.nodes, store.edges).get(selectedNodes[0].id) : undefined
           history.pushSnapshot(store.nodes, store.edges)
           selectedNodes.forEach((n) => store.deleteNode(n.id))
           selectedEdges.forEach((edge) => store.deleteEdge(edge.id))
+          if (parent) selectOnly(parent)
         }
       }
 

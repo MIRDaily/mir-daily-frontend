@@ -1,5 +1,7 @@
 import type { Variants } from 'framer-motion'
 
+// Todos los estados fijan opacity: 1. Si no, un nodo que aún no hubiera terminado la entrada
+// (opacity 0) se quedaba invisible al pasar a "editing"/"selected", que solo tocaban la escala.
 export const nodeVariants: Variants = {
   initial: { scale: 0, opacity: 0 },
   visible: {
@@ -10,14 +12,17 @@ export const nodeVariants: Variants = {
   idle: { scale: 1, opacity: 1 },
   hovered: {
     scale: 1.04,
+    opacity: 1,
     transition: { type: 'spring', stiffness: 400, damping: 15 },
   },
   selected: {
     scale: 1.02,
+    opacity: 1,
     transition: { type: 'spring', stiffness: 350, damping: 18 },
   },
   editing: {
     scale: 1.03,
+    opacity: 1,
     transition: { type: 'spring', stiffness: 300, damping: 20 },
   },
   exit: {
@@ -27,6 +32,7 @@ export const nodeVariants: Variants = {
   },
   dividing: {
     scale: [1, 1.15, 0.95, 1],
+    opacity: 1,
     transition: { duration: 0.45, times: [0, 0.3, 0.7, 1] },
   },
 }

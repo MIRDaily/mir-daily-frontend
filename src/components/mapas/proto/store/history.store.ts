@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { HistoryState } from '@/components/mapas/proto/types/store.types'
 import { useMindMapStore } from './mindmap.store'
+import { withoutPhysics } from '@/components/mapas/proto/hooks/usePhysics'
 
 const MAX_HISTORY = 50
 
@@ -33,7 +34,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         ...future,
       ],
     })
-    useMindMapStore.setState({ nodes: previous.nodes, edges: previous.edges })
+    withoutPhysics(() => useMindMapStore.setState({ nodes: previous.nodes, edges: previous.edges }))
   },
 
   redo: () => {
@@ -49,6 +50,6 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       ],
       future: future.slice(1),
     })
-    useMindMapStore.setState({ nodes: next.nodes, edges: next.edges })
+    withoutPhysics(() => useMindMapStore.setState({ nodes: next.nodes, edges: next.edges }))
   },
 }))

@@ -150,27 +150,22 @@ export function CustomMiniMap() {
         <rect width="100%" height="100%" fill="url(#mm-grid)" />
       </svg>
 
-      {/* Nodes */}
-      {nodes.map(n => {
-        const { x: mx, y: my } = flowToMini(n.position.x, n.position.y)
-        const nw = Math.max(((n.measured?.width  as number | undefined) ?? 160) * scale, 4)
-        const nh = Math.max(((n.measured?.height as number | undefined) ?? 50)  * scale, 3)
-        return (
-          <div
-            key={n.id}
-            style={{
-              position:     'absolute',
-              left:         mx,
-              top:          my,
-              width:        nw,
-              height:       nh,
-              background:   n.data.style?.color ?? t.border2,
-              borderRadius: 2,
-              opacity:      0.9,
-            }}
-          />
-        )
-      })}
+      {/* Nodes: un trazado SVG por color en vez de un <div> por nodo. Con ~100 nodos, el
+          minimapa recreaba 100 elementos en cada fotograma de un arrastre. */}
+      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+        {Object.entries(
+          nodes.reduce<Record<string, string>>((acc, n) => {
+            const { x: mx, y: my } = flowToMini(n.position.x, n.position.y)
+            const nw = Math.max(((n.measured?.width  as number | undefined) ?? 160) * scale, 4)
+            const nh = Math.max(((n.measured?.height as number | undefined) ?? 50)  * scale, 3)
+            const color = n.data.style?.color ?? t.border2
+            acc[color] = (acc[color] ?? '') + `M${mx.toFixed(1)} ${my.toFixed(1)}h${nw.toFixed(1)}v${nh.toFixed(1)}h${(-nw).toFixed(1)}Z`
+            return acc
+          }, {}),
+        ).map(([color, d]) => (
+          <path key={color} d={d} fill={color} opacity={0.9} />
+        ))}
+      </svg>
 
       {/* Viewport rectangle */}
       <div

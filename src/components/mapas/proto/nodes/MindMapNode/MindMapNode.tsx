@@ -1,6 +1,6 @@
-import { memo, useCallback, useEffect, useRef } from 'react'
+import { memo, useCallback } from 'react'
 import { NodeToolbar, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
-import { motion, useAnimationControls } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { Trash2, Plus, Palette } from 'lucide-react'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
@@ -13,24 +13,17 @@ import { NodeLabel } from './NodeLabel'
 import { NodeEditor } from './NodeEditor'
 import { NodeHandles } from './NodeHandles'
 import { BranchToggle } from './BranchToggle'
+import { addChildAndEdit } from '@/components/mapas/proto/utils/keyboard'
 
 function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   // Solo se lee lo que este nodo pinta; las acciones se piden a la store en el momento de
   // usarlas. Suscribirse a toda la store re-renderizaba los ~80 nodos en cada cambio.
   const { setCenter } = useReactFlow()
-  const controls = useAnimationControls()
-  const isFirstMount = useRef(true)
 
-  // Entry animation for new nodes
-  useEffect(() => {
-    if (!isFirstMount.current) return
-    isFirstMount.current = false
-    if (data.isNew) {
-      controls.start('visible')
-    } else {
-      controls.set('idle')
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Entrada de un nodo nuevo: declarativa (animate="visible" mientras es nuevo). Antes se lanzaba
+  // con controls.start() en un efecto de montaje que solo corría una vez; con el doble montaje de
+  // React en desarrollo la animación no arrancaba y el nodo se quedaba en opacity 0 / scale 0. Si
+  // además estaba en edición (creado con Tab), seguía invisible mientras se escribía.
 
   const isEditing = useMindMapStore((s) => s.editingNodeId === id)
 
@@ -49,6 +42,11 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
     [id]
   )
 
+  // Tab mientras se escribe: el texto ya se ha guardado; se crea un hijo y se sigue escribiendo.
+  const handleTab = useCallback(() => {
+    addChildAndEdit(id)
+  }, [id])
+
   const handleExit = useCallback(() => {
     useMindMapStore.getState().setEditing(null)
   }, [])
@@ -56,7 +54,6 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   const spawnChild = useCallback((direction?: 'top' | 'bottom' | 'left' | 'right') => {
     const store = useMindMapStore.getState()
     useHistoryStore.getState().pushSnapshot(store.nodes, store.edges)
-    controls.start('dividing').then(() => controls.start('idle'))
     const newId = store.addNode(id, direction)
     setTimeout(() => {
       const newNode = useMindMapStore.getState().nodes.find((n) => n.id === newId)
@@ -64,7 +61,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
         setCenter(newNode.position.x, newNode.position.y, { duration: 600, zoom: 1 })
       }
     }, 150)
-  }, [id, controls, setCenter])
+  }, [id, setCenter])
 
   const handleAddChild = useCallback(() => spawnChild(), [spawnChild])
 
@@ -124,7 +121,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
 
       <motion.div
         initial={data.isNew ? 'initial' : 'idle'}
-        animate={data.isNew ? controls : animateState}
+        animate={data.isNew ? 'visible' : animateState}
         variants={nodeVariants}
         whileHover={isEditing ? undefined : 'hovered'}
         style={{
@@ -135,7 +132,14 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
       >
         <NodeBody style={data.style} isSelected={!!selected} isDark={t.isDark}>
           {isEditing ? (
-            <NodeEditor label={data.label} style={data.style} onSave={handleSave} onExit={handleExit} />
+            <NodeEditor
+              label={data.label}
+              style={data.style}
+              onSave={handleSave}
+              onExit={handleExit}
+              onTab={handleTab}
+              selectAll={data.label === 'Nueva idea'}
+            />
           ) : (
             <NodeLabel label={data.label} style={data.style} />
           )}

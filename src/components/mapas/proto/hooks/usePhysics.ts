@@ -56,6 +56,29 @@ function sizeOf(n: MindMapNode) {
 
 let anim: number | null = null
 
+let suppressed = false
+
+/**
+ * Aplica un cambio sin que la física reaccione (deshacer/rehacer: los nodos que reaparecen no son
+ * nuevos y no hay que apartarlos). Corta además la animación en curso, que si no seguiría moviendo
+ * el estado restaurado.
+ */
+export function withoutPhysics(fn: () => void) {
+  cancelSettle()
+  suppressed = true
+  try {
+    fn()
+  } finally {
+    suppressed = false
+  }
+}
+
+/** Corta la animación en curso. */
+export function cancelSettle() {
+  if (anim !== null) cancelAnimationFrame(anim)
+  anim = null
+}
+
 /**
  * Deshace los solapes alrededor de `movers` y anima el resultado. Los nodos de `movers` (recién
  * creados) ceden casi todo; los de `pinned` (el que se acaba de soltar) no se mueven; el resto
@@ -112,7 +135,7 @@ export function usePhysics() {
   useEffect(() => {
     const unsub = useMindMapStore.subscribe((state, prev) => {
       // Cargar un mapa cambia el número de nodos pero no debe recolocarlos.
-      if (state.loadTick !== prev.loadTick) return
+      if (state.loadTick !== prev.loadTick || suppressed) return
       if (!useUIStore.getState().physicsEnabled) return
       if (state.nodes.length <= prev.nodes.length) return
       const before = new Set(prev.nodes.map((n) => n.id))

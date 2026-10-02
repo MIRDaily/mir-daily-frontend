@@ -3,19 +3,18 @@ import {
   type EdgeProps,
   type InternalNode,
   Position,
-  useNodes,
   useInternalNode,
 } from '@xyflow/react'
 import { animate as fmAnimate } from 'framer-motion'
 import type { MindMapEdge, EdgeVariant } from '@/components/mapas/proto/types/edge.types'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
+import { obstacleKey, parseObstacles } from './obstacles'
 
 // ─── Geometry helpers ────────────────────────────────────────────────────────
 
-// Margen de esquiva alrededor de cada nodo. El prototipo usaba 32; en un mapa ordenado en
-// árbol los nodos están a ~18 px y casi todas las líneas rozaban a algún vecino y hacían rodeos.
-const NODE_PAD = 6
+// Margen de esquiva alrededor de cada nodo: NODE_PAD en obstacles.ts (el prototipo usaba 32; en
+// un mapa en árbol los nodos están a ~18 px y casi todas las líneas hacían rodeos).
 // Desvíos que se prueban (px desde la cuerda) antes de rendirse y dibujar la curva directa.
 // Antes el desvío era siempre medio nodo (~115 px en uno ancho) aunque la línea solo rozara
 // una esquina, y salía una joroba enorme.
@@ -163,35 +162,12 @@ function curveThrough(
   ]
 }
 
-type SlimNode = {
-  id: string
-  position: { x: number; y: number }
-  measured?: { width?: number; height?: number }
-  hidden?: boolean
-}
+/** Hasta dónde puede llegar un desvío (el máximo es 160) más margen: lo que cuenta como cerca. */
+const REACH = 200
 
-function computePath(
-  s: Pt, t: Pt,
-  srcPos: Position, tgtPos: Position,
-  nodes: SlimNode[],
-  sourceId: string, targetId: string,
-): string {
+/** `rects`: los nodos cerca de la línea (sin sus extremos), ya con su margen. */
+function computePath(s: Pt, t: Pt, srcPos: Position, tgtPos: Position, rects: Rect[]): string {
   const direct = directCurve(s, t, srcPos, tgtPos)
-
-  // Solo cuentan los nodos cerca de la línea (su caja + el desvío máximo, 160).
-  const reach = 200
-  const minX = Math.min(s.x, t.x) - reach, maxX = Math.max(s.x, t.x) + reach
-  const minY = Math.min(s.y, t.y) - reach, maxY = Math.max(s.y, t.y) + reach
-  const rects: Rect[] = []
-  for (const node of nodes) {
-    if (node.id === sourceId || node.id === targetId || node.hidden) continue
-    const nw = node.measured?.width  ?? 160
-    const nh = node.measured?.height ?? 50
-    const x = node.position.x - NODE_PAD, y = node.position.y - NODE_PAD
-    const w = nw + NODE_PAD * 2, h = nh + NODE_PAD * 2
-    if (x > maxX || x + w < minX || y > maxY || y + h < minY) continue
-    rects.push({ x, y, w, h, cx: x + w / 2, cy: y + h / 2 })
-  }
 
   const hit = firstHit(direct, rects)
   if (!hit) return toD(direct)
@@ -225,8 +201,6 @@ function computePath(
 
 // ─── Edge component ──────────────────────────────────────────────────────────
 
-const NO_NODES: SlimNode[] = []
-
 const DASH_MAP: Record<EdgeVariant, string> = {
   solid:  '',
   dashed: '10 5',
@@ -242,15 +216,13 @@ function AnimatedEdgeInner({
   const pathRef             = useRef<SVGPathElement>(null)
   const updateEdgeAnimating = useMindMapStore((s) => s.updateEdgeAnimating)
   const isDragging          = useUIStore((s) => s.isDragging)
-  const allNodes            = useNodes()
   const srcRect             = rectOf(useInternalNode(source))
   const tgtRect             = rectOf(useInternalNode(target))
   // El atenuado por el modo foco (hover) lo pone useFocusController con un atributo y CSS:
   // suscribir cada línea al hover las re-renderizaba todas en cada movimiento del ratón.
 
-  // Mientras se arrastra no se esquiva nada (se recalcula al soltar).
-  const obstacles = isDragging ? NO_NODES : allNodes
-  const edgePath = useMemo(
+  // Extremos y lados según dónde están ahora los dos nodos.
+  const geom = useMemo(
     () => {
       let s: Pt = { x: sourceX, y: sourceY }
       let t: Pt = { x: targetX, y: targetY }
@@ -260,13 +232,31 @@ function AnimatedEdgeInner({
         s = anchor(srcRect, sp)
         t = anchor(tgtRect, tp)
       }
-      return computePath(s, t, sp, tp, obstacles, source, target)
+      return { s, t, sp, tp }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition,
      srcRect?.x, srcRect?.y, srcRect?.w, srcRect?.h,
-     tgtRect?.x, tgtRect?.y, tgtRect?.w, tgtRect?.h,
-     obstacles, source, target],
+     tgtRect?.x, tgtRect?.y, tgtRect?.w, tgtRect?.h],
+  )
+
+  // Solo los nodos cerca de esta línea, como clave de texto: si su entorno no cambia, la línea
+  // no se vuelve a dibujar aunque se mueva otro nodo del mapa. Mientras se arrastra no se
+  // esquiva nada (se recalcula al soltar).
+  const { s: gs, t: gt } = geom
+  const nearKey = useMindMapStore((st) =>
+    isDragging
+      ? ''
+      : obstacleKey(
+          st.nodes,
+          Math.min(gs.x, gt.x) - REACH, Math.min(gs.y, gt.y) - REACH,
+          Math.max(gs.x, gt.x) + REACH, Math.max(gs.y, gt.y) + REACH,
+          source, target,
+        ),
+  )
+  const edgePath = useMemo(
+    () => computePath(geom.s, geom.t, geom.sp, geom.tp, parseObstacles(nearKey)),
+    [geom, nearKey],
   )
 
   const variant: EdgeVariant  = data?.variant ?? 'solid'

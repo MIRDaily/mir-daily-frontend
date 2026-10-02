@@ -48,6 +48,12 @@ function childSlot(parent: MindMapNode, nodes: MindMapNode[]) {
   return { x, y: last.position.y + (last.measured?.height ?? 44) + 16 }
 }
 
+/** Lo registra useBranchDrag mientras dura un arrastre de rama. */
+let dragFollower: ((nodes: MindMapNode[]) => void) | null = null
+export function setDragFollower(fn: ((nodes: MindMapNode[]) => void) | null) {
+  dragFollower = fn
+}
+
 export const useMindMapStore = create<MindMapState>()(
   immer((set, get) => ({
     nodes: [],
@@ -71,6 +77,9 @@ export const useMindMapStore = create<MindMapState>()(
     onNodesChange: (changes) =>
       set((s) => {
         s.nodes = applyNodeChanges(changes, s.nodes) as MindMapNode[]
+        // Arrastre de rama: los descendientes se mueven en esta misma actualización (antes era
+        // otra aparte en onNodeDrag: dos renders del lienzo por fotograma).
+        dragFollower?.(s.nodes)
       }),
 
     onEdgesChange: (changes) =>

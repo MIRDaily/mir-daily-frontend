@@ -4,6 +4,10 @@ import { motion, AnimatePresence, useAnimationControls } from 'framer-motion'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 
 const SHORTCUTS: { keys: string[]; desc: string }[] = [
+  { keys: ['Tab'], desc: 'Hijo del nodo seleccionado (también escribiendo)' },
+  { keys: ['Enter'], desc: 'Hermano del nodo seleccionado' },
+  { keys: ['← ↑ → ↓'], desc: 'Moverse entre nodos conectados' },
+  { keys: ['F2'], desc: 'Editar el nodo seleccionado' },
   { keys: ['Doble clic'], desc: 'Editar nodo' },
   { keys: ['N'], desc: 'Nuevo nodo' },
   { keys: ['Click +'], desc: 'Añadir nodo hijo' },
