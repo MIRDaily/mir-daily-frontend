@@ -97,6 +97,11 @@ export default function PrivacidadPage() {
           que marque la ley. En las partidas de Versus ya jugadas con otras personas, tu participación queda
           como «Jugador eliminado». Podemos conservar estadísticas que ya no te identifiquen.
         </p>
+        <p>
+          Aunque no borres la cuenta, el registro de los días en que usas MIRDaily y los eventos de uso de las
+          funciones se eliminan automáticamente a los <strong>24 meses</strong>. Tu progreso de estudio
+          (respuestas, mazos, nivel…) se conserva mientras tengas la cuenta, porque es lo que te mostramos.
+        </p>
       </Seccion>
 
       <Seccion titulo="5. Quién más trata tus datos">
@@ -108,7 +113,6 @@ export default function PrivacidadPage() {
           <li><strong>Railway</strong>: servidor de la aplicación.</li>
           <li><strong>Vercel</strong>: alojamiento de la web y estadísticas de visitas sin cookies.</li>
           <li><strong>Google y Apple</strong>: solo si eliges iniciar sesión con ellos.</li>
-          <li><strong>Google Fonts</strong>: carga de iconos; tu navegador se conecta a sus servidores.</li>
           <li><strong><Hueco>PASARELA DE PAGO</Hueco></strong>: cobros, cuando existan.</li>
         </ul>
         <p>

@@ -1,5 +1,50 @@
 @import "tailwindcss";
 
+/* Iconos Material Symbols servidos desde nuestro dominio (antes, de Google
+   Fonts: cada visita mandaba la IP a Google). Mismos ficheros y reglas que
+   daba Google. Rounded es un recorte con solo pause y play_arrow (los del
+   temporizador Zen): la fuente entera pesaba 5,4 MB por dos iconos. Si se usa
+   otro icono Rounded, regenerar el recorte con &icon_names=... */
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url('./fonts/material-symbols-outlined.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Material Symbols Rounded';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/material-symbols-rounded-play-pause.woff2') format('woff2');
+}
+
+.material-symbols-outlined,
+.material-symbols-rounded {
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+}
+
+.material-symbols-rounded {
+  font-family: 'Material Symbols Rounded';
+}
+
 :root {
   --font-display: var(--font-lexend);
 }
