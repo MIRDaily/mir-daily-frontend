@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import localFont from 'next/font/local'
 import Script from 'next/script'
 import GlobalHeader from '@/components/GlobalHeader'
+import WebAnalytics from '@/components/analytics/WebAnalytics'
 import { AppProviders } from '@/providers/AppProviders'
 import { debugRender } from '@/lib/debugRSC'
 
@@ -78,6 +79,7 @@ export default function RootLayout({
           {children}
         </AppProviders>
         <Script src="/js/cozy-cursor.js" strategy="afterInteractive" />
+        <WebAnalytics />
       </body>
     </html>
   )

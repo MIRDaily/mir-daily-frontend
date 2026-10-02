@@ -818,7 +818,13 @@ export default function LandingPage() {
           <p className="text-xs text-[#8C857E]">
             © {new Date().getFullYear()} MirDaily — El MIR se gana un día a la vez.
           </p>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <Link href="/privacidad" className="text-xs text-[#8C857E] hover:underline">
+              Privacidad
+            </Link>
+            <Link href="/aviso-legal" className="text-xs text-[#8C857E] hover:underline">
+              Aviso legal
+            </Link>
             <Link href="/landing-v2" className="text-xs font-bold text-[#B87A6F] hover:underline">
               Ver versión nocturna 🌙
             </Link>

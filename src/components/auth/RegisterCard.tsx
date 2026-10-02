@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabaseBrowser'
 
 function buildOAuthRedirectUrl(): string {
@@ -242,6 +243,18 @@ export default function RegisterCard({
         >
           Iniciar sesion
         </button>
+      </p>
+
+      <p className="mt-3 text-center text-xs text-[#7D8A96]">
+        Al registrarte aceptas el{' '}
+        <Link href="/aviso-legal" target="_blank" className="underline">
+          aviso legal
+        </Link>{' '}
+        y confirmas haber leido la{' '}
+        <Link href="/privacidad" target="_blank" className="underline">
+          politica de privacidad
+        </Link>
+        .
       </p>
     </>
   )
