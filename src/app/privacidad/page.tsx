@@ -91,10 +91,11 @@ export default function PrivacidadPage() {
 
       <Seccion titulo="4. Cuánto tiempo los conservamos">
         <p>
-          Mientras tengas la cuenta activa. Si la eliminas, borraremos tus datos personales en un plazo máximo
-          de <Hueco>PLAZO, p. ej. 30 días</Hueco>, salvo los que debamos conservar por obligación legal (por
-          ejemplo, facturas) durante los plazos que marque la ley. Podemos conservar estadísticas que ya no te
-          identifiquen.
+          Mientras tengas la cuenta activa. Puedes eliminarla tú en cualquier momento desde{' '}
+          <strong>Configuración › Eliminar cuenta</strong>: se borran al instante tu cuenta y todo tu progreso,
+          salvo los datos que debamos conservar por obligación legal (por ejemplo, facturas) durante los plazos
+          que marque la ley. En las partidas de Versus ya jugadas con otras personas, tu participación queda
+          como «Jugador eliminado». Podemos conservar estadísticas que ya no te identifiquen.
         </p>
       </Seccion>
 
@@ -124,7 +125,8 @@ export default function PrivacidadPage() {
         <p>
           Puedes ejercer tus derechos de acceso, rectificación, supresión, oposición, limitación del tratamiento
           y portabilidad, y retirar tu consentimiento en cualquier momento, escribiendo a <Hueco>EMAIL</Hueco>.
-          Te responderemos en el plazo de un mes.
+          Te responderemos en el plazo de un mes. Para borrar tu cuenta no hace falta escribirnos: puedes
+          hacerlo tú desde Configuración.
         </p>
         <p>
           Si crees que no hemos tratado bien tus datos, puedes reclamar ante la Agencia Española de Protección

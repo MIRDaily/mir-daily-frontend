@@ -21,6 +21,7 @@ import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import AcademicEditor from '@/components/Profile/AcademicEditor'
 import AvatarSelector from '@/components/Profile/AvatarSelector'
+import DeleteAccountDialog from '@/components/Profile/DeleteAccountDialog'
 import {
   DocChip,
   GhostButton,
@@ -122,6 +123,7 @@ export default function SettingsCard() {
   } | null>(null)
   const [toast, setToast] = useState<ToastState>(null)
   const [isEditingDetails, setIsEditingDetails] = useState(false)
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const cozyCursorEnabled = useSyncExternalStore(
     subscribeCozyCursor,
     readCozyCursor,
@@ -745,6 +747,27 @@ export default function SettingsCard() {
             </StickerCard>
           </section>
 
+          <section>
+            <SectionLabel>Privacidad</SectionLabel>
+            <StickerCard className="p-5" depth={4}>
+              <p className="text-sm font-black text-[#2C3E50]">Eliminar cuenta</p>
+              <p className="mt-1 text-xs leading-relaxed text-[#7D8A96]">
+                Borra tu cuenta y todo tu progreso para siempre. Lee cómo tratamos tus datos en la{' '}
+                <Link href="/privacidad" className="font-bold text-[#C4655A] underline-offset-2 hover:underline">
+                  política de privacidad
+                </Link>
+                .
+              </p>
+              <GhostButton
+                icon="delete_forever"
+                onClick={() => setIsDeletingAccount(true)}
+                className="mt-3 w-full"
+              >
+                Eliminar mi cuenta
+              </GhostButton>
+            </StickerCard>
+          </section>
+
           {error ? (
             <p className="rounded-2xl border-2 border-[#F1D3C9] bg-[#FFF4EF] px-4 py-3 text-sm font-bold text-[#C4655A]">
               {error}
@@ -763,6 +786,10 @@ export default function SettingsCard() {
           />
         ) : null}
       </AnimatePresence>
+
+      {isDeletingAccount ? (
+        <DeleteAccountDialog onCancel={() => setIsDeletingAccount(false)} />
+      ) : null}
 
       {/* Aviso flotante */}
       <AnimatePresence>
