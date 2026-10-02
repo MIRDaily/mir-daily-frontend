@@ -12,6 +12,11 @@ type Flow = ReactFlowInstance<MindMapNode, MindMapEdge>
 let flow: Flow | null = null
 
 /** Lo registra el lienzo: hace falta para llevar la vista hasta un nodo. */
+/** La vista de React Flow (para convertir coordenadas de pantalla o mover la cámara). */
+export function getFlow(): Flow | null {
+  return flow
+}
+
 export function registerFlow(instance: Flow | null) {
   flow = instance
 }

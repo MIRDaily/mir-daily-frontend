@@ -57,7 +57,7 @@ export function MindMapCanvas() {
   useMindMapShortcuts()
   useFocusController(wrapperRef)
   usePhysics()
-  const { onNodeDragStart, onNodeDragStop } = useBranchDrag()
+  const { onNodeDragStart, onNodeDrag, onNodeDragStop } = useBranchDrag()
 
   // Las acciones de teclado (utils/keyboard) necesitan la vista para llevarla hasta un nodo.
   const flow = useReactFlow<MindMapNode, MindMapEdge>()
@@ -92,6 +92,7 @@ export function MindMapCanvas() {
         onEdgesChange={onEdgesChange}
         onConnect={connectNodes}
         onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onPaneClick={onPaneClick}
         onSelectionChange={onSelectionChange}

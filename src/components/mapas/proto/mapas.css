@@ -288,3 +288,65 @@
 .mapa-root .branch-toggle:hover {
   transform: translateY(-50%) scale(1.15) !important;
 }
+
+/* Destino al cambiar de rama (Ctrl + arrastrar): el nodo del que pasará a colgar lo soltado. */
+.mapa-root .react-flow__node.drop-target .mindmap-node-root {
+  outline: 2.5px dashed #E8A598;
+  outline-offset: 7px;
+  border-radius: 14px;
+}
+.mapa-root .react-flow__node.drop-target .mindmap-node-root::after {
+  content: 'Soltar aquí: pasa a esta rama';
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 14px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: #E8A598;
+  padding: 3px 8px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+/* Resultados del buscador (SearchBar): todos con un aro suave, el actual más marcado. */
+.mapa-root .react-flow__node.search-match .mindmap-node-root {
+  outline: 2px solid #E8A59899;
+  outline-offset: 5px;
+  border-radius: 14px;
+}
+.mapa-root .react-flow__node.search-current .mindmap-node-root {
+  outline: 3px solid #E8A598;
+  outline-offset: 6px;
+  border-radius: 14px;
+}
+
+/* Texto que coincide con la búsqueda: el mismo "marcador" que HighlightedText en Studio
+   (bg #FDE68A, texto #2C3E50). El resultado actual, un amarillo más intenso. */
+.mapa-root ::highlight(mapa-busqueda) {
+  background-color: #FDE68A;
+  color: #2C3E50;
+}
+.mapa-root ::highlight(mapa-busqueda-actual) {
+  background-color: #FCD34D;
+  color: #2C3E50;
+}
+
+/* Mientras se arrastra: fuera barras de nodo y botones de plegar (tapaban el destino al cambiar
+   de rama). El destino se dibuja por encima de lo arrastrado, y lo arrastrado se vuelve
+   translúcido en cuanto hay destino. */
+.mapa-root[data-dragging] .react-flow__node-toolbar,
+.mapa-root[data-dragging] .branch-toggle,
+.mapa-root[data-dragging] .react-flow__resize-control {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+.mapa-root .react-flow__node.drop-target {
+  z-index: 10000 !important;
+}
+.mapa-root .react-flow__node.reparenting {
+  opacity: 0.45;
+}

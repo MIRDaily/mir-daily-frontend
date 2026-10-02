@@ -1,4 +1,4 @@
-import { Plus, Undo2, Redo2, HelpCircle, Moon, Sun, FileDown, FileJson, Network, Orbit, Shapes, Loader2 } from 'lucide-react'
+import { Plus, Undo2, Redo2, HelpCircle, Moon, Sun, FileDown, FileJson, Network, Orbit, Shapes, Loader2, Search } from 'lucide-react'
 import type { BgStyle } from '@/components/mapas/proto/types/store.types'
 import { useState } from 'react'
 import { useReactFlow } from '@xyflow/react'
@@ -7,6 +7,7 @@ import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import { exportToPdf } from '@/components/mapas/proto/utils/exportPdf'
+import { showUpToLevel } from '@/components/mapas/proto/utils/branches'
 
 interface MainToolbarProps {
   onExportJson: () => void
@@ -164,6 +165,28 @@ export function MainToolbar({ onExportJson, onAutoLayout }: MainToolbarProps) {
           hoverBg={t.hoverBg}
         >
           <Orbit size={15} />
+        </Btn>
+
+        <Divider color={t.border} />
+
+        <Btn onClick={() => useUIStore.getState().setSearchOpen(true)} title="Buscar en el mapa (Ctrl+F)" color={t.textSecondary} hoverBg={t.hoverBg}>
+          <Search size={15} />
+        </Btn>
+        {/* Ver el mapa hasta un nivel: pliega lo que queda por debajo (Alt+1/2/3, Alt+0 = todo). */}
+        <span style={{ fontSize: 11, color: t.textMuted, padding: '0 2px 0 6px', whiteSpace: 'nowrap' }}>Niveles</span>
+        {[1, 2, 3].map((lvl) => (
+          <Btn
+            key={lvl}
+            onClick={() => showUpToLevel(lvl)}
+            title={`Ver hasta el nivel ${lvl} (Alt+${lvl})`}
+            color={t.textSecondary}
+            hoverBg={t.hoverBg}
+          >
+            <span style={{ fontSize: 12, minWidth: 8, textAlign: 'center' }}>{lvl}</span>
+          </Btn>
+        ))}
+        <Btn onClick={() => showUpToLevel(null)} title="Desplegarlo todo (Alt+0)" color={t.textSecondary} hoverBg={t.hoverBg}>
+          <span style={{ fontSize: 12 }}>Todo</span>
         </Btn>
 
         <Divider color={t.border} />

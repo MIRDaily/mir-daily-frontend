@@ -47,6 +47,9 @@ export interface UIState {
   /** Colores y formas que el usuario ha redefinido para las categorías de este mapa. */
   categoryStyles: CategoryStyles
   categoriesPanelOpen: boolean
+  /** Buscador de nodos (Ctrl+F) abierto. */
+  searchOpen: boolean
+  setSearchOpen: (open: boolean) => void
   setCategoryStyles: (styles: CategoryStyles) => void
   setCategoriesPanelOpen: (open: boolean) => void
   setPhysicsEnabled: (v: boolean) => void

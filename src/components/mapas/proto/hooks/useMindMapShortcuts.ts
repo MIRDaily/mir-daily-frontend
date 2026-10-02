@@ -8,6 +8,7 @@ import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
 import { applyCategoryToNodes } from '@/components/mapas/proto/utils/categories'
 import { categoryForKey } from '@/lib/mapas/types'
 import { parentMap } from '@/components/mapas/proto/utils/tree'
+import { showUpToLevel, toggleBranch } from '@/components/mapas/proto/utils/branches'
 import {
   addChildAndEdit,
   addSiblingAndEdit,
@@ -52,6 +53,21 @@ export function useMindMapShortcuts() {
       // ── Teclado tipo XMind: Tab = hijo, Enter = hermano, F2 = editar, flechas = moverse ──
       // Solo con exactamente un nodo seleccionado y el foco en el lienzo (o en ninguna parte): con
       // el foco en un botón de la barra, Enter debe pulsar ese botón.
+      // ── Ctrl+F: buscador del mapa (en vez del de la página) ─────────────────
+      if (isMod && !e.altKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        ui.setSearchOpen(true)
+        return
+      }
+
+      // ── Alt+1/2/3: ver hasta ese nivel · Alt+0: desplegarlo todo ───────────
+      if (e.altKey && !isMod && /^Digit[0-3]$/.test(e.code)) {
+        e.preventDefault()
+        const level = Number(e.code.slice(5))
+        showUpToLevel(level === 0 ? null : level)
+        return
+      }
+
       const inCanvas = target === document.body || !!target.closest?.('.react-flow')
       if (!isMod && !e.altKey && inCanvas && !store.editingNodeId) {
         const sel = getNodes().filter((n) => n.selected)
@@ -64,6 +80,12 @@ export function useMindMapShortcuts() {
         if (one && e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault()
           addSiblingAndEdit(one)
+          return
+        }
+        if (one && e.key === ' ') {
+          // Espacio: plegar/desplegar la rama del nodo seleccionado.
+          e.preventDefault()
+          toggleBranch(one)
           return
         }
         if (one && e.key === 'F2') {

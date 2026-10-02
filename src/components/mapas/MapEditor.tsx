@@ -26,6 +26,7 @@ import { MapTitleBar, type SaveState } from '@/components/mapas/proto/components
 import { StylePanel } from '@/components/mapas/proto/components/Toolbar/StylePanel'
 import { TextFormatPopup } from '@/components/mapas/proto/components/Toolbar/TextFormatPopup'
 import { ShortcutsPanel } from '@/components/mapas/proto/components/Toolbar/ShortcutsPanel'
+import { SearchBar } from '@/components/mapas/proto/components/Toolbar/SearchBar'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
@@ -149,6 +150,7 @@ export default function MapEditor(props: Props) {
     ui.setBgStyle(doc.settings?.bgStyle ?? 'dots-light')
     ui.setCategoryStyles(doc.settings?.categoryStyles ?? {})
     ui.setCategoriesPanelOpen(false)
+    ui.setSearchOpen(false)
     // La física solo deshace solapes (no recoloca el mapa), así que vale también en mapas grandes.
     ui.setPhysicsEnabled(true)
     ui.setSelectedNodeId(null)
@@ -267,8 +269,13 @@ function EditorInner({
 
   // ---- ordenar --------------------------------------------------------------
 
+  /**
+   * Ordena el mapa en árbol. Con `only` (ordenar por bloques: lo seleccionado), coloca solo esos
+   * nodos, con su esquina superior izquierda donde estaba la del bloque, y no toca nada más ni
+   * mueve la cámara.
+   */
   const layoutNow = useCallback(
-    (animate: boolean) => {
+    (animate: boolean, only?: Set<string>) => {
       const rfNodes = getNodes()
       const sizes = new Map<string, { w: number; h: number }>()
       for (const n of rfNodes) {
@@ -279,16 +286,23 @@ function EditorInner({
       const { nodes, edges } = useMindMapStore.getState()
       // Las ramas plegadas no ocupan sitio: se ordena lo visible y lo oculto se mueve lo mismo
       // que su antepasado visible más cercano (al desplegar aparece donde estaba respecto a él).
-      const visible = nodes.filter((n) => !n.hidden)
-      const visibleIds = new Set(visible.map((n) => n.id))
+      const scope = nodes.filter((n) => !n.hidden && (!only || only.has(n.id)))
+      const scopeIds = new Set(scope.map((n) => n.id))
       const pos = autoLayoutGraph(
-        visible.map((n) => ({ id: n.id, data: { label: n.data.label, parentId: n.data.parentId } })),
+        scope.map((n) => ({ id: n.id, data: { label: n.data.label, parentId: n.data.parentId } })),
         edges
-          .filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
+          .filter((e) => scopeIds.has(e.source) && scopeIds.has(e.target))
           .map((e) => ({ source: e.source, target: e.target })),
         (id) => sizes.get(id),
       )
-      if (visible.length < nodes.length) {
+      if (only && scope.length) {
+        // El bloque ordenado empieza donde empezaba: misma esquina superior izquierda.
+        const minOf = (xs: number[]) => Math.min(...xs)
+        const dx = minOf(scope.map((n) => n.position.x)) - minOf([...pos.values()].map((p) => p.x))
+        const dy = minOf(scope.map((n) => n.position.y)) - minOf([...pos.values()].map((p) => p.y))
+        for (const [id, p] of pos) pos.set(id, { x: p.x + dx, y: p.y + dy })
+      }
+      if (nodes.some((n) => n.hidden)) {
         const parents = parentMap(nodes, edges)
         const byId = new Map(nodes.map((n) => [n.id, n]))
         for (const n of nodes) {
@@ -315,7 +329,7 @@ function EditorInner({
         }),
       }))
       useMindMapStore.getState().syncCollapse()
-      requestAnimationFrame(() => void fitView({ padding: 0.25, maxZoom: 1.1, duration: animate ? 500 : 0 }))
+      if (!only) requestAnimationFrame(() => void fitView({ padding: 0.25, maxZoom: 1.1, duration: animate ? 500 : 0 }))
     },
     [fitView, getNodes],
   )
@@ -331,7 +345,9 @@ function EditorInner({
   const onAutoLayout = useCallback(() => {
     const { nodes, edges } = useMindMapStore.getState()
     useHistoryStore.getState().pushSnapshot(nodes, edges)
-    layoutNow(true)
+    // Con varios nodos seleccionados se ordena solo ese bloque; el resto no se toca.
+    const selected = nodes.filter((n) => n.selected && !n.hidden).map((n) => n.id)
+    layoutNow(true, selected.length > 1 ? new Set(selected) : undefined)
   }, [layoutNow])
 
   // ---- exportar -------------------------------------------------------------
@@ -385,6 +401,7 @@ function EditorInner({
         <MainToolbar onExportJson={onExportJson} onAutoLayout={onAutoLayout} />
         <CategoryStylesPanel />
         <StylePanel />
+        <SearchBar />
         <TextFormatPopup />
         <ShortcutsPanel />
         <CustomMiniMap />

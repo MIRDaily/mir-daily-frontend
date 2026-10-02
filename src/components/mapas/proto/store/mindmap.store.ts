@@ -27,7 +27,7 @@ function maybeSnapshotStyle() {
  * fuera (el lado contrario al abuelo; a la derecha si es la raíz), en la columna de sus hermanos
  * y debajo del último.
  */
-function childSlot(parent: MindMapNode, nodes: MindMapNode[]) {
+export function childSlot(parent: MindMapNode, nodes: MindMapNode[]) {
   const pw = parent.measured?.width ?? 160
   const grand = nodes.find((n) => n.id === parent.data.parentId)
   const side = grand && grand.position.x > parent.position.x ? -1 : 1

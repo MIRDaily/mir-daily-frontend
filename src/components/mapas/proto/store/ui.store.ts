@@ -10,6 +10,8 @@ export const useUIStore = create<UIState>((set) => ({
   physicsEnabled: true,
   categoryStyles: {},
   categoriesPanelOpen: false,
+  searchOpen: false,
+  setSearchOpen: (searchOpen) => set({ searchOpen }),
   setCategoryStyles: (categoryStyles) => set({ categoryStyles }),
   setCategoriesPanelOpen: (open) => set({ categoriesPanelOpen: open }),
   setPhysicsEnabled: (v) => set({ physicsEnabled: v }),

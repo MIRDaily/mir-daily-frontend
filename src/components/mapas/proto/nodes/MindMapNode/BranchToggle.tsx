@@ -1,5 +1,4 @@
-import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
-import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
+import { toggleBranch } from '@/components/mapas/proto/utils/branches'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 
 interface BranchToggleProps {
@@ -20,9 +19,8 @@ export function BranchToggle({ nodeId, collapsed, hiddenCount, side, accent }: B
 
   const toggle = (e: React.MouseEvent) => {
     e.stopPropagation()
-    const store = useMindMapStore.getState()
-    useHistoryStore.getState().pushSnapshot(store.nodes, store.edges)
-    store.toggleCollapse(nodeId)
+    // Animado y con su paso de deshacer (utils/branches).
+    toggleBranch(nodeId)
   }
 
   return (
