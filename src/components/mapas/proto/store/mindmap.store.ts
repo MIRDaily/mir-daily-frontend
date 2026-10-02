@@ -6,6 +6,7 @@ import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import { DEFAULT_NODE_STYLE } from '@/components/mapas/proto/types/node.types'
 import { nanoid } from '@/components/mapas/proto/utils/nanoid'
 import { useHistoryStore } from './history.store'
+import { syncCollapse } from '@/components/mapas/proto/utils/tree'
 
 // Debounce: only push a snapshot once per 600ms window to avoid flooding history on slider drags
 let lastStyleSnapshot = 0
@@ -64,6 +65,7 @@ export const useMindMapStore = create<MindMapState>()(
         s.focusedNodeId = null
         s.hoveredNodeId = null
         s.loadTick += 1
+        syncCollapse(s.nodes, s.edges)
       }),
 
     onNodesChange: (changes) =>
@@ -78,6 +80,10 @@ export const useMindMapStore = create<MindMapState>()(
 
     addNode: (parentId, direction) => {
       const id = nanoid()
+      // Añadir un hijo a una rama plegada la despliega: si no, el nodo nuevo nacería oculto.
+      if (parentId && get().nodes.find((n) => n.id === parentId)?.data.collapsed) {
+        get().toggleCollapse(parentId)
+      }
       const nodes = get().nodes
       const parent = nodes.find((n) => n.id === parentId)
       const distance = 230
@@ -128,6 +134,7 @@ export const useMindMapStore = create<MindMapState>()(
             data: { isAnimating: true },
           })
         }
+        syncCollapse(s.nodes, s.edges)
       })
 
       // Clear isNew after animation completes
@@ -148,6 +155,21 @@ export const useMindMapStore = create<MindMapState>()(
         if (s.editingNodeId === id) s.editingNodeId = null
         if (s.focusedNodeId === id) s.focusedNodeId = null
         if (s.hoveredNodeId === id) s.hoveredNodeId = null
+        // Si era una rama plegada, sus descendientes se quedan sin el padre que los ocultaba.
+        syncCollapse(s.nodes, s.edges)
+      }),
+
+    toggleCollapse: (id) =>
+      set((s) => {
+        const node = s.nodes.find((n) => n.id === id)
+        if (!node) return
+        node.data.collapsed = !node.data.collapsed
+        syncCollapse(s.nodes, s.edges)
+      }),
+
+    syncCollapse: () =>
+      set((s) => {
+        syncCollapse(s.nodes, s.edges)
       }),
 
     updateNodeData: (id, data) =>
@@ -161,6 +183,14 @@ export const useMindMapStore = create<MindMapState>()(
       set((s) => {
         const node = s.nodes.find((n) => n.id === id)
         if (node) Object.assign(node.data.style, style)
+      })
+    },
+
+    updateNodesStyle: (ids, style) => {
+      maybeSnapshotStyle()
+      const targets = new Set(ids)
+      set((s) => {
+        for (const node of s.nodes) if (targets.has(node.id)) Object.assign(node.data.style, style)
       })
     },
 
@@ -183,15 +213,18 @@ export const useMindMapStore = create<MindMapState>()(
         const idMap = new Map<string, string>()
         const OFFSET = 44
 
+        nodes.forEach((n) => idMap.set(n.id, nanoid()))
         nodes.forEach((n) => {
-          const newId = nanoid()
-          idMap.set(n.id, newId)
+          // El padre de la copia es la copia del padre; si el padre no se copió, la copia queda
+          // suelta (antes seguía colgando del original y movía/plegaba con él).
+          const { parentId, ...data } = n.data
+          const newParent = parentId ? idMap.get(parentId) : undefined
           s.nodes.push({
             ...n,
-            id: newId,
+            id: idMap.get(n.id)!,
             selected: true,
             position: { x: n.position.x + OFFSET, y: n.position.y + OFFSET },
-            data: { ...n.data, isNew: false, isRemoving: false },
+            data: { ...data, ...(newParent ? { parentId: newParent } : {}), isNew: false, isRemoving: false },
           })
         })
 
@@ -209,6 +242,7 @@ export const useMindMapStore = create<MindMapState>()(
             })
           }
         })
+        syncCollapse(s.nodes, s.edges)
       }),
 
     setEditing: (id) => set((s) => { s.editingNodeId = id }),
@@ -236,11 +270,13 @@ export const useMindMapStore = create<MindMapState>()(
           type: 'animated',
           data: { isAnimating: true },
         })
+        syncCollapse(s.nodes, s.edges)
       }),
 
     deleteEdge: (id) =>
       set((s) => {
         s.edges = s.edges.filter((e) => e.id !== id)
+        syncCollapse(s.nodes, s.edges)
       }),
   }))
 )

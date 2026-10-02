@@ -25,7 +25,8 @@ export function MainToolbar({ onExportJson, onAutoLayout }: MainToolbarProps) {
     if (exporting) return
     setExporting(true)
     try {
-      await exportToPdf(useMindMapStore.getState().nodes, setNodes)
+      // El PDF encuadra lo que se ve: las ramas plegadas salen plegadas.
+      await exportToPdf(useMindMapStore.getState().nodes.filter((n) => !n.hidden), setNodes)
     } finally {
       setExporting(false)
     }

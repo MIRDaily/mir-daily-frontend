@@ -12,6 +12,7 @@ import { NodeBody } from './NodeBody'
 import { NodeLabel } from './NodeLabel'
 import { NodeEditor } from './NodeEditor'
 import { NodeHandles } from './NodeHandles'
+import { BranchToggle } from './BranchToggle'
 
 function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   // Solo se lee lo que este nodo pinta; las acciones se piden a la store en el momento de
@@ -111,6 +112,15 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
         lineStyle={{ display: 'none' }}
       />
       <NodeHandles onQuickAdd={spawnChild} />
+      {!!data.childCount && !isEditing && (
+        <BranchToggle
+          nodeId={id}
+          collapsed={!!data.collapsed}
+          hiddenCount={data.hiddenCount ?? 0}
+          side={data.childSide ?? 'right'}
+          accent={data.style.glowColor}
+        />
+      )}
 
       <motion.div
         initial={data.isNew ? 'initial' : 'idle'}
@@ -202,6 +212,10 @@ export const MindMapNodeComponent = memo(MindMapNodeInner, (prev, next) => {
     prev.data.label === next.data.label &&
     prev.data.isNew === next.data.isNew &&
     prev.data.isRemoving === next.data.isRemoving &&
+    prev.data.collapsed === next.data.collapsed &&
+    prev.data.childCount === next.data.childCount &&
+    prev.data.hiddenCount === next.data.hiddenCount &&
+    prev.data.childSide === next.data.childSide &&
     JSON.stringify(prev.data.style) === JSON.stringify(next.data.style) &&
     (prev as { id: string }).id === (next as { id: string }).id
   )

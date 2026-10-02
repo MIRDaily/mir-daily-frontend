@@ -12,7 +12,8 @@ import { nodeTypes } from '@/components/mapas/proto/nodes/nodeTypes'
 import { edgeTypes } from '@/components/mapas/proto/edges/edgeTypes'
 import { useMindMapShortcuts } from '@/components/mapas/proto/hooks/useMindMapShortcuts'
 import { useFocusController } from '@/components/mapas/proto/hooks/useFocusMode'
-import { usePhysics, settleNodes } from '@/components/mapas/proto/hooks/usePhysics'
+import { usePhysics } from '@/components/mapas/proto/hooks/usePhysics'
+import { useBranchDrag } from '@/components/mapas/proto/hooks/useBranchDrag'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { EdgeStylePanel } from './EdgeStylePanel'
@@ -29,7 +30,6 @@ export function MindMapCanvas() {
   )
 
   const t               = useTheme()
-  const setDragging     = useUIStore((s) => s.setDragging)
   const setStylePanelOpen = useUIStore((s) => s.setStylePanelOpen)
   // Used to set data-selected-count for CSS-based multi-select indicator
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -37,6 +37,7 @@ export function MindMapCanvas() {
   useMindMapShortcuts()
   useFocusController(wrapperRef)
   usePhysics()
+  const { onNodeDragStart, onNodeDrag, onNodeDragStop } = useBranchDrag()
 
   return (
     <div ref={wrapperRef} style={{ width: '100%', height: '100%' }}>
@@ -48,12 +49,9 @@ export function MindMapCanvas() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={connectNodes}
-        onNodeDragStart={() => setDragging(true)}
-        onNodeDragStop={(_, __, dragged) => {
-          setDragging(false)
-          // Con la física activa, lo que quede pisado por el nodo soltado se aparta.
-          if (useUIStore.getState().physicsEnabled) settleNodes({ pinned: dragged.map((n) => n.id) })
-        }}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
+        onNodeDragStop={onNodeDragStop}
         onPaneClick={() => setStylePanelOpen(false)}
         onSelectionChange={({ nodes: sel }) => {
           if (wrapperRef.current)

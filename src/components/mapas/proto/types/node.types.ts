@@ -23,6 +23,12 @@ export interface NodeData extends Record<string, unknown> {
   isNew: boolean
   isRemoving: boolean
   parentId?: string
+  /** Rama plegada: sus descendientes no se ven. Se guarda en el mapa. */
+  collapsed?: boolean
+  // Derivados (los calcula syncCollapse, no se guardan): lo que pinta el botón de plegar.
+  childCount?: number
+  hiddenCount?: number
+  childSide?: 'left' | 'right'
   /** Categoría MIR (definición, clínica…): semántica del nodo, el estilo es aparte. */
   category?: string
 }

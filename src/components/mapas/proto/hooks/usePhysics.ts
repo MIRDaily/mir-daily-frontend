@@ -62,7 +62,8 @@ let anim: number | null = null
  * cede poco, para que el mapa se aparte sin desordenarse.
  */
 export function settleNodes({ movers = [], pinned = [] }: { movers?: string[]; pinned?: string[] }) {
-  const nodes = useMindMapStore.getState().nodes
+  // Lo oculto en ramas plegadas no ocupa sitio.
+  const nodes = useMindMapStore.getState().nodes.filter((n) => !n.hidden)
   if (nodes.length < 2) return
   const moverSet = new Set(movers), pinnedSet = new Set(pinned)
   const boxes: Box[] = nodes.map((n) => {

@@ -59,7 +59,18 @@ const popupVariants: Variants = {
 export function StylePanel() {
   const { stylePanelOpen, selectedNodeId, setStylePanelOpen } = useUIStore()
   const node = useMindMapStore(useShallow((s) => s.nodes.find((n) => n.id === selectedNodeId)))
-  const updateNodeStyle = useMindMapStore((s) => s.updateNodeStyle)
+  // Si el nodo desde el que se abre el panel forma parte de una selección múltiple, el panel
+  // edita toda la selección; si no, solo ese nodo.
+  const selectedIds = useMindMapStore(useShallow((s) => s.nodes.filter((n) => n.selected).map((n) => n.id)))
+  const targetIds =
+    selectedNodeId && selectedIds.length > 1 && selectedIds.includes(selectedNodeId) ? selectedIds : node ? [node.id] : []
+  const targetStyles = useMindMapStore(
+    useShallow((s) => s.nodes.filter((n) => targetIds.includes(n.id)).map((n) => n.data.style)),
+  )
+  const targetCategories = useMindMapStore(
+    useShallow((s) => s.nodes.filter((n) => targetIds.includes(n.id)).map((n) => n.data.category)),
+  )
+  const updateNodesStyle = useMindMapStore((s) => s.updateNodesStyle)
   const categoryStyles = useUIStore((s) => s.categoryStyles)
   const t = useTheme()
 
@@ -67,13 +78,21 @@ export function StylePanel() {
   const allNodes = useNodes()
 
   const update = (style: Partial<NodeStyle>) => {
-    if (!selectedNodeId) return
-    updateNodeStyle(selectedNodeId, style)
+    if (targetIds.length) updateNodesStyle(targetIds, style)
   }
 
-  // Elegir categoría: la guarda en el nodo, recolorea su estilo y la línea que llega a él.
+  /** El valor si todos los nodos editados lo comparten; si difieren, ninguno sale marcado. */
+  const shared = <K extends keyof NodeStyle>(key: K): NodeStyle[K] | undefined => {
+    const first = targetStyles[0]?.[key]
+    return targetStyles.every((st) => st[key] === first) ? first : undefined
+  }
+  const sharedCategory = targetCategories.every((c) => c === targetCategories[0]) ? targetCategories[0] : undefined
+  const many = targetIds.length > 1
+  const borderWidth = shared('borderWidth')
+
+  // Elegir categoría: la guarda en los nodos, recolorea su estilo y la línea que llega a ellos.
   const applyCategory = (category: MapCategoryId) => {
-    if (node) applyCategoryToNodes([node.id], category)
+    if (targetIds.length) applyCategoryToNodes(targetIds, category)
   }
 
   // Compute popup position near the selected node
@@ -130,7 +149,7 @@ export function StylePanel() {
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ color: t.textPrimary, fontWeight: 700, fontSize: 13, letterSpacing: '-0.01em' }}>
-              Estilo del nodo
+              {many ? `Estilo de ${targetIds.length} nodos` : 'Estilo del nodo'}
             </span>
             <button
               onClick={() => setStylePanelOpen(false)}
@@ -155,7 +174,7 @@ export function StylePanel() {
           <Section label="Categoría" textMuted={t.textMuted}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {MAP_CATEGORY_LIST.map((c) => {
-                const active = node.data.category === c.id
+                const active = sharedCategory === c.id
                 const color = categoryAccent(c.id, categoryStyles)
                 return (
                   <button
@@ -190,7 +209,7 @@ export function StylePanel() {
           <Section label="Forma" textMuted={t.textMuted}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
               {SHAPES.map((s) => {
-                const isActive = node.data.style.shape === s.value
+                const isActive = shared('shape') === s.value
                 return (
                   <button
                     key={s.value}
@@ -218,7 +237,7 @@ export function StylePanel() {
           <Section label="Color de fondo" textMuted={t.textMuted}>
             <ColorGrid
               colors={BG_COLORS}
-              selected={node.data.style.color}
+              selected={shared('color')}
               onSelect={(c) => update({ color: c })}
               accentColor={t.accent}
             />
@@ -228,20 +247,20 @@ export function StylePanel() {
           <Section label="Color de borde" textMuted={t.textMuted}>
             <ColorGrid
               colors={BG_COLORS}
-              selected={node.data.style.borderColor}
+              selected={shared('borderColor')}
               onSelect={(c) => update({ borderColor: c, glowColor: c })}
               accentColor={t.accent}
             />
           </Section>
 
           {/* Border width */}
-          <Section label={`Grosor del borde: ${node.data.style.borderWidth}px`} textMuted={t.textMuted}>
+          <Section label={`Grosor del borde: ${borderWidth === undefined ? 'varios' : `${borderWidth}px`}`} textMuted={t.textMuted}>
             <input
               type="range"
               min={0}
               max={6}
               step={1}
-              value={node.data.style.borderWidth}
+              value={borderWidth ?? node.data.style.borderWidth}
               onChange={(e) => update({ borderWidth: Number(e.target.value) })}
               style={{ width: '100%', accentColor: t.accent }}
             />
@@ -251,7 +270,7 @@ export function StylePanel() {
           <Section label="Color de texto" textMuted={t.textMuted}>
             <ColorGrid
               colors={TEXT_COLORS}
-              selected={node.data.style.textColor}
+              selected={shared('textColor')}
               onSelect={(c) => update({ textColor: c })}
               accentColor={t.accent}
             />
@@ -298,7 +317,7 @@ function ColorGrid({
   accentColor,
 }: {
   colors: string[]
-  selected: string
+  selected: string | undefined
   onSelect: (c: string) => void
   accentColor: string
 }) {

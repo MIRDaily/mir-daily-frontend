@@ -29,6 +29,7 @@ import { ShortcutsPanel } from '@/components/mapas/proto/components/Toolbar/Shor
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
+import { parentMap } from '@/components/mapas/proto/utils/tree'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
 
@@ -57,6 +58,7 @@ function toEngine(doc: GraphDoc): { nodes: MindMapNode[]; edges: MindMapEdge[] }
       style: n.data.style,
       ...(n.data.parentId ? { parentId: n.data.parentId } : {}),
       ...(n.data.category ? { category: n.data.category } : {}),
+      ...(n.data.collapsed ? { collapsed: true } : {}),
       isEditing: false,
       isFocused: false,
       isNew: false,
@@ -90,6 +92,7 @@ function fromEngine(nodes: MindMapNode[], edges: MindMapEdge[]): GraphDoc {
       style: n.data.style,
       ...(n.data.parentId ? { parentId: n.data.parentId } : {}),
       ...(n.data.category ? { category: n.data.category as GraphNode['data']['category'] } : {}),
+      ...(n.data.collapsed ? { collapsed: true } : {}),
     },
   }))
   const gEdges: GraphEdge[] = edges.map((e) => {
@@ -191,6 +194,10 @@ function EditorInner({
   const flush = useCallback(async () => {
     if (inFlight.current) return
     const { nodes, edges } = useMindMapStore.getState()
+    // Un mapa sin nodos no se guarda nunca: el editor siempre tiene al menos uno, así que una
+    // store vacía es un estado roto (p. ej. la recarga en caliente del servidor de desarrollo
+    // reinicia la store), y grabarla borraba el mapa.
+    if (nodes.length === 0) return
     const doc = fromEngine(nodes, edges)
     const snapshot = JSON.stringify({ ...doc, title: titleRef.current })
     if (snapshot === lastSaved.current) {
@@ -252,7 +259,7 @@ function EditorInner({
       // Al salir del editor, lo pendiente se manda sin esperar al debounce.
       const { nodes, edges } = useMindMapStore.getState()
       const doc = fromEngine(nodes, edges)
-      if (JSON.stringify({ ...doc, title: titleRef.current }) !== lastSaved.current) {
+      if (nodes.length > 0 && JSON.stringify({ ...doc, title: titleRef.current }) !== lastSaved.current) {
         void saveMap(mapId, { title: titleRef.current, doc }).catch(() => {})
       }
     }
@@ -270,17 +277,44 @@ function EditorInner({
         if (w && h) sizes.set(n.id, { w, h })
       }
       const { nodes, edges } = useMindMapStore.getState()
+      // Las ramas plegadas no ocupan sitio: se ordena lo visible y lo oculto se mueve lo mismo
+      // que su antepasado visible más cercano (al desplegar aparece donde estaba respecto a él).
+      const visible = nodes.filter((n) => !n.hidden)
+      const visibleIds = new Set(visible.map((n) => n.id))
       const pos = autoLayoutGraph(
-        nodes.map((n) => ({ id: n.id, data: { label: n.data.label, parentId: n.data.parentId } })),
-        edges.map((e) => ({ source: e.source, target: e.target })),
+        visible.map((n) => ({ id: n.id, data: { label: n.data.label, parentId: n.data.parentId } })),
+        edges
+          .filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
+          .map((e) => ({ source: e.source, target: e.target })),
         (id) => sizes.get(id),
       )
+      if (visible.length < nodes.length) {
+        const parents = parentMap(nodes, edges)
+        const byId = new Map(nodes.map((n) => [n.id, n]))
+        for (const n of nodes) {
+          if (!n.hidden) continue
+          let a = parents.get(n.id)
+          const seen = new Set<string>()
+          while (a && byId.get(a)?.hidden && !seen.has(a)) {
+            seen.add(a)
+            a = parents.get(a)
+          }
+          const anchor = a ? byId.get(a) : undefined
+          const moved = a ? pos.get(a) : undefined
+          if (!anchor || !moved) continue
+          pos.set(n.id, {
+            x: n.position.x + moved.x - anchor.position.x,
+            y: n.position.y + moved.y - anchor.position.y,
+          })
+        }
+      }
       useMindMapStore.setState((s) => ({
         nodes: s.nodes.map((n) => {
           const p = pos.get(n.id)
           return p ? { ...n, position: { x: p.x, y: p.y } } : n
         }),
       }))
+      useMindMapStore.getState().syncCollapse()
       requestAnimationFrame(() => void fitView({ padding: 0.25, maxZoom: 1.1, duration: animate ? 500 : 0 }))
     },
     [fitView, getNodes],

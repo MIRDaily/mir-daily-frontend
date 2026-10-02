@@ -11,7 +11,8 @@ const MIN_HALF_H = 650 // minimum half-height (~2 screens of context)
 
 export function CustomMiniMap() {
   const { x: vpX, y: vpY, zoom } = useViewport()
-  const nodes = useNodes() as MindMapNode[]
+  // Lo plegado no se dibuja en el minimapa (tampoco ensancha sus límites).
+  const nodes = (useNodes() as MindMapNode[]).filter((n) => !n.hidden)
   const { setViewport } = useReactFlow()
   // Tamaño del lienzo del editor (no de la ventana: aquí hay cabecera de la web encima).
   const screenW = useStore((s) => s.width)

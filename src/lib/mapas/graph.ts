@@ -40,6 +40,8 @@ export type GraphNode = {
     style: GraphNodeStyle
     /** Padre lógico (jerarquía), independiente de dónde esté dibujado. */
     parentId?: string
+    /** Rama plegada en el editor. */
+    collapsed?: boolean
     category?: MapCategoryId
   }
 }
@@ -327,6 +329,7 @@ export function sanitizeGraph(raw: unknown): GraphDoc {
         style: sanitizeStyle(data.style),
         ...(typeof data.parentId === 'string' ? { parentId: data.parentId.slice(0, 80) } : {}),
         ...(category ? { category } : {}),
+        ...(data.collapsed === true ? { collapsed: true } : {}),
       },
     })
   }

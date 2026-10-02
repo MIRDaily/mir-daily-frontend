@@ -19,6 +19,8 @@ export interface MindMapState {
   deleteNode: (id: string) => void
   updateNodeData: (id: string, data: Partial<NodeData>) => void
   updateNodeStyle: (id: string, style: Partial<NodeStyle>) => void
+  /** Lo mismo para varios nodos a la vez (selección múltiple): un solo paso de deshacer. */
+  updateNodesStyle: (ids: string[], style: Partial<NodeStyle>) => void
   updateEdgeAnimating: (id: string, val: boolean) => void
   updateEdgeData: (id: string, data: Partial<EdgeData>) => void
   pasteNodes: (nodes: MindMapNode[], edges: MindMapEdge[]) => void
@@ -27,6 +29,10 @@ export interface MindMapState {
   setHovered: (id: string | null) => void
   connectNodes: (connection: Connection) => void
   deleteEdge: (id: string) => void
+  /** Pliega o despliega la rama de un nodo. */
+  toggleCollapse: (id: string) => void
+  /** Recalcula lo oculto por ramas plegadas (tras cambios en la jerarquía). */
+  syncCollapse: () => void
 }
 
 export type BgStyle = 'flat' | 'dots-light' | 'dots'

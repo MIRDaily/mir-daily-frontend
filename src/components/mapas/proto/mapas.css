@@ -268,3 +268,23 @@
 .mapa-root .react-flow__resize-control.handle {
   cursor: nwse-resize !important;
 }
+
+/* Botón de plegar rama (BranchToggle). Desplegado solo aparece al pasar por el nodo o con él
+   seleccionado; se oculta con 300 ms de retraso para que dé tiempo a llegar a él cruzando el
+   hueco que lo separa del nodo. Plegado ("+N") se ve siempre. */
+.mapa-root .branch-toggle {
+  transition: opacity 180ms ease, visibility 0s linear 300ms, transform 150ms ease;
+}
+.mapa-root .branch-toggle[data-collapsed="false"] {
+  opacity: 0;
+  visibility: hidden;
+}
+.mapa-root .react-flow__node:hover .branch-toggle,
+.mapa-root .react-flow__node.selected .branch-toggle {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 180ms ease, visibility 0s, transform 150ms ease;
+}
+.mapa-root .branch-toggle:hover {
+  transform: translateY(-50%) scale(1.15) !important;
+}

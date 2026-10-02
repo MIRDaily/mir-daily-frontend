@@ -167,6 +167,7 @@ type SlimNode = {
   id: string
   position: { x: number; y: number }
   measured?: { width?: number; height?: number }
+  hidden?: boolean
 }
 
 function computePath(
@@ -183,7 +184,7 @@ function computePath(
   const minY = Math.min(s.y, t.y) - reach, maxY = Math.max(s.y, t.y) + reach
   const rects: Rect[] = []
   for (const node of nodes) {
-    if (node.id === sourceId || node.id === targetId) continue
+    if (node.id === sourceId || node.id === targetId || node.hidden) continue
     const nw = node.measured?.width  ?? 160
     const nh = node.measured?.height ?? 50
     const x = node.position.x - NODE_PAD, y = node.position.y - NODE_PAD

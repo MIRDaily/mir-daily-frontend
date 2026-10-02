@@ -338,3 +338,83 @@ test('atajos 1–7: cada dígito es una categoría, en el orden del panel', asyn
   assert.equal(categoryForKey('12'), null)
   for (const c of MAP_CATEGORY_LIST) assert.equal(categoryForKey(String(categoryNumber(c.id))), c.id)
 })
+
+test('sanitizeGraph conserva solo collapsed === true', () => {
+  const g = sanitizeGraph({
+    version: 2,
+    nodes: [
+      { id: 'a', position: { x: 0, y: 0 }, data: { label: 'A', collapsed: true } },
+      { id: 'b', position: { x: 0, y: 0 }, data: { label: 'B', collapsed: 'sí' } },
+    ],
+    edges: [],
+  })
+  assert.equal(g.nodes[0].data.collapsed, true)
+  assert.equal('collapsed' in g.nodes[1].data, false)
+})
+
+// ---------------------------------------------------------------------------
+// Ramas del editor: plegar y descendientes
+// ---------------------------------------------------------------------------
+
+import { childrenMap, descendantsOf, parentMap, syncCollapse } from '@/components/mapas/proto/utils/tree'
+import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
+import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
+
+function engineNode(id: string, x: number, parentId?: string, collapsed?: boolean): MindMapNode {
+  return {
+    id,
+    type: 'mindmap',
+    position: { x, y: 0 },
+    data: {
+      label: id,
+      style: {} as MindMapNode['data']['style'],
+      isEditing: false,
+      isFocused: false,
+      isNew: false,
+      isRemoving: false,
+      ...(parentId ? { parentId } : {}),
+      ...(collapsed ? { collapsed } : {}),
+    },
+  }
+}
+const engineEdge = (s: string, t: string): MindMapEdge => ({ id: `${s}-${t}`, source: s, target: t, type: 'animated' })
+
+test('parentMap usa parentId y, si falta, la primera arista entrante', () => {
+  const nodes = [engineNode('r', 0), engineNode('a', 200, 'r'), engineNode('b', 200)]
+  const edges = [engineEdge('r', 'a'), engineEdge('a', 'b')]
+  const p = parentMap(nodes, edges)
+  assert.equal(p.get('a'), 'r')
+  assert.equal(p.get('b'), 'a')
+  assert.equal(p.has('r'), false)
+})
+
+test('descendantsOf no se cuelga con ciclos', () => {
+  const children = new Map([['a', ['b']], ['b', ['a', 'c']]])
+  assert.deepEqual([...descendantsOf(['a'], children)].sort(), ['b', 'c'])
+  assert.deepEqual([...descendantsOf(['x'], childrenMap(new Map()))], [])
+})
+
+test('syncCollapse oculta la rama plegada, sus líneas y cuenta lo oculto', () => {
+  const nodes = [
+    engineNode('r', 0),
+    engineNode('a', 300, 'r', true),
+    engineNode('a1', 600, 'a'),
+    engineNode('a2', 600, 'a'),
+    engineNode('a11', 900, 'a1'),
+    engineNode('izq', -400, 'r'),
+  ]
+  const edges = [engineEdge('r', 'a'), engineEdge('a', 'a1'), engineEdge('a', 'a2'), engineEdge('a1', 'a11'), engineEdge('r', 'izq')]
+  syncCollapse(nodes, edges)
+  const by = new Map(nodes.map((n) => [n.id, n]))
+  assert.deepEqual(nodes.filter((n) => n.hidden).map((n) => n.id).sort(), ['a1', 'a11', 'a2'])
+  assert.equal(!!by.get('a')!.hidden, false)
+  assert.equal(by.get('a')!.data.hiddenCount, 3)
+  assert.equal(by.get('a')!.data.childCount, 2)
+  assert.equal(by.get('a')!.data.childSide, 'right')
+  assert.equal(edges.filter((e) => e.hidden).length, 3)
+  // Desplegar lo vuelve a mostrar todo.
+  by.get('a')!.data.collapsed = false
+  syncCollapse(nodes, edges)
+  assert.equal(nodes.some((n) => n.hidden), false)
+  assert.equal(by.get('a')!.data.hiddenCount, 0)
+})
