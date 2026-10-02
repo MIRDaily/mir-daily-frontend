@@ -21,7 +21,7 @@ export default function DeleteAccountDialog({ onCancel }: { onCancel: () => void
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const confirmado = texto.trim().toUpperCase() === PALABRA
+  const confirmado = texto.trim() === PALABRA
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -98,7 +98,7 @@ export default function DeleteAccountDialog({ onCancel }: { onCancel: () => void
               id="confirmar-borrado"
               ref={inputRef}
               value={texto}
-              onChange={(event) => setTexto(event.target.value)}
+              onChange={(event) => setTexto(event.target.value.toUpperCase())}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') eliminar()
               }}
