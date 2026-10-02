@@ -173,7 +173,7 @@ export function MainToolbar({ onExportJson, onAutoLayout }: MainToolbarProps) {
           <Search size={15} />
         </Btn>
         {/* Ver el mapa hasta un nivel: pliega lo que queda por debajo (Alt+1/2/3, Alt+0 = todo). */}
-        <span style={{ fontSize: 11, color: t.textMuted, padding: '0 2px 0 6px', whiteSpace: 'nowrap' }}>Niveles</span>
+        <span data-tuto="niveles" style={{ fontSize: 11, color: t.textMuted, padding: '0 2px 0 6px', whiteSpace: 'nowrap' }}>Niveles</span>
         {[1, 2, 3].map((lvl) => (
           <Btn
             key={lvl}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { HelpCircle, X } from 'lucide-react'
+import Link from 'next/link'
+import { GraduationCap, HelpCircle, X } from 'lucide-react'
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 
@@ -123,6 +124,9 @@ export function ShortcutsPanel() {
               padding: '14px 16px',
               boxShadow: `0 8px 32px ${t.shadow}`,
               minWidth: 244,
+              // Con tantos atajos ya no cabe entero: que no se meta bajo la barra ni la caja del título.
+              maxHeight: 'calc(100dvh - 300px)',
+              overflowY: 'auto',
               transition: 'background 400ms ease, border-color 400ms ease',
             }}
           >
@@ -168,6 +172,28 @@ export function ShortcutsPanel() {
                 <X size={13} />
               </button>
             </div>
+
+            {/* Acceso permanente al tutorial interactivo (mapa de práctica + mascota). */}
+            <Link
+              href="/mapas/tutorial"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                marginBottom: 12,
+                padding: '8px 10px',
+                borderRadius: 10,
+                background: t.isDark ? '#3a2f2c' : '#FCEFEC',
+                color: '#E8A598',
+                fontSize: 12,
+                fontWeight: 700,
+                textDecoration: 'none',
+              }}
+            >
+              <GraduationCap size={15} />
+              <span style={{ flex: 1 }}>Tutorial interactivo</span>
+              <span aria-hidden>→</span>
+            </Link>
 
             {/* Shortcut rows */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>

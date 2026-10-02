@@ -4,7 +4,7 @@ import '@xyflow/react/dist/style.css'
 import '@/components/mapas/proto/mapas.css'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ReactFlowProvider, useNodesInitialized, useReactFlow } from '@xyflow/react'
+import { ReactFlowProvider, useNodesInitialized, useReactFlow, type FitViewOptions } from '@xyflow/react'
 import { saveMap } from '@/lib/mapas/api'
 import {
   autoLayoutGraph,
@@ -41,6 +41,15 @@ type Props = {
   initialTitle: string
   /** Documento guardado tal cual: grafo (v2) o árbol (v1). */
   rawDoc: unknown
+  /**
+   * Mapa de práctica (tutorial): no se guarda nunca (ni autoguardado, ni al salir, ni aviso de
+   * cambios sin guardar). La barra del título lo dice.
+   */
+  sandbox?: boolean
+  /** Capa extra dentro del editor (y del ReactFlowProvider): el entrenador del tutorial. */
+  overlay?: React.ReactNode
+  /** Márgenes al encuadrar el mapa (el tutorial deja sitio a su panel, a la izquierda). */
+  fitPadding?: FitViewOptions['padding']
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +184,9 @@ function EditorInner({
   initialTitle,
   fromTree,
   initialSaved,
+  sandbox = false,
+  overlay,
+  fitPadding,
 }: Props & { fromTree: boolean; initialSaved: string }) {
   const theme = useUIStore((s) => s.theme)
   const bgStyle = useUIStore((s) => s.bgStyle)
@@ -200,6 +212,7 @@ function EditorInner({
     // store vacía es un estado roto (p. ej. la recarga en caliente del servidor de desarrollo
     // reinicia la store), y grabarla borraba el mapa.
     if (nodes.length === 0) return
+    if (sandbox) return // el mapa de práctica no se guarda
     const doc = fromEngine(nodes, edges)
     const snapshot = JSON.stringify({ ...doc, title: titleRef.current })
     if (snapshot === lastSaved.current) {
@@ -217,7 +230,7 @@ function EditorInner({
     } finally {
       inFlight.current = false
     }
-  }, [mapId])
+  }, [mapId, sandbox])
 
   const schedule = useCallback(() => {
     setSave((s) => (s === 'saving' || s === 'error' ? s : 'dirty'))
@@ -253,7 +266,7 @@ function EditorInner({
     const beforeUnload = (e: BeforeUnloadEvent) => {
       const { nodes, edges } = useMindMapStore.getState()
       const snap = JSON.stringify({ ...fromEngine(nodes, edges), title: titleRef.current })
-      if (snap !== lastSaved.current) e.preventDefault()
+      if (!sandbox && snap !== lastSaved.current) e.preventDefault()
     }
     window.addEventListener('beforeunload', beforeUnload)
     return () => {
@@ -261,11 +274,11 @@ function EditorInner({
       // Al salir del editor, lo pendiente se manda sin esperar al debounce.
       const { nodes, edges } = useMindMapStore.getState()
       const doc = fromEngine(nodes, edges)
-      if (nodes.length > 0 && JSON.stringify({ ...doc, title: titleRef.current }) !== lastSaved.current) {
+      if (!sandbox && nodes.length > 0 && JSON.stringify({ ...doc, title: titleRef.current }) !== lastSaved.current) {
         void saveMap(mapId, { title: titleRef.current, doc }).catch(() => {})
       }
     }
-  }, [mapId])
+  }, [mapId, sandbox])
 
   // ---- ordenar --------------------------------------------------------------
 
@@ -329,9 +342,13 @@ function EditorInner({
         }),
       }))
       useMindMapStore.getState().syncCollapse()
-      if (!only) requestAnimationFrame(() => void fitView({ padding: 0.25, maxZoom: 1.1, duration: animate ? 500 : 0 }))
+      if (!only) {
+        requestAnimationFrame(
+          () => void fitView({ padding: fitPadding ?? 0.25, maxZoom: 1.1, duration: animate ? 500 : 0 }),
+        )
+      }
     },
-    [fitView, getNodes],
+    [fitView, getNodes, fitPadding],
   )
 
   // Un mapa que viene de un árbol (importado o generado) se dibuja con el tamaño
@@ -396,7 +413,13 @@ function EditorInner({
       <InteractiveBackground isDark={isDark} bgStyle={bgStyle} />
       <div style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
         <MindMapCanvas />
-        <MapTitleBar title={title} onTitleChange={onTitleChange} save={save} onRetry={() => void flush()} />
+        <MapTitleBar
+          title={title}
+          onTitleChange={onTitleChange}
+          save={save}
+          onRetry={() => void flush()}
+          statusText={sandbox ? 'Práctica · no se guarda' : undefined}
+        />
         <BrandCorner />
         <MainToolbar onExportJson={onExportJson} onAutoLayout={onAutoLayout} />
         <CategoryStylesPanel />
@@ -405,6 +428,7 @@ function EditorInner({
         <TextFormatPopup />
         <ShortcutsPanel />
         <CustomMiniMap />
+        {overlay}
       </div>
     </div>
   )

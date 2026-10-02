@@ -9,10 +9,12 @@ interface MapTitleBarProps {
   onTitleChange: (title: string) => void
   save: SaveState
   onRetry: () => void
+  /** Texto fijo en lugar del estado del guardado (p. ej. el mapa de práctica, que no se guarda). */
+  statusText?: string
 }
 
 /** Volver a la lista, título del mapa y estado del guardado. Mismo lenguaje visual que MainToolbar. */
-export function MapTitleBar({ title, onTitleChange, save, onRetry }: MapTitleBarProps) {
+export function MapTitleBar({ title, onTitleChange, save, onRetry, statusText }: MapTitleBarProps) {
   const t = useTheme()
 
   return (
@@ -68,7 +70,7 @@ export function MapTitleBar({ title, onTitleChange, save, onRetry }: MapTitleBar
           fontFamily: 'inherit',
         }}
       />
-      {save === 'error' ? (
+      {save === 'error' && !statusText ? (
         <button
           type="button"
           onClick={onRetry}
@@ -90,7 +92,7 @@ export function MapTitleBar({ title, onTitleChange, save, onRetry }: MapTitleBar
         </button>
       ) : (
         <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 500, color: t.textMuted, whiteSpace: 'nowrap' }}>
-          {save === 'saved' ? 'Guardado' : save === 'saving' ? 'Guardando…' : 'Cambios sin guardar'}
+          {statusText ?? (save === 'saved' ? 'Guardado' : save === 'saving' ? 'Guardando…' : 'Cambios sin guardar')}
         </span>
       )}
     </div>

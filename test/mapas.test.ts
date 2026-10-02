@@ -418,3 +418,25 @@ test('syncCollapse oculta la rama plegada, sus líneas y cuenta lo oculto', () =
   assert.equal(nodes.some((n) => n.hidden), false)
   assert.equal(by.get('a')!.data.hiddenCount, 0)
 })
+
+// ---------------------------------------------------------------------------
+// Tutorial interactivo
+// ---------------------------------------------------------------------------
+
+import { LESSONS } from '@/components/mapas/tutorial/lessons'
+import { LESSON_IDS, TOTAL_LESSONS } from '@/components/mapas/tutorial/progress'
+import { PRACTICE_IDS, PRACTICE_MAP } from '@/lib/mapas/tutorial/practiceMap'
+
+test('el tutorial: total de lecciones al día, ids únicos y mapa de práctica válido', () => {
+  assert.equal(TOTAL_LESSONS, LESSONS.length)
+  assert.deepEqual([...LESSON_IDS], LESSONS.map((l) => l.id))
+  assert.equal(new Set(LESSONS.map((l) => l.id)).size, LESSONS.length)
+  for (const l of LESSONS) {
+    assert.ok(l.intro.length > 0, `${l.id} sin introducción`)
+    assert.equal(new Set(l.tasks.map((t) => t.id)).size, l.tasks.length, `${l.id}: tareas repetidas`)
+  }
+  // Las demostraciones señalan nodos por id: tienen que existir en el mapa de práctica.
+  const ids = new Set(PRACTICE_MAP.nodes.map((n) => n.id))
+  for (const id of [...Object.values(PRACTICE_IDS), 'eti-2', 'cli-1']) assert.ok(ids.has(id), `falta ${id}`)
+  assert.equal(sanitizeDoc(PRACTICE_MAP).nodes.length, PRACTICE_MAP.nodes.length)
+})

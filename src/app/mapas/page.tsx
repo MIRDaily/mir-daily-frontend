@@ -1,11 +1,17 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createMap, deleteMap, listMaps, type MapSummary } from '@/lib/mapas/api'
 import { useCozyCursorOff } from '@/hooks/useCozyCursorOff'
 import { MapFileError, parseMapFile } from '@/lib/mapas/json'
+import Image from 'next/image'
+import { useTutorialReady } from '@/providers/TutorialProvider'
+import { TUTORIAL_MAPAS } from '@/lib/tutorials/scripts'
+import { firstPendingLesson, readLessonsDone, TOTAL_LESSONS } from '@/components/mapas/tutorial/progress'
+
+const noSubscribe = () => () => {}
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
@@ -21,6 +27,13 @@ export default function MapasPage() {
   const [creating, setCreating] = useState(false)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  // Progreso del tutorial interactivo (lo guarda el propio tutorial en este navegador).
+  // (useSyncExternalStore: en el servidor no hay localStorage y la primera pintura dice 0.)
+  const lessonsDone = useSyncExternalStore(noSubscribe, () => readLessonsDone().length, () => 0)
+  const resumeAt = useSyncExternalStore(noSubscribe, () => firstPendingLesson(readLessonsDone()), () => 0)
+
+  // La mascota invita al tutorial la primera vez (una vez por cuenta), con la lista ya pintada.
+  useTutorialReady(TUTORIAL_MAPAS.id, maps !== null)
 
   useEffect(() => {
     let cancelled = false
@@ -119,6 +132,36 @@ export default function MapasPage() {
             </button>
           </div>
         </section>
+
+        {/* Tutorial interactivo: siempre aquí, para quien quiera aprender (o repasar) los atajos.
+            La primera vez, la mascota lo señala (TUTORIAL_MAPAS). */}
+        <Link
+          href={resumeAt > 0 && lessonsDone < TOTAL_LESSONS ? `/mapas/tutorial?leccion=${resumeAt}` : '/mapas/tutorial'}
+          data-tutorial="mapas-aprende"
+          className="group flex items-center gap-5 rounded-3xl border border-[#E8A598]/30 bg-gradient-to-r from-[#FCEFEC] to-white p-4 pr-6 shadow-sm transition-shadow hover:shadow-md"
+        >
+          <div className="relative size-20 shrink-0 transition-transform group-hover:-rotate-3 group-hover:scale-105">
+            <Image src="/img/mascota/saludo.png" alt="" fill sizes="80px" className="object-contain" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black tracking-widest text-[#E8A598] uppercase">Tutorial interactivo</p>
+            <p className="text-lg font-bold text-[#2C3E50]">Aprende a usar los mapas en cinco minutos</p>
+            <p className="text-sm">
+              Crear con el teclado, plegar, mover y cambiar ramas, buscar… practicando en un mapa de prueba.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <span className="flex items-center gap-1 rounded-2xl bg-[#E8A598] px-4 py-2 text-sm font-bold text-white transition-colors group-hover:bg-[#d18d80]">
+              {lessonsDone > 0 && lessonsDone < TOTAL_LESSONS ? 'Seguir' : lessonsDone >= TOTAL_LESSONS ? 'Repasar' : 'Empezar'}
+              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+            </span>
+            {lessonsDone > 0 && (
+              <span className="text-xs font-medium">
+                {Math.min(lessonsDone, TOTAL_LESSONS)} de {TOTAL_LESSONS} lecciones
+              </span>
+            )}
+          </div>
+        </Link>
 
         {error && (
           <div className="rounded-2xl border border-[#E8A598]/40 bg-[#FCEFEC] px-4 py-3 text-sm font-medium text-[#B87A6F]">

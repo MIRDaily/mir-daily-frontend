@@ -134,9 +134,25 @@ export const TUTORIAL_STUDIO: Tutorial = {
   ],
 }
 
+export const TUTORIAL_MAPAS: Tutorial = {
+  /* Un solo paso: aquí no hay nada que decidir salvo si quieres aprender los
+     atajos. El tutorial de verdad es interactivo y vive en /mapas/tutorial
+     (la mascota dentro del editor, con un mapa de práctica); este paso solo
+     señala la tarjeta que lleva a él, que se queda siempre en la página. */
+  id: 'mapas.v1',
+  steps: [
+    {
+      anchor: 'mapas-aprende',
+      pose: 'senalando',
+      text: '¿Primera vez con los mapas? Aquí practicas los atajos en un mapa de prueba. Cinco minutos y vas el doble de rápido.',
+    },
+  ],
+}
+
 export const TUTORIALS: Record<TutorialId, Tutorial> = {
   [TUTORIAL_DAILY.id]: TUTORIAL_DAILY,
   [TUTORIAL_STUDIO.id]: TUTORIAL_STUDIO,
+  [TUTORIAL_MAPAS.id]: TUTORIAL_MAPAS,
 }
 
 /* ── Mensajes de una sola vez ────────────────────────────────────────────

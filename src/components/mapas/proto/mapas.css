@@ -350,3 +350,17 @@
 .mapa-root .react-flow__node.reparenting {
   opacity: 0.45;
 }
+
+/* Tutorial: lo que pide la tarea pendiente (un botón de la barra) late suavemente. */
+@keyframes tuto-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(232, 165, 152, 0.55); }
+  50% { box-shadow: 0 0 0 7px rgba(232, 165, 152, 0); }
+}
+.mapa-root .tuto-glow {
+  border-radius: 10px;
+  background: #FCEFEC !important;
+  animation: tuto-glow 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mapa-root .tuto-glow { animation: none; outline: 2px solid #E8A598; }
+}
