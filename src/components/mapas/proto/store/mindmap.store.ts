@@ -20,6 +20,33 @@ function maybeSnapshotStyle() {
   }
 }
 
+/**
+ * Sitio para un hijo nuevo sin dirección (botón "+"). El prototipo lo tiraba a un ángulo al azar
+ * y los "Nueva idea" acababan encima de cualquier rama. Ahora va como en un mapa en árbol: hacia
+ * fuera (el lado contrario al abuelo; a la derecha si es la raíz), en la columna de sus hermanos
+ * y debajo del último.
+ */
+function childSlot(parent: MindMapNode, nodes: MindMapNode[]) {
+  const pw = parent.measured?.width ?? 160
+  const grand = nodes.find((n) => n.id === parent.data.parentId)
+  const side = grand && grand.position.x > parent.position.x ? -1 : 1
+  const siblings = nodes.filter(
+    (n) => n.data.parentId === parent.id && Math.sign(n.position.x - parent.position.x) === side,
+  )
+  if (siblings.length === 0) {
+    return side > 0
+      ? { x: parent.position.x + pw + 90, y: parent.position.y }
+      : { x: parent.position.x - 90 - 160, y: parent.position.y }
+  }
+  const last = siblings.reduce((a, b) =>
+    b.position.y + (b.measured?.height ?? 44) > a.position.y + (a.measured?.height ?? 44) ? b : a,
+  )
+  const x = side > 0
+    ? Math.min(...siblings.map((n) => n.position.x))
+    : Math.max(...siblings.map((n) => n.position.x + (n.measured?.width ?? 160))) - 160
+  return { x, y: last.position.y + (last.measured?.height ?? 44) + 16 }
+}
+
 export const useMindMapStore = create<MindMapState>()(
   immer((set, get) => ({
     nodes: [],
@@ -55,14 +82,13 @@ export const useMindMapStore = create<MindMapState>()(
       const parent = nodes.find((n) => n.id === parentId)
       const distance = 230
       const directionAngles = { right: 0, bottom: Math.PI / 2, left: Math.PI, top: -Math.PI / 2 }
-      const angle = direction
-        ? directionAngles[direction]
-        : Math.random() * Math.PI * 2
       const position = parent
-        ? {
-            x: parent.position.x + Math.cos(angle) * distance,
-            y: parent.position.y + Math.sin(angle) * distance,
-          }
+        ? direction
+          ? {
+              x: parent.position.x + Math.cos(directionAngles[direction]) * distance,
+              y: parent.position.y + Math.sin(directionAngles[direction]) * distance,
+            }
+          : childSlot(parent, nodes)
         : { x: (Math.random() - 0.5) * 300, y: (Math.random() - 0.5) * 300 }
 
       // Style inheritance: from parent if child node, otherwise from last created node

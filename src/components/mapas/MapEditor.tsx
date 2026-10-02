@@ -33,9 +33,6 @@ import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
 
 const AUTOSAVE_MS = 900
-// Con muchos nodos la física del prototipo (que aparta los nodos al añadir uno)
-// desharía un mapa ya ordenado; se arranca apagada y se puede encender en la barra.
-const PHYSICS_MAX_NODES = 20
 
 type Props = {
   mapId: string
@@ -149,7 +146,8 @@ export default function MapEditor(props: Props) {
     ui.setBgStyle(doc.settings?.bgStyle ?? 'dots-light')
     ui.setCategoryStyles(doc.settings?.categoryStyles ?? {})
     ui.setCategoriesPanelOpen(false)
-    ui.setPhysicsEnabled(doc.nodes.length <= PHYSICS_MAX_NODES)
+    // La física solo deshace solapes (no recoloca el mapa), así que vale también en mapas grandes.
+    ui.setPhysicsEnabled(true)
     ui.setSelectedNodeId(null)
     ui.setStylePanelOpen(false)
     // Lo ya guardado (título + documento): si no cambia nada, no se vuelve a escribir. Un árbol

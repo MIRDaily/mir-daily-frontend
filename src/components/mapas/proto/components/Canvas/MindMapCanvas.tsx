@@ -12,7 +12,7 @@ import { nodeTypes } from '@/components/mapas/proto/nodes/nodeTypes'
 import { edgeTypes } from '@/components/mapas/proto/edges/edgeTypes'
 import { useMindMapShortcuts } from '@/components/mapas/proto/hooks/useMindMapShortcuts'
 import { useFocusController } from '@/components/mapas/proto/hooks/useFocusMode'
-import { usePhysics } from '@/components/mapas/proto/hooks/usePhysics'
+import { usePhysics, settleNodes } from '@/components/mapas/proto/hooks/usePhysics'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { EdgeStylePanel } from './EdgeStylePanel'
@@ -49,7 +49,11 @@ export function MindMapCanvas() {
         onEdgesChange={onEdgesChange}
         onConnect={connectNodes}
         onNodeDragStart={() => setDragging(true)}
-        onNodeDragStop={() => setDragging(false)}
+        onNodeDragStop={(_, __, dragged) => {
+          setDragging(false)
+          // Con la física activa, lo que quede pisado por el nodo soltado se aparta.
+          if (useUIStore.getState().physicsEnabled) settleNodes({ pinned: dragged.map((n) => n.id) })
+        }}
         onPaneClick={() => setStylePanelOpen(false)}
         onSelectionChange={({ nodes: sel }) => {
           if (wrapperRef.current)
