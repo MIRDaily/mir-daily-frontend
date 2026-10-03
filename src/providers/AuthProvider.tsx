@@ -196,6 +196,19 @@ function coerceAuthUser(payload: unknown, fallbackSession: Session): AuthUser | 
   }
 }
 
+/**
+ * El perfil se pide al backend. Si no responde (sin red, o el backend local apagado en desarrollo) es
+ * un fallo ESPERABLE: se avisa en la consola sin `console.error`, que en desarrollo abre el
+ * recuadro rojo de Next en cada recarga. Los demás errores siguen siendo errores.
+ */
+function logProfileError(message: string, err: unknown) {
+  if (err instanceof TypeError && /failed to fetch|networkerror|load failed/i.test(err.message)) {
+    console.warn(`${message} no se pudo contactar con el servidor.`)
+    return
+  }
+  console.error(message, err)
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
 
@@ -291,7 +304,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           await fetchProfile(data.session)
         } catch (err) {
-          console.error('[AuthProvider] Error cargando perfil inicial:', err)
+          logProfileError('[AuthProvider] Error cargando perfil inicial:', err)
           setUser(null)
         }
       } finally {
@@ -327,7 +340,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       void fetchProfile(session)
         .catch((err) => {
-          console.error('[AuthProvider] Error actualizando perfil:', err)
+          logProfileError('[AuthProvider] Error actualizando perfil:', err)
           setUser(null)
         })
         .finally(() => {

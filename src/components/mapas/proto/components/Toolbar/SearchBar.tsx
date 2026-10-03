@@ -174,6 +174,16 @@ function SearchBox() {
   }, [matches, current, query])
 
   const close = () => useUIStore.getState().setSearchOpen(false)
+
+  // Pulsar fuera de la barra la cierra (Esc y la X también).
+  const rootRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const down = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) useUIStore.getState().setSearchOpen(false)
+    }
+    document.addEventListener('mousedown', down)
+    return () => document.removeEventListener('mousedown', down)
+  }, [])
   const step = (d: number) => {
     if (!matches.length) return
     setIndex((i) => (Math.min(i, matches.length - 1) + d + matches.length) % matches.length)
@@ -181,11 +191,12 @@ function SearchBox() {
 
   return (
     <div
+      ref={rootRef}
       role="search"
       style={{
         position: 'absolute',
-        // Debajo de la barra y de la caja del título (que en pantallas estrechas quedaría debajo).
-        top: 118,
+        // El lienzo ya empieza debajo de la cabecera del editor: solo un respiro.
+        top: 14,
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 1001,
