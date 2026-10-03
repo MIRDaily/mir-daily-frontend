@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createMap, deleteMap, listMaps, type MapSummary } from '@/lib/mapas/api'
 import { useCozyCursorOff } from '@/hooks/useCozyCursorOff'
+import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import { MapFileError, parseMapFile } from '@/lib/mapas/json'
 import Image from 'next/image'
 import { useTutorialReady } from '@/providers/TutorialProvider'
@@ -22,6 +23,13 @@ function formatDate(iso: string): string {
 export default function MapasPage() {
   const router = useRouter()
   useCozyCursorOff()
+
+  // El retroceso va en la cabecera global, como en mazos.
+  const { setBackAction } = useHeaderUI()
+  useEffect(() => {
+    setBackAction({ label: 'Estudio', href: '/studio' })
+    return () => setBackAction(null)
+  }, [setBackAction])
   const [maps, setMaps] = useState<MapSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -89,13 +97,6 @@ export default function MapasPage() {
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
         <section className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <Link
-              href="/studio"
-              className="mb-1 flex items-center gap-2 text-sm font-semibold tracking-wider text-[#E8A598] uppercase"
-            >
-              <span className="material-symbols-outlined text-base">arrow_back</span>
-              Studio
-            </Link>
             <h1 className="text-4xl font-black tracking-tight text-[#2C3E50]">Mapas mentales</h1>
             <p className="mt-1 max-w-xl text-lg font-light">
               Organiza un tema en un mapa: definición, clínica, diagnóstico, tratamiento y perlas MIR.
