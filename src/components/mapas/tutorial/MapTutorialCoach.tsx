@@ -140,7 +140,11 @@ export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
       const m = /^Ver hasta el nivel ([1-3])/.exec(lvl)
       if (m) note(`Alt${m[1]}`)
       if (/^Desplegarlo todo/.test(lvl)) note('Alt0')
-      if (t?.closest?.('[data-tuto="export-dialog"] button[aria-pressed]')?.textContent?.includes('Una hoja por rama')) note('export-branches')
+      const exp = t?.closest?.('[data-tuto="export-dialog"] button[aria-pressed]')?.textContent ?? ''
+      if (exp.includes('Una hoja por rama')) note('export-branches')
+      if (exp.includes('Ahorro de tinta') || exp.includes('Blanco y negro')) note('export-ink')
+      // Barra de líneas usada con nodos seleccionados (y ninguna línea): cambia todas las suyas.
+      if (t?.closest?.('[data-tuto="edge-panel"] button') && !useMindMapStore.getState().edges.some((e) => e.selected)) note('edge-bulk')
       if (t?.closest?.('button[title="Ordenar el mapa automáticamente"]')) {
         note('ordenar')
         const { nodes } = useMindMapStore.getState()

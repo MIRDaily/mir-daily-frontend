@@ -1,4 +1,5 @@
 import { useEdges, Panel } from '@xyflow/react'
+import { useShallow } from 'zustand/react/shallow'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
@@ -26,9 +27,12 @@ const WIDTHS = [1, 2, 3, 4]
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-/** Solo monta el panel con alguna línea seleccionada: si no, no vigila las líneas. */
+/**
+ * Solo monta el panel si hay algo que editar: alguna línea seleccionada o algún nodo seleccionado (en
+ * ese caso, todas las líneas que llegan o salen de él). Si no, no vigila las líneas.
+ */
 export function EdgeStylePanel() {
-  const any = useMindMapStore((s) => s.edges.some((e) => e.selected))
+  const any = useMindMapStore((s) => s.edges.some((e) => e.selected) || (s.editingNodeId === null && s.nodes.some((n) => n.selected && !n.hidden)))
   return any ? <EdgeStylePanelBody /> : null
 }
 
@@ -37,8 +41,15 @@ function EdgeStylePanelBody() {
   const updateEdgeData = useMindMapStore((s) => s.updateEdgeData)
   const t             = useTheme()
 
-  const selected = edges.filter((e) => e.selected)
-  if (selected.length === 0) return null
+  const selectedNodes = useMindMapStore(useShallow((s) => s.nodes.filter((n) => n.selected && !n.hidden).map((n) => n.id)))
+  const editing = useMindMapStore((s) => s.editingNodeId !== null)
+  // Con líneas seleccionadas se editan esas; si no, las de los nodos seleccionados: todas las que
+  // los unen a otros (entrada y salida), y también las que unen los propios seleccionados entre sí.
+  const lines = edges.filter((e) => e.selected)
+  const byNode = lines.length === 0 ? edges.filter((e) => !e.hidden && (selectedNodes.includes(e.source) || selectedNodes.includes(e.target))) : []
+  const selected = lines.length > 0 ? lines : byNode
+  if (editing || selected.length === 0) return null
+  const fromNodes = lines.length === 0
 
   const firstData = selected[0].data as EdgeData | undefined
   const variant    = firstData?.variant    ?? 'solid'
@@ -74,6 +85,15 @@ function EdgeStylePanelBody() {
             pointerEvents: 'all',
           }}
         >
+          {fromNodes && (
+            <span
+              title="Cambian todas las líneas que unen estos nodos con otros"
+              style={{ color: t.textSecondary, fontSize: 11, fontWeight: 700, padding: '0 6px 0 2px', whiteSpace: 'nowrap' }}
+            >
+              {selected.length === 1 ? '1 línea' : `${selected.length} líneas`}
+              {selectedNodes.length > 1 ? ` de ${selectedNodes.length} nodos` : ''}
+            </span>
+          )}
           {/* ── Variant ──────────────────────────────────────────────────── */}
           {VARIANTS.map((v) => (
             <button

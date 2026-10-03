@@ -110,6 +110,24 @@ function createPainter(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D,
   }
 }
 
+/**
+ * Dibuja una hoja entera (con cabecera y pie) en pequeño y la devuelve como imagen: la vista previa
+ * del diálogo de exportar. `pxPerPt` es el tamaño de la miniatura respecto a la hoja en puntos.
+ */
+export function renderPageThumb(page: Page, opts: Omit<DrawOptions, 'pageNo' | 'pageCount'> & { pageNo: number; pageCount: number }, scope: Element, pxPerPt: number): string {
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return ''
+  const painter = createPainter(canvas, ctx, scope)
+  const begin = painter.beginPage.bind(painter)
+  painter.beginPage = (w, h, bg) => {
+    begin(w * pxPerPt, h * pxPerPt, bg)
+    ctx.scale(pxPerPt, pxPerPt)
+  }
+  drawPage(painter, page, opts)
+  return canvas.toDataURL('image/png')
+}
+
 /** Escala (px de imagen por px del lienzo) que respeta los límites del navegador. */
 export function pngScale(width: number, height: number, wanted: number): number {
   let k = wanted

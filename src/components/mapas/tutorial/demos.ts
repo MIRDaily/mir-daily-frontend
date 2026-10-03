@@ -4,8 +4,7 @@ import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { navigate, selectOnly, getFlow } from '@/components/mapas/proto/utils/keyboard'
 import { reparentNode, showUpToLevel, toggleBranch } from '@/components/mapas/proto/utils/branches'
 import { settleNodes } from '@/components/mapas/proto/hooks/usePhysics'
-import { applyCategoryToNodes, resetNodesStyle } from '@/components/mapas/proto/utils/categories'
-import { changeCategoryStyle } from '@/components/mapas/proto/components/Toolbar/CategoryStylesPanel'
+import { applyCategoryToNodes } from '@/components/mapas/proto/utils/categories'
 import { childrenMap, descendantsOf, parentMap } from '@/components/mapas/proto/utils/tree'
 import { PRACTICE_IDS as P } from '@/lib/mapas/tutorial/practiceMap'
 import { TUTORIAL_FIT } from './layout'
@@ -35,6 +34,16 @@ export type DemoId = 'export' | 'edges' | 'panel' | 'mouse' | 'tab' | 'arrows' |
 function visibleOr(selector: string, fallback: string): string {
   const el = document.querySelector(selector)
   return el && el.getClientRects().length > 0 ? selector : fallback
+}
+
+/** El cursor fantasma va hasta un elemento y lo pulsa de verdad (sus cambios se ven en directo). */
+async function liveClick(run: number, el: Element | null) {
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  if (r.width === 0 && r.height === 0) return
+  await cursorTo(run, r.left + r.width / 2, r.top + r.height / 2, 600)
+  await click(run)
+  ;(el as HTMLElement).click()
 }
 
 /** Escribe en un nodo letra a letra (sin abrir el editor de texto). */
@@ -309,32 +318,59 @@ const DEMOS: Record<DemoId, (run: number) => Promise<void>> = {
     await wait(run, 200)
   },
 
-  // Exportar: Ctrl+P / el botón abre el diálogo; se elige «Una hoja por rama» y se cierra sin descargar.
+  // Exportar: se abre el diálogo y se recorren sus opciones con el cursor, viendo cómo cambia la vista
+  // previa; al final se señala «Descargar» (sin descargar nada) y se cierra.
   async export(run) {
     await cursorToElement(run, '[data-tuto="export-open"]')
     await click(run)
     useUIStore.getState().setExportOpen(true)
+    await wait(run, 1400)
+    const btn = (re: RegExp) =>
+      [...document.querySelectorAll<HTMLButtonElement>('[data-tuto="export-dialog"] button')].find((b) => re.test(b.innerText.trim())) ?? null
+    // Formatos: PNG y vuelta al PDF.
+    await liveClick(run, btn(/Imagen PNG/))
+    await wait(run, 1000)
+    await liveClick(run, btn(/PDF para imprimir/))
+    await wait(run, 800)
+    // Qué y cómo se reparte: a tamaño real en varias hojas, entero en una, y una hoja por rama.
+    await liveClick(run, btn(/Tamaño real/))
+    await wait(run, 1400)
+    await liveClick(run, btn(/Entero en una hoja/))
     await wait(run, 900)
-    const choice = [...document.querySelectorAll<HTMLButtonElement>('[data-tuto="export-dialog"] button[aria-pressed]')].find((b) =>
-      /Una hoja por rama/.test(b.innerText),
-    )
-    if (choice) {
-      const r = choice.getBoundingClientRect()
-      await cursorTo(run, r.left + r.width / 2, r.top + r.height / 2)
-      await click(run)
-      choice.click()
-      await wait(run, 1500)
-    }
-    useUIStore.getState().setExportOpen(false)
+    await liveClick(run, btn(/Una hoja por rama/))
+    await wait(run, 1600)
+    // Papel.
+    await liveClick(run, btn(/^A3$/))
+    await wait(run, 900)
+    await liveClick(run, btn(/^A4$/))
+    await wait(run, 700)
+    // Tinta: sin rellenos de color, para imprimir sin gastar.
+    await liveClick(run, btn(/Ahorro de tinta/))
+    await wait(run, 2200)
+    await liveClick(run, btn(/Blanco y negro/))
+    await wait(run, 1600)
+    await liveClick(run, btn(/^Color$/))
+    await wait(run, 900)
+    // «Descargar» se señala, no se pulsa.
+    await cursorToElement(run, '[data-tuto="export-go"]')
+    await wait(run, 1100)
+    await liveClick(run, btn(/Cancelar|Cerrar/))
     hideCursor()
     await wait(run, 500)
   },
 
-  // Líneas: clic en una línea abre su barra; trazo, color y grosor.
+  // Líneas: se elige una línea y se cambia su trazo, color y grosor con el cursor sobre la barra de
+  // abajo; después, con un NODO seleccionado, la misma barra cambia todas las líneas que lo unen.
   async edges(run) {
     const { edges } = useMindMapStore.getState()
     const edge = edges.find((e) => e.target === P.clinica)
     if (!edge) return
+    const affected = edges.filter((e) => e.source === P.clinica || e.target === P.clinica)
+    const original = new Map(affected.map((e) => [e.id, { variant: e.data?.variant, color: e.data?.color, strokeWidth: e.data?.strokeWidth }]))
+    const restore = () => {
+      const upd = useMindMapStore.getState().updateEdgeData
+      for (const [id, d] of original) upd(id, d)
+    }
     const path = document.querySelector<SVGPathElement>('.react-flow__edge[data-id="' + edge.id + '"] path')
     const ctm = path?.getScreenCTM()
     if (path && ctm) {
@@ -348,46 +384,57 @@ const DEMOS: Record<DemoId, (run: number) => Promise<void>> = {
         for (const e of s.edges) e.selected = on && e.id === edge.id
       })
     setSelected(true)
-    await wait(run, 900)
-    const upd = useMindMapStore.getState().updateEdgeData
-    const orig = { variant: edge.data?.variant, color: edge.data?.color, strokeWidth: edge.data?.strokeWidth }
-    upd(edge.id, { variant: 'dashed' })
+    await wait(run, 1100)
+    const panel = (label: string) => document.querySelector<HTMLButtonElement>('[data-tuto="edge-panel"] button[aria-label="' + label + '"]')
+    await liveClick(run, panel('Línea guiones'))
     await wait(run, 1000)
-    upd(edge.id, { color: '#89b4fa' })
+    await liveClick(run, panel('Color de línea: Azul'))
     await wait(run, 1000)
-    upd(edge.id, { strokeWidth: 4 })
-    await wait(run, 1200)
-    // La línea queda como estaba: la práctica empieza desde el aspecto original.
-    upd(edge.id, orig)
+    await liveClick(run, panel('Grosor 4 px'))
+    await wait(run, 1300)
+    restore()
     setSelected(false)
+    await wait(run, 600)
+    // Con un nodo seleccionado, la misma barra edita todas las líneas que lo unen.
+    await cursorToNode(run, P.clinica)
+    await click(run)
+    selectOnly(P.clinica)
+    await wait(run, 1300)
+    await liveClick(run, panel('Línea puntos'))
+    await wait(run, 1000)
+    await liveClick(run, panel('Color de línea: Verde'))
+    await wait(run, 1700)
+    restore()
+    selectOnly('')
     hideCursor()
-    await wait(run, 300)
+    await wait(run, 500)
   },
 
-  // Panel de estilo: se abre desde la paleta del nodo; forma, color y restablecer.
+  // Panel de estilo: se abre desde la paleta del nodo y se prueban forma, colores y restablecer, con el
+  // cursor pulsando cada opción (los cambios se ven en directo en el nodo).
   async panel(run) {
     const id = 'cli-2' // "Edemas"
-    const store = useMindMapStore.getState
     await cursorToNode(run, id)
     await click(run)
     selectOnly(id)
-    await wait(run, 500)
-    await cursorToElement(run, 'button[title="Estilos"]')
-    await click(run)
-    useUIStore.getState().setSelectedNodeId(id)
-    useUIStore.getState().setStylePanelOpen(true)
-    await wait(run, 900)
-    store().updateNodesStyle([id], { shape: 'diamond' })
+    await wait(run, 600)
+    await liveClick(run, document.querySelector<HTMLButtonElement>('button[title="Estilos"]'))
     await wait(run, 1100)
-    store().updateNodesStyle([id], { shape: 'pill' })
+    const opt = (label: string) => document.querySelector<HTMLButtonElement>('[data-tuto="style-panel"] button[aria-label="' + label + '"]')
+    await liveClick(run, opt('Rombo'))
+    await wait(run, 1200)
+    await liveClick(run, opt('Píldora'))
     await wait(run, 900)
-    store().updateNodesStyle([id], { color: '#B8D4CC' })
+    await liveClick(run, opt('Color #B8D4CC (relleno)'))
     await wait(run, 1000)
-    await cursorToElement(run, '[data-tuto="style-reset"]')
-    await click(run)
-    resetNodesStyle([id])
+    await liveClick(run, opt('Color #D4756A (borde)'))
+    await wait(run, 1000)
+    await liveClick(run, opt('Color #FFFFFF (texto)'))
     await wait(run, 900)
-    useUIStore.getState().setStylePanelOpen(false)
+    await liveClick(run, document.querySelector<HTMLButtonElement>('[data-tuto="style-reset"]'))
+    await wait(run, 1100)
+    await liveClick(run, opt('Cerrar'))
+    await wait(run, 500)
     // Sin selección: las tareas del panel no deben salir hechas al empezar a practicar.
     selectOnly('')
     hideCursor()
@@ -407,26 +454,28 @@ const DEMOS: Record<DemoId, (run: number) => Promise<void>> = {
     applyCategoryToNodes([id], 'clinica')
     await wait(run, 500)
     useMindMapStore.getState().setHovered(null)
-    // Menú «Categorías»: se abre, se despliega una categoría y se le cambia el color.
-    await cursorToElement(run, visibleOr('button[title="Estilos de las categorías"]', '[data-tuto="vista"]'))
+    // Menú «Categorías»: se abre con el botón y se cambia una categoría entera con el cursor.
+    const trigger = visibleOr('button[title="Estilos de las categorías"]', '[data-tuto="vista"]')
+    await cursorToElement(run, trigger)
     await click(run)
     useUIStore.getState().setCategoriesPanelOpen(true)
-    await wait(run, 800)
-    const tab = document.querySelector<HTMLButtonElement>('[data-tuto="categories-panel"] [data-cat="clinica"]')
-    if (tab) {
-      const r = tab.getBoundingClientRect()
-      await cursorTo(run, r.left + r.width / 2, r.top + r.height / 2)
-      await click(run)
-      tab.click()
-      await wait(run, 700)
-    }
-    changeCategoryStyle('clinica', { fill: '#D4E0E6', border: '#6E9BC5', borderWidth: 3 })
-    await wait(run, 1400)
-    changeCategoryStyle('clinica', { fontFamily: 'Caveat', fontSize: 18 })
-    await wait(run, 1400)
-    changeCategoryStyle('clinica', null)
-    await wait(run, 700)
-    useUIStore.getState().setCategoriesPanelOpen(false)
+    await wait(run, 1100)
+    const cp = (sel: string) => document.querySelector<HTMLButtonElement>('[data-tuto="categories-panel"] ' + sel)
+    await liveClick(run, cp('[data-cat="clinica"]'))
+    await wait(run, 900)
+    await liveClick(run, cp('button[aria-label="Color #6E9BC5 (relleno)"]'))
+    await wait(run, 1000)
+    await liveClick(run, cp('button[aria-label="Color #FFFFFF (texto)"]'))
+    await wait(run, 900)
+    await liveClick(run, cp('button[aria-label="Rombo"]'))
+    await wait(run, 1100)
+    await liveClick(run, cp('button[title="Caveat"]'))
+    await wait(run, 1300)
+    const reset = [...document.querySelectorAll<HTMLButtonElement>('[data-tuto="categories-panel"] button')].find((b) => /Restablecer «/.test(b.innerText))
+    await liveClick(run, reset ?? null)
+    await wait(run, 1100)
+    await liveClick(run, cp('button[aria-label="Cerrar"]'))
+    await wait(run, 500)
     hideCursor()
     await wait(run, 300)
   },

@@ -503,6 +503,7 @@ import { wrapParagraphs } from '@/lib/mapas/export/layout'
 import { parsePath, type Section, type SceneNode } from '@/lib/mapas/export/scene'
 import { planPages } from '@/lib/mapas/export/pages'
 import { parseColor } from '@/lib/mapas/export/color'
+import { applyInk } from '@/lib/mapas/export/print'
 
 test('export: el texto con formato se separa en tramos y párrafos', () => {
   const p = parseLabel('Hola <b>mundo <i>feliz</i></b><br>segunda &amp; línea<div>tercera</div>')
@@ -566,4 +567,24 @@ test('lista: la miniatura y el texto salen del propio documento', () => {
   assert.ok(s.text.includes('insuficiencia cardiaca') && s.text.includes('peptidos natriureticos'))
   assert.ok(summarizeDoc({ nope: true }).thumb!.nodes.length >= 1) // un documento ilegible se repara, no rompe la lista
   assert.equal(searchable('<b>Diagnóstico</b>&nbsp;ÓPTICO'), 'diagnostico optico')
+})
+
+test('export: ahorro de tinta quita los rellenos y deja contornos legibles', () => {
+  const solid: SceneNode = { ...boxNode('a', 0, 0), fill: '#9B86BD', stroke: '#9B86BD', strokeWidth: 0, textColor: '#FFFFFF' }
+  const outlined: SceneNode = { ...boxNode('b', 0, 0), fill: '#FFFFFF', stroke: '#E8A598', strokeWidth: 2, textColor: '#2A2420' }
+  const section: Section = {
+    title: '',
+    nodes: [solid, outlined],
+    edges: [{ id: 'e', source: 'a', target: 'b', cmds: [], color: '#F0F0F0', width: 1.8, dash: null }],
+  }
+  const save = applyInk(section, 'save')
+  assert.equal(save.nodes[0].fill, '#FFFFFF')
+  assert.equal(save.nodes[0].stroke, '#9B86BD')
+  assert.ok(save.nodes[0].strokeWidth >= 1.6)
+  assert.equal(save.nodes[0].textColor, '#2A2420') // la letra blanca sobre blanco no se leería
+  assert.equal(save.nodes[1].stroke, '#E8A598')
+  assert.equal(save.edges[0].color, '#7D8A96') // una línea casi blanca se oscurece
+  const bw = applyInk(section, 'gray')
+  assert.ok(/^#([0-9a-f]{2})\1\1$/.test(bw.nodes[0].stroke) && /^#([0-9a-f]{2})\1\1$/.test(bw.nodes[0].textColor))
+  assert.equal(applyInk(section, 'color'), section)
 })

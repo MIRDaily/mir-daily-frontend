@@ -385,7 +385,7 @@ export const LESSONS: Lesson[] = [
     demo: 'edges',
     demoLine: {
       pose: 'senalando',
-      text: 'Haz clic en una línea: abajo te sale su barra. Con Ctrl+clic eliges varias y se cambian a la vez.',
+      text: 'Clic en una línea: abajo sale su barra. Y con un nodo seleccionado, la misma barra cambia todas las líneas que lo unen.',
     },
     tasks: [
       {
@@ -397,6 +397,12 @@ export const LESSONS: Lesson[] = [
       { id: 'trazo', text: 'Cámbiale el trazo: continua, guiones o puntos', check: (ctx) => edgeProp(ctx, (d) => d.variant) },
       { id: 'color-linea', text: 'Dale otro color', check: (ctx) => edgeProp(ctx, (d) => d.color) },
       { id: 'grosor', text: 'Cambia su grosor', check: (ctx) => edgeProp(ctx, (d) => d.strokeWidth) },
+      {
+        id: 'por-nodo',
+        text: 'Selecciona un nodo (o varios) y cambia en la barra de abajo el estilo de TODAS las líneas que lo unen',
+        check: (ctx) => ctx.events.has('edge-bulk'),
+        glow: '[data-tuto="edge-panel"]',
+      },
     ],
     done: { pose: 'celebracion', text: 'Si cambias la categoría de un nodo, la línea que llega a él toma el color de la categoría.' },
   },
@@ -431,7 +437,7 @@ export const LESSONS: Lesson[] = [
     demo: 'export',
     demoLine: {
       pose: 'senalando',
-      text: 'Ctrl+P o el botón Exportar. Puedes sacar todo el mapa, solo lo seleccionado, o una hoja por cada rama principal.',
+      text: 'Ctrl+P o el botón Exportar. Eliges qué sacar, el papel y la tinta, y la vista previa te enseña cómo saldrá cada hoja.',
     },
     tasks: [
       {
@@ -445,6 +451,11 @@ export const LESSONS: Lesson[] = [
         id: 'una-hoja-por-rama',
         text: 'Elige «Una hoja por rama»: cada rama principal sale en su hoja, con la letra bien grande',
         check: (ctx) => ctx.events.has('export-branches'),
+      },
+      {
+        id: 'ahorro-tinta',
+        text: 'Prueba «Ahorro de tinta»: sin rellenos de color, gasta mucho menos al imprimir',
+        check: (ctx) => ctx.events.has('export-ink'),
       },
     ],
     done: { pose: 'celebracion', text: 'Con «Tamaño real, en varias hojas» el mapa se reparte en folios A4 para pegarlos. Descarga cuando quieras.' },

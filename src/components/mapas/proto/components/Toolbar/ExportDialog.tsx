@@ -3,9 +3,10 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { FileDown, FileJson, FileText, Image as ImageIcon, Loader2, X } from 'lucide-react'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
-import { pageStats, DEFAULT_EXPORT, runExport, selectionSize, type Background, type ExportOptions } from '@/lib/mapas/export'
+import { pageStats, DEFAULT_EXPORT, renderPreviews, runExport, selectionSize, type Background, type ExportOptions } from '@/lib/mapas/export'
 import { PAPER_LABEL, type Distribution, type Orientation, type PaperId } from '@/lib/mapas/export/pages'
 import type { Scope } from '@/lib/mapas/export/collect'
+import { INK_LABEL, type InkMode } from '@/lib/mapas/export/print'
 
 type Theme = ReturnType<typeof useTheme>
 type Tab = 'pdf' | 'png' | 'json'
@@ -128,7 +129,7 @@ function ExportBody({ mapTitle, onExportJson, onClose }: { mapTitle: string; onE
         exit={{ scale: 0.97, y: 6, transition: { duration: 0.12 } }}
         transition={{ type: 'spring', stiffness: 420, damping: 32 }}
         style={{
-          width: 560,
+          width: 880,
           maxWidth: '100%',
           maxHeight: '100%',
           overflowY: 'auto',
@@ -194,6 +195,8 @@ function ExportBody({ mapTitle, onExportJson, onClose }: { mapTitle: string; onE
           ))}
         </div>
 
+        <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <div style={{ flex: '1 1 360px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
         {tab === 'json' ? (
           <p style={{ color: t.textSecondary, fontSize: 12.5, lineHeight: 1.5, margin: 0 }}>
             Descarga el mapa completo (con posiciones, colores y ramas plegadas) como copia de seguridad. Se puede volver a
@@ -278,8 +281,28 @@ function ExportBody({ mapTitle, onExportJson, onClose }: { mapTitle: string; onE
                 }
               />
             </Field>
+
+            <Field label="Impresión" t={t}>
+              <Segmented<InkMode>
+                value={opts.ink}
+                onChange={(v) => set('ink', v)}
+                t={t}
+                options={(Object.keys(INK_LABEL) as InkMode[]).map((k) => [k, INK_LABEL[k]] as [InkMode, string])}
+              />
+              <div style={{ color: t.textMuted, fontSize: 11.5, marginTop: 6, lineHeight: 1.45 }}>
+                {opts.ink === 'color'
+                  ? 'Tal como se ve en pantalla.'
+                  : opts.ink === 'save'
+                    ? 'Sin rellenos: cada nodo queda en un contorno del color de su categoría y la letra en oscuro. Casi no gasta tinta.'
+                    : 'Lo mismo, en escala de grises, para impresoras en blanco y negro.'}
+              </div>
+            </Field>
           </>
         )}
+
+        </div>
+        {tab === 'pdf' && <PreviewPane opts={full} t={t} />}
+        </div>
 
         {tab !== 'json' && (
           <div style={{ color: t.textMuted, fontSize: 12, lineHeight: 1.5 }}>
@@ -395,6 +418,61 @@ function Segmented<V extends string | number>({ value, onChange, options, t }: {
           {label}
         </button>
       ))}
+    </div>
+  )
+}
+
+/** Vista previa de las primeras hojas del PDF, con el papel, la tinta y el reparto elegidos. */
+function PreviewPane({ opts, t }: { opts: ExportOptions; t: Theme }) {
+  const [state, setState] = useState<{ urls: string[]; total: number; busy: boolean }>({ urls: [], total: 0, busy: true })
+  const key = JSON.stringify([opts.scope, opts.paper, opts.orientation, opts.distribution, opts.background, opts.withTitle, opts.ink, opts.mapTitle])
+  useEffect(() => {
+    let cancelled = false
+    const id = setTimeout(() => {
+      renderPreviews(opts, 4)
+        .then((r) => {
+          if (!cancelled) setState({ urls: r.urls, total: r.total, busy: false })
+        })
+        .catch(() => {
+          if (!cancelled) setState({ urls: [], total: 0, busy: false })
+        })
+    }, 160)
+    return () => {
+      cancelled = true
+      clearTimeout(id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+  return (
+    <div data-tuto="export-preview" style={{ flex: '0 1 300px', minWidth: 240 }}>
+      <div style={{ color: t.textMuted, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 7 }}>
+        Vista previa{state.total > 0 ? ` · ${state.total} hoja${state.total === 1 ? '' : 's'}` : ''}
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: state.urls.length > 1 ? '1fr 1fr' : '1fr',
+          gap: 8,
+          padding: 10,
+          borderRadius: 12,
+          background: t.bgPanel2,
+          opacity: state.busy ? 0.55 : 1,
+          transition: 'opacity 150ms',
+        }}
+      >
+        {state.urls.length === 0 && (
+          <div style={{ color: t.textMuted, fontSize: 12, padding: '30px 0', textAlign: 'center', gridColumn: '1 / -1' }}>
+            {state.busy ? 'Preparando…' : 'Sin vista previa'}
+          </div>
+        )}
+        {state.urls.map((u, i) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={i} src={u} alt={`Hoja ${i + 1}`} style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 3, border: `1px solid ${t.border}`, background: '#fff' }} />
+        ))}
+      </div>
+      {state.total > state.urls.length && (
+        <div style={{ color: t.textMuted, fontSize: 11.5, marginTop: 6 }}>y {state.total - state.urls.length} hoja{state.total - state.urls.length === 1 ? '' : 's'} más</div>
+      )}
     </div>
   )
 }

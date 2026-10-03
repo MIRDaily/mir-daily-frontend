@@ -1,5 +1,6 @@
 import { collectSections, type Scope } from '@/lib/mapas/export/collect'
 import { planPages, type Distribution, type Orientation, type Page, type PaperId, REGION_PAD } from '@/lib/mapas/export/pages'
+import { applyInk, type InkMode } from '@/lib/mapas/export/print'
 import { boundsOf, type Section } from '@/lib/mapas/export/scene'
 
 export type ExportFormat = 'pdf' | 'png'
@@ -13,6 +14,8 @@ export type ExportOptions = {
   distribution: Distribution
   background: Background
   withTitle: boolean
+  /** Tinta: tal cual, ahorro de tinta (sin rellenos) o blanco y negro. */
+  ink: InkMode
   /** PNG: píxeles de imagen por píxel del lienzo (se reduce solo si el mapa es enorme). */
   quality: 2 | 3 | 4
   mapTitle: string
@@ -26,6 +29,7 @@ export const DEFAULT_EXPORT: Omit<ExportOptions, 'mapTitle'> = {
   distribution: 'fit',
   background: 'white',
   withTitle: true,
+  ink: 'color',
   quality: 3,
 }
 
@@ -45,6 +49,19 @@ function dateLabel(): string {
   return new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+/** Las partes a exportar con el modo de tinta ya aplicado. */
+function sectionsFor(o: ExportOptions): Section[] {
+  return collectSections(o.scope)
+    .filter((s) => s.nodes.length > 0)
+    .map((s) => applyInk(s, o.ink))
+}
+
+/** Fondo real: para imprimir con ahorro de tinta o en blanco y negro, siempre papel blanco. */
+function backgroundFor(o: ExportOptions): string | null {
+  if (o.ink !== 'color' && o.background === 'cream') return BG.white
+  return BG[o.background]
+}
+
 function pagesFor(sections: Section[], o: ExportOptions): Page[] {
   // «Una hoja por rama» es siempre una rama por hoja, ajustada: el mosaico no tiene sentido ahí.
   const distribution = o.scope === 'branches' ? 'fit' : o.distribution
@@ -53,7 +70,7 @@ function pagesFor(sections: Section[], o: ExportOptions): Page[] {
 
 /** Cuántas hojas saldrán y qué tamaño tendrá la letra más pequeña (pt), para avisar antes de exportar. */
 export function pageStats(o: ExportOptions): { pages: number; minFontPt: number | null } {
-  const sections = collectSections(o.scope).filter((s) => s.nodes.length > 0)
+  const sections = sectionsFor(o)
   if (o.format === 'png') return { pages: sections.length > 0 ? 1 : 0, minFontPt: null }
   const pages = pagesFor(sections, o)
   if (pages.length === 0) return { pages: 0, minFontPt: null }
@@ -65,6 +82,39 @@ export function pageStats(o: ExportOptions): { pages: number; minFontPt: number 
 
 export function selectionSize(): number {
   return collectSections('selection')[0]?.nodes.length ?? 0
+}
+
+/**
+ * Miniaturas de las primeras hojas del PDF, tal como saldrán (con el modo de tinta elegido). Sirven
+ * para la vista previa del diálogo. Devuelve también cuántas hojas hay en total.
+ */
+export async function renderPreviews(o: ExportOptions, max = 4, pxPerPt = 0.42): Promise<{ urls: string[]; total: number }> {
+  const root = document.querySelector('.mapa-root')
+  if (!root) return { urls: [], total: 0 }
+  const pages = pagesFor(sectionsFor(o), o)
+  await document.fonts.ready
+  const { renderPageThumb } = await import('@/lib/mapas/export/png')
+  const urls: string[] = []
+  for (const page of pages.slice(0, max)) {
+    urls.push(
+      renderPageThumb(
+        page,
+        {
+          background: backgroundFor(o) ?? '#FFFFFF',
+          mapTitle: o.mapTitle.trim() || 'Mapa mental',
+          withTitle: o.withTitle,
+          dateLabel: dateLabel(),
+          ink: '#2C3E50',
+          muted: '#7D8A96',
+          pageNo: urls.length + 1,
+          pageCount: pages.length,
+        },
+        root,
+        pxPerPt,
+      ),
+    )
+  }
+  return { urls, total: pages.length }
 }
 
 function download(blob: Blob, filename: string) {
@@ -81,14 +131,14 @@ function download(blob: Blob, filename: string) {
 export async function runExport(o: ExportOptions): Promise<{ filename: string; pages: number }> {
   const root = document.querySelector('.mapa-root')
   if (!root) throw new Error('No se encontró el mapa.')
-  const sections = collectSections(o.scope).filter((s) => s.nodes.length > 0)
+  const sections = sectionsFor(o)
   if (sections.length === 0) throw new Error(o.scope === 'selection' ? 'No hay nada seleccionado.' : 'El mapa está vacío.')
   await document.fonts.ready
 
   const part = o.scope === 'selection' ? '-seleccion' : o.scope === 'branches' ? '-por-ramas' : ''
   const base = `${slug(o.mapTitle)}${part}`
   const common = {
-    background: BG[o.background],
+    background: backgroundFor(o),
     mapTitle: o.mapTitle.trim() || 'Mapa mental',
     withTitle: o.withTitle,
     dateLabel: dateLabel(),

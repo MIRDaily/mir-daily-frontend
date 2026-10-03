@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { HelpCircle } from 'lucide-react'
 import { useTutorialFx } from './fx'
@@ -112,8 +113,9 @@ export function TutorialFx({ leftInset = 0 }: { leftInset?: number }) {
         </AnimatePresence>
       </div>
 
-      {/* Cursor fantasma, en coordenadas de pantalla. */}
-      {cursor && (
+      {/* Cursor fantasma, en coordenadas de pantalla. Va en el <body>: dentro del editor quedaba por
+          debajo de la cabecera y de los diálogos (cada uno tiene su propio apilado). */}
+      {cursor && typeof document !== 'undefined' && createPortal(
         <motion.div
           aria-hidden
           initial={false}
@@ -150,7 +152,8 @@ export function TutorialFx({ leftInset = 0 }: { leftInset?: number }) {
           >
             <path d="M1 1 L11 11 L6.5 11.5 L9 16.5 L7 17.5 L4.5 12.5 L1 15.5 Z" fill={TINTA} stroke="#fff" strokeWidth="1.2" />
           </motion.svg>
-        </motion.div>
+        </motion.div>,
+        document.body,
       )}
     </>
   )
