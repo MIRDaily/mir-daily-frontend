@@ -493,3 +493,60 @@ test('categorías: relleno, borde y fuente se aplican y, al quitarlos, vuelven a
   assert.equal(back.fontFamily, natural.fontFamily)
   assert.equal(back.fontSize, natural.fontSize)
 })
+
+// ---------------------------------------------------------------------------
+// Exportación (PDF vectorial / PNG): texto, rutas y reparto en hojas
+// ---------------------------------------------------------------------------
+
+import { parseLabel, plainText } from '@/lib/mapas/export/richtext'
+import { wrapParagraphs } from '@/lib/mapas/export/layout'
+import { parsePath, type Section, type SceneNode } from '@/lib/mapas/export/scene'
+import { planPages } from '@/lib/mapas/export/pages'
+import { parseColor } from '@/lib/mapas/export/color'
+
+test('export: el texto con formato se separa en tramos y párrafos', () => {
+  const p = parseLabel('Hola <b>mundo <i>feliz</i></b><br>segunda &amp; línea<div>tercera</div>')
+  assert.equal(p.length, 3)
+  assert.deepEqual(p[0].map((r) => [r.text, !!r.bold, !!r.italic]), [['Hola ', false, false], ['mundo ', true, false], ['feliz', true, true]])
+  assert.equal(p[1][0].text, 'segunda & línea')
+  assert.equal(plainText('<b>a</b> <i>b</i>'), 'a b')
+})
+
+test('export: el texto se parte por palabras según el ancho', () => {
+  const measure = (t: string) => t.length * 10
+  const lines = wrapParagraphs(parseLabel('uno dos tres cuatro'), 90, { family: 'Lexend', size: 10 }, measure)
+  assert.deepEqual(lines.map((l) => l.runs.map((r) => r.text).join('')), ['uno dos', 'tres', 'cuatro'])
+  // Una palabra más larga que la línea se parte por letras en vez de salirse.
+  const long = wrapParagraphs(parseLabel('abcdefghijkl'), 50, { family: 'Lexend', size: 10 }, measure)
+  assert.ok(long.length >= 2 && long.every((l) => l.width <= 50))
+})
+
+test('export: la ruta SVG se lee en absoluto (M, L, C, Q y relativos)', () => {
+  assert.deepEqual(parsePath('M 183 270 C 263.5 270, 212.5 22, 293 22'), [['M', 183, 270], ['C', 263.5, 270, 212.5, 22, 293, 22]])
+  assert.deepEqual(parsePath('M10 10 l5 5 h5 v-5'), [['M', 10, 10], ['L', 15, 15], ['L', 20, 15], ['L', 20, 10]])
+  assert.deepEqual(parseColor('rgb(110, 155, 197)'), { r: 110, g: 155, b: 197, a: 1 })
+  assert.equal(parseColor('#FFF').g, 255)
+})
+
+function boxNode(id: string, x: number, y: number): SceneNode {
+  return { id, parentId: null, x, y, w: 160, h: 50, shape: 'rectangle', fill: '#fff', stroke: '#000', strokeWidth: 1, textColor: '#000', fontFamily: 'Lexend', fontSize: 14, align: 'center', paragraphs: [[{ text: id }]] }
+}
+
+test('export: reparto en hojas (una hoja, mosaico a tamaño real y una por parte)', () => {
+  const small: Section = { title: '', nodes: [boxNode('a', 0, 0), boxNode('b', 300, 200)], edges: [] }
+  const big: Section = { title: '', nodes: [boxNode('a', 0, 0), boxNode('b', 3000, 2000)], edges: [] }
+  const base = { paper: 'a4' as const, orientation: 'auto' as const, withTitle: true }
+  const one = planPages([small], { ...base, distribution: 'fit' })
+  assert.equal(one.length, 1)
+  assert.ok(one[0].scale <= 1.4 + 1e-9)
+  const tiles = planPages([big], { ...base, distribution: 'tiles' })
+  assert.ok(tiles.length > 4)
+  assert.ok(tiles.every((p) => p.scale === 0.75 && p.tile))
+  // Las hojas contiguas se solapan (para poder pegarlas) y cubren todo el mapa.
+  const xs = tiles.filter((p) => p.tile!.row === 0).map((p) => p.region.x)
+  const reach = tiles.filter((p) => p.tile!.row === 0).at(-1)!.region
+  assert.ok(xs[1] < xs[0] + tiles[0].region.w)
+  assert.ok(reach.x + reach.w >= 3160)
+  const parts = planPages([small, { ...small, title: 'Rama' }], { ...base, distribution: 'fit' })
+  assert.equal(parts.length, 2)
+})

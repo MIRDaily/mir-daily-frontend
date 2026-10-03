@@ -1,4 +1,4 @@
-import { Plus, Undo2, Redo2, HelpCircle, Moon, Sun, FileDown, FileJson, Network, Orbit, Focus, Shapes, Loader2, Search } from 'lucide-react'
+import { Plus, Undo2, Redo2, HelpCircle, Moon, Sun, FileDown, Network, Orbit, Focus, Shapes, Search } from 'lucide-react'
 import type { BgStyle } from '@/components/mapas/proto/types/store.types'
 import { useState } from 'react'
 import { useReactFlow } from '@xyflow/react'
@@ -6,32 +6,18 @@ import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
-import { exportToPdf } from '@/components/mapas/proto/utils/exportPdf'
 import { showUpToLevel } from '@/components/mapas/proto/utils/branches'
 
 interface MainToolbarProps {
-  onExportJson: () => void
   onAutoLayout: () => void
 }
 
-export function MainToolbar({ onExportJson, onAutoLayout }: MainToolbarProps) {
-  const { theme, setTheme, bgStyle, setBgStyle, physicsEnabled, setPhysicsEnabled, categoriesPanelOpen, setCategoriesPanelOpen, focusBlur, setFocusBlur } = useUIStore()
-  const { setCenter, setNodes } = useReactFlow()
+export function MainToolbar({ onAutoLayout }: MainToolbarProps) {
+  const { theme, setTheme, bgStyle, setBgStyle, physicsEnabled, setPhysicsEnabled, categoriesPanelOpen, setCategoriesPanelOpen, focusBlur, setFocusBlur, exportOpen } = useUIStore()
+  const { setCenter } = useReactFlow()
   const [showHelp, setShowHelp]       = useState(false)
-  const [exporting, setExporting]     = useState(false)
   const t = useTheme()
   const isDark = theme === 'dark'
-
-  const handleExport = async () => {
-    if (exporting) return
-    setExporting(true)
-    try {
-      // El PDF encuadra lo que se ve: las ramas plegadas salen plegadas.
-      await exportToPdf(useMindMapStore.getState().nodes.filter((n) => !n.hidden), setNodes)
-    } finally {
-      setExporting(false)
-    }
-  }
 
   const handleAddRoot = () => {
     const store = useMindMapStore.getState()
@@ -124,20 +110,13 @@ export function MainToolbar({ onExportJson, onAutoLayout }: MainToolbarProps) {
         <Divider color={t.border} />
 
         <Btn
-          onClick={handleExport}
-          title="Exportar como PDF"
-          color={exporting ? t.accent : t.textSecondary}
+          onClick={() => useUIStore.getState().setExportOpen(true)}
+          title="Exportar o imprimir (Ctrl+P): PDF, imagen o copia JSON"
+          color={exportOpen ? t.accent : t.textSecondary}
           hoverBg={t.hoverBg}
         >
-          {exporting
-            ? <Loader2 size={15} style={{ animation: 'mapa-spin 1s linear infinite' }} />
-            : <FileDown size={15} />}
-          <span style={{ fontSize: 12 }}>PDF</span>
-        </Btn>
-
-        <Btn onClick={onExportJson} title="Descargar copia en JSON" color={t.textSecondary} hoverBg={t.hoverBg}>
-          <FileJson size={15} />
-          <span style={{ fontSize: 12 }}>JSON</span>
+          <FileDown size={15} />
+          <span style={{ fontSize: 12 }}>Exportar</span>
         </Btn>
 
         <Divider color={t.border} />

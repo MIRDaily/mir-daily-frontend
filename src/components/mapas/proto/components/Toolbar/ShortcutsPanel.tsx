@@ -13,6 +13,7 @@ const SHORTCUTS: { keys: string[]; desc: string }[] = [
   { keys: ['Espacio'], desc: 'Plegar / desplegar los nodos seleccionados' },
   { keys: ['Alt', '1 – 9'], desc: 'Ver hasta ese nivel (Alt+0: todo)' },
   { keys: ['Ctrl', 'F'], desc: 'Buscar en el mapa' },
+  { keys: ['Ctrl', 'P'], desc: 'Exportar / imprimir (PDF, imagen)' },
   { keys: ['Ctrl', 'Arrastrar'], desc: 'Soltar sobre otro nodo: cambia de rama' },
   { keys: ['Selección', 'Ordenar'], desc: 'Ordena solo los nodos seleccionados' },
   { keys: ['Doble clic'], desc: 'Editar nodo' },

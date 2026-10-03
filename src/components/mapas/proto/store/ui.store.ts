@@ -4,6 +4,8 @@ import type { UIState } from '@/components/mapas/proto/types/store.types'
 export const useUIStore = create<UIState>((set) => ({
   stylePanelOpen: false,
   multiSelect: false,
+  exportOpen: false,
+  setExportOpen: (exportOpen) => set({ exportOpen }),
   cameraLocked: false,
   setCameraLocked: (cameraLocked) => set({ cameraLocked }),
   focusBlur: true,

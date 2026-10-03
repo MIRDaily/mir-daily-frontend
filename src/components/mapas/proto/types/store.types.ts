@@ -43,6 +43,9 @@ export interface UIState {
   stylePanelOpen: boolean
   /** Hay más de un nodo seleccionado: la barra de grupo sustituye a la de cada nodo. */
   multiSelect: boolean
+  /** Diálogo de exportación abierto. */
+  exportOpen: boolean
+  setExportOpen: (v: boolean) => void
   /** La cámara no se mueve sola (las demostraciones del tutorial la tienen fijada). */
   cameraLocked: boolean
   setCameraLocked: (v: boolean) => void

@@ -61,6 +61,13 @@ export function useMindMapShortcuts() {
         return
       }
 
+      // ── Ctrl+P: exportar / imprimir (el diálogo, no el de la página) ────────
+      if (isMod && !e.altKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault()
+        ui.setExportOpen(true)
+        return
+      }
+
       // ── Ctrl+E: panel de estilo del nodo seleccionado (o de la selección) ───
       if (isMod && !e.altKey && e.key.toLowerCase() === 'e') {
         const first = getNodes().find((n) => n.selected && !n.hidden)

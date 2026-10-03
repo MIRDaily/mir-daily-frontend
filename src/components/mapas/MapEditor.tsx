@@ -19,6 +19,7 @@ import { setTextMeasurer } from '@/lib/mapas/layout'
 import { MindMapCanvas } from '@/components/mapas/proto/components/Canvas/MindMapCanvas'
 import { InteractiveBackground } from '@/components/mapas/proto/components/Canvas/InteractiveBackground'
 import { CustomMiniMap } from '@/components/mapas/proto/components/Canvas/CustomMiniMap'
+import { ExportDialog } from '@/components/mapas/proto/components/Toolbar/ExportDialog'
 import { MainToolbar } from '@/components/mapas/proto/components/Toolbar/MainToolbar'
 import { BrandCorner } from '@/components/mapas/proto/components/Toolbar/BrandCorner'
 import { CategoryStylesPanel } from '@/components/mapas/proto/components/Toolbar/CategoryStylesPanel'
@@ -479,12 +480,13 @@ function EditorInner({
           statusText={sandbox ? 'Práctica · no se guarda' : undefined}
         />
         <BrandCorner />
-        <MainToolbar onExportJson={onExportJson} onAutoLayout={onAutoLayout} />
+        <MainToolbar onAutoLayout={onAutoLayout} />
         <CategoryStylesPanel />
         <StylePanel />
         <SearchBar />
         <TextFormatPopup />
         <ShortcutsPanel />
+        <ExportDialog mapTitle={title} onExportJson={onExportJson} />
         <CustomMiniMap />
         {overlay}
       </div>
