@@ -24,6 +24,7 @@ function shouldShowHeader(pathname: string): boolean {
     // La lista de mapas conserva la cabecera; el editor (/mapas/<id>) no: es un lienzo a
     // pantalla completa y solo lleva el logo en una esquina.
     pathname === '/mapas' ||
+    pathname === '/mapas/papelera' ||
     pathname.startsWith('/admin') ||
     pathname.startsWith('/medguess')
   )

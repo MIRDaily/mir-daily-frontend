@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createMap, deleteMap, listMaps, type MapSummary } from '@/lib/mapas/api'
+import { createMap, deleteMap, listMaps, purgeExpiredMaps, restoreMap, type MapSummary } from '@/lib/mapas/api'
+import UndoDeleteToast from '@/components/studio/UndoDeleteToast'
 import { useCozyCursorOff } from '@/hooks/useCozyCursorOff'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import { MapFileError, parseMapFile } from '@/lib/mapas/json'
@@ -33,7 +34,30 @@ export default function MapasPage() {
   const [maps, setMaps] = useState<MapSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
-  const [confirmId, setConfirmId] = useState<string | null>(null)
+  // Borrar manda el mapa a la papelera (24 h) y ofrece deshacer, igual que en mazos.
+  const [undo, setUndo] = useState<{ map: MapSummary; index: number } | null>(null)
+  const [undoBusy, setUndoBusy] = useState(false)
+  const [toast, setToast] = useState<{ message: string; tone: 'neutral' | 'success' | 'error'; visible: boolean } | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingDelete = useRef<Map<string, Promise<void>>>(new Map())
+
+  const showToast = (message: string, tone: 'neutral' | 'success' | 'error', ms: number) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast({ message, tone, visible: false })
+    requestAnimationFrame(() => setToast((t) => (t ? { ...t, visible: true } : t)))
+    toastTimer.current = setTimeout(() => {
+      setToast((t) => (t ? { ...t, visible: false } : t))
+      toastTimer.current = setTimeout(() => setToast(null), 260)
+    }, ms)
+  }
+  useEffect(
+    () => () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current)
+      if (undoTimer.current) clearTimeout(undoTimer.current)
+    },
+    [],
+  )
   const fileRef = useRef<HTMLInputElement>(null)
   // Progreso del tutorial interactivo (lo guarda el propio tutorial en este navegador).
   // (useSyncExternalStore: en el servidor no hay localStorage y la primera pintura dice 0.)
@@ -45,6 +69,7 @@ export default function MapasPage() {
 
   useEffect(() => {
     let cancelled = false
+    void purgeExpiredMaps().catch(() => {})
     listMaps()
       .then((m) => {
         if (!cancelled) setMaps(m)
@@ -82,13 +107,56 @@ export default function MapasPage() {
     }
   }
 
-  const onDelete = async (id: string) => {
-    setConfirmId(null)
+  const onDelete = async (map: MapSummary) => {
+    if (undoBusy || !maps) return
+    const index = maps.findIndex((x) => x.id === map.id)
+    if (index < 0) return
+    setError(null)
+    setMaps((m) => (m ? m.filter((x) => x.id !== map.id) : m))
+    setUndo({ map, index })
+    showToast('Mapa enviado a la papelera (24 h)', 'neutral', 6000)
+    if (undoTimer.current) clearTimeout(undoTimer.current)
+    undoTimer.current = setTimeout(() => setUndo(null), 6000)
+    const request = deleteMap(map.id)
+    pendingDelete.current.set(map.id, request)
     try {
-      await deleteMap(id)
-      setMaps((m) => (m ? m.filter((x) => x.id !== id) : m))
+      await request
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo borrar el mapa')
+      setMaps((m) => {
+        if (!m || m.some((x) => x.id === map.id)) return m
+        const next = [...m]
+        next.splice(Math.min(index, next.length), 0, map)
+        return next
+      })
+      setUndo(null)
+      showToast(e instanceof Error ? e.message : 'No se pudo borrar el mapa', 'error', 3000)
+    } finally {
+      pendingDelete.current.delete(map.id)
+    }
+  }
+
+  const onUndo = async () => {
+    if (!undo || undoBusy) return
+    const { map, index } = undo
+    setUndoBusy(true)
+    if (undoTimer.current) clearTimeout(undoTimer.current)
+    try {
+      const pending = pendingDelete.current.get(map.id)
+      if (pending) await pending.catch(() => {})
+      await restoreMap(map.id)
+      setMaps((m) => {
+        if (!m || m.some((x) => x.id === map.id)) return m
+        const next = [...m]
+        next.splice(Math.min(index, next.length), 0, map)
+        return next
+      })
+      setUndo(null)
+      showToast('Mapa restaurado', 'success', 2500)
+    } catch (e) {
+      setUndo(null)
+      showToast(e instanceof Error ? e.message : 'No se pudo restaurar el mapa', 'error', 3000)
+    } finally {
+      setUndoBusy(false)
     }
   }
 
@@ -113,6 +181,14 @@ export default function MapasPage() {
                 e.target.value = ''
               }}
             />
+            <Link
+              href="/mapas/papelera"
+              title="Papelera"
+              aria-label="Papelera de mapas"
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#7D8A96]/25 bg-white text-[#7D8A96] transition-colors hover:border-[#E8A598] hover:text-[#E8A598]"
+            >
+              <span className="material-symbols-outlined text-[22px]">delete_sweep</span>
+            </Link>
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
@@ -197,36 +273,31 @@ export default function MapasPage() {
                   </p>
                 </Link>
                 <div className="absolute top-4 right-4">
-                  {confirmId === m.id ? (
-                    <div className="flex items-center gap-1 rounded-xl bg-[#FCEFEC] p-1 text-xs font-bold">
-                      <button
-                        type="button"
-                        onClick={() => void onDelete(m.id)}
-                        className="rounded-lg bg-[#B87A6F] px-2 py-1 text-white"
-                      >
-                        Borrar
-                      </button>
-                      <button type="button" onClick={() => setConfirmId(null)} className="px-2 py-1 text-[#7D8A96]">
-                        Cancelar
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmId(m.id)}
-                      title="Borrar mapa"
-                      aria-label={`Borrar ${m.title}`}
-                      className="flex h-8 w-8 items-center justify-center rounded-xl text-[#7D8A96] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#FAF7F4] hover:text-[#B87A6F] focus:opacity-100"
-                    >
-                      <span className="material-symbols-outlined text-[20px]">delete</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => void onDelete(m)}
+                    title="Enviar a la papelera"
+                    aria-label={`Enviar a la papelera ${m.title}`}
+                    className="flex h-8 w-8 items-center justify-center rounded-xl text-[#7D8A96] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#FAF7F4] hover:text-[#B87A6F] focus:opacity-100"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">delete</span>
+                  </button>
                 </div>
               </article>
             ))}
           </section>
         )}
       </div>
+      {toast ? (
+        <UndoDeleteToast
+          message={toast.message}
+          tone={toast.tone}
+          isVisible={toast.visible}
+          actionLabel={undo && toast.tone === 'neutral' ? 'Deshacer' : undefined}
+          actionDisabled={undoBusy}
+          onAction={undo && toast.tone === 'neutral' ? () => void onUndo() : undefined}
+        />
+      ) : null}
     </main>
   )
 }
