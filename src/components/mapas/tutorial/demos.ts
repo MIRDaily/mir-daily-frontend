@@ -29,7 +29,13 @@ import {
 // verdad (las mismas funciones que los atajos): el cursor y las teclas solo enseñan qué se
 // está pulsando. Así la demostración no puede contar algo distinto de lo que hace el editor.
 
-export type DemoId = 'edges' | 'panel' | 'mouse' | 'tab' | 'arrows' | 'fold' | 'drag' | 'reparent' | 'search' | 'category' | 'layout'
+export type DemoId = 'export' | 'edges' | 'panel' | 'mouse' | 'tab' | 'arrows' | 'fold' | 'drag' | 'reparent' | 'search' | 'category' | 'layout'
+
+/** El selector si ese elemento se ve; si no (ventana estrecha: pasa al menú «Vista»), el de reserva. */
+function visibleOr(selector: string, fallback: string): string {
+  const el = document.querySelector(selector)
+  return el && el.getClientRects().length > 0 ? selector : fallback
+}
 
 /** Escribe en un nodo letra a letra (sin abrir el editor de texto). */
 async function typeInto(run: number, id: string, text: string) {
@@ -303,6 +309,27 @@ const DEMOS: Record<DemoId, (run: number) => Promise<void>> = {
     await wait(run, 200)
   },
 
+  // Exportar: Ctrl+P / el botón abre el diálogo; se elige «Una hoja por rama» y se cierra sin descargar.
+  async export(run) {
+    await cursorToElement(run, '[data-tuto="export-open"]')
+    await click(run)
+    useUIStore.getState().setExportOpen(true)
+    await wait(run, 900)
+    const choice = [...document.querySelectorAll<HTMLButtonElement>('[data-tuto="export-dialog"] button[aria-pressed]')].find((b) =>
+      /Una hoja por rama/.test(b.innerText),
+    )
+    if (choice) {
+      const r = choice.getBoundingClientRect()
+      await cursorTo(run, r.left + r.width / 2, r.top + r.height / 2)
+      await click(run)
+      choice.click()
+      await wait(run, 1500)
+    }
+    useUIStore.getState().setExportOpen(false)
+    hideCursor()
+    await wait(run, 500)
+  },
+
   // Líneas: clic en una línea abre su barra; trazo, color y grosor.
   async edges(run) {
     const { edges } = useMindMapStore.getState()
@@ -381,7 +408,7 @@ const DEMOS: Record<DemoId, (run: number) => Promise<void>> = {
     await wait(run, 500)
     useMindMapStore.getState().setHovered(null)
     // Menú «Categorías»: se abre, se despliega una categoría y se le cambia el color.
-    await cursorToElement(run, 'button[title="Estilos de las categorías"]')
+    await cursorToElement(run, visibleOr('button[title="Estilos de las categorías"]', '[data-tuto="vista"]'))
     await click(run)
     useUIStore.getState().setCategoriesPanelOpen(true)
     await wait(run, 800)

@@ -357,3 +357,12 @@
 @media (prefers-reduced-motion: reduce) {
   .mapa-root .tuto-glow { animation: none; outline: 2px solid #E8A598; }
 }
+
+/* El resaltado del tutorial no debe esconder el texto: el botón Exportar ya es de color, y en
+   oscuro el fondo claro del resaltado deja el texto claro ilegible. */
+.mapa-root [data-tuto="export-open"].tuto-glow {
+  background: #E8A598 !important;
+}
+.mapa-root[data-theme="dark"] .tuto-glow {
+  background: rgba(232, 165, 152, 0.2) !important;
+}

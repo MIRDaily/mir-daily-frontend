@@ -135,6 +135,12 @@ export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
       if (t?.closest?.('.react-flow__node')) note('node-click')
       if (t?.closest?.('[data-tuto="style-reset"]')) note('style-reset')
       if (t?.closest?.('.react-flow__controls-zoomin, .react-flow__controls-zoomout')) note('zoom')
+      // El menú «Niveles» de la barra vale lo mismo que Alt+1…3 / Alt+0.
+      const lvl = (t?.closest?.('[role="menuitem"]') as HTMLElement | null)?.title ?? ''
+      const m = /^Ver hasta el nivel ([1-3])/.exec(lvl)
+      if (m) note(`Alt${m[1]}`)
+      if (/^Desplegarlo todo/.test(lvl)) note('Alt0')
+      if (t?.closest?.('[data-tuto="export-dialog"] button[aria-pressed]')?.textContent?.includes('Una hoja por rama')) note('export-branches')
       if (t?.closest?.('button[title="Ordenar el mapa automáticamente"]')) {
         note('ordenar')
         const { nodes } = useMindMapStore.getState()
@@ -183,6 +189,7 @@ export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
       if (s.searchOpen && !p.searchOpen) note('search-open')
       if (s.stylePanelOpen && !p.stylePanelOpen) note('style-open')
       if (s.categoriesPanelOpen && !p.categoriesPanelOpen) note('cat-open')
+      if (s.exportOpen && !p.exportOpen) note('export-open')
       if (s.categoryStyles !== p.categoryStyles) note('cat-style')
     })
     window.addEventListener('keydown', onKey, true)
@@ -241,6 +248,7 @@ export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
     const ui = useUIStore.getState()
     ui.setStylePanelOpen(false)
     ui.setCategoriesPanelOpen(false)
+    ui.setExportOpen(false)
     ui.setSearchOpen(false)
     resetMap()
     void flow.fitView({ ...TUTORIAL_FIT, duration: 500 })
@@ -302,7 +310,11 @@ export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
     if (phase !== 'practice') return
     const pending = lesson.tasks.find((_, i) => !taskState[i])
     if (!pending?.glow) return
-    const els = [...document.querySelectorAll(pending.glow)]
+    let els = [...document.querySelectorAll<HTMLElement>(pending.glow)].filter((el) => el.getClientRects().length > 0)
+    // Con la ventana estrecha, «Niveles» y «Categorías» están dentro del menú «Vista»: se señala ese.
+    if (els.length === 0 && /niveles|categor/i.test(pending.glow)) {
+      els = [...document.querySelectorAll<HTMLElement>('[data-tuto="vista"]')]
+    }
     els.forEach((el) => el.classList.add('tuto-glow'))
     return () => els.forEach((el) => el.classList.remove('tuto-glow'))
   }, [phase, lesson, taskState])

@@ -19,6 +19,7 @@ export const LESSON_IDS = [
   'panel',
   'lineas',
   'ordenar',
+  'exportar',
   'fin',
 ] as const
 

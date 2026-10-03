@@ -256,7 +256,7 @@ export const LESSONS: Lesson[] = [
       { id: 'desplegar', text: 'Vuelve a desplegarla', keys: ['Espacio'], check: (ctx) => ctx.events.has('unfold') },
       {
         id: 'niveles',
-        text: 'Prueba Alt+1, Alt+2 y Alt+3 (hasta ese nivel) y vuelve a verlo todo con Alt+0',
+        text: 'Prueba Alt+1, Alt+2 y Alt+3 (hasta ese nivel) y vuelve a verlo todo con Alt+0, o usa el menú «Niveles» de la barra',
         keys: ['Alt', '1·2·3', '0'],
         check: (ctx) => ctx.events.has('Alt1') && ctx.events.has('Alt2') && ctx.events.has('Alt3') && ctx.events.has('Alt0'),
         glow: '[data-tuto="niveles"]',
@@ -330,7 +330,7 @@ export const LESSONS: Lesson[] = [
       },
       {
         id: 'menu-categorias',
-        text: 'Abre el menú «Categorías» de la barra superior',
+        text: 'Abre «Categorías» en la barra de arriba',
         check: (ctx) => ctx.events.has('cat-open'),
         glow: 'button[title="Estilos de las categorías"]',
       },
@@ -409,7 +409,7 @@ export const LESSONS: Lesson[] = [
     tasks: [
       {
         id: 'ordenar',
-        text: 'El mapa está desordenado: pulsa «Ordenar» en la barra',
+        text: 'El mapa está desordenado: pulsa «Ordenar» en la barra de arriba',
         check: (ctx) => ctx.events.has('ordenar-cambio'),
         glow: 'button[title="Ordenar el mapa automáticamente"]',
       },
@@ -421,6 +421,33 @@ export const LESSONS: Lesson[] = [
       },
     ],
     done: { pose: 'celebracion', text: 'Así de fácil. Y si el resultado no te convence, Ctrl+Z.' },
+  },
+  {
+    id: 'exportar',
+    title: 'Exportar e imprimir',
+    intro: [
+      { pose: 'hablando', text: 'Para estudiar en papel, el mapa se exporta a PDF. No es una foto: el texto y las líneas son vectores y salen nítidos.' },
+    ],
+    demo: 'export',
+    demoLine: {
+      pose: 'senalando',
+      text: 'Ctrl+P o el botón Exportar. Puedes sacar todo el mapa, solo lo seleccionado, o una hoja por cada rama principal.',
+    },
+    tasks: [
+      {
+        id: 'abrir-exportar',
+        text: 'Abre «Exportar» con Ctrl+P o con el botón de arriba a la derecha',
+        keys: ['Ctrl', 'P'],
+        check: (ctx) => ctx.events.has('export-open'),
+        glow: '[data-tuto="export-open"]',
+      },
+      {
+        id: 'una-hoja-por-rama',
+        text: 'Elige «Una hoja por rama»: cada rama principal sale en su hoja, con la letra bien grande',
+        check: (ctx) => ctx.events.has('export-branches'),
+      },
+    ],
+    done: { pose: 'celebracion', text: 'Con «Tamaño real, en varias hojas» el mapa se reparte en folios A4 para pegarlos. Descarga cuando quieras.' },
   },
   {
     id: 'fin',

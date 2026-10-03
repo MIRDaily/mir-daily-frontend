@@ -106,7 +106,10 @@ function ExportBody({ mapTitle, onExportJson, onClose }: { mapTitle: string; onE
       }}
       style={{
         position: 'absolute',
-        inset: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 'var(--mapa-inset-left, 0px)',
         zIndex: 1500,
         display: 'flex',
         alignItems: 'center',

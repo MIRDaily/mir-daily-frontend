@@ -390,6 +390,7 @@ function ViewMenu({ t }: { t: Theme }) {
     <div ref={ref} style={{ position: 'relative' }}>
       <button
         type="button"
+        data-tuto="vista"
         onClick={() => setOpen(!open)}
         title="Vista: fondo, tema, física y desenfoque"
         aria-haspopup="menu"
@@ -409,9 +410,9 @@ function ViewMenu({ t }: { t: Theme }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 4px 0' }}>
               <span style={{ fontSize: 12.5, color: t.textSecondary, marginRight: 4 }}>Niveles</span>
               {[1, 2, 3].map((l) => (
-                <button key={l} style={{ ...chip(t), width: 30, height: 30 }} onClick={() => { showUpToLevel(l); setOpen(false) }}>{l}</button>
+                <button key={l} role="menuitem" title={`Ver hasta el nivel ${l} (Alt+${l})`} style={{ ...chip(t), width: 30, height: 30 }} onClick={() => { showUpToLevel(l); setOpen(false) }}>{l}</button>
               ))}
-              <button style={{ ...chip(t), width: 'auto', height: 30, padding: '0 9px' }} onClick={() => { showUpToLevel(null); setOpen(false) }}>Todo</button>
+              <button role="menuitem" title="Desplegarlo todo (Alt+0)" style={{ ...chip(t), width: 'auto', height: 30, padding: '0 9px' }} onClick={() => { showUpToLevel(null); setOpen(false) }}>Todo</button>
             </div>
             <div style={{ height: 1, background: t.border, margin: '8px 0 2px' }} />
           </div>
