@@ -1,9 +1,22 @@
 'use client'
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createMap, deleteMap, listMaps, purgeExpiredMaps, restoreMap, type MapSummary } from '@/lib/mapas/api'
+import {
+  createMap,
+  deleteMap,
+  duplicateMap,
+  listMaps,
+  purgeExpiredMaps,
+  renameMap,
+  restoreMap,
+  setMapPinned,
+  setMapSubject,
+  type MapSummary,
+} from '@/lib/mapas/api'
+import { MapCard } from '@/components/mapas/list/MapCard'
+import { searchable } from '@/lib/mapas/summary'
 import UndoDeleteToast from '@/components/studio/UndoDeleteToast'
 import { useCozyCursorOff } from '@/hooks/useCozyCursorOff'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
@@ -15,11 +28,8 @@ import { firstPendingLesson, readLessonsDone, TOTAL_LESSONS } from '@/components
 
 const noSubscribe = () => () => {}
 
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
-}
+type Sort = 'recent' | 'name' | 'size'
+const SORT_LABEL: Record<Sort, string> = { recent: 'Más recientes', name: 'Nombre (A–Z)', size: 'Más grandes' }
 
 export default function MapasPage() {
   const router = useRouter()
@@ -34,6 +44,11 @@ export default function MapasPage() {
   const [maps, setMaps] = useState<MapSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [pinSupported, setPinSupported] = useState(false)
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<Sort>('recent')
+  const [subjectFilter, setSubjectFilter] = useState<string | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
   // Borrar manda el mapa a la papelera (24 h) y ofrece deshacer, igual que en mazos.
   const [undo, setUndo] = useState<{ map: MapSummary; index: number } | null>(null)
   const [undoBusy, setUndoBusy] = useState(false)
@@ -71,8 +86,10 @@ export default function MapasPage() {
     let cancelled = false
     void purgeExpiredMaps().catch(() => {})
     listMaps()
-      .then((m) => {
-        if (!cancelled) setMaps(m)
+      .then((r) => {
+        if (cancelled) return
+        setMaps(r.maps)
+        setPinSupported(r.pinSupported)
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Error desconocido')
@@ -81,6 +98,78 @@ export default function MapasPage() {
       cancelled = true
     }
   }, [])
+
+  const patchMap = (id: string, patch: Partial<MapSummary>) =>
+    setMaps((m) => (m ? m.map((x) => (x.id === id ? { ...x, ...patch } : x)) : m))
+
+  const reload = async () => {
+    try {
+      const r = await listMaps()
+      setMaps(r.maps)
+      setPinSupported(r.pinSupported)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo recargar la lista')
+    }
+  }
+
+  const onRename = (map: MapSummary, raw: string) => {
+    setRenamingId(null)
+    const title = raw.trim().slice(0, 200)
+    if (!title || title === map.title) return
+    patchMap(map.id, { title })
+    renameMap(map.id, title).catch((e: unknown) => {
+      patchMap(map.id, { title: map.title })
+      showToast(e instanceof Error ? e.message : 'No se pudo renombrar', 'error', 3000)
+    })
+  }
+
+  const onDuplicate = async (map: MapSummary) => {
+    try {
+      await duplicateMap(map.id)
+      await reload()
+      showToast('Mapa duplicado', 'success', 2200)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo duplicar', 'error', 3000)
+    }
+  }
+
+  const onSubject = (map: MapSummary, subject: string | null) => {
+    patchMap(map.id, { subject })
+    setMapSubject(map.id, subject).catch((e: unknown) => {
+      patchMap(map.id, { subject: map.subject })
+      showToast(e instanceof Error ? e.message : 'No se pudo cambiar la asignatura', 'error', 3000)
+    })
+  }
+
+  const onPin = (map: MapSummary) => {
+    patchMap(map.id, { pinned: !map.pinned })
+    setMapPinned(map.id, !map.pinned).catch((e: unknown) => {
+      patchMap(map.id, { pinned: map.pinned })
+      showToast(e instanceof Error ? e.message : 'No se pudo fijar', 'error', 3000)
+    })
+  }
+
+  // Búsqueda (título, texto de los nodos y asignatura), filtro por asignatura y orden.
+  const subjectsPresent = useMemo(
+    () => [...new Set((maps ?? []).map((m) => m.subject).filter((s): s is string => !!s))].sort((a, b) => a.localeCompare(b, 'es')),
+    [maps],
+  )
+  const visible = useMemo(() => {
+    const q = searchable(query)
+    const list = (maps ?? []).filter((m) => {
+      if (subjectFilter && m.subject !== subjectFilter) return false
+      if (!q) return true
+      return searchable(m.title).includes(q) || m.text.includes(q) || searchable(m.subject ?? '').includes(q)
+    })
+    const by: Record<Sort, (a: MapSummary, b: MapSummary) => number> = {
+      recent: (a, b) => b.updated_at.localeCompare(a.updated_at),
+      name: (a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }),
+      size: (a, b) => b.nodeCount - a.nodeCount,
+    }
+    return [...list].sort(by[sort])
+  }, [maps, query, subjectFilter, sort])
+  const pinnedMaps = visible.filter((m) => m.pinned)
+  const restMaps = visible.filter((m) => !m.pinned)
 
   const onCreate = async () => {
     if (creating) return
@@ -246,7 +335,19 @@ export default function MapasPage() {
           </div>
         )}
 
-        {maps === null && !error && <p className="text-sm">Cargando tus mapas…</p>}
+        {maps === null && !error && (
+          <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Cargando tus mapas">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="animate-pulse overflow-hidden rounded-3xl border border-[#7D8A96]/10 bg-white">
+                <div className="aspect-[16/10] bg-[#F1ECE6]" />
+                <div className="space-y-2 p-4">
+                  <div className="h-4 w-2/3 rounded bg-[#F1ECE6]" />
+                  <div className="h-3 w-1/3 rounded bg-[#F1ECE6]" />
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
 
         {maps !== null && maps.length === 0 && (
           <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-[#7D8A96]/30 bg-white/60 px-6 py-16 text-center">
@@ -259,33 +360,126 @@ export default function MapasPage() {
         )}
 
         {maps !== null && maps.length > 0 && (
-          <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-label="Tus mapas">
-            {maps.map((m) => (
-              <article
-                key={m.id}
-                className="group relative rounded-3xl border border-[#7D8A96]/15 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
-              >
-                <Link href={`/mapas/${m.id}`} className="block">
-                  <span className="material-symbols-outlined mb-3 text-3xl text-[#E8A598]">account_tree</span>
-                  <h2 className="line-clamp-2 text-lg font-bold text-[#2C3E50]">{m.title || 'Mapa sin título'}</h2>
-                  <p className="mt-1 text-xs font-medium">
-                    {m.nodeCount} {m.nodeCount === 1 ? 'nodo' : 'nodos'} · {formatDate(m.updated_at)}
-                  </p>
-                </Link>
-                <div className="absolute top-4 right-4">
+          <>
+            {/* Buscar, filtrar por asignatura y ordenar */}
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="relative min-w-[220px] flex-1">
+                <span className="material-symbols-outlined pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[20px] text-[#7D8A96]">search</span>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Buscar por título o por lo que hay dentro…"
+                  aria-label="Buscar mapas"
+                  className="w-full rounded-2xl border border-[#7D8A96]/20 bg-white py-3 pr-4 pl-10 text-sm font-medium text-[#2C3E50] outline-none transition-colors placeholder:text-[#7D8A96]/70 focus:border-[#E8A598]"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm font-semibold">
+                <span className="sr-only">Ordenar</span>
+                <span className="material-symbols-outlined text-[20px]">sort</span>
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as Sort)}
+                  className="rounded-2xl border border-[#7D8A96]/20 bg-white px-3 py-3 text-sm font-semibold text-[#2C3E50] outline-none focus:border-[#E8A598]"
+                >
+                  {(Object.keys(SORT_LABEL) as Sort[]).map((k) => (
+                    <option key={k} value={k}>
+                      {SORT_LABEL[k]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {subjectsPresent.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtrar por asignatura">
+                {[null, ...subjectsPresent].map((s) => (
                   <button
+                    key={s ?? 'todas'}
                     type="button"
-                    onClick={() => void onDelete(m)}
-                    title="Enviar a la papelera"
-                    aria-label={`Enviar a la papelera ${m.title}`}
-                    className="flex h-8 w-8 items-center justify-center rounded-xl text-[#7D8A96] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#FAF7F4] hover:text-[#B87A6F] focus:opacity-100"
+                    onClick={() => setSubjectFilter(s)}
+                    aria-pressed={subjectFilter === s}
+                    className={`rounded-full border px-3.5 py-1.5 text-xs font-bold transition-colors ${
+                      subjectFilter === s
+                        ? 'border-[#E8A598] bg-[#FCEFEC] text-[#B87A6F]'
+                        : 'border-[#7D8A96]/20 bg-white text-[#7D8A96] hover:border-[#E8A598]'
+                    }`}
                   >
-                    <span className="material-symbols-outlined text-[20px]">delete</span>
+                    {s ?? 'Todas'}
                   </button>
-                </div>
-              </article>
+                ))}
+              </div>
+            )}
+
+            {visible.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 rounded-3xl border border-dashed border-[#7D8A96]/30 bg-white/60 px-6 py-14 text-center">
+                <span className="material-symbols-outlined text-4xl text-[#E8A598]">search_off</span>
+                <p className="text-lg font-bold text-[#2C3E50]">Ningún mapa coincide</p>
+                <p className="text-sm">Prueba con otra palabra o quita el filtro.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery('')
+                    setSubjectFilter(null)
+                  }}
+                  className="mt-1 rounded-xl bg-[#E8A598] px-4 py-2 text-sm font-bold text-white hover:bg-[#d18d80]"
+                >
+                  Quitar búsqueda y filtros
+                </button>
+              </div>
+            ) : (
+              <>
+                {pinnedMaps.length > 0 && (
+                  <section aria-label="Mapas fijados" className="flex flex-col gap-3">
+                    <h2 className="flex items-center gap-1.5 text-xs font-black tracking-widest text-[#7D8A96] uppercase">
+                      <span className="material-symbols-outlined text-[16px] text-[#E8A598]">push_pin</span>Fijados
+                    </h2>
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {pinnedMaps.map((m) => (
+              <MapCard
+                key={m.id}
+                map={m}
+                pinSupported={pinSupported}
+                renaming={renamingId === m.id}
+                onStartRename={() => setRenamingId(m.id)}
+                onRename={(t) => onRename(m, t)}
+                onCancelRename={() => setRenamingId(null)}
+                onDuplicate={() => void onDuplicate(m)}
+                onSubject={(subject) => onSubject(m, subject)}
+                onPin={() => onPin(m)}
+                onDelete={() => void onDelete(m)}
+              />
             ))}
-          </section>
+                    </div>
+                  </section>
+                )}
+                {restMaps.length > 0 && (
+                  <section aria-label="Tus mapas" className="flex flex-col gap-3">
+                    {pinnedMaps.length > 0 && (
+                      <h2 className="text-xs font-black tracking-widest text-[#7D8A96] uppercase">Todos los mapas</h2>
+                    )}
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {restMaps.map((m) => (
+              <MapCard
+                key={m.id}
+                map={m}
+                pinSupported={pinSupported}
+                renaming={renamingId === m.id}
+                onStartRename={() => setRenamingId(m.id)}
+                onRename={(t) => onRename(m, t)}
+                onCancelRename={() => setRenamingId(null)}
+                onDuplicate={() => void onDuplicate(m)}
+                onSubject={(subject) => onSubject(m, subject)}
+                onPin={() => onPin(m)}
+                onDelete={() => void onDelete(m)}
+              />
+            ))}
+                    </div>
+                  </section>
+                )}
+              </>
+            )}
+          </>
         )}
       </div>
       {toast ? (

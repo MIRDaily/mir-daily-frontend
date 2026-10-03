@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabaseBrowser'
 import { docNodeCount, newGraphDoc, type StoredDoc } from '@/lib/mapas/graph'
+import { summarizeDoc, type Thumb } from '@/lib/mapas/summary'
 
 // Acceso a `public.mind_maps` (sql/2026-09-mapas-mentales.sql). Directo con el
 // cliente de Supabase: RLS deja a cada usuario solo lo suyo.
@@ -14,6 +15,14 @@ export type MapSummary = {
   subject: string | null
   updated_at: string
   nodeCount: number
+  /** Mapa de ejemplo temporal repartido a todos (sql/2026-10-mapa-ejemplo-para-todos.sql): se marca con una asignatura reservada. */
+  example: boolean
+  /** Fijado arriba en la lista. */
+  pinned: boolean
+  /** Dibujo en miniatura del mapa (null si está vacío o no se pudo leer). */
+  thumb: Thumb | null
+  /** Texto de todos los nodos, en minúsculas y sin tildes, para buscar. */
+  text: string
 }
 
 export type MapRecord = {
@@ -24,20 +33,64 @@ export type MapRecord = {
   doc: unknown
 }
 
-export async function listMaps(): Promise<MapSummary[]> {
-  const { data, error } = await supabase
-    .from('mind_maps')
-    .select('id,title,subject,updated_at,doc')
-    .is('deleted_at', null)
-    .order('updated_at', { ascending: false })
+/**
+ * Los mapas del usuario con lo necesario para la lista. `pinSupported` es false mientras no se
+ * haya aplicado el SQL de «fijados» (la columna `pinned`): la lista funciona igual, sin fijar.
+ */
+export async function listMaps(): Promise<{ maps: MapSummary[]; pinSupported: boolean }> {
+  const query = (cols: string) =>
+    supabase.from('mind_maps').select(cols).is('deleted_at', null).order('updated_at', { ascending: false })
+  let pinSupported = true
+  let res = await query('id,title,subject,updated_at,doc,pinned')
+  if (res.error && /pinned/i.test(res.error.message)) {
+    pinSupported = false
+    res = await query('id,title,subject,updated_at,doc')
+  }
+  if (res.error) throw new Error(res.error.message)
+  const rows = (res.data ?? []) as unknown as Record<string, unknown>[]
+  const maps = rows.map((row) => {
+    const sum = summarizeDoc(row.doc)
+    return {
+      id: row.id as string,
+      title: row.title as string,
+      subject: row.subject === EXAMPLE_SUBJECT ? null : ((row.subject as string | null) ?? null),
+      updated_at: row.updated_at as string,
+      nodeCount: docNodeCount(row.doc),
+      example: row.subject === EXAMPLE_SUBJECT,
+      pinned: row.pinned === true,
+      thumb: sum.thumb,
+      text: sum.text,
+    }
+  })
+  return { maps, pinSupported }
+}
+
+/** Marca (en `subject`) del mapa de ejemplo temporal: la limpieza previa al lanzamiento lo localiza por ella. */
+export const EXAMPLE_SUBJECT = 'ejemplo-temporal'
+
+export async function renameMap(id: string, title: string) {
+  const { error } = await supabase.from('mind_maps').update({ title: title.slice(0, 200) }).eq('id', id)
   if (error) throw new Error(error.message)
-  return (data ?? []).map((row) => ({
-    id: row.id as string,
-    title: row.title as string,
-    subject: (row.subject as string | null) ?? null,
-    updated_at: row.updated_at as string,
-    nodeCount: docNodeCount(row.doc),
-  }))
+}
+
+export async function setMapSubject(id: string, subject: string | null) {
+  const { error } = await supabase.from('mind_maps').update({ subject }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+export async function setMapPinned(id: string, pinned: boolean) {
+  const { error } = await supabase.from('mind_maps').update({ pinned }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/** Copia un mapa (mismo contenido y asignatura) con «(copia)» en el título. Devuelve el id nuevo. */
+export async function duplicateMap(id: string): Promise<string> {
+  const { data, error } = await supabase.from('mind_maps').select('title,subject,doc').eq('id', id).single()
+  if (error) throw new Error(error.message)
+  const title = `${String(data.title).slice(0, 190)} (copia)`
+  const ins = await supabase.from('mind_maps').insert({ title, subject: data.subject === EXAMPLE_SUBJECT ? null : data.subject, doc: data.doc }).select('id').single()
+  if (ins.error) throw new Error(ins.error.message)
+  return ins.data.id as string
 }
 
 export async function getMap(id: string): Promise<MapRecord | null> {

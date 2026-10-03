@@ -552,3 +552,18 @@ test('export: reparto en hojas (una hoja, mosaico a tamaño real y una por parte
   const parts = planPages([small, { ...small, title: 'Rama' }], { ...base, distribution: 'fit' })
   assert.equal(parts.length, 2)
 })
+
+// ---------------------------------------------------------------------------
+// Lista de mapas: miniatura y texto buscable
+// ---------------------------------------------------------------------------
+
+import { searchable, summarizeDoc } from '@/lib/mapas/summary'
+
+test('lista: la miniatura y el texto salen del propio documento', () => {
+  const s = summarizeDoc(PRACTICE_MAP)
+  assert.ok(s.thumb && s.thumb.nodes.length === PRACTICE_MAP.nodes.length)
+  assert.equal(s.thumb!.edges.length, PRACTICE_MAP.nodes.length - 1)
+  assert.ok(s.text.includes('insuficiencia cardiaca') && s.text.includes('peptidos natriureticos'))
+  assert.ok(summarizeDoc({ nope: true }).thumb!.nodes.length >= 1) // un documento ilegible se repara, no rompe la lista
+  assert.equal(searchable('<b>Diagnóstico</b>&nbsp;ÓPTICO'), 'diagnostico optico')
+})

@@ -90,6 +90,16 @@ const VISUAL_ALIASES: Record<string, string> = {
   legislacion: 'bioetica',
 }
 
+/** Las asignaturas del MIR con su sigla y categoría, en orden de categoría y nombre (para elegirlas). */
+export function listSubjects(): { label: string; sigla: string; icon: string; category: SubjectCategory }[] {
+  return Object.values(SUBJECT_VISUALS)
+    .map((e) => ({ label: e.label, sigla: e.sigla, icon: e.icon, category: e.category as SubjectCategory }))
+    .sort(
+      (a, b) =>
+        CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category) || a.label.localeCompare(b.label, 'es'),
+    )
+}
+
 export type SubjectVisual = {
   /** Clave canónica, o `null` si el mazo no es una asignatura reconocida. */
   key: string | null
