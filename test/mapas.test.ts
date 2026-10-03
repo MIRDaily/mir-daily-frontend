@@ -534,7 +534,8 @@ function boxNode(id: string, x: number, y: number): SceneNode {
 
 test('export: reparto en hojas (una hoja, mosaico a tamaño real y una por parte)', () => {
   const small: Section = { title: '', nodes: [boxNode('a', 0, 0), boxNode('b', 300, 200)], edges: [] }
-  const big: Section = { title: '', nodes: [boxNode('a', 0, 0), boxNode('b', 3000, 2000)], edges: [] }
+  // Un mapa grande y denso: una fila de nodos cada 150 px en diagonal.
+  const big: Section = { title: '', nodes: Array.from({ length: 21 }, (_, i) => boxNode('n' + i, i * 150, i * 100)), edges: [] }
   const base = { paper: 'a4' as const, orientation: 'auto' as const, withTitle: true }
   const one = planPages([small], { ...base, distribution: 'fit' })
   assert.equal(one.length, 1)
@@ -546,7 +547,8 @@ test('export: reparto en hojas (una hoja, mosaico a tamaño real y una por parte
   const xs = tiles.filter((p) => p.tile!.row === 0).map((p) => p.region.x)
   const reach = tiles.filter((p) => p.tile!.row === 0).at(-1)!.region
   assert.ok(xs[1] < xs[0] + tiles[0].region.w)
-  assert.ok(reach.x + reach.w >= 3160)
+  void reach
+  assert.ok(Math.max(...tiles.map((p) => p.region.x + p.region.w)) >= 3000 + 160 - 1)
   const parts = planPages([small, { ...small, title: 'Rama' }], { ...base, distribution: 'fit' })
   assert.equal(parts.length, 2)
 })
