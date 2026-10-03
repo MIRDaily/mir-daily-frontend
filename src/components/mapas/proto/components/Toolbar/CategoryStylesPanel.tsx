@@ -187,7 +187,7 @@ function CategoryStylesBody() {
         <div
           style={{
             position: 'absolute',
-            top: 74,
+            top: 14,
             left: 'var(--mapa-inset-left, 0px)',
             right: 0,
             zIndex: 1000,
@@ -207,7 +207,7 @@ function CategoryStylesBody() {
               pointerEvents: 'auto',
               width: 880,
               maxWidth: '100%',
-              maxHeight: 'calc(100vh - 100px)',
+              maxHeight: 'calc(100vh - 80px)',
               overflowY: 'auto',
               background: t.bgPanel,
               border: `1px solid ${t.border}`,

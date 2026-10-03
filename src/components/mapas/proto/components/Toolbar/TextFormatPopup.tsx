@@ -54,7 +54,7 @@ function TextFormatBody() {
     left = Math.max(MARGIN, Math.min(window.innerWidth - POPUP_W - MARGIN, left))
 
     let top = screenPos.y - POPUP_H - GAP
-    top = Math.max(MARGIN, top)
+    top = Math.max(52 + MARGIN, top) // nunca bajo la cabecera del editor
 
     return { position: 'fixed', left, top }
   }

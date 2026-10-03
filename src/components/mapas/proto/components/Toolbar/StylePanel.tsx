@@ -48,7 +48,7 @@ function ShapeIcon({ shape }: { shape: NodeShape }) {
 const POPUP_W = 272
 const POPUP_H_EST = 420
 /** Debajo de la barra superior (y de la caja del título). */
-const TOP_SAFE = 80
+const TOP_SAFE = 52 + 14 // debajo de la cabecera del editor (BAR_H) y un respiro
 const GAP = 14
 const MARGIN = 8
 

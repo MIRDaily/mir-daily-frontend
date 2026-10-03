@@ -20,10 +20,8 @@ import { MindMapCanvas } from '@/components/mapas/proto/components/Canvas/MindMa
 import { InteractiveBackground } from '@/components/mapas/proto/components/Canvas/InteractiveBackground'
 import { CustomMiniMap } from '@/components/mapas/proto/components/Canvas/CustomMiniMap'
 import { ExportDialog } from '@/components/mapas/proto/components/Toolbar/ExportDialog'
-import { MainToolbar } from '@/components/mapas/proto/components/Toolbar/MainToolbar'
-import { BrandCorner } from '@/components/mapas/proto/components/Toolbar/BrandCorner'
+import { BAR_H, EditorTopBar, type SaveState } from '@/components/mapas/proto/components/Toolbar/EditorTopBar'
 import { CategoryStylesPanel } from '@/components/mapas/proto/components/Toolbar/CategoryStylesPanel'
-import { MapTitleBar, type SaveState } from '@/components/mapas/proto/components/Toolbar/MapTitleBar'
 import { StylePanel } from '@/components/mapas/proto/components/Toolbar/StylePanel'
 import { TextFormatPopup } from '@/components/mapas/proto/components/Toolbar/TextFormatPopup'
 import { ShortcutsPanel } from '@/components/mapas/proto/components/Toolbar/ShortcutsPanel'
@@ -470,26 +468,27 @@ function EditorInner({
     <div className={`mapa-root ${MAP_FONT_CLASSES}`} data-theme={theme} style={rootStyle}>
       {/* Capa 0: fondo de puntos interactivo. Capa 1+: lienzo y controles (transparentes). */}
       <InteractiveBackground isDark={isDark} bgStyle={bgStyle} />
-      <div style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
+      {/* Cabecera única: título, acciones y vista en una sola franja (nada flota ni se pisa). */}
+      <EditorTopBar
+        title={title}
+        onTitleChange={onTitleChange}
+        save={save}
+        onRetry={() => void flush()}
+        statusText={sandbox ? 'Práctica · no se guarda' : undefined}
+        onAutoLayout={onAutoLayout}
+      />
+      {/* El lienzo y sus paneles ocupan lo que queda debajo de la cabecera. */}
+      <div style={{ position: 'absolute', top: BAR_H, left: 0, right: 0, bottom: 0, zIndex: 1 }}>
         <MindMapCanvas />
-        <MapTitleBar
-          title={title}
-          onTitleChange={onTitleChange}
-          save={save}
-          onRetry={() => void flush()}
-          statusText={sandbox ? 'Práctica · no se guarda' : undefined}
-        />
-        <BrandCorner />
-        <MainToolbar onAutoLayout={onAutoLayout} />
         <CategoryStylesPanel />
         <StylePanel />
         <SearchBar />
         <TextFormatPopup />
         <ShortcutsPanel />
-        <ExportDialog mapTitle={title} onExportJson={onExportJson} />
         <CustomMiniMap />
         {overlay}
       </div>
+      <ExportDialog mapTitle={title} onExportJson={onExportJson} />
     </div>
   )
 }

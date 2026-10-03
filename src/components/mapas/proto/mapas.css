@@ -202,34 +202,27 @@
   background: #3C3530;
 }
 
-/* Título del mapa: a la izquierda de la barra principal; en pantallas estrechas pasa a la fila de debajo. */
-.mapa-root .mapa-titlebar {
-  top: 16px;
-  left: 16px;
-  max-width: calc(50% - 250px);
+/*
+ * Cabecera del editor (EditorTopBar). Con la ventana estrecha pierde las etiquetas (quedan los
+ * iconos) y, más estrecha aún, buscar / categorías / niveles pasan al menú «Vista».
+ */
+.mapa-root .mapa-topbar .only-md {
+  display: none;
 }
-@media (max-width: 1100px) {
-  .mapa-root .mapa-titlebar {
-    top: 78px;
-    max-width: calc(100% - 32px);
+.mapa-root .mapa-topbar-title:hover {
+  border-color: var(--mapa-border, rgba(125, 138, 150, 0.35)) !important;
+}
+@media (max-width: 1180px) {
+  .mapa-root .mapa-topbar .lbl {
+    display: none;
   }
 }
-
-/* Logo de MIRDaily: esquina superior derecha; en pantallas estrechas baja a la fila del título. */
-.mapa-root .mapa-brand {
-  top: 14px;
-  right: 16px;
-  opacity: 0.85;
-}
-.mapa-root .mapa-brand:hover {
-  opacity: 1;
-}
-@media (max-width: 1100px) {
-  .mapa-root .mapa-brand {
-    top: 82px;
+@media (max-width: 900px) {
+  .mapa-root .mapa-topbar .hide-md {
+    display: none !important;
   }
-  .mapa-root .mapa-titlebar {
-    max-width: calc(100% - 190px);
+  .mapa-root .mapa-topbar .only-md {
+    display: flex;
   }
 }
 

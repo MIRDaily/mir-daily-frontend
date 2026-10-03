@@ -7,7 +7,7 @@ export const COACH_WIDTH = 392
  * pequeñas los nodos se queden diminutos: se prefiere recortar un poco el borde a no poder leerlos.
  */
 export const TUTORIAL_FIT = {
-  padding: { top: '110px', right: '40px', bottom: '40px', left: `${COACH_WIDTH + 48}px` },
+  padding: { top: '40px', right: '40px', bottom: '40px', left: `${COACH_WIDTH + 48}px` },
   minZoom: 0.72,
   maxZoom: 1.1,
 } as const

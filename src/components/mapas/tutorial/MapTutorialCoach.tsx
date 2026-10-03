@@ -27,7 +27,7 @@ import { readLessonsDone, writeLessonsDone } from './progress'
 
 
 const LEFT = 16
-const TOP = 120
+const TOP = 16
 
 type Phase = 'intro' | 'demo' | 'practice'
 
