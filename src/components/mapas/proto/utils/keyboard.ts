@@ -1,6 +1,7 @@
 import type { ReactFlowInstance } from '@xyflow/react'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
+import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { childrenMap, parentMap } from '@/components/mapas/proto/utils/tree'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
@@ -25,7 +26,7 @@ export function registerFlow(instance: Flow | null) {
 export function revealNode(id: string) {
   const node = useMindMapStore.getState().nodes.find((n) => n.id === id)
   const pane = document.querySelector('.mapa-root .react-flow')?.getBoundingClientRect()
-  if (!flow || !node || !pane) return
+  if (!flow || !node || !pane || useUIStore.getState().cameraLocked) return
   const w = node.measured?.width ?? 160
   const h = node.measured?.height ?? 50
   const { x, y, zoom } = flow.getViewport()

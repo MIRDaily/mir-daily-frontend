@@ -22,6 +22,7 @@ import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
 import { EdgeStylePanel } from './EdgeStylePanel'
+import { GroupToolbar } from './GroupToolbar'
 import { registerFlow } from '@/components/mapas/proto/utils/keyboard'
 
 // Props de React Flow fuera del render: un objeto/array nuevo en cada render (como estaban
@@ -69,6 +70,7 @@ export function MindMapCanvas() {
   const onPaneClick = useCallback(() => setStylePanelOpen(false), [setStylePanelOpen])
   const onSelectionChange = useCallback(({ nodes: sel }: OnSelectionChangeParams) => {
     if (wrapperRef.current) wrapperRef.current.dataset.selectedCount = String(sel.length)
+    useUIStore.getState().setMultiSelect(sel.length > 1)
   }, [])
   const controlsStyle = useMemo(
     () => ({
@@ -118,6 +120,7 @@ export function MindMapCanvas() {
       >
         <Controls style={controlsStyle} />
         <EdgeStylePanel />
+        <GroupToolbar />
       </ReactFlow>
     </div>
   )

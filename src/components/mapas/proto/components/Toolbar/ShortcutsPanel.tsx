@@ -8,14 +8,15 @@ const SHORTCUTS: { keys: string[]; desc: string }[] = [
   { keys: ['Tab'], desc: 'Hijo del nodo seleccionado (también escribiendo)' },
   { keys: ['Enter'], desc: 'Hermano del nodo seleccionado' },
   { keys: ['← ↑ → ↓'], desc: 'Moverse entre nodos conectados' },
-  { keys: ['F2'], desc: 'Editar el nodo seleccionado' },
-  { keys: ['Espacio'], desc: 'Plegar / desplegar el nodo seleccionado' },
-  { keys: ['Alt', '1 – 3'], desc: 'Ver hasta ese nivel (Alt+0: todo)' },
+  { keys: ['Escribir'], desc: 'Editar el nodo seleccionado (F2 también)' },
+  { keys: ['N'], desc: 'Nuevo nodo suelto (sin nada seleccionado; Alt+N siempre)' },
+  { keys: ['Espacio'], desc: 'Plegar / desplegar los nodos seleccionados' },
+  { keys: ['Alt', '1 – 9'], desc: 'Ver hasta ese nivel (Alt+0: todo)' },
   { keys: ['Ctrl', 'F'], desc: 'Buscar en el mapa' },
   { keys: ['Ctrl', 'Arrastrar'], desc: 'Soltar sobre otro nodo: cambia de rama' },
   { keys: ['Selección', 'Ordenar'], desc: 'Ordena solo los nodos seleccionados' },
   { keys: ['Doble clic'], desc: 'Editar nodo' },
-  { keys: ['N'], desc: 'Nuevo nodo' },
+  
   { keys: ['Click +'], desc: 'Añadir nodo hijo' },
   { keys: ['Supr'], desc: 'Eliminar selección' },
   { keys: ['Ctrl', 'Z'], desc: 'Deshacer' },
@@ -23,9 +24,9 @@ const SHORTCUTS: { keys: string[]; desc: string }[] = [
   { keys: ['Ctrl', 'C'], desc: 'Copiar nodos' },
   { keys: ['Ctrl', 'X'], desc: 'Cortar nodos' },
   { keys: ['Ctrl', 'V'], desc: 'Pegar nodos' },
-  { keys: ['Ctrl', 'Clic ▶'], desc: 'Estilos del nodo' },
+  { keys: ['Ctrl', 'E'], desc: 'Estilos del nodo seleccionado (o la paleta sobre el nodo)' },
   { keys: ['Varios + Estilos'], desc: 'Mismo estilo a toda la selección' },
-  { keys: ['1 – 7'], desc: 'Categoría del nodo bajo el cursor' },
+  { keys: ['1 – 7'], desc: 'Categoría del nodo bajo el cursor (o de toda la selección)' },
   { keys: ['Arrastrar nodo'], desc: 'Mueve el nodo con toda su rama' },
   { keys: ['Alt', 'Arrastrar'], desc: 'Mueve solo el nodo' },
   { keys: ['Clic − / +N'], desc: 'Plegar / desplegar rama' },
@@ -93,14 +94,14 @@ export function ShortcutsPanel() {
   }
 
   return (
-    // Positioned above the RF Controls widget.
-    // Controls: 4 buttons ≈ 110px tall, RF default bottom: 8px → top at ~118px.
-    // Add 16px gap → button bottom at 134px. Align left with controls (RF default: 8px).
+    // Encima de los controles de zoom de React Flow y en su misma columna: allí están a 15 px del
+    // borde, miden 28 px de ancho y unos 106 de alto (+ − encuadrar bloquear). El botón copia su
+    // caja (ancho, borde, radio, sombra) para leerse como uno más de la columna.
     <div
       style={{
         position: 'absolute',
-        bottom: 146,
-        left: 8,
+        bottom: 15 + 106 + 10,
+        left: 15,
         zIndex: 900,
         display: 'flex',
         flexDirection: 'column',
@@ -242,13 +243,13 @@ export function ShortcutsPanel() {
       <motion.button
         animate={btnControls}
         onClick={handleToggle}
-        whileHover={{ scale: 1.1 }}
+        whileHover={{ scale: 1.06 }}
         whileTap={{ scale: 0.92 }}
         title={open ? 'Cerrar atajos' : 'Ver atajos de teclado'}
         style={{
-          width: 34,
-          height: 34,
-          borderRadius: '50%',
+          width: 28,
+          height: 28,
+          borderRadius: 10,
           border: `1px solid ${open ? t.accent : t.border}`,
           background: open ? t.accent : t.bgPanel,
           color: open ? '#fff' : t.textMuted,
@@ -257,10 +258,11 @@ export function ShortcutsPanel() {
           alignItems: 'center',
           justifyContent: 'center',
           boxShadow: `0 2px 12px ${t.shadow}`,
+          padding: 0,
           transition: 'background 200ms ease, color 200ms ease, border-color 200ms ease',
         }}
       >
-        <HelpCircle size={16} />
+        <HelpCircle size={15} />
       </motion.button>
     </div>
   )

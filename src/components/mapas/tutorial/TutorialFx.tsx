@@ -1,10 +1,36 @@
 import { AnimatePresence, motion } from 'framer-motion'
+import { HelpCircle } from 'lucide-react'
 import { useTutorialFx } from './fx'
 
 // Lo que se ve de las demostraciones: el cursor fantasma y las teclas pulsadas. Mismo cursor que
 // las maquetas del Studio (components/tutorial/PreviewModo), para que se reconozca.
 
 const TINTA = '#2C3E50'
+
+/** El botón ? de atajos del editor, tal cual se ve en la interfaz (para nombrarlo dentro del texto). */
+export function HelpButtonIcon() {
+  return (
+    <span
+      aria-hidden
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 24,
+        height: 24,
+        margin: '0 2px',
+        verticalAlign: 'middle',
+        borderRadius: 8,
+        border: '1px solid #E5DED6',
+        background: '#FFFFFF',
+        color: '#7D8A96',
+        boxShadow: '0 2px 8px rgba(125,138,150,.22)',
+      }}
+    >
+      <HelpCircle size={14} />
+    </span>
+  )
+}
 
 export function KeyCap({ k, pressed = false, size = 'md' }: { k: string; pressed?: boolean; size?: 'sm' | 'md' | 'lg' }) {
   const pad = size === 'lg' ? '10px 18px' : size === 'md' ? '4px 9px' : '2px 6px'

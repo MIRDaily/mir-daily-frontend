@@ -2,17 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useReactFlow } from '@xyflow/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, ChevronRight, Minimize2, Play, RotateCcw, X } from 'lucide-react'
 import MascotBubble from '@/components/tutorial/MascotBubble'
 import { desbloquearVoz } from '@/lib/tutorials/mascotAudio'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
-import { cancelRuns, DemoCancelled, newRun } from './fx'
+import { cancelRuns, DemoCancelled, newRun, wait } from './fx'
 import { runDemo } from './demos'
 import { LESSONS, type CheckCtx, type Line } from './lessons'
-import { KeyCap, TutorialFx } from './TutorialFx'
-import { COACH_WIDTH } from './layout'
+import { HelpButtonIcon, KeyCap, TutorialFx } from './TutorialFx'
+import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
+import { COACH_WIDTH, TUTORIAL_FIT } from './layout'
 import { readLessonsDone, writeLessonsDone } from './progress'
 
 // El entrenador del tutorial de mapas (/mapas/tutorial). Vive DENTRO del editor, sobre un mapa
@@ -37,6 +39,7 @@ const keepFocus = (e: React.MouseEvent) => e.preventDefault()
 
 export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
   const router = useRouter()
+  const flow = useReactFlow()
   const [lessonIdx, setLessonIdx] = useState(() => Math.min(Math.max(startAt, 0), LESSONS.length - 1))
   const [phase, setPhase] = useState<Phase>('intro')
   const [lineIdx, setLineIdx] = useState(0)
@@ -53,15 +56,58 @@ export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
   const base = useRef<CheckCtx['base'] | null>(null)
   const passed = useRef<Set<string>>(new Set())
   const [, bump] = useState(0)
-  const nodes = useMindMapStore((s) => s.nodes)
-  const edges = useMindMapStore((s) => s.edges)
-  const editingNodeId = useMindMapStore((s) => s.editingNodeId)
+  // Las tareas se comprueban sobre el mapa, pero NO se re-renderiza el entrenador (mascota, tareas…)
+  // en cada fotograma de un arrastre: la store avisa con un pequeño retardo y se mira entonces.
+  const [mapTick, setMapTick] = useState(0)
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const unsub = useMindMapStore.subscribe((s, p) => {
+      if (s.nodes === p.nodes && s.edges === p.edges && s.editingNodeId === p.editingNodeId) return
+      if (timer) return
+      timer = setTimeout(() => {
+        timer = undefined
+        setMapTick((n) => n + 1)
+      }, 120)
+    })
+    return () => {
+      unsub()
+      if (timer) clearTimeout(timer)
+    }
+  }, [])
 
   useEffect(() => {
     // El editor ordena el mapa de práctica al abrirlo: se espera a que esté colocado para que
     // la primera demostración no apunte a nodos que aún se están moviendo.
     const t = setTimeout(() => setReady(true), 700)
     return () => clearTimeout(t)
+  }, [])
+
+  // El mapa de práctica tal como queda al abrir el tutorial (ya ordenado). Cada lección y cada demo
+  // empiezan desde aquí: si el usuario borra o descoloca nodos que luego usa una demostración (p. ej.
+  // «HTA»), la demo no se rompe.
+  const pristine = useRef<{ nodes: ReturnType<typeof useMindMapStore.getState>['nodes']; edges: ReturnType<typeof useMindMapStore.getState>['edges'] } | null>(null)
+  useEffect(() => {
+    if (!ready) return
+    const t = setTimeout(() => {
+      const s = useMindMapStore.getState()
+      pristine.current = { nodes: structuredClone(s.nodes), edges: structuredClone(s.edges) }
+    }, 500)
+    return () => clearTimeout(t)
+  }, [ready])
+
+  const resetMap = useCallback(() => {
+    const p = pristine.current
+    if (!p) return
+    useHistoryStore.getState().clear()
+    useUIStore.getState().setCategoryStyles({})
+    useUIStore.getState().setStylePanelOpen(false)
+    useMindMapStore.setState({
+      nodes: structuredClone(p.nodes).map((n) => ({ ...n, selected: false })),
+      edges: structuredClone(p.edges).map((e) => ({ ...e, selected: false })),
+      editingNodeId: null,
+      hoveredNodeId: null,
+    })
+    useMindMapStore.getState().syncCollapse()
   }, [])
 
   const note = useCallback((e: string) => {
@@ -78,18 +124,49 @@ export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
       else if (e.key.startsWith('Arrow')) note('Arrow')
       else if (e.key === 'F2') note('F2')
       else if (e.key === ' ') note('Space')
-      if (e.altKey && e.code === 'Digit1') note('Alt1')
+      if (e.altKey && /^Digit[1-3]$/.test(e.code)) note(`Alt${e.code.slice(5)}`)
+      if (!mod && !e.altKey && e.key.length === 1 && e.key !== ' ' && !(e.target as HTMLElement | null)?.isContentEditable) note('typed')
       if (e.altKey && e.code === 'Digit0') note('Alt0')
       if (mod && e.key.toLowerCase() === 'f') note('CtrlF')
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) note('CtrlZ')
     }
     const onClick = (e: MouseEvent) => {
       const t = e.target as Element | null
+      if (t?.closest?.('.react-flow__node')) note('node-click')
+      if (t?.closest?.('[data-tuto="style-reset"]')) note('style-reset')
+      if (t?.closest?.('.react-flow__controls-zoomin, .react-flow__controls-zoomout')) note('zoom')
       if (t?.closest?.('button[title="Ordenar el mapa automáticamente"]')) {
         note('ordenar')
-        const sel = useMindMapStore.getState().nodes.filter((n) => n.selected && !n.hidden).length
-        if (sel > 1) note('ordenar-bloque')
+        const { nodes } = useMindMapStore.getState()
+        const sel = nodes.filter((n) => n.selected && !n.hidden).length
+        // "Ordenar" solo cuenta si de verdad coloca algo: se compara dónde estaban los nodos antes
+        // de pulsar con dónde están un momento después.
+        const before = new Map(nodes.map((n) => [n.id, n.position]))
+        setTimeout(() => {
+          const moved = useMindMapStore
+            .getState()
+            .nodes.some((n) => {
+              const b = before.get(n.id)
+              return b && Math.hypot(n.position.x - b.x, n.position.y - b.y) > 4
+            })
+          if (!moved) return
+          note('ordenar-cambio')
+          if (sel > 1) note('ordenar-bloque-cambio')
+        }, 120)
       }
+    }
+    const onDblClick = (e: MouseEvent) => {
+      if ((e.target as Element | null)?.closest?.('.react-flow__node')) note('dblclick')
+    }
+    // Rueda sin Ctrl = mover el mapa; con Ctrl (o pellizco) = zoom.
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.target as Element | null)?.closest?.('.react-flow')) return
+      note(e.ctrlKey || e.metaKey ? 'zoom' : 'pan')
+    }
+    // Arrastrar con el botón central o el derecho también mueve el mapa.
+    const onPointerMove = (e: PointerEvent) => {
+      if ((e.buttons & 6) === 0) return
+      if ((e.target as Element | null)?.closest?.('.react-flow__pane')) note('pan')
     }
     const unMap = useMindMapStore.subscribe((s, p) => {
       if (s.editingNodeId && !p.editingNodeId) note('editing')
@@ -104,12 +181,21 @@ export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
     })
     const unUi = useUIStore.subscribe((s, p) => {
       if (s.searchOpen && !p.searchOpen) note('search-open')
+      if (s.stylePanelOpen && !p.stylePanelOpen) note('style-open')
+      if (s.categoriesPanelOpen && !p.categoriesPanelOpen) note('cat-open')
+      if (s.categoryStyles !== p.categoryStyles) note('cat-style')
     })
     window.addEventListener('keydown', onKey, true)
     document.addEventListener('click', onClick, true)
+    document.addEventListener('dblclick', onDblClick, true)
+    document.addEventListener('wheel', onWheel, { capture: true, passive: true })
+    document.addEventListener('pointermove', onPointerMove, true)
     return () => {
       window.removeEventListener('keydown', onKey, true)
       document.removeEventListener('click', onClick, true)
+      document.removeEventListener('dblclick', onDblClick, true)
+      document.removeEventListener('wheel', onWheel, true)
+      document.removeEventListener('pointermove', onPointerMove, true)
       unMap()
       unUi()
     }
@@ -129,23 +215,56 @@ export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
       startPractice()
       return
     }
+    resetMap()
     const run = newRun()
     setPhase('demo')
-    runDemo(lesson.demo, run)
+    // La cámara se fija en el encuadre óptimo antes de empezar (y el mapa queda bloqueado mientras
+    // dura, ver el escudo más abajo): las demostraciones apuntan a posiciones de pantalla, y si la
+    // vista se mueve a mitad el cursor y las teclas dejan de coincidir con los nodos.
+    wait(run, 120)
+      .then(async () => {
+        await flow.fitView({ ...TUTORIAL_FIT, duration: 450 })
+        await wait(run, 200)
+      })
+      .then(() => runDemo(lesson.demo!, run))
       .then(() => startPractice())
       .catch((e: unknown) => {
         if (!(e instanceof DemoCancelled)) startPractice()
       })
-  }, [lesson.demo, startPractice])
+  }, [lesson.demo, startPractice, resetMap, flow])
 
   const goTo = useCallback((idx: number) => {
     cancelRuns()
     base.current = null
+    // Lo que dejó abierto la lección anterior (paneles de estilo, buscador…) no debe pasar a la
+    // siguiente, y el mapa se vuelve a encuadrar por si se movió o se acercó.
+    const ui = useUIStore.getState()
+    ui.setStylePanelOpen(false)
+    ui.setCategoriesPanelOpen(false)
+    ui.setSearchOpen(false)
+    resetMap()
+    void flow.fitView({ ...TUTORIAL_FIT, duration: 500 })
     setLessonIdx(Math.min(Math.max(idx, 0), LESSONS.length - 1))
     setPhase('intro')
     setLineIdx(0)
     setTypedKey(null)
-  }, [])
+  }, [flow, resetMap])
+
+  // Durante una demostración el teclado tampoco llega al mapa (el escudo bloquea el ratón y la rueda).
+  useEffect(() => {
+    if (phase !== 'demo') return
+    const block = (e: KeyboardEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    window.addEventListener('keydown', block, true)
+    // Y la cámara se queda quieta: ni el teclado, ni el buscador ni los nodos nuevos la mueven.
+    useUIStore.getState().setCameraLocked(true)
+    return () => {
+      window.removeEventListener('keydown', block, true)
+      useUIStore.getState().setCameraLocked(false)
+    }
+  }, [phase])
 
   // Al desmontar (salir), que no quede ninguna demostración a medias.
   useEffect(() => () => cancelRuns(), [])
@@ -153,7 +272,8 @@ export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
   // ── Estado de las tareas ───────────────────────────────────────────────────
   const taskState = useMemo(() => {
     if (phase !== 'practice' || !base.current) return lesson.tasks.map(() => false)
-    const ctx: CheckCtx = { nodes, edges, base: base.current, events: events.current, editingNodeId }
+    const st = useMindMapStore.getState()
+    const ctx: CheckCtx = { nodes: st.nodes, edges: st.edges, base: base.current, events: events.current, editingNodeId: st.editingNodeId }
     return lesson.tasks.map((t) => {
       // Una tarea hecha se queda hecha (deshacer no la desmarca).
       if (passed.current.has(t.id)) return true
@@ -164,7 +284,7 @@ export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
       return false
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, lesson, nodes, edges, editingNodeId, events.current.size])
+  }, [phase, lesson, mapTick, events.current.size])
 
   const allDone = phase === 'practice' && lesson.tasks.length > 0 && taskState.every(Boolean)
 
@@ -229,11 +349,20 @@ export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
     router.push('/mapas')
   }
 
+  // Mientras corre una demostración, una capa transparente sobre el mapa se come ratón y rueda: no se
+  // puede mover, acercar ni arrastrar nada (la vista y los nodos son de la demo). Debajo del entrenador,
+  // para que «Saltar» y minimizar sigan funcionando.
+  const shield =
+    phase === 'demo' ? (
+      <div aria-hidden className="tuto-shield" style={{ position: 'absolute', inset: 0, zIndex: 1050, cursor: 'progress' }} />
+    ) : null
+
   if (!ready) return <TutorialFx leftInset={LEFT + COACH_WIDTH} />
 
   if (minimized) {
     return (
       <>
+        {shield}
         <TutorialFx leftInset={0} />
         <button
           type="button"
@@ -267,6 +396,7 @@ export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
 
   return (
     <>
+      {shield}
       <TutorialFx leftInset={LEFT + COACH_WIDTH} />
       <div
         className="tuto-coach"
@@ -361,7 +491,7 @@ export function MapTutorialCoach({ startAt = 0 }: { startAt?: number }) {
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.2 }}
             >
-              <MascotBubble texto={line.text} pose={line.pose} apilada onTextoCompleto={() => setTypedKey(lineKey)} />
+              <MascotBubble texto={line.text} marca={<HelpButtonIcon />} pose={line.pose} apilada onTextoCompleto={() => setTypedKey(lineKey)} />
             </motion.div>
           </AnimatePresence>
         </button>

@@ -61,8 +61,25 @@ export type GraphEdge = {
   }
 }
 
-/** Lo que el usuario ha redefinido de una categoría en ESTE mapa: su color y/o su forma. */
-export type CategoryStyleOverride = { color?: string; shape?: GraphShape }
+/**
+ * Lo que el usuario ha redefinido de una categoría en ESTE mapa. Todo es opcional: lo que falta
+ * sigue el estilo de serie.
+ *  - `color`: el color de la categoría (acento): líneas que llegan al nodo, brillo, chip, y relleno
+ *    o borde por defecto del nodo.
+ *  - `fill` / `border` / `borderWidth` / `textColor`: relleno, borde y texto de los nodos.
+ *  - `fontFamily` / `fontSize`: tipografía. `label`: el título de la categoría.
+ */
+export type CategoryStyleOverride = {
+  color?: string
+  shape?: GraphShape
+  label?: string
+  fill?: string
+  border?: string
+  borderWidth?: number
+  textColor?: string
+  fontFamily?: string
+  fontSize?: number
+}
 export type CategoryStyles = Partial<Record<MapCategoryId, CategoryStyleOverride>>
 
 export type GraphDoc = {
@@ -147,18 +164,41 @@ export function styleForCategory(
   current: GraphNodeStyle,
   category: MapCategoryId,
   overrides?: CategoryStyles,
+  /** Lo que tenía la categoría ANTES (si cambia) y el estilo de serie del nodo: lo que se quita de
+   *  la categoría vuelve a lo natural en vez de quedarse con el valor viejo. */
+  restore?: { prev?: CategoryStyleOverride; natural: GraphNodeStyle },
 ): GraphNodeStyle {
   const accent = categoryAccent(category, overrides)
-  const shape = overrides?.[category]?.shape
-  const filled = current.borderWidth === 0
-  return {
+  const o = overrides?.[category]
+  const prev = restore?.prev
+  const nat = restore?.natural
+  // ¿Es un nodo macizo (relleno con el color de la categoría) o de contorno?
+  const filled = (o?.borderWidth ?? current.borderWidth) === 0
+  const out: GraphNodeStyle = {
     ...current,
-    ...(shape ? { shape } : {}),
     color: filled ? accent : current.color,
     borderColor: filled ? current.borderColor : accent,
     glowColor: accent,
     textColor: filled ? '#FFFFFF' : current.textColor,
   }
+  if (o?.shape) out.shape = o.shape
+  else if (prev?.shape && nat) out.shape = nat.shape
+  const field = <K extends keyof GraphNodeStyle>(key: K, set: GraphNodeStyle[K] | undefined, was: unknown) => {
+    if (set !== undefined) out[key] = set
+    else if (was !== undefined && nat) out[key] = nat[key]
+  }
+  field('color', o?.fill, prev?.fill)
+  field('borderColor', o?.border, prev?.border)
+  field('borderWidth', o?.borderWidth, prev?.borderWidth)
+  field('textColor', o?.textColor, prev?.textColor)
+  field('fontFamily', o?.fontFamily, prev?.fontFamily)
+  field('fontSize', o?.fontSize, prev?.fontSize)
+  return out
+}
+
+/** Título de una categoría: el que le ha puesto el usuario o el de serie. */
+export function categoryLabel(category: MapCategoryId, overrides?: CategoryStyles): string {
+  return overrides?.[category]?.label?.trim() || MAP_CATEGORIES[category].label
 }
 
 // ---------------------------------------------------------------------------
@@ -292,7 +332,23 @@ export function sanitizeCategoryStyles(raw: unknown): CategoryStyles {
     const entry: CategoryStyleOverride = {}
     if (typeof v.color === 'string' && HEX_COLOR.test(v.color)) entry.color = v.color
     if (SHAPES.includes(v.shape as GraphShape)) entry.shape = v.shape as GraphShape
-    if (entry.color || entry.shape) out[key as MapCategoryId] = entry
+    const hex = (x: unknown) => (typeof x === 'string' && HEX_COLOR.test(x) ? x : undefined)
+    const label = typeof v.label === 'string' ? v.label.trim().slice(0, 40) : ''
+    if (label) entry.label = label
+    const fill = hex(v.fill)
+    if (fill) entry.fill = fill
+    const border = hex(v.border)
+    if (border) entry.border = border
+    const textColor = hex(v.textColor)
+    if (textColor) entry.textColor = textColor
+    if (typeof v.borderWidth === 'number' && Number.isFinite(v.borderWidth)) {
+      entry.borderWidth = Math.min(8, Math.max(0, Math.round(v.borderWidth)))
+    }
+    if (typeof v.fontFamily === 'string' && v.fontFamily.length > 0 && v.fontFamily.length <= 80) entry.fontFamily = v.fontFamily
+    if (typeof v.fontSize === 'number' && Number.isFinite(v.fontSize)) {
+      entry.fontSize = Math.min(48, Math.max(8, Math.round(v.fontSize)))
+    }
+    if (Object.keys(entry).length > 0) out[key as MapCategoryId] = entry
   }
   return out
 }

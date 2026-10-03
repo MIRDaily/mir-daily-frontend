@@ -1,4 +1,4 @@
-import { Plus, Undo2, Redo2, HelpCircle, Moon, Sun, FileDown, FileJson, Network, Orbit, Shapes, Loader2, Search } from 'lucide-react'
+import { Plus, Undo2, Redo2, HelpCircle, Moon, Sun, FileDown, FileJson, Network, Orbit, Focus, Shapes, Loader2, Search } from 'lucide-react'
 import type { BgStyle } from '@/components/mapas/proto/types/store.types'
 import { useState } from 'react'
 import { useReactFlow } from '@xyflow/react'
@@ -15,7 +15,7 @@ interface MainToolbarProps {
 }
 
 export function MainToolbar({ onExportJson, onAutoLayout }: MainToolbarProps) {
-  const { theme, setTheme, bgStyle, setBgStyle, physicsEnabled, setPhysicsEnabled, categoriesPanelOpen, setCategoriesPanelOpen } = useUIStore()
+  const { theme, setTheme, bgStyle, setBgStyle, physicsEnabled, setPhysicsEnabled, categoriesPanelOpen, setCategoriesPanelOpen, focusBlur, setFocusBlur } = useUIStore()
   const { setCenter, setNodes } = useReactFlow()
   const [showHelp, setShowHelp]       = useState(false)
   const [exporting, setExporting]     = useState(false)
@@ -83,7 +83,7 @@ export function MainToolbar({ onExportJson, onAutoLayout }: MainToolbarProps) {
 
         <Divider color={t.border} />
 
-        <Btn onClick={handleAddRoot} title="Nuevo nodo (N)" color={t.accent} hoverBg={t.hoverBg}>
+        <Btn onClick={handleAddRoot} title="Nuevo nodo sin relaciones (N, o Alt+N)" color={t.accent} hoverBg={t.hoverBg}>
           <Plus size={15} />
           <span style={{ fontSize: 12 }}>Añadir</span>
         </Btn>
@@ -165,6 +165,24 @@ export function MainToolbar({ onExportJson, onAutoLayout }: MainToolbarProps) {
           hoverBg={t.hoverBg}
         >
           <Orbit size={15} />
+        </Btn>
+        <Btn
+          onClick={() => setFocusBlur(!focusBlur)}
+          title={focusBlur ? 'Desenfoque al pasar el ratón: activado (pulsa para desactivarlo)' : 'Desenfoque al pasar el ratón: desactivado (pulsa para activarlo)'}
+          color={focusBlur ? t.accent : t.textMuted}
+          hoverBg={t.hoverBg}
+        >
+          {/* Desactivado: el icono lleva una barra diagonal encima (con un trazo del color del panel
+              debajo para que se lea sobre las esquinas del icono). */}
+          <span style={{ position: 'relative', display: 'inline-flex', opacity: focusBlur ? 1 : 0.75 }}>
+            <Focus size={15} />
+            {!focusBlur && (
+              <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden style={{ position: 'absolute', inset: 0 }}>
+                <line x1="1.5" y1="13.5" x2="13.5" y2="1.5" stroke={t.bgPanel} strokeWidth="4" strokeLinecap="round" />
+                <line x1="1.5" y1="13.5" x2="13.5" y2="1.5" stroke={t.danger} strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            )}
+          </span>
         </Btn>
 
         <Divider color={t.border} />
@@ -275,7 +293,8 @@ export function MainToolbar({ onExportJson, onAutoLayout }: MainToolbarProps) {
           </div>
           {[
             ['Doble clic', 'Editar nodo'],
-            ['N', 'Nuevo nodo raíz'],
+            ['Escribir', 'Editar el nodo seleccionado'],
+            ['N / Alt+N', 'Nuevo nodo sin relaciones'],
             ['+ (toolbar)', 'Añadir nodo hijo'],
             ['Delete / Backspace', 'Eliminar seleccionado'],
             ['Cmd/Ctrl + Z', 'Deshacer'],

@@ -1,9 +1,9 @@
+import { fontCss } from '@/lib/mapas/fonts'
+
 /**
- * El prototipo guardaba 'Lexend' como nombre de fuente. En MIRDaily Lexend se carga
- * con next/font y su familia real es la variable `--font-lexend`; el nombre suelto
- * no resolvería a nada.
+ * Pila CSS de una fuente guardada. Acepta el id de una de las fuentes del editor ('Nunito'…), el
+ * antiguo 'Lexend' del prototipo y las pilas sueltas de mapas viejos ('Georgia, serif').
  */
 export function resolveFont(name: string | undefined): string {
-  if (!name || name === 'Lexend') return "var(--font-lexend), 'Lexend', system-ui, sans-serif"
-  return name
+  return fontCss(name)
 }

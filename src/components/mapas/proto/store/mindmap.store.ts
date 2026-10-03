@@ -60,6 +60,7 @@ export const useMindMapStore = create<MindMapState>()(
     edges: [],
     loadTick: 0,
     editingNodeId: null,
+    editSeed: null,
     focusedNodeId: null,
     hoveredNodeId: null,
 
@@ -254,7 +255,7 @@ export const useMindMapStore = create<MindMapState>()(
         syncCollapse(s.nodes, s.edges)
       }),
 
-    setEditing: (id) => set((s) => { s.editingNodeId = id }),
+    setEditing: (id, seed) => set((s) => { s.editingNodeId = id; s.editSeed = id ? seed ?? null : null }),
     setFocused: (id) => set((s) => { s.focusedNodeId = id }),
     setHovered: (id) => set((s) => { s.hoveredNodeId = id }),
 

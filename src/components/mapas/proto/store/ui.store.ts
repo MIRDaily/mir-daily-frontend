@@ -3,6 +3,12 @@ import type { UIState } from '@/components/mapas/proto/types/store.types'
 
 export const useUIStore = create<UIState>((set) => ({
   stylePanelOpen: false,
+  multiSelect: false,
+  cameraLocked: false,
+  setCameraLocked: (cameraLocked) => set({ cameraLocked }),
+  focusBlur: true,
+  setFocusBlur: (focusBlur) => set({ focusBlur }),
+  setMultiSelect: (multiSelect) => set((s) => (s.multiSelect === multiSelect ? s : { multiSelect })),
   selectedNodeId: null,
   theme: 'light',
   bgStyle: 'dots-light',

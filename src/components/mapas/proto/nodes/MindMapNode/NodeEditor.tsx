@@ -11,9 +11,11 @@ interface NodeEditorProps {
   onTab?: () => void
   /** Seleccionar todo el texto al empezar (nodo recién creado: se escribe encima). */
   selectAll?: boolean
+  /** Texto con el que empieza (se escribió con el nodo seleccionado): sustituye al anterior. */
+  seed?: string | null
 }
 
-export function NodeEditor({ label, style, onSave, onExit, onTab, selectAll }: NodeEditorProps) {
+export function NodeEditor({ label, style, onSave, onExit, onTab, selectAll, seed }: NodeEditorProps) {
   const ref = useRef<HTMLDivElement>(null)
   const savedRef = useRef(false)
 
@@ -22,7 +24,8 @@ export function NodeEditor({ label, style, onSave, onExit, onTab, selectAll }: N
     if (!el) return
 
     // Set initial HTML content (supports rich formatting from previous edits)
-    el.innerHTML = label
+    if (seed != null) el.textContent = seed
+    else el.innerHTML = label
 
     // Un nodo recién creado está oculto (visibility: hidden) hasta que React Flow lo mide, y
     // focus() no funciona sobre algo oculto: se reintenta durante un momento (con temporizador, no

@@ -26,6 +26,9 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   // además estaba en edición (creado con Tab), seguía invisible mientras se escribía.
 
   const isEditing = useMindMapStore((s) => s.editingNodeId === id)
+  // Con varios seleccionados la barra es una sola para el grupo (GroupToolbar), no una por nodo.
+  const multiSelect = useUIStore((s) => s.multiSelect)
+  const editSeed = useMindMapStore((s) => (s.editingNodeId === id ? s.editSeed : null))
 
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -57,7 +60,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
     const newId = store.addNode(id, direction)
     setTimeout(() => {
       const newNode = useMindMapStore.getState().nodes.find((n) => n.id === newId)
-      if (newNode) {
+      if (newNode && !useUIStore.getState().cameraLocked) {
         setCenter(newNode.position.x, newNode.position.y, { duration: 600, zoom: 1 })
       }
     }, 150)
@@ -139,6 +142,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
               onExit={handleExit}
               onTab={handleTab}
               selectAll={data.label === 'Nueva idea'}
+              seed={editSeed}
             />
           ) : (
             <NodeLabel label={data.label} style={data.style} />
@@ -146,7 +150,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
         </NodeBody>
       </motion.div>
 
-      <NodeToolbar isVisible={!!selected && !isEditing} position={Position.Top}>
+      <NodeToolbar isVisible={!!selected && !isEditing && !multiSelect} position={Position.Top}>
         <div
           style={{
             display: 'flex',

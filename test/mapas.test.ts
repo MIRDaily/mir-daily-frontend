@@ -171,6 +171,9 @@ test('JSON: sanea nodos rotos del archivo importado', () => {
 import {
   autoLayoutGraph,
   categoryAccent,
+  categoryLabel,
+  sanitizeCategoryStyles,
+  styleForNode,
   naturalShape,
   newGraphDoc,
   sanitizeGraph,
@@ -439,4 +442,54 @@ test('el tutorial: total de lecciones al día, ids únicos y mapa de práctica v
   const ids = new Set(PRACTICE_MAP.nodes.map((n) => n.id))
   for (const id of [...Object.values(PRACTICE_IDS), 'eti-2', 'cli-1']) assert.ok(ids.has(id), `falta ${id}`)
   assert.equal(sanitizeDoc(PRACTICE_MAP).nodes.length, PRACTICE_MAP.nodes.length)
+})
+
+// ---------------------------------------------------------------------------
+// Categorías editables por completo
+// ---------------------------------------------------------------------------
+
+test('categorías: se sanean todos los ajustes y se descarta lo inválido', () => {
+  const out = sanitizeCategoryStyles({
+    clinica: {
+      label: '  Cuadro clínico  ',
+      fill: '#112233',
+      border: 'rojo',
+      borderWidth: 99,
+      textColor: '#FFF',
+      fontFamily: 'Caveat',
+      fontSize: 3,
+      shape: 'diamond',
+    },
+    inventada: { color: '#000000' },
+    perla: { color: 'no' },
+  })
+  assert.deepEqual(out.clinica, {
+    label: 'Cuadro clínico',
+    fill: '#112233',
+    borderWidth: 8,
+    textColor: '#FFF',
+    fontFamily: 'Caveat',
+    fontSize: 8,
+    shape: 'diamond',
+  })
+  assert.equal(out.perla, undefined)
+  assert.equal(categoryLabel('clinica', out), 'Cuadro clínico')
+  assert.equal(categoryLabel('perla', out), 'Perla MIR')
+})
+
+test('categorías: relleno, borde y fuente se aplican y, al quitarlos, vuelven a lo natural', () => {
+  const natural = styleForNode(2, 'clinica', 'Disnea')
+  const prev = { fill: '#112233', border: '#445566', borderWidth: 4, fontFamily: 'Caveat', fontSize: 20 }
+  const styled = styleForCategory(natural, 'clinica', { clinica: prev })
+  assert.equal(styled.color, '#112233')
+  assert.equal(styled.borderColor, '#445566')
+  assert.equal(styled.borderWidth, 4)
+  assert.equal(styled.fontFamily, 'Caveat')
+  assert.equal(styled.fontSize, 20)
+  // Se quita todo: cada campo vuelve al del estilo natural del nodo.
+  const back = styleForCategory(styled, 'clinica', {}, { prev, natural })
+  assert.equal(back.color, natural.color)
+  assert.equal(back.borderWidth, natural.borderWidth)
+  assert.equal(back.fontFamily, natural.fontFamily)
+  assert.equal(back.fontSize, natural.fontSize)
 })

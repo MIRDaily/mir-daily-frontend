@@ -4,11 +4,15 @@ import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { navigate, selectOnly, getFlow } from '@/components/mapas/proto/utils/keyboard'
 import { reparentNode, showUpToLevel, toggleBranch } from '@/components/mapas/proto/utils/branches'
 import { settleNodes } from '@/components/mapas/proto/hooks/usePhysics'
-import { applyCategoryToNodes } from '@/components/mapas/proto/utils/categories'
+import { applyCategoryToNodes, resetNodesStyle } from '@/components/mapas/proto/utils/categories'
+import { changeCategoryStyle } from '@/components/mapas/proto/components/Toolbar/CategoryStylesPanel'
 import { childrenMap, descendantsOf, parentMap } from '@/components/mapas/proto/utils/tree'
 import { PRACTICE_IDS as P } from '@/lib/mapas/tutorial/practiceMap'
+import { TUTORIAL_FIT } from './layout'
 import {
   click,
+  cursorAt,
+  frame,
   cursorTo,
   cursorToElement,
   cursorToNode,
@@ -25,7 +29,7 @@ import {
 // verdad (las mismas funciones que los atajos): el cursor y las teclas solo enseñan qué se
 // está pulsando. Así la demostración no puede contar algo distinto de lo que hace el editor.
 
-export type DemoId = 'tab' | 'arrows' | 'fold' | 'drag' | 'reparent' | 'search' | 'category' | 'layout'
+export type DemoId = 'edges' | 'panel' | 'mouse' | 'tab' | 'arrows' | 'fold' | 'drag' | 'reparent' | 'search' | 'category' | 'layout'
 
 /** Escribe en un nodo letra a letra (sin abrir el editor de texto). */
 async function typeInto(run: number, id: string, text: string) {
@@ -36,7 +40,10 @@ async function typeInto(run: number, id: string, text: string) {
   }
 }
 
-/** Mueve un nodo y toda su rama `dx, dy` (lienzo) con el cursor agarrándolo. */
+/**
+ * Mueve un nodo y toda su rama `dx, dy` (lienzo) con el cursor agarrándolo. Un paso por fotograma
+ * (requestAnimationFrame): antes cada paso esperaba ~40 ms y se veía a unos 25 fps.
+ */
 async function dragBranch(run: number, id: string, dx: number, dy: number, ms = 800) {
   const { nodes, edges } = useMindMapStore.getState()
   const ids = new Set([id, ...descendantsOf([id], childrenMap(parentMap(nodes, edges)))])
@@ -54,12 +61,100 @@ async function dragBranch(run: number, id: string, dx: number, dy: number, ms = 
         if (p) n.position = { x: p.x + dx * e, y: p.y + dy * e }
       }
     })
-    await cursorTo(run, c0.x + dx * zoom * e, c0.y + dy * zoom * e, 0)
+    cursorAt(c0.x + dx * zoom * e, c0.y + dy * zoom * e)
     if (k >= 1) break
+    await frame(run)
   }
 }
 
+/** Mueve varios nodos a la vez a nuevas posiciones, con una transición suave (un paso por fotograma). */
+async function animateTo(run: number, targets: Map<string, { x: number; y: number }>, ms = 600) {
+  const start = new Map(
+    useMindMapStore
+      .getState()
+      .nodes.filter((n) => targets.has(n.id))
+      .map((n) => [n.id, { ...n.position }]),
+  )
+  const t0 = performance.now()
+  for (;;) {
+    const k = Math.min(1, (performance.now() - t0) / ms)
+    const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2
+    useMindMapStore.setState((s) => {
+      for (const n of s.nodes) {
+        const a = start.get(n.id)
+        const b = targets.get(n.id)
+        if (a && b) n.position = { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e }
+      }
+    })
+    if (k >= 1) break
+    await frame(run)
+  }
+}
+
+/**
+ * Descoloca el mapa (cada rama a su aire, con sus hijos) para que «Ordenar» tenga algo que hacer.
+ * Se usa al acabar la demostración de ordenar: si no, el usuario pulsaría un botón que no se nota.
+ */
+async function scrambleMap(run: number) {
+  const { nodes, edges } = useMindMapStore.getState()
+  const children = childrenMap(parentMap(nodes, edges))
+  const shifts: [string, number, number][] = [
+    [P.definicion, -90, 170],
+    [P.etiologia, 130, -60],
+    [P.clinica, -120, 120],
+    [P.diagnostico, 150, 40],
+    [P.tratamiento, -70, -150],
+  ]
+  const targets = new Map<string, { x: number; y: number }>()
+  for (const [id, dx, dy] of shifts) {
+    for (const m of [id, ...descendantsOf([id], children)]) {
+      const n = nodes.find((x) => x.id === m)
+      if (n) targets.set(m, { x: n.position.x + dx, y: n.position.y + dy })
+    }
+  }
+  await animateTo(run, targets, 700)
+}
+
 const DEMOS: Record<DemoId, (run: number) => Promise<void>> = {
+  // Ratón: clic selecciona, la rueda mueve, Ctrl+rueda acerca, doble clic edita.
+  async mouse(run) {
+    const flow = getFlow()
+    await cursorToNode(run, P.clinica)
+    await click(run)
+    selectOnly(P.clinica)
+    await wait(run, 700)
+    // Mover el mapa con la rueda.
+    hold(['Rueda'])
+    if (flow) {
+      const v = flow.getViewport()
+      await flow.setViewport({ x: v.x - 90, y: v.y + 50, zoom: v.zoom }, { duration: 700 })
+    }
+    await wait(run, 900)
+    release()
+    // Acercar con Ctrl + rueda y volver.
+    hold(['Ctrl', 'Rueda'])
+    if (flow) {
+      const v = flow.getViewport()
+      await flow.zoomTo(v.zoom * 1.25, { duration: 600 })
+    }
+    await wait(run, 900)
+    release()
+    if (flow) await flow.fitView({ ...TUTORIAL_FIT, duration: 600 })
+    await wait(run, 800)
+    // Doble clic: edita el nodo.
+    await cursorToNode(run, P.definicion)
+    await click(run)
+    await click(run)
+    selectOnly(P.definicion)
+    useMindMapStore.getState().setEditing(P.definicion)
+    await wait(run, 1100)
+    useMindMapStore.getState().setEditing(null)
+    // Sin selección: si no, la tarea "haz clic en un nodo" ya saldría hecha al empezar a practicar.
+    selectOnly('')
+    hideCursor()
+    await wait(run, 300)
+  },
+
   // Tab = hijo, Enter (tras escribir) = guardar, Enter otra vez = hermano.
   async tab(run) {
     await cursorToNode(run, P.clinica)
@@ -98,12 +193,16 @@ const DEMOS: Record<DemoId, (run: number) => Promise<void>> = {
       cur = cur ? navigate(cur, dir) ?? cur : cur
       await wait(run, 250)
     }
-    // F2 abre de verdad el editor de texto del seleccionado; Esc lo cierra.
-    await press(run, ['F2'])
-    if (cur) useMindMapStore.getState().setEditing(cur)
-    await wait(run, 1100)
-    await press(run, ['Esc'], 450)
-    useMindMapStore.getState().setEditing(null)
+    // Escribir con un nodo seleccionado abre de verdad su editor de texto; Esc lo cierra.
+    if (cur) {
+      const original = useMindMapStore.getState().nodes.find((n) => n.id === cur)?.data.label
+      await press(run, ['A – Z'])
+      useMindMapStore.getState().setEditing(cur, 'Hola')
+      await wait(run, 1100)
+      await press(run, ['Esc'], 450)
+      useMindMapStore.getState().setEditing(null)
+      if (original !== undefined) useMindMapStore.getState().updateNodeData(cur, { label: original })
+    }
   },
 
   // Plegar con Espacio y ver por niveles con Alt+1 / Alt+0.
@@ -119,9 +218,11 @@ const DEMOS: Record<DemoId, (run: number) => Promise<void>> = {
     await press(run, ['Espacio'])
     toggleBranch(P.diagnostico)
     await wait(run, 800)
-    await press(run, ['Alt', '1'])
-    showUpToLevel(1)
-    await wait(run, 1200)
+    for (const level of [1, 2, 3]) {
+      await press(run, ['Alt', String(level)])
+      showUpToLevel(level)
+      await wait(run, 1100)
+    }
     await press(run, ['Alt', '0'])
     showUpToLevel(null)
     await wait(run, 500)
@@ -202,6 +303,70 @@ const DEMOS: Record<DemoId, (run: number) => Promise<void>> = {
     await wait(run, 200)
   },
 
+  // Líneas: clic en una línea abre su barra; trazo, color y grosor.
+  async edges(run) {
+    const { edges } = useMindMapStore.getState()
+    const edge = edges.find((e) => e.target === P.clinica)
+    if (!edge) return
+    const path = document.querySelector<SVGPathElement>('.react-flow__edge[data-id="' + edge.id + '"] path')
+    const ctm = path?.getScreenCTM()
+    if (path && ctm) {
+      const p = path.getPointAtLength(path.getTotalLength() / 2)
+      const pt = new DOMPoint(p.x, p.y).matrixTransform(ctm)
+      await cursorTo(run, pt.x, pt.y)
+      await click(run)
+    }
+    const setSelected = (on: boolean) =>
+      useMindMapStore.setState((s) => {
+        for (const e of s.edges) e.selected = on && e.id === edge.id
+      })
+    setSelected(true)
+    await wait(run, 900)
+    const upd = useMindMapStore.getState().updateEdgeData
+    const orig = { variant: edge.data?.variant, color: edge.data?.color, strokeWidth: edge.data?.strokeWidth }
+    upd(edge.id, { variant: 'dashed' })
+    await wait(run, 1000)
+    upd(edge.id, { color: '#89b4fa' })
+    await wait(run, 1000)
+    upd(edge.id, { strokeWidth: 4 })
+    await wait(run, 1200)
+    // La línea queda como estaba: la práctica empieza desde el aspecto original.
+    upd(edge.id, orig)
+    setSelected(false)
+    hideCursor()
+    await wait(run, 300)
+  },
+
+  // Panel de estilo: se abre desde la paleta del nodo; forma, color y restablecer.
+  async panel(run) {
+    const id = 'cli-2' // "Edemas"
+    const store = useMindMapStore.getState
+    await cursorToNode(run, id)
+    await click(run)
+    selectOnly(id)
+    await wait(run, 500)
+    await cursorToElement(run, 'button[title="Estilos"]')
+    await click(run)
+    useUIStore.getState().setSelectedNodeId(id)
+    useUIStore.getState().setStylePanelOpen(true)
+    await wait(run, 900)
+    store().updateNodesStyle([id], { shape: 'diamond' })
+    await wait(run, 1100)
+    store().updateNodesStyle([id], { shape: 'pill' })
+    await wait(run, 900)
+    store().updateNodesStyle([id], { color: '#B8D4CC' })
+    await wait(run, 1000)
+    await cursorToElement(run, '[data-tuto="style-reset"]')
+    await click(run)
+    resetNodesStyle([id])
+    await wait(run, 900)
+    useUIStore.getState().setStylePanelOpen(false)
+    // Sin selección: las tareas del panel no deben salir hechas al empezar a practicar.
+    selectOnly('')
+    hideCursor()
+    await wait(run, 400)
+  },
+
   // Ratón encima de un nodo + número = categoría (y su color).
   async category(run) {
     const id = 'cli-1' // "Disnea"
@@ -215,7 +380,28 @@ const DEMOS: Record<DemoId, (run: number) => Promise<void>> = {
     applyCategoryToNodes([id], 'clinica')
     await wait(run, 500)
     useMindMapStore.getState().setHovered(null)
+    // Menú «Categorías»: se abre, se despliega una categoría y se le cambia el color.
+    await cursorToElement(run, 'button[title="Estilos de las categorías"]')
+    await click(run)
+    useUIStore.getState().setCategoriesPanelOpen(true)
+    await wait(run, 800)
+    const tab = document.querySelector<HTMLButtonElement>('[data-tuto="categories-panel"] [data-cat="clinica"]')
+    if (tab) {
+      const r = tab.getBoundingClientRect()
+      await cursorTo(run, r.left + r.width / 2, r.top + r.height / 2)
+      await click(run)
+      tab.click()
+      await wait(run, 700)
+    }
+    changeCategoryStyle('clinica', { fill: '#D4E0E6', border: '#6E9BC5', borderWidth: 3 })
+    await wait(run, 1400)
+    changeCategoryStyle('clinica', { fontFamily: 'Caveat', fontSize: 18 })
+    await wait(run, 1400)
+    changeCategoryStyle('clinica', null)
+    await wait(run, 700)
+    useUIStore.getState().setCategoriesPanelOpen(false)
     hideCursor()
+    await wait(run, 300)
   },
 
   // Ordenar recoloca el mapa entero (o solo lo seleccionado).
@@ -234,6 +420,11 @@ const DEMOS: Record<DemoId, (run: number) => Promise<void>> = {
     document.querySelector<HTMLButtonElement>(btn)?.click()
     await wait(run, 900)
     hideCursor()
+    // Y se vuelve a descolocar: así la práctica empieza con un mapa que sí hay que ordenar.
+    await wait(run, 500)
+    await scrambleMap(run)
+    selectOnly('')
+    await wait(run, 300)
   },
 }
 

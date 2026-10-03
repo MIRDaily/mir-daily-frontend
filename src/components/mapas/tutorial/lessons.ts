@@ -3,6 +3,7 @@ import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
 import { childrenMap, parentMap } from '@/components/mapas/proto/utils/tree'
 import type { MascotPose } from '@/lib/tutorials/types'
 import type { DemoId } from './demos'
+import { MARCA } from '@/components/tutorial/marca'
 
 // El guion del tutorial de mapas. Cada lección: la mascota lo cuenta en una o dos frases cortas
 // (se escriben letra a letra), lo enseña con el propio editor (demo) y te deja probarlo con
@@ -108,6 +109,29 @@ function categoryChanged(ctx: CheckCtx): boolean {
   return ctx.nodes.some((n) => was.has(n.id) && was.get(n.id) !== n.data.category)
 }
 
+function categoryChangedTogether(ctx: CheckCtx): boolean {
+  const was = new Map(ctx.base.nodes.map((n) => [n.id, n.data.category]))
+  const changed = ctx.nodes.filter((n) => was.has(n.id) && was.get(n.id) !== n.data.category)
+  const byCat = new Map<string, number>()
+  for (const n of changed) byCat.set(String(n.data.category), (byCat.get(String(n.data.category)) ?? 0) + 1)
+  return [...byCat.values()].some((c) => c >= 2)
+}
+
+function shapeChanged(ctx: CheckCtx): boolean {
+  const was = new Map(ctx.base.nodes.map((n) => [n.id, n.data.style.shape]))
+  return ctx.nodes.some((n) => was.has(n.id) && was.get(n.id) !== n.data.style.shape)
+}
+
+function colorChanged(ctx: CheckCtx): boolean {
+  const was = new Map(ctx.base.nodes.map((n) => [n.id, n.data.style.color]))
+  return ctx.nodes.some((n) => was.has(n.id) && was.get(n.id) !== n.data.style.color)
+}
+
+function edgeProp(ctx: CheckCtx, pick: (d: Record<string, unknown>) => unknown): boolean {
+  const was = new Map(ctx.base.edges.map((e) => [e.id, pick((e.data ?? {}) as Record<string, unknown>)]))
+  return ctx.edges.some((e) => was.has(e.id) && was.get(e.id) !== pick((e.data ?? {}) as Record<string, unknown>))
+}
+
 function colorChangedTogether(ctx: CheckCtx): boolean {
   const was = new Map(ctx.base.nodes.map((n) => [n.id, n.data.style.color]))
   const changed = ctx.nodes.filter((n) => was.has(n.id) && was.get(n.id) !== n.data.style.color)
@@ -130,6 +154,49 @@ export const LESSONS: Lesson[] = [
       },
     ],
     tasks: [],
+  },
+  {
+    id: 'raton',
+    title: 'Moverte con el ratón',
+    intro: [
+      { pose: 'hablando', text: 'Antes de los atajos, lo básico: cómo moverte por el mapa y tocar los nodos con el ratón.' },
+    ],
+    demo: 'mouse',
+    demoLine: {
+      pose: 'senalando',
+      text: 'La rueda mueve el mapa; con Ctrl, acerca y aleja. Clic selecciona y doble clic edita.',
+    },
+    tasks: [
+      {
+        id: 'mover-mapa',
+        text: 'Mueve el mapa con la rueda (o arrastrando con el botón central o el derecho)',
+        keys: ['Rueda'],
+        check: (ctx) => ctx.events.has('pan'),
+      },
+      {
+        id: 'zoom',
+        text: 'Acerca o aleja con Ctrl + rueda (o con + y − de abajo a la izquierda)',
+        keys: ['Ctrl', 'Rueda'],
+        check: (ctx) => ctx.events.has('zoom'),
+      },
+      {
+        id: 'clic',
+        text: 'Haz clic en un nodo para seleccionarlo',
+        check: (ctx) => ctx.events.has('node-click') && !!selectedNode(ctx),
+      },
+      {
+        id: 'recuadro',
+        text: 'Arrastra en una zona vacía para seleccionar varios a la vez',
+        check: (ctx) => ctx.nodes.filter((n) => n.selected).length >= 2,
+      },
+      {
+        id: 'doble-clic',
+        text: 'Haz doble clic en un nodo para editarlo (Esc o clic fuera para salir)',
+        keys: ['Doble clic'],
+        check: (ctx) => ctx.events.has('dblclick') && ctx.events.has('editing'),
+      },
+    ],
+    done: { pose: 'celebracion', text: 'Con eso ya te mueves por cualquier mapa. Ahora, los atajos.' },
   },
   {
     id: 'crear',
@@ -158,7 +225,7 @@ export const LESSONS: Lesson[] = [
     title: 'Moverse con flechas',
     intro: [{ pose: 'hablando', text: 'Con un nodo seleccionado, las flechas te llevan a sus vecinos: padre, hijos y hermanos.' }],
     demo: 'arrows',
-    demoLine: { pose: 'senalando', text: 'Así recorres el mapa sin tocar el ratón. F2 edita el que tienes seleccionado.' },
+    demoLine: { pose: 'senalando', text: 'Así recorres el mapa sin tocar el ratón. Y si escribes con un nodo seleccionado, lo editas.' },
     tasks: [
       {
         id: 'flechas',
@@ -167,28 +234,31 @@ export const LESSONS: Lesson[] = [
         check: (ctx) => ctx.events.has('Arrow') && (selectedNode(ctx)?.id ?? null) !== ctx.base.selected,
       },
       {
-        id: 'f2',
-        text: 'Pulsa F2 para editar el seleccionado (Enter o Esc para salir)',
-        keys: ['F2'],
-        check: (ctx) => ctx.events.has('F2') && ctx.events.has('editing'),
+        id: 'escribir',
+        text: 'Con un nodo seleccionado, empieza a escribir: la letra sustituye a su texto (Enter guarda, Esc sale)',
+        keys: ['A – Z'],
+        check: (ctx) => ctx.events.has('typed') && ctx.events.has('editing'),
       },
     ],
-    done: { pose: 'confiado', text: 'Perfecto. Con Supr borras el seleccionado y la selección pasa a su padre.' },
+    done: { pose: 'confiado', text: 'Perfecto. Doble clic o F2 también editan. Con Supr borras el seleccionado y la selección pasa a su padre.' },
   },
   {
     id: 'plegar',
     title: 'Plegar ramas',
-    intro: [{ pose: 'hablando-variante2', text: 'Un mapa grande agobia. Pliega lo que no estés mirando y estudia por partes.' }],
+    intro: [
+      { pose: 'hablando-variante2', text: 'Un mapa grande agobia. Pliega lo que no estés mirando y estudia por partes.' },
+      { pose: 'hablando', text: 'Este mapa tiene tres niveles de ideas: las ramas, sus detalles y los detalles de los detalles.' },
+    ],
     demo: 'fold',
-    demoLine: { pose: 'senalando', text: 'Espacio pliega el nodo seleccionado. Alt+1 deja solo lo principal; Alt+0 lo abre todo.' },
+    demoLine: { pose: 'senalando', text: 'Espacio pliega la rama. Alt+1 deja solo el primer nivel, Alt+2 los dos primeros, Alt+3 los tres; Alt+0 lo abre todo.' },
     tasks: [
-      { id: 'plegar', text: 'Pliega una rama: Espacio o el botón − junto al nodo', keys: ['Espacio'], check: (ctx) => ctx.events.has('fold') },
+      { id: 'plegar', text: 'Pliega una rama (o varias seleccionadas): Espacio o el botón − junto al nodo', keys: ['Espacio'], check: (ctx) => ctx.events.has('fold') },
       { id: 'desplegar', text: 'Vuelve a desplegarla', keys: ['Espacio'], check: (ctx) => ctx.events.has('unfold') },
       {
         id: 'niveles',
-        text: 'Mira solo lo principal con Alt+1 y vuelve con Alt+0',
-        keys: ['Alt', '1'],
-        check: (ctx) => ctx.events.has('Alt1') && ctx.events.has('Alt0'),
+        text: 'Prueba Alt+1, Alt+2 y Alt+3 (hasta ese nivel) y vuelve a verlo todo con Alt+0',
+        keys: ['Alt', '1·2·3', '0'],
+        check: (ctx) => ctx.events.has('Alt1') && ctx.events.has('Alt2') && ctx.events.has('Alt3') && ctx.events.has('Alt0'),
         glow: '[data-tuto="niveles"]',
       },
     ],
@@ -241,19 +311,94 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'estilo',
-    title: 'Categorías y color',
-    intro: [{ pose: 'con-mazo', text: 'Cada idea tiene su categoría MIR: definición, clínica, tratamiento… y su color.' }],
+    title: 'Categorías',
+    intro: [
+      { pose: 'con-mazo', text: 'Cada idea tiene su categoría MIR: definición, clínica, tratamiento… y su color.' },
+      { pose: 'hablando', text: 'Así, de un vistazo, distingues qué es clínica y qué es una perla. Se asignan con un número del 1 al 7.' },
+    ],
     demo: 'category',
-    demoLine: { pose: 'senalando', text: 'Ratón encima y un número del 1 al 7. El 7 es Perla MIR.' },
+    demoLine: {
+      pose: 'senalando',
+      text: 'Ratón encima y un número. Y en el menú Categorías editas todo de una categoría entera: título, colores, forma y fuente.',
+    },
     tasks: [
       { id: 'categoria', text: 'Pasa el ratón por un nodo y pulsa un número del 1 al 7', keys: ['1 – 7'], check: categoryChanged },
       {
-        id: 'varios',
-        text: 'Selecciona varios arrastrando en vacío, abre la paleta de uno y cámbiales el color',
-        check: colorChangedTogether,
+        id: 'categoria-varios',
+        text: 'Selecciona varios arrastrando en vacío y pulsa un número (o uno de los puntos de colores de su barra): cambian todos',
+        check: categoryChangedTogether,
+      },
+      {
+        id: 'menu-categorias',
+        text: 'Abre el menú «Categorías» de la barra superior',
+        check: (ctx) => ctx.events.has('cat-open'),
+        glow: 'button[title="Estilos de las categorías"]',
+      },
+      {
+        id: 'color-categoria',
+        text: 'Elige una categoría arriba y cámbiale el relleno, el borde, la fuente… se actualizan todos sus nodos',
+        check: (ctx) => ctx.events.has('cat-style'),
       },
     ],
-    done: { pose: 'celebracion', text: 'Todo lo que cambies con varios seleccionados se aplica a todos.' },
+    done: { pose: 'celebracion', text: 'Ahí también puedes seleccionar de golpe todos los nodos de una categoría.' },
+  },
+  {
+    id: 'panel',
+    title: 'Estilo de los nodos',
+    intro: [
+      { pose: 'con-mazo', text: 'Para retocar el aspecto de un nodo hay un panel de estilo: forma, colores y grosor del borde.' },
+    ],
+    demo: 'panel',
+    demoLine: {
+      pose: 'senalando',
+      text: 'Se abre con la paleta que sale sobre el nodo, o con Ctrl+E. Con varios seleccionados, cambia todos a la vez.',
+    },
+    tasks: [
+      {
+        id: 'abrir-panel',
+        text: 'Selecciona un nodo y abre el panel con la paleta de encima (o Ctrl+E)',
+        keys: ['Ctrl', 'E'],
+        check: (ctx) => ctx.events.has('style-open'),
+      },
+      { id: 'forma', text: 'Cámbiale la forma', check: shapeChanged, glow: '[data-tuto="style-panel"]' },
+      { id: 'color', text: 'Elige otro color de relleno', check: colorChanged, glow: '[data-tuto="style-panel"]' },
+      {
+        id: 'varios',
+        text: 'Selecciona varios arrastrando en vacío: sale una sola barra para todos. Ábrela con su paleta y cámbiales el color',
+        check: colorChangedTogether,
+      },
+      {
+        id: 'restablecer',
+        text: 'Pulsa «Restablecer estilo» para volver al aspecto original',
+        check: (ctx) => ctx.events.has('style-reset'),
+        glow: '[data-tuto="style-reset"]',
+      },
+    ],
+    done: { pose: 'celebracion', text: 'Y siempre puedes deshacerlo con Ctrl+Z.' },
+  },
+  {
+    id: 'lineas',
+    title: 'Las líneas',
+    intro: [
+      { pose: 'hablando', text: 'Las líneas que unen las ideas también se pueden retocar: tipo de trazo, color y grosor.' },
+    ],
+    demo: 'edges',
+    demoLine: {
+      pose: 'senalando',
+      text: 'Haz clic en una línea: abajo te sale su barra. Con Ctrl+clic eliges varias y se cambian a la vez.',
+    },
+    tasks: [
+      {
+        id: 'elegir-linea',
+        text: 'Haz clic sobre una línea para seleccionarla',
+        check: (ctx) => ctx.edges.some((e) => e.selected),
+        glow: '[data-tuto="edge-panel"]',
+      },
+      { id: 'trazo', text: 'Cámbiale el trazo: continua, guiones o puntos', check: (ctx) => edgeProp(ctx, (d) => d.variant) },
+      { id: 'color-linea', text: 'Dale otro color', check: (ctx) => edgeProp(ctx, (d) => d.color) },
+      { id: 'grosor', text: 'Cambia su grosor', check: (ctx) => edgeProp(ctx, (d) => d.strokeWidth) },
+    ],
+    done: { pose: 'celebracion', text: 'Si cambias la categoría de un nodo, la línea que llega a él toma el color de la categoría.' },
   },
   {
     id: 'ordenar',
@@ -264,14 +409,14 @@ export const LESSONS: Lesson[] = [
     tasks: [
       {
         id: 'ordenar',
-        text: 'Pulsa «Ordenar» en la barra',
-        check: (ctx) => ctx.events.has('ordenar'),
+        text: 'El mapa está desordenado: pulsa «Ordenar» en la barra',
+        check: (ctx) => ctx.events.has('ordenar-cambio'),
         glow: 'button[title="Ordenar el mapa automáticamente"]',
       },
       {
         id: 'bloque',
-        text: 'Selecciona unos cuantos y vuelve a pulsar «Ordenar»: solo se colocan esos',
-        check: (ctx) => ctx.events.has('ordenar-bloque'),
+        text: 'Desordena a mano un par de ramas, selecciónalas (Ctrl+clic o recuadro) y pulsa «Ordenar»: solo se colocan esas',
+        check: (ctx) => ctx.events.has('ordenar-bloque-cambio'),
         glow: 'button[title="Ordenar el mapa automáticamente"]',
       },
     ],
@@ -284,7 +429,7 @@ export const LESSONS: Lesson[] = [
       { pose: 'celebracion', text: '¡Ya lo tienes! Con esto se monta un tema entero en un rato.' },
       {
         pose: 'despedida',
-        text: 'Los atajos están siempre en el botón ? del editor, y este tutorial en «Mapas mentales». ¡A estudiar!',
+        text: `Los atajos están siempre en el botón ${MARCA} del editor, y este tutorial en «Mapas mentales». ¡A estudiar!`,
       },
     ],
     tasks: [],

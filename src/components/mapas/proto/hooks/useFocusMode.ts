@@ -69,7 +69,9 @@ export function useFocusController(rootRef: RefObject<HTMLElement | null>) {
 
     const sync = () => {
       frame = 0
-      const dragging = useUIStore.getState().isDragging
+      const ui = useUIStore.getState()
+      // Arrastrando, o con el desenfoque desactivado en la barra, no hay foco.
+      const dragging = ui.isDragging || !ui.focusBlur
       const target = dragging ? null : useMindMapStore.getState().hoveredNodeId
 
       if (target !== null) {
@@ -110,7 +112,7 @@ export function useFocusController(rootRef: RefObject<HTMLElement | null>) {
       }
     })
     const unsubUi = useUIStore.subscribe((s, p) => {
-      if (s.isDragging !== p.isDragging) schedule()
+      if (s.isDragging !== p.isDragging || s.focusBlur !== p.focusBlur) schedule()
     })
 
     return () => {

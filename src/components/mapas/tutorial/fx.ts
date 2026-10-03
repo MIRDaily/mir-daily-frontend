@@ -105,3 +105,16 @@ export function hold(keys: string[]) {
 export function release() {
   useTutorialFx.setState({ keys: [] })
 }
+
+// ─── Animación fotograma a fotograma ─────────────────────────────────────────
+
+/** Espera al siguiente fotograma (y lanza DemoCancelled si la demostración se ha cortado). */
+export async function frame(run: number) {
+  await new Promise((r) => requestAnimationFrame(() => r(null)))
+  if (run !== runId) throw new DemoCancelled()
+}
+
+/** Pone el cursor en un punto YA, sin transición (para seguir algo que se mueve cada fotograma). */
+export function cursorAt(x: number, y: number) {
+  useTutorialFx.setState((s) => ({ cursor: { x, y, ms: 0, pressed: s.cursor?.pressed ?? false } }))
+}

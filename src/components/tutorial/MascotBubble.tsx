@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { motion, useReducedMotion } from 'framer-motion'
 import { blip, vozActual } from '@/lib/tutorials/mascotAudio'
 import type { MascotPose } from '@/lib/tutorials/types'
+import { MARCA } from './marca'
 
 /* Los PNG están todos normalizados con el mismo criterio: la cabeza del mismo
    ancho y las patas sobre una línea de suelo común, para que la mascota no dé
@@ -35,8 +36,11 @@ const MS_MINIMO = 4
 /** Separación mínima entre blips. Sin esto, acelerar suena a metralleta. */
 const MS_ENTRE_BLIPS = 55
 
+
 type Props = {
   texto: string
+  /** Elemento que sustituye a MARCA dentro del texto (ocupa un carácter al escribirse). */
+  marca?: React.ReactNode
   pose: MascotPose
   /** Volteada cuando el bocadillo cae a la derecha del objetivo. */
   mirandoIzquierda?: boolean
@@ -68,6 +72,7 @@ type Props = {
  */
 export default function MascotBubble({
   texto,
+  marca,
   pose,
   mirandoIzquierda,
   apilada = false,
@@ -227,9 +232,9 @@ export default function MascotBubble({
             3. el texto completo para los lectores de pantalla, que no deben
                tener que esperar a que termine la animación para leerlo. */}
         <p className="relative text-[15px] font-medium leading-relaxed text-[#2D3748]">
-          <span aria-hidden className="invisible">{texto}</span>
-          <span aria-hidden className="absolute inset-0">{texto.slice(0, visibles)}</span>
-          <span className="sr-only">{texto}</span>
+          <span aria-hidden className="invisible">{conMarca(texto, marca)}</span>
+          <span aria-hidden className="absolute inset-0">{conMarca(texto.slice(0, visibles), marca)}</span>
+          <span className="sr-only">{texto.split(MARCA).join('el botón ?')}</span>
         </p>
 
         {/* La señal de "ya puedes seguir".
@@ -261,4 +266,10 @@ export default function MascotBubble({
       </div>
     </div>
   )
+}
+
+function conMarca(t: string, marca: React.ReactNode): React.ReactNode {
+  if (!marca || !t.includes(MARCA)) return t.split(MARCA).join('')
+  const partes = t.split(MARCA)
+  return partes.flatMap((p, i) => (i < partes.length - 1 ? [p, <span key={i}>{marca}</span>] : [p]))
 }

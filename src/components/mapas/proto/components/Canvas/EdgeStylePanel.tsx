@@ -6,10 +6,10 @@ import type { EdgeData, EdgeVariant } from '@/components/mapas/proto/types/edge.
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const VARIANTS: { id: EdgeVariant; dash?: string }[] = [
-  { id: 'solid' },
-  { id: 'dashed', dash: '10 5' },
-  { id: 'dotted', dash: '2 6'  },
+const VARIANTS: { id: EdgeVariant; dash?: string; label: string }[] = [
+  { id: 'solid', label: 'Continua' },
+  { id: 'dashed', dash: '10 5', label: 'Guiones' },
+  { id: 'dotted', dash: '2 6', label: 'Puntos' },
 ]
 
 const COLORS = [
@@ -26,7 +26,13 @@ const WIDTHS = [1, 2, 3, 4]
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
+/** Solo monta el panel con alguna línea seleccionada: si no, no vigila las líneas. */
 export function EdgeStylePanel() {
+  const any = useMindMapStore((s) => s.edges.some((e) => e.selected))
+  return any ? <EdgeStylePanelBody /> : null
+}
+
+function EdgeStylePanelBody() {
   const edges         = useEdges()
   const updateEdgeData = useMindMapStore((s) => s.updateEdgeData)
   const t             = useTheme()
@@ -51,6 +57,7 @@ export function EdgeStylePanel() {
       <AnimatePresence>
         <motion.div
           key="edge-panel"
+          data-tuto="edge-panel"
           initial={{ opacity: 0, y: 8, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 8, scale: 0.97 }}
@@ -71,7 +78,9 @@ export function EdgeStylePanel() {
           {VARIANTS.map((v) => (
             <button
               key={v.id}
-              title={v.id}
+              title={v.label}
+              aria-label={`Línea ${v.label.toLowerCase()}`}
+              aria-pressed={variant === v.id}
               onClick={() => applyAll({ variant: v.id })}
               style={{
                 background: variant === v.id ? t.hoverBg : 'transparent',
@@ -96,6 +105,7 @@ export function EdgeStylePanel() {
               <button
                 key={c.id}
                 title={c.label}
+                aria-label={`Color de línea: ${c.label}`}
                 onClick={() => applyAll({ color: c.value ?? undefined })}
                 style={{
                   width: 18, height: 18,
@@ -114,6 +124,24 @@ export function EdgeStylePanel() {
             )
           })}
 
+          {/* Cualquier otro color */}
+          <label
+            title="Otro color…"
+            style={{
+              position: 'relative', width: 18, height: 18, borderRadius: '50%', cursor: 'pointer', overflow: 'hidden', flexShrink: 0,
+              border: `2px solid ${activeColor && !COLORS.some((c) => c.value === activeColor) ? t.accent : 'transparent'}`,
+              background: activeColor && !COLORS.some((c) => c.value === activeColor) ? activeColor : 'conic-gradient(#f87171, #fbbf24, #34d399, #60a5fa, #a78bfa, #f472b6, #f87171)',
+            }}
+          >
+            <input
+              type="color"
+              aria-label="Otro color de línea"
+              value={/^#[0-9a-fA-F]{6}$/.test(activeColor ?? '') ? (activeColor as string) : '#E8A598'}
+              onChange={(e) => applyAll({ color: e.target.value })}
+              style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
+            />
+          </label>
+
           {divider}
 
           {/* ── Stroke width ─────────────────────────────────────────────── */}
@@ -122,7 +150,8 @@ export function EdgeStylePanel() {
             return (
               <button
                 key={w}
-                title={`${w}px`}
+                title={`Grosor ${w} px`}
+                aria-label={`Grosor ${w} px`}
                 onClick={() => applyAll({ strokeWidth: w })}
                 style={{
                   background: isActive ? t.hoverBg : 'transparent',

@@ -8,12 +8,13 @@ import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
 import { applyCategoryToNodes } from '@/components/mapas/proto/utils/categories'
 import { categoryForKey } from '@/lib/mapas/types'
 import { parentMap } from '@/components/mapas/proto/utils/tree'
-import { showUpToLevel, toggleBranch } from '@/components/mapas/proto/utils/branches'
+import { showUpToLevel, toggleBranch, toggleBranches } from '@/components/mapas/proto/utils/branches'
 import {
   addChildAndEdit,
   addSiblingAndEdit,
   navigate,
   selectOnly,
+  getFlow,
   type Direction,
 } from '@/components/mapas/proto/utils/keyboard'
 
@@ -60,8 +61,36 @@ export function useMindMapShortcuts() {
         return
       }
 
-      // ── Alt+1/2/3: ver hasta ese nivel · Alt+0: desplegarlo todo ───────────
-      if (e.altKey && !isMod && /^Digit[0-3]$/.test(e.code)) {
+      // ── Ctrl+E: panel de estilo del nodo seleccionado (o de la selección) ───
+      if (isMod && !e.altKey && e.key.toLowerCase() === 'e') {
+        const first = getNodes().find((n) => n.selected && !n.hidden)
+        if (first) {
+          e.preventDefault()
+          ui.setSelectedNodeId(first.id)
+          ui.setStylePanelOpen(true)
+        }
+        return
+      }
+
+      // ── N: nodo nuevo sin relaciones ──────────────────────────────────────────
+      // Con un nodo seleccionado, escribir lo edita (la N incluida), así que N a secas solo crea con
+      // la selección vacía; Alt+N crea siempre.
+      const wantsNew = !isMod && !e.shiftKey && (e.altKey ? e.code === 'KeyN' : e.key.toLowerCase() === 'n')
+      if (wantsNew && !store.editingNodeId && (e.altKey || !getNodes().some((n) => n.selected))) {
+        if (e.altKey || target === document.body || !!target.closest?.('.react-flow')) {
+          e.preventDefault()
+          history.pushSnapshot(store.nodes, store.edges)
+          const newId = store.addNode()
+          setTimeout(() => {
+            const node = useMindMapStore.getState().nodes.find((n) => n.id === newId)
+            if (node) void getFlow()?.setCenter(node.position.x, node.position.y, { duration: 600, zoom: 1 })
+          }, 150)
+          return
+        }
+      }
+
+      // ── Alt+1…9: ver hasta ese nivel · Alt+0: desplegarlo todo ───────────
+      if (e.altKey && !isMod && /^Digit[0-9]$/.test(e.code)) {
         e.preventDefault()
         const level = Number(e.code.slice(5))
         showUpToLevel(level === 0 ? null : level)
@@ -82,6 +111,12 @@ export function useMindMapShortcuts() {
           addSiblingAndEdit(one)
           return
         }
+        if (sel.length > 1 && e.key === ' ') {
+          // Espacio con varios seleccionados: pliega (o despliega) todas sus ramas a la vez.
+          e.preventDefault()
+          toggleBranches(sel.map((n) => n.id))
+          return
+        }
         if (one && e.key === ' ') {
           // Espacio: plegar/desplegar la rama del nodo seleccionado.
           e.preventDefault()
@@ -91,6 +126,13 @@ export function useMindMapShortcuts() {
         if (one && e.key === 'F2') {
           e.preventDefault()
           store.setEditing(one)
+          return
+        }
+        // Escribir con un nodo seleccionado lo edita (como en una hoja de cálculo): la letra
+        // sustituye al texto. Los números 1-7 con el ratón encima de un nodo siguen siendo categorías.
+        if (one && e.key.length === 1 && e.key !== ' ' && !(categoryForKey(e.key) && store.hoveredNodeId)) {
+          e.preventDefault()
+          store.setEditing(one, e.key)
           return
         }
         const dir = ARROWS[e.key]
@@ -171,12 +213,17 @@ export function useMindMapShortcuts() {
       if (!isMod && !e.altKey && !e.shiftKey) {
         const category = categoryForKey(e.key)
         const hovered = useMindMapStore.getState().hoveredNodeId
-        if (category && hovered) {
+        const selected = category
+          ? getNodes()
+              .filter((n) => n.selected && !n.hidden)
+              .map((n) => n.id)
+          : []
+        // Con varios nodos seleccionados el número se aplica a TODOS (con el ratón sobre uno de
+        // ellos o sobre ningún nodo); con el ratón sobre un nodo ajeno a la selección, solo a ese.
+        const target = hovered ? (selected.includes(hovered) ? selected : [hovered]) : selected.length > 1 ? selected : []
+        if (category && target.length) {
           e.preventDefault()
-          const selected = getNodes()
-            .filter((n) => n.selected)
-            .map((n) => n.id)
-          applyCategoryToNodes(selected.includes(hovered) ? selected : [hovered], category)
+          applyCategoryToNodes(target, category)
         }
       }
 
@@ -187,11 +234,6 @@ export function useMindMapShortcuts() {
         ui.setStylePanelOpen(false)
       }
 
-      // ── New node (n) ────────────────────────────────────────────────────────
-      if (e.key === 'n' && !isMod) {
-        history.pushSnapshot(store.nodes, store.edges)
-        store.addNode()
-      }
     }
 
     window.addEventListener('keydown', handler)

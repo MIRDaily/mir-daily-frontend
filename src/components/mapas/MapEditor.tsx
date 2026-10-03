@@ -3,7 +3,7 @@
 import '@xyflow/react/dist/style.css'
 import '@/components/mapas/proto/mapas.css'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ReactFlowProvider, useNodesInitialized, useReactFlow, type FitViewOptions } from '@xyflow/react'
 import { saveMap } from '@/lib/mapas/api'
 import {
@@ -30,7 +30,8 @@ import { SearchBar } from '@/components/mapas/proto/components/Toolbar/SearchBar
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
-import { parentMap } from '@/components/mapas/proto/utils/tree'
+import { MAP_FONT_CLASSES } from '@/components/mapas/proto/fonts'
+import { childrenMap, descendantsOf, parentMap } from '@/components/mapas/proto/utils/tree'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
 
@@ -49,7 +50,7 @@ type Props = {
   /** Capa extra dentro del editor (y del ReactFlowProvider): el entrenador del tutorial. */
   overlay?: React.ReactNode
   /** Márgenes al encuadrar el mapa (el tutorial deja sitio a su panel, a la izquierda). */
-  fitPadding?: FitViewOptions['padding']
+  fitOptions?: FitViewOptions
 }
 
 // ---------------------------------------------------------------------------
@@ -90,7 +91,9 @@ function toEngine(doc: GraphDoc): { nodes: MindMapNode[]; edges: MindMapEdge[] }
 const round = (v: number) => Math.round(v * 10) / 10
 
 /** Lo que se guarda: solo datos del mapa, nada de estado de interfaz (selección, edición, animaciones). */
-function fromEngine(nodes: MindMapNode[], edges: MindMapEdge[]): GraphDoc {
+type EditorSettings = Pick<ReturnType<typeof useUIStore.getState>, 'theme' | 'bgStyle' | 'categoryStyles'>
+
+function fromEngine(nodes: MindMapNode[], edges: MindMapEdge[], settings?: EditorSettings): GraphDoc {
   const gNodes: GraphNode[] = nodes.map((n) => ({
     id: n.id,
     type: 'mindmap',
@@ -122,7 +125,7 @@ function fromEngine(nodes: MindMapNode[], edges: MindMapEdge[]): GraphDoc {
       },
     }
   })
-  const { theme, bgStyle, categoryStyles } = useUIStore.getState()
+  const { theme, bgStyle, categoryStyles } = settings ?? useUIStore.getState()
   return {
     version: 2,
     nodes: gNodes,
@@ -145,13 +148,31 @@ function installMeasurer() {
 // ---------------------------------------------------------------------------
 
 export default function MapEditor(props: Props) {
-  // Carga el mapa en el motor una sola vez, antes del primer pintado: el lienzo
-  // hace `fitView` al montarse y necesita ya los nodos. El editor es ssr:false, así
-  // que aquí siempre hay navegador. Cargar dos veces (StrictMode) es inocuo.
+  // El documento se convierte durante el render (cálculo puro, una vez)…
   const [prepared] = useState(() => {
-    installMeasurer()
     const { doc, fromTree } = toGraphDoc(props.rawDoc)
     const engine = toEngine(doc)
+    // Lo ya guardado (título + documento): si no cambia nada, no se vuelve a escribir. Un árbol
+    // recién convertido cuenta como "sin guardar" para que se grabe ya como grafo.
+    const saved = fromTree
+      ? ''
+      : JSON.stringify({ ...fromEngine(engine.nodes, engine.edges), title: props.initialTitle })
+    // Carga de la store antes de la nuestra: el editor está listo cuando el contador la supera.
+    return { doc, engine, fromTree, saved, tickBefore: useMindMapStore.getState().loadTick }
+  })
+
+  // …pero se mete en las stores en un layout effect, NO en el render. Antes se cargaba dentro del
+  // inicializador de useState, y si había algo suscrito a la store (el lienzo de otro editor, o un
+  // replay de Suspense del import dinámico) React avisaba "Cannot update MindMapCanvas while
+  // rendering MapEditor". El layout effect corre antes de pintar, así que el lienzo se monta en el
+  // render siguiente ya con los nodos (su fitView inicial los necesita) y sin parpadeo. El editor
+  // es ssr:false: aquí siempre hay navegador. Cargar dos veces (StrictMode) es inocuo.
+  const loaded = useMindMapStore((s) => s.loadTick !== prepared.tickBefore)
+  // La carga que es de ESTE editor (ver EditorInner: guardar solo lo propio).
+  const ownTick = useRef(-1)
+  useLayoutEffect(() => {
+    const { doc, engine } = prepared
+    installMeasurer()
     useMindMapStore.getState().load(engine.nodes, engine.edges)
     useHistoryStore.getState().clear()
     const ui = useUIStore.getState()
@@ -164,17 +185,15 @@ export default function MapEditor(props: Props) {
     ui.setPhysicsEnabled(true)
     ui.setSelectedNodeId(null)
     ui.setStylePanelOpen(false)
-    // Lo ya guardado (título + documento): si no cambia nada, no se vuelve a escribir. Un árbol
-    // recién convertido cuenta como "sin guardar" para que se grabe ya como grafo.
-    const saved = fromTree
-      ? ''
-      : JSON.stringify({ ...fromEngine(engine.nodes, engine.edges), title: props.initialTitle })
-    return { fromTree, saved }
-  })
+    ui.setFocusBlur(true) // el desenfoque al pasar el ratón empieza siempre activado
+    ownTick.current = useMindMapStore.getState().loadTick
+  }, [prepared])
+
+  if (!loaded) return null
 
   return (
     <ReactFlowProvider>
-      <EditorInner {...props} fromTree={prepared.fromTree} initialSaved={prepared.saved} />
+      <EditorInner {...props} fromTree={prepared.fromTree} initialSaved={prepared.saved} ownTick={ownTick} />
     </ReactFlowProvider>
   )
 }
@@ -186,8 +205,9 @@ function EditorInner({
   initialSaved,
   sandbox = false,
   overlay,
-  fitPadding,
-}: Props & { fromTree: boolean; initialSaved: string }) {
+  fitOptions,
+  ownTick,
+}: Props & { fromTree: boolean; initialSaved: string; ownTick: React.RefObject<number> }) {
   const theme = useUIStore((s) => s.theme)
   const bgStyle = useUIStore((s) => s.bgStyle)
   const isDark = theme === 'dark'
@@ -205,8 +225,28 @@ function EditorInner({
 
   // ---- guardado -----------------------------------------------------------
 
+  // Las stores son globales: al pasar de un editor a otro sin recargar (p. ej. de un mapa al
+  // tutorial), el nuevo carga sus nodos ANTES de que el viejo termine de desmontarse. El viejo,
+  // al salir, guardaba "lo pendiente" leyendo la store… que ya era la del otro: así se grabó el
+  // mapa de práctica encima de un mapa real. Ahora cada editor solo guarda lo suyo: la store es
+  // suya mientras `loadTick` sea el de su carga, y guarda aparte su última copia (nodos, líneas y
+  // ajustes) para el guardado al salir.
+  const isMine = useCallback(() => useMindMapStore.getState().loadTick === ownTick.current, [ownTick])
+  const own = useRef(
+    (() => {
+      const s = useMindMapStore.getState()
+      const u = useUIStore.getState()
+      return {
+        nodes: s.nodes,
+        edges: s.edges,
+        settings: { theme: u.theme, bgStyle: u.bgStyle, categoryStyles: u.categoryStyles } as EditorSettings,
+      }
+    })(),
+  )
+
   const flush = useCallback(async () => {
     if (inFlight.current) return
+    if (!isMine()) return // otro editor ha cargado su mapa: esto ya no es nuestro
     const { nodes, edges } = useMindMapStore.getState()
     // Un mapa sin nodos no se guarda nunca: el editor siempre tiene al menos uno, así que una
     // store vacía es un estado roto (p. ej. la recarga en caliente del servidor de desarrollo
@@ -230,7 +270,7 @@ function EditorInner({
     } finally {
       inFlight.current = false
     }
-  }, [mapId, sandbox])
+  }, [mapId, sandbox, isMine])
 
   const schedule = useCallback(() => {
     setSave((s) => (s === 'saving' || s === 'error' ? s : 'dirty'))
@@ -240,17 +280,26 @@ function EditorInner({
 
   useEffect(() => {
     const unsubMap = useMindMapStore.subscribe((s, p) => {
-      if (s.nodes !== p.nodes || s.edges !== p.edges) schedule()
+      // Cambios de otro editor (que ya ha cargado su mapa) no son nuestros.
+      if (s.loadTick !== ownTick.current) return
+      if (s.nodes !== p.nodes || s.edges !== p.edges) {
+        own.current = { ...own.current, nodes: s.nodes, edges: s.edges }
+        schedule()
+      }
     })
     const unsubUi = useUIStore.subscribe((s, p) => {
-      if (s.theme !== p.theme || s.bgStyle !== p.bgStyle || s.categoryStyles !== p.categoryStyles) schedule()
+      if (!isMine()) return
+      if (s.theme !== p.theme || s.bgStyle !== p.bgStyle || s.categoryStyles !== p.categoryStyles) {
+        own.current = { ...own.current, settings: { theme: s.theme, bgStyle: s.bgStyle, categoryStyles: s.categoryStyles } }
+        schedule()
+      }
     })
     return () => {
       unsubMap()
       unsubUi()
       if (timer.current) clearTimeout(timer.current)
     }
-  }, [schedule])
+  }, [schedule, isMine, ownTick])
 
   // Un reintento tras un fallo de red o de permisos.
   useEffect(() => {
@@ -264,16 +313,17 @@ function EditorInner({
 
   useEffect(() => {
     const beforeUnload = (e: BeforeUnloadEvent) => {
-      const { nodes, edges } = useMindMapStore.getState()
-      const snap = JSON.stringify({ ...fromEngine(nodes, edges), title: titleRef.current })
+      const { nodes, edges, settings } = own.current
+      const snap = JSON.stringify({ ...fromEngine(nodes, edges, settings), title: titleRef.current })
       if (!sandbox && snap !== lastSaved.current) e.preventDefault()
     }
     window.addEventListener('beforeunload', beforeUnload)
     return () => {
       window.removeEventListener('beforeunload', beforeUnload)
-      // Al salir del editor, lo pendiente se manda sin esperar al debounce.
-      const { nodes, edges } = useMindMapStore.getState()
-      const doc = fromEngine(nodes, edges)
+      // Al salir del editor, lo pendiente se manda sin esperar al debounce. Con NUESTRA última
+      // copia, no con la store: puede que otro editor ya haya cargado la suya (ver `own`).
+      const { nodes, edges, settings } = own.current
+      const doc = fromEngine(nodes, edges, settings)
       if (!sandbox && nodes.length > 0 && JSON.stringify({ ...doc, title: titleRef.current }) !== lastSaved.current) {
         void saveMap(mapId, { title: titleRef.current, doc }).catch(() => {})
       }
@@ -344,11 +394,11 @@ function EditorInner({
       useMindMapStore.getState().syncCollapse()
       if (!only) {
         requestAnimationFrame(
-          () => void fitView({ padding: fitPadding ?? 0.25, maxZoom: 1.1, duration: animate ? 500 : 0 }),
+          () => void fitView({ padding: 0.25, maxZoom: 1.1, ...fitOptions, duration: animate ? 500 : 0 }),
         )
       }
     },
-    [fitView, getNodes, fitPadding],
+    [fitView, getNodes, fitOptions],
   )
 
   // Un mapa que viene de un árbol (importado o generado) se dibuja con el tamaño
@@ -362,9 +412,15 @@ function EditorInner({
   const onAutoLayout = useCallback(() => {
     const { nodes, edges } = useMindMapStore.getState()
     useHistoryStore.getState().pushSnapshot(nodes, edges)
-    // Con varios nodos seleccionados se ordena solo ese bloque; el resto no se toca.
+    // Con varios nodos seleccionados se ordena solo ese bloque (con todo lo que cuelga de ellos);
+    // el resto no se toca.
     const selected = nodes.filter((n) => n.selected && !n.hidden).map((n) => n.id)
-    layoutNow(true, selected.length > 1 ? new Set(selected) : undefined)
+    if (selected.length > 1) {
+      const block = new Set([...selected, ...descendantsOf(selected, childrenMap(parentMap(nodes, edges)))])
+      layoutNow(true, block)
+    } else {
+      layoutNow(true)
+    }
   }, [layoutNow])
 
   // ---- exportar -------------------------------------------------------------
@@ -403,12 +459,14 @@ function EditorInner({
       isolation: 'isolate' as const,
       background: isDark ? '#1C1815' : '#FAF7F4',
       transition: 'background 400ms ease',
+      // El tutorial deja a la izquierda la columna de la mascota: los popups anchos se centran al resto.
+      ...(sandbox ? ({ '--mapa-inset-left': '424px' } as React.CSSProperties) : null),
     }),
-    [isDark],
+    [isDark, sandbox],
   )
 
   return (
-    <div className="mapa-root" data-theme={theme} style={rootStyle}>
+    <div className={`mapa-root ${MAP_FONT_CLASSES}`} data-theme={theme} style={rootStyle}>
       {/* Capa 0: fondo de puntos interactivo. Capa 1+: lienzo y controles (transparentes). */}
       <InteractiveBackground isDark={isDark} bgStyle={bgStyle} />
       <div style={{ position: 'absolute', inset: 0, zIndex: 1 }}>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useViewport, useNodes, useReactFlow, useStore } from '@xyflow/react'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
@@ -11,8 +11,7 @@ const MIN_HALF_H = 650 // minimum half-height (~2 screens of context)
 
 export function CustomMiniMap() {
   const { x: vpX, y: vpY, zoom } = useViewport()
-  // Lo plegado no se dibuja en el minimapa (tampoco ensancha sus límites).
-  const nodes = (useNodes() as MindMapNode[]).filter((n) => !n.hidden)
+  const rfNodes = useNodes() as MindMapNode[]
   const { setViewport } = useReactFlow()
   // Tamaño del lienzo del editor (no de la ventana: aquí hay cabecera de la web encima).
   const screenW = useStore((s) => s.width)
@@ -28,28 +27,53 @@ export function CustomMiniMap() {
   })
   const [dragging, setDragging] = useState(false)
 
-  // ── Adaptive bounds: node content + padding, with a sensible minimum ─────
-  let rawMinX = -PAD, rawMinY = -PAD, rawMaxX = PAD, rawMaxY = PAD
-  if (nodes.length > 0) {
-    rawMinX = Math.min(...nodes.map(n => n.position.x)) - PAD
-    rawMaxX = Math.max(...nodes.map(n => n.position.x + ((n.measured?.width  as number | undefined) ?? 160))) + PAD
-    rawMinY = Math.min(...nodes.map(n => n.position.y)) - PAD
-    rawMaxY = Math.max(...nodes.map(n => n.position.y + ((n.measured?.height as number | undefined) ?? 50))) + PAD
-  }
+  // Todo lo que depende solo de los nodos (límites, escala y trazados) se calcula una vez por cambio
+  // de nodos, no en cada fotograma de mover/ampliar la vista. Lo plegado no se dibuja (ni ensancha
+  // los límites). Un solo recorrido en vez de cuatro Math.min/max con spread.
+  const geo = useMemo(() => {
+    let rawMinX = Infinity, rawMinY = Infinity, rawMaxX = -Infinity, rawMaxY = -Infinity
+    const visible: MindMapNode[] = []
+    for (const n of rfNodes) {
+      if (n.hidden) continue
+      visible.push(n)
+      const w = (n.measured?.width as number | undefined) ?? 160
+      const h = (n.measured?.height as number | undefined) ?? 50
+      if (n.position.x < rawMinX) rawMinX = n.position.x
+      if (n.position.y < rawMinY) rawMinY = n.position.y
+      if (n.position.x + w > rawMaxX) rawMaxX = n.position.x + w
+      if (n.position.y + h > rawMaxY) rawMaxY = n.position.y + h
+    }
+    if (visible.length === 0) {
+      rawMinX = 0; rawMinY = 0; rawMaxX = 0; rawMaxY = 0
+    }
+    rawMinX -= PAD; rawMinY -= PAD; rawMaxX += PAD; rawMaxY += PAD
 
-  // Expand symmetrically from the content center up to the minimum half-size
-  const cx   = (rawMinX + rawMaxX) / 2
-  const cy   = (rawMinY + rawMaxY) / 2
-  const minX = cx - Math.max((rawMaxX - rawMinX) / 2, MIN_HALF_W)
-  const maxX = cx + Math.max((rawMaxX - rawMinX) / 2, MIN_HALF_W)
-  const minY = cy - Math.max((rawMaxY - rawMinY) / 2, MIN_HALF_H)
-  const maxY = cy + Math.max((rawMaxY - rawMinY) / 2, MIN_HALF_H)
+    // Expand symmetrically from the content center up to the minimum half-size
+    const cx   = (rawMinX + rawMaxX) / 2
+    const cy   = (rawMinY + rawMaxY) / 2
+    const minX = cx - Math.max((rawMaxX - rawMinX) / 2, MIN_HALF_W)
+    const maxX = cx + Math.max((rawMaxX - rawMinX) / 2, MIN_HALF_W)
+    const minY = cy - Math.max((rawMaxY - rawMinY) / 2, MIN_HALF_H)
+    const maxY = cy + Math.max((rawMaxY - rawMinY) / 2, MIN_HALF_H)
+    const contentW = maxX - minX
+    const contentH = maxY - minY
+    const scale    = Math.min(W / contentW, H / contentH)
+    const offX     = (W - contentW * scale) / 2
+    const offY     = (H - contentH * scale) / 2
 
-  const contentW = maxX - minX
-  const contentH = maxY - minY
-  const scale    = Math.min(W / contentW, H / contentH)
-  const offX     = (W - contentW * scale) / 2
-  const offY     = (H - contentH * scale) / 2
+    // Nodos: un trazado SVG por color en vez de un <div> por nodo.
+    const byColor: Record<string, string> = {}
+    for (const n of visible) {
+      const mx = (n.position.x - minX) * scale + offX
+      const my = (n.position.y - minY) * scale + offY
+      const nw = Math.max(((n.measured?.width  as number | undefined) ?? 160) * scale, 4)
+      const nh = Math.max(((n.measured?.height as number | undefined) ?? 50)  * scale, 3)
+      const color = n.data.style?.color ?? ''
+      byColor[color] = (byColor[color] ?? '') + `M${mx.toFixed(1)} ${my.toFixed(1)}h${nw.toFixed(1)}v${nh.toFixed(1)}h${(-nw).toFixed(1)}Z`
+    }
+    return { minX, minY, maxX, maxY, scale, offX, offY, paths: Object.entries(byColor) }
+  }, [rfNodes])
+  const { minX, minY, maxX, maxY, scale, offX, offY } = geo
 
   // Keep refs in sync so event handlers always have fresh values
   useEffect(() => {
@@ -153,17 +177,8 @@ export function CustomMiniMap() {
       {/* Nodes: un trazado SVG por color en vez de un <div> por nodo. Con ~100 nodos, el
           minimapa recreaba 100 elementos en cada fotograma de un arrastre. */}
       <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-        {Object.entries(
-          nodes.reduce<Record<string, string>>((acc, n) => {
-            const { x: mx, y: my } = flowToMini(n.position.x, n.position.y)
-            const nw = Math.max(((n.measured?.width  as number | undefined) ?? 160) * scale, 4)
-            const nh = Math.max(((n.measured?.height as number | undefined) ?? 50)  * scale, 3)
-            const color = n.data.style?.color ?? t.border2
-            acc[color] = (acc[color] ?? '') + `M${mx.toFixed(1)} ${my.toFixed(1)}h${nw.toFixed(1)}v${nh.toFixed(1)}h${(-nw).toFixed(1)}Z`
-            return acc
-          }, {}),
-        ).map(([color, d]) => (
-          <path key={color} d={d} fill={color} opacity={0.9} />
+        {geo.paths.map(([color, d]) => (
+          <path key={color} d={d} fill={color || t.border2} opacity={0.9} />
         ))}
       </svg>
 

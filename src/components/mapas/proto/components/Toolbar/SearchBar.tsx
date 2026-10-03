@@ -88,7 +88,7 @@ function unfoldTo(id: string) {
 function centerOn(id: string) {
   const flow = getFlow()
   const node = useMindMapStore.getState().nodes.find((n) => n.id === id)
-  if (!flow || !node) return
+  if (!flow || !node || useUIStore.getState().cameraLocked) return
   const w = node.measured?.width ?? 160
   const h = node.measured?.height ?? 50
   const zoom = Math.max(flow.getViewport().zoom, 0.9)

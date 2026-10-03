@@ -72,7 +72,7 @@ export function reparentNode(id: string, newParent: string): string[] | null {
 }
 
 /** Profundidad de cada nodo (las raíces, 0). A prueba de ciclos. */
-function depths(): Map<string, number> {
+export function depths(): Map<string, number> {
   const { nodes, edges } = useMindMapStore.getState()
   const parents = parentMap(nodes, edges)
   const out = new Map<string, number>()
@@ -109,4 +109,18 @@ export function toggleBranch(id: string) {
   if (!node?.data.childCount) return
   useHistoryStore.getState().pushSnapshot(store.nodes, store.edges)
   setCollapsedAnimated(new Map([[id, !node.data.collapsed]]))
+}
+
+/**
+ * Plegar/desplegar varias ramas a la vez (Espacio con varios seleccionados). Si alguna de las que
+ * tienen hijos está desplegada, se pliegan todas; si ya estaban todas plegadas, se despliegan.
+ * Un paso de deshacer.
+ */
+export function toggleBranches(ids: string[]) {
+  const store = useMindMapStore.getState()
+  const withKids = store.nodes.filter((n) => ids.includes(n.id) && n.data.childCount)
+  if (withKids.length === 0) return
+  const collapse = withKids.some((n) => !n.data.collapsed)
+  useHistoryStore.getState().pushSnapshot(store.nodes, store.edges)
+  setCollapsedAnimated(new Map(withKids.map((n) => [n.id, collapse])))
 }

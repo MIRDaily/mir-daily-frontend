@@ -9,6 +9,7 @@ export interface MindMapState {
   /** Sube en cada carga de un mapa: el motor de física no debe reaccionar a eso. */
   loadTick: number
   editingNodeId: string | null
+  editSeed: string | null
   focusedNodeId: string | null
   hoveredNodeId: string | null
 
@@ -24,7 +25,8 @@ export interface MindMapState {
   updateEdgeAnimating: (id: string, val: boolean) => void
   updateEdgeData: (id: string, data: Partial<EdgeData>) => void
   pasteNodes: (nodes: MindMapNode[], edges: MindMapEdge[]) => void
-  setEditing: (id: string | null) => void
+  /** Abre el editor de texto de un nodo. `seed`: texto con el que arranca (lo escrito con el nodo seleccionado). */
+  setEditing: (id: string | null, seed?: string | null) => void
   setFocused: (id: string | null) => void
   setHovered: (id: string | null) => void
   connectNodes: (connection: Connection) => void
@@ -39,6 +41,15 @@ export type BgStyle = 'flat' | 'dots-light' | 'dots'
 
 export interface UIState {
   stylePanelOpen: boolean
+  /** Hay más de un nodo seleccionado: la barra de grupo sustituye a la de cada nodo. */
+  multiSelect: boolean
+  /** La cámara no se mueve sola (las demostraciones del tutorial la tienen fijada). */
+  cameraLocked: boolean
+  setCameraLocked: (v: boolean) => void
+  /** Desenfocar lo que no está conectado al nodo bajo el ratón (por defecto, sí). */
+  focusBlur: boolean
+  setFocusBlur: (v: boolean) => void
+  setMultiSelect: (v: boolean) => void
   selectedNodeId: string | null
   theme: 'dark' | 'light'
   bgStyle: BgStyle

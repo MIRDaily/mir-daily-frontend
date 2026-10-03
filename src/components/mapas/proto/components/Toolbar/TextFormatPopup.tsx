@@ -1,4 +1,5 @@
 import { resolveFont } from '@/components/mapas/proto/utils/font'
+import { MAP_FONTS } from '@/lib/mapas/fonts'
 import { type CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlignLeft, AlignCenter, AlignRight } from 'lucide-react'
@@ -8,12 +9,7 @@ import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import type { NodeStyle } from '@/components/mapas/proto/types/node.types'
 
-const FONTS: { value: string; label: string }[] = [
-  { value: 'Lexend',                       label: 'Lex'   },
-  { value: 'Inter, system-ui, sans-serif', label: 'Inter' },
-  { value: 'Georgia, serif',               label: 'Geo'   },
-  { value: "'Courier New', monospace",     label: 'Mono'  },
-]
+const FONTS: { value: string; label: string }[] = MAP_FONTS.map((f) => ({ value: f.id, label: f.label }))
 
 const FONT_SIZES = [11, 12, 13, 14, 16, 18, 20, 24]
 
@@ -27,7 +23,13 @@ function execFmt(cmd: string) {
   document.execCommand(cmd, false)
 }
 
+/** Solo monta el contenido mientras se edita un texto: el resto del tiempo no vigila los nodos. */
 export function TextFormatPopup() {
+  const editing = useMindMapStore((s) => s.editingNodeId !== null)
+  return editing ? <TextFormatBody /> : null
+}
+
+function TextFormatBody() {
   const editingNodeId = useMindMapStore((s) => s.editingNodeId)
   const node = useMindMapStore(useShallow((s) => s.nodes.find((n) => n.id === editingNodeId)))
   const updateNodeStyle = useMindMapStore((s) => s.updateNodeStyle)
@@ -104,6 +106,8 @@ export function TextFormatPopup() {
             return (
               <button
                 key={f.value}
+                title={f.label}
+                aria-label={f.label}
                 onClick={() => update({ fontFamily: f.value })}
                 style={{
                   flex: 1,
@@ -119,7 +123,7 @@ export function TextFormatPopup() {
                   transition: 'all 120ms',
                 }}
               >
-                {f.label}
+                Aa
               </button>
             )
           })}

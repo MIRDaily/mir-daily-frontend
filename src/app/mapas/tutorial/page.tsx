@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic'
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import { PRACTICE_MAP, PRACTICE_TITLE } from '@/lib/mapas/tutorial/practiceMap'
-import { COACH_WIDTH } from '@/components/mapas/tutorial/layout'
+import { TUTORIAL_FIT } from '@/components/mapas/tutorial/layout'
 
 // Tutorial interactivo de los mapas: el editor de verdad con un mapa de práctica que no se guarda
 // y el entrenador de la mascota encima. Accesible siempre desde /mapas y desde el panel de atajos
@@ -22,9 +22,6 @@ const MapTutorialCoach = dynamic(
   { ssr: false },
 )
 
-// El mapa se encuadra a la derecha del panel de la mascota (columna izquierda).
-// En px y como texto: un número suelto React Flow lo toma como fracción (110 = 11 000 %).
-const FIT_PADDING = { top: '110px', right: '48px', bottom: '48px', left: `${COACH_WIDTH + 56}px` } as const
 
 function TutorialEditor() {
   const params = useSearchParams()
@@ -35,7 +32,7 @@ function TutorialEditor() {
       initialTitle={PRACTICE_TITLE}
       rawDoc={PRACTICE_MAP}
       sandbox
-      fitPadding={FIT_PADDING}
+      fitOptions={TUTORIAL_FIT}
       overlay={<MapTutorialCoach startAt={startAt} />}
     />
   )

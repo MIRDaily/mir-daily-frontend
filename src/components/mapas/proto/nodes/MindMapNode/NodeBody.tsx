@@ -8,7 +8,9 @@ function getShapeStyles(shape: NodeShape): CSSProperties {
     case 'circle':
       return { borderRadius: '50%', minWidth: 80, minHeight: 80, aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center' }
     case 'diamond':
-      return { borderRadius: '8px', transform: 'rotate(45deg)', minWidth: 80, minHeight: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }
+      // El rombo se dibuja con un polígono SVG detrás del texto (ver NodeBody): girar la caja 45°
+      // desbordaba el texto y no coincidía con el tamaño que mide React Flow.
+      return { borderRadius: 0, minWidth: 130, minHeight: 64, padding: '18px 52px' }
     default:
       return { borderRadius: '12px' }
   }
@@ -51,13 +53,45 @@ export function NodeBody({ style, children, isSelected, isDark }: NodeBodyProps)
     ...getShapeStyles(style.shape),
   }
 
+  if (style.shape === 'diamond') {
+    // Sin fondo, borde ni sombra propios: los pone el polígono (la sombra, con drop-shadow, que sí
+    // sigue la silueta del rombo).
+    const stroke = isSelected ? style.glowColor : style.borderColor
+    const shadow = isSelected
+      ? `drop-shadow(0 0 3px ${style.glowColor}) drop-shadow(0 0 12px ${style.glowColor}66)`
+      : style.glowIntensity > 0
+        ? `drop-shadow(0 0 ${style.glowIntensity * 10}px ${style.glowColor}88)`
+        : isDark
+          ? 'drop-shadow(0 4px 10px rgba(232,165,152,0.30))'
+          : 'drop-shadow(0 2px 6px rgba(0,0,0,0.18))'
+    return (
+      <div
+        className="node-body"
+        style={{ ...containerStyle, background: 'none', border: 'none', boxShadow: 'none', filter: shadow }}
+      >
+        <svg
+          aria-hidden
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible' }}
+        >
+          <polygon
+            points="50,0 100,50 50,100 0,50"
+            fill={style.color}
+            stroke={style.borderWidth > 0 || isSelected ? stroke : 'none'}
+            strokeWidth={isSelected ? Math.max(style.borderWidth, 2) : style.borderWidth}
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        <div style={{ position: 'relative' }}>{children}</div>
+      </div>
+    )
+  }
+
   return (
     <div className="node-body" style={containerStyle}>
-      {style.shape === 'diamond' ? (
-        <div style={{ transform: 'rotate(-45deg)' }}>{children}</div>
-      ) : (
-        children
-      )}
+      {children}
     </div>
   )
 }

@@ -8,6 +8,7 @@ const PROGRESS_KEY = 'mapas.tutorial.hechas'
  *  mapas; una prueba vigila que coincidan. */
 export const LESSON_IDS = [
   'bienvenida',
+  'raton',
   'crear',
   'moverse',
   'plegar',
@@ -15,6 +16,8 @@ export const LESSON_IDS = [
   'cambiar-rama',
   'buscar',
   'estilo',
+  'panel',
+  'lineas',
   'ordenar',
   'fin',
 ] as const
