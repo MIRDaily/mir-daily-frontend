@@ -2,6 +2,7 @@ import { childSlot, useMindMapStore } from '@/components/mapas/proto/store/mindm
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { childrenMap, descendantsOf, parentMap, syncCollapse } from '@/components/mapas/proto/utils/tree'
 import { setCollapsedAnimated } from '@/components/mapas/proto/utils/foldAnimation'
+import { finishTweens, reducedMotion, tweenPositions } from '@/components/mapas/proto/utils/positionTween'
 
 // Operaciones sobre ramas enteras: cambiar un nodo de padre, plegar por niveles.
 
@@ -104,9 +105,13 @@ const chocan = (a: Caja, b: Caja) =>
  * que lo que se abría hacia la izquierda se abre hacia la derecha (y al revés) con la misma forma.
  * Las líneas cambian de lado solas (eligen el lado según las posiciones). Si al otro lado la rama
  * pisa nodos que ya estaban allí, se desplaza en vertical al hueco libre más cercano.
+ * Animado: la rama gira como una página alrededor del eje (girarComoPagina + tweenPositions).
  * La raíz no se mueve. Un paso de deshacer. Devuelve cuántas ramas se han invertido.
  */
 export function mirrorBranches(ids: string[]): number {
+  // Si otra inversión sigue animándose, se termina antes: los destinos se calculan desde
+  // posiciones definitivas, no desde un fotograma intermedio.
+  finishTweens()
   const store = useMindMapStore.getState()
   const { nodes, edges } = store
   const parents = parentMap(nodes, edges)
@@ -148,21 +153,53 @@ export function mirrorBranches(ids: string[]): number {
   }
 
   useHistoryStore.getState().pushSnapshot(nodes, edges)
+  // Las líneas guardaban el lado por el que salían: se dejan libres para que lo elija la posición.
   useMindMapStore.setState((s) => {
-    for (const n of s.nodes) {
-      const p = nuevas.get(n.id)
-      if (p) n.position = p
-    }
-    // Las líneas guardaban el lado por el que salían: se dejan libres para que lo elija la posición.
     for (const e of s.edges) {
       if (nuevas.has(e.target)) {
         e.sourceHandle = null
         e.targetHandle = null
       }
     }
-    syncCollapse(s.nodes, s.edges)
+  })
+  girarComoPagina(nuevas)
+  tweenPositions(nuevas, {
+    ms: ESPEJO_MS,
+    alTerminar: () => useMindMapStore.setState((s) => syncCollapse(s.nodes, s.edges)),
   })
   return elegidos.size
+}
+
+const ESPEJO_MS = 560
+
+/**
+ * Efecto de «pasar la página» mientras los nodos viajan al otro lado: cada nodo se estrecha al
+ * cruzar el eje (escala horizontal 1 → 0,2 → 1; nunca negativa, el texto no sale al revés) y las
+ * líneas de la rama se atenúan en el cruce. Web Animations sobre el DOM, como el plegado: no
+ * toca la store. Nada si el sistema pide reducir el movimiento.
+ */
+function girarComoPagina(ids: Map<string, unknown>) {
+  if (reducedMotion() || typeof document === 'undefined') return
+  const opciones: KeyframeAnimationOptions = { duration: ESPEJO_MS, easing: 'cubic-bezier(.65, 0, .35, 1)' }
+  for (const id of ids.keys()) {
+    document
+      .querySelector<HTMLElement>(`.mapa-root .react-flow__node[data-id="${id}"] .mindmap-node-root`)
+      ?.animate(
+        [
+          { transform: 'scaleX(1)', opacity: 1 },
+          { transform: 'scaleX(0.2)', opacity: 0.8, offset: 0.5 },
+          { transform: 'scaleX(1)', opacity: 1 },
+        ],
+        opciones,
+      )
+  }
+  const { edges } = useMindMapStore.getState()
+  for (const e of edges) {
+    if (!ids.has(e.target)) continue
+    document
+      .querySelector<SVGGElement>(`.mapa-root .react-flow__edge[data-id="${e.id}"]`)
+      ?.animate([{ opacity: 1 }, { opacity: 0.15, offset: 0.5 }, { opacity: 1 }], opciones)
+  }
 }
 
 /** Profundidad de cada nodo (las raíces, 0). A prueba de ciclos. */

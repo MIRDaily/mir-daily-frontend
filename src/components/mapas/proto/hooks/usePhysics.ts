@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
+import { cancelTweens } from '@/components/mapas/proto/utils/positionTween'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 
@@ -73,10 +74,11 @@ export function withoutPhysics(fn: () => void) {
   }
 }
 
-/** Corta la animación en curso. */
+/** Corta la animación en curso (y las interpolaciones de ramas, p. ej. el espejo). */
 export function cancelSettle() {
   if (anim !== null) cancelAnimationFrame(anim)
   anim = null
+  cancelTweens()
 }
 
 /**
