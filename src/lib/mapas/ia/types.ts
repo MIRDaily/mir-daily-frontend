@@ -50,7 +50,7 @@ export const FACTOR_LECTURA = 1.3
 
 /**
  * Nodos aproximados por modo, para avisar de lo que saldrá. Es lo que sale de
- * verdad, no el presupuesto del servidor: en esquema se le piden ~1 por 900
- * caracteres y el modelo se pasa en torno a un 30 % (medido: 97-143 nodos con 83.000).
+ * verdad, no el presupuesto del servidor (que el modelo supera): medido con
+ * 83.000 caracteres, esquema 97-143 nodos y detalle 175-189.
  */
-export const CARACTERES_POR_NODO: Record<ModoIA, number> = { esquema: 700, detalle: 150 }
+export const CARACTERES_POR_NODO: Record<ModoIA, number> = { esquema: 700, detalle: 450 }

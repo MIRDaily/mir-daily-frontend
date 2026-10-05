@@ -31,8 +31,12 @@ const MODOS: { id: ModoIA; titulo: string; descripcion: string; ejemplo: string[
   {
     id: 'detalle',
     titulo: 'Con más contenido',
-    descripcion: 'Bocadillos con el dato clave: cifras, criterios, fármacos.',
-    ejemplo: ['Causa más frecuente: tiroiditis de Hashimoto', 'TSH elevada con T4L baja', 'Levotiroxina 1,6 µg/kg/día en ayunas'],
+    descripcion: 'Los mismos bloques, con más datos por enfermedad: cifras, criterios, fármacos.',
+    ejemplo: [
+      'Hipotiroidismo primario',
+      'Marcador: antiperoxidasa positivos en más del 90%',
+      'Tratamiento: levotiroxina 1,6 µg/kg/día en ayunas',
+    ],
   },
 ]
 
