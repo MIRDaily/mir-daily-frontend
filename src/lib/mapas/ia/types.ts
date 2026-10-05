@@ -47,6 +47,20 @@ export class IAError extends Error {
 /** Tamaño máximo de archivo que se intenta leer (protege la memoria de la pestaña). */
 export const MAX_ARCHIVO_BYTES = 30_000_000
 
+/**
+ * En Word y PowerPoint casi todo el peso son imágenes, que no se leen (solo se cuentan): un
+ * seminario de 32 MB tenía 27 MB de fotos y 25.000 caracteres de texto. El tope es más alto.
+ */
+export const MAX_OFFICE_BYTES = 120_000_000
+
+/** Aviso para un documento con imágenes: su contenido no entra en el mapa. */
+export function avisoImagenes(n: number): string | null {
+  if (n <= 0) return null
+  return n === 1
+    ? 'Tiene 1 imagen: lo que haya dentro (tablas, esquemas, texto en la imagen) no se lee, solo el texto del documento.'
+    : `Tiene ${n} imágenes: lo que haya dentro (tablas, esquemas, texto en las imágenes) no se lee, solo el texto del documento.`
+}
+
 /** Se deja de leer al pasar de este múltiplo del tope de caracteres del servidor. */
 export const FACTOR_LECTURA = 1.3
 

@@ -1,4 +1,4 @@
-import { ExtractError, FACTOR_LECTURA, type Extraido, type Seccion } from '../types'
+import { avisoImagenes, ExtractError, FACTOR_LECTURA, type Extraido, type Seccion } from '../types'
 import { limpiarTexto, tituloDeArchivo } from './limpiar'
 
 type Opciones = { maxChars: number }
@@ -160,6 +160,9 @@ export async function extraerPptx(file: File, { maxChars }: Opciones): Promise<E
 
   const avisos: string[] = []
   if (truncado) avisos.push('La presentación es muy larga: solo se han leído las primeras diapositivas.')
+  // Las imágenes no se leen (ni se descomprimen): solo se cuentan para avisar.
+  const aviso = avisoImagenes(Object.keys(zip.files).filter((n) => /^ppt\/media\/image/i.test(n)).length)
+  if (aviso) avisos.push(aviso)
   return {
     titulo: tituloDePortada(tituloPortada) || tituloDeArchivo(file.name),
     secciones,
