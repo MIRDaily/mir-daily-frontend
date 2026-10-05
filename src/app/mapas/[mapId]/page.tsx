@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { getMap, type MapRecord } from '@/lib/mapas/api'
+import IABanner from '@/components/mapas/ia/IABanner'
 
 // El editor (React Flow + su CSS) solo se descarga al abrir un mapa, no en la lista.
 const MapEditor = dynamic(() => import('@/components/mapas/MapEditor'), {
@@ -54,6 +55,11 @@ export default function MapaPage() {
         </Centered>
       )}
       {state.kind === 'error' && <Centered>No se pudo cargar el mapa: {state.message}</Centered>}
+      {state.kind === 'ready' && (
+        <Suspense fallback={null}>
+          <IABanner />
+        </Suspense>
+      )}
       {state.kind === 'ready' && (
         <MapEditor key={state.map.id} mapId={state.map.id} initialTitle={state.map.title} rawDoc={state.map.doc} />
       )}
