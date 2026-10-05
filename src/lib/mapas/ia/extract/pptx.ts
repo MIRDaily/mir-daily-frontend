@@ -18,6 +18,15 @@ const PH_TITULO = new Set(['title', 'ctrTitle'])
 
 type Zip = import('jszip')
 
+/** Título de la portada como título del mapa; en MAYÚSCULAS se pasa a frase normal. */
+function tituloDePortada(t: string): string {
+  const limpio = t.replace(/\s+/g, ' ').trim().slice(0, 120)
+  if (limpio.length < 4) return ''
+  if (limpio !== limpio.toUpperCase()) return limpio
+  const minus = limpio.toLowerCase()
+  return minus.charAt(0).toUpperCase() + minus.slice(1)
+}
+
 async function leerXml(zip: Zip, ruta: string): Promise<Document | null> {
   const entrada = zip.file(ruta)
   if (!entrada) return null
@@ -94,6 +103,8 @@ export async function extraerPptx(file: File, { maxChars }: Opciones): Promise<E
   if (!rutas.length) throw new ExtractError('La presentación no tiene diapositivas.')
 
   const secciones: Seccion[] = []
+  // Título de la portada: el nombre del archivo suele ser «Clase ITU» o «tema3_v2».
+  let tituloPortada = ''
   const tope = maxChars * FACTOR_LECTURA
   let acumulado = 0
   let truncado = false
@@ -133,6 +144,7 @@ export async function extraerPptx(file: File, { maxChars }: Opciones): Promise<E
       if (lineas.length) cuerpo.push(`Notas: ${lineas.join(' ')}`)
     }
 
+    if (ruta === rutas[0]) tituloPortada = titulo
     const texto = limpiarTexto(cuerpo.join('\n'))
     if (!titulo && texto.length < 10) continue
     secciones.push({ titulo: titulo.slice(0, 100) || undefined, texto: texto || titulo })
@@ -149,9 +161,10 @@ export async function extraerPptx(file: File, { maxChars }: Opciones): Promise<E
   const avisos: string[] = []
   if (truncado) avisos.push('La presentación es muy larga: solo se han leído las primeras diapositivas.')
   return {
-    titulo: tituloDeArchivo(file.name),
+    titulo: tituloDePortada(tituloPortada) || tituloDeArchivo(file.name),
     secciones,
     paginas: rutas.length,
+    unidad: 'diapositiva',
     caracteres: total,
     avisos,
     truncado,

@@ -248,7 +248,8 @@ export default function CrearConIA({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-[#2C3E50]">{archivo?.name}</p>
                   <p className="text-xs text-[#7D8A96]">
-                    {fmt(extraido.paginas)} {extraido.paginas === 1 ? 'página' : 'páginas'} · {fmt(extraido.caracteres)} caracteres
+                    {fmt(extraido.paginas)} {extraido.unidad ?? 'página'}
+                    {extraido.paginas === 1 ? '' : 's'} · {fmt(extraido.caracteres)} caracteres
                   </p>
                 </div>
                 <button
