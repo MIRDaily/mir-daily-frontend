@@ -6,7 +6,7 @@ import { createMap } from '@/lib/mapas/api'
 import { extraerDocumento, FORMATOS_ACEPTADOS } from '@/lib/mapas/ia/extract'
 import { iaGenerar } from '@/lib/mapas/ia/api'
 import {
-  CARACTERES_POR_NODO,
+  NODOS_POR_RAIZ,
   ExtractError,
   IAError,
   type EstadoIA,
@@ -143,7 +143,7 @@ export default function CrearConIA({
     }
   }
 
-  const nodosAprox = extraido ? Math.max(5, Math.round(extraido.caracteres / CARACTERES_POR_NODO[modo])) : 0
+  const nodosAprox = extraido ? Math.max(5, Math.round(NODOS_POR_RAIZ[modo] * Math.sqrt(extraido.caracteres))) : 0
   const segMin = extraido ? Math.max(5, Math.round(extraido.caracteres / 6000)) : 0
   const segMax = extraido ? Math.max(10, Math.round(extraido.caracteres / 3500)) : 0
 

@@ -49,8 +49,9 @@ export const MAX_ARCHIVO_BYTES = 30_000_000
 export const FACTOR_LECTURA = 1.3
 
 /**
- * Nodos aproximados por modo, para avisar de lo que saldrá. Es lo que sale de
- * verdad, no el presupuesto del servidor (que el modelo supera): medido con
- * 83.000 caracteres, esquema 97-143 nodos y detalle 175-189.
+ * Nodos aproximados por modo (k × √caracteres), para avisar de lo que saldrá.
+ * Es lo que sale de verdad, no el presupuesto del servidor (que el modelo
+ * supera algo): medido con los 16 temas de reuma, de 1.500 a 84.000 caracteres.
+ * Crece con la raíz y no en línea: un tema corto también tiene sus entidades.
  */
-export const CARACTERES_POR_NODO: Record<ModoIA, number> = { esquema: 700, detalle: 450 }
+export const NODOS_POR_RAIZ: Record<ModoIA, number> = { esquema: 0.5, detalle: 0.7 }
