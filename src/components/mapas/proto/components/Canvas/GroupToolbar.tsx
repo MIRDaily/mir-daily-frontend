@@ -1,13 +1,13 @@
 import { memo } from 'react'
 import { NodeToolbar, Position } from '@xyflow/react'
-import { ChevronsDownUp, Palette, Trash2 } from 'lucide-react'
+import { ChevronsDownUp, FlipHorizontal2, Palette, Trash2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import { applyCategoryToNodes } from '@/components/mapas/proto/utils/categories'
-import { toggleBranches } from '@/components/mapas/proto/utils/branches'
+import { mirrorBranches, toggleBranches } from '@/components/mapas/proto/utils/branches'
 import { categoryAccent, categoryLabel } from '@/lib/mapas/graph'
 import { MAP_CATEGORY_LIST, categoryNumber } from '@/lib/mapas/types'
 
@@ -91,6 +91,9 @@ function GroupToolbarInner() {
         </Btn>
         <Btn onClick={() => toggleBranches(ids)} title="Plegar / desplegar las ramas (Espacio)" color={t.textSecondary} hoverBg={t.hoverBg}>
           <ChevronsDownUp size={14} />
+        </Btn>
+        <Btn onClick={() => mirrorBranches(ids)} title="Pasar las ramas al otro lado, en espejo (Alt+M)" color={t.textSecondary} hoverBg={t.hoverBg}>
+          <FlipHorizontal2 size={14} />
         </Btn>
         <Btn onClick={remove} title="Eliminar la selección (Supr)" color={t.danger} hoverBg={t.hoverBg}>
           <Trash2 size={14} />

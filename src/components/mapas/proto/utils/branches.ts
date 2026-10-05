@@ -71,6 +71,100 @@ export function reparentNode(id: string, newParent: string): string[] | null {
   return [id, ...branch]
 }
 
+type Caja = { x: number; y: number; w: number; h: number }
+
+const cajaDe = (n: { position: { x: number; y: number }; measured?: { width?: number; height?: number }; width?: number; height?: number }): Caja => ({
+  x: n.position.x,
+  y: n.position.y,
+  w: n.measured?.width ?? n.width ?? 160,
+  h: n.measured?.height ?? n.height ?? 50,
+})
+
+const MARGEN_ESPEJO = 24
+
+/** Caja que envuelve varias. */
+function envolvente(cajas: Caja[]): Caja {
+  const x = Math.min(...cajas.map((c) => c.x))
+  const y = Math.min(...cajas.map((c) => c.y))
+  return {
+    x,
+    y,
+    w: Math.max(...cajas.map((c) => c.x + c.w)) - x,
+    h: Math.max(...cajas.map((c) => c.y + c.h)) - y,
+  }
+}
+
+const chocan = (a: Caja, b: Caja) =>
+  a.x < b.x + b.w + MARGEN_ESPEJO && b.x < a.x + a.w + MARGEN_ESPEJO &&
+  a.y < b.y + b.h + MARGEN_ESPEJO && b.y < a.y + a.h + MARGEN_ESPEJO
+
+/**
+ * Pasa cada rama seleccionada al otro lado de su padre, en espejo: el nodo y todos sus
+ * descendientes se reflejan respecto al eje vertical que pasa por el centro del padre, de modo
+ * que lo que se abría hacia la izquierda se abre hacia la derecha (y al revés) con la misma forma.
+ * Las líneas cambian de lado solas (eligen el lado según las posiciones). Si al otro lado la rama
+ * pisa nodos que ya estaban allí, se desplaza en vertical al hueco libre más cercano.
+ * La raíz no se mueve. Un paso de deshacer. Devuelve cuántas ramas se han invertido.
+ */
+export function mirrorBranches(ids: string[]): number {
+  const store = useMindMapStore.getState()
+  const { nodes, edges } = store
+  const parents = parentMap(nodes, edges)
+  const children = childrenMap(parents)
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  // Si se selecciona una rama y algo de dentro, se invierte solo la de fuera (si no, lo de dentro
+  // daría la vuelta dos veces y quedaría donde estaba).
+  const elegidos = new Set(ids.filter((id) => parents.has(id) && byId.has(parents.get(id) as string)))
+  for (const id of [...elegidos]) {
+    for (let p = parents.get(id); p; p = parents.get(p)) if (elegidos.has(p)) { elegidos.delete(id); break }
+  }
+  if (elegidos.size === 0) return 0
+
+  const nuevas = new Map<string, { x: number; y: number }>()
+  for (const id of elegidos) {
+    const padre = cajaDe(byId.get(parents.get(id) as string)!)
+    const eje = padre.x + padre.w / 2
+    const rama = [id, ...descendantsOf([id], children)]
+    const reflejadas = rama.map((nid) => {
+      const c = cajaDe(byId.get(nid)!)
+      return { id: nid, caja: { ...c, x: 2 * eje - c.x - c.w } }
+    })
+    // Hueco libre más cercano en vertical frente a lo visible que no es de la rama.
+    const enRama = new Set(rama)
+    const visibles = reflejadas.filter((r) => !byId.get(r.id)!.hidden).map((r) => r.caja)
+    const bloque = envolvente(visibles.length ? visibles : reflejadas.map((r) => r.caja))
+    const otros = nodes
+      .filter((n) => !n.hidden && !enRama.has(n.id))
+      .map((n) => (nuevas.has(n.id) ? { ...cajaDe(n), ...nuevas.get(n.id)! } : cajaDe(n)))
+    const libre = (dy: number) => !otros.some((o) => chocan({ ...bloque, y: bloque.y + dy }, o))
+    let dy = 0
+    if (!libre(0)) {
+      const candidatos = otros
+        .flatMap((o) => [o.y + o.h + MARGEN_ESPEJO - bloque.y, o.y - MARGEN_ESPEJO - bloque.h - bloque.y])
+        .sort((a, b) => Math.abs(a) - Math.abs(b))
+      dy = candidatos.find((c) => libre(c)) ?? 0
+    }
+    for (const r of reflejadas) nuevas.set(r.id, { x: r.caja.x, y: r.caja.y + dy })
+  }
+
+  useHistoryStore.getState().pushSnapshot(nodes, edges)
+  useMindMapStore.setState((s) => {
+    for (const n of s.nodes) {
+      const p = nuevas.get(n.id)
+      if (p) n.position = p
+    }
+    // Las líneas guardaban el lado por el que salían: se dejan libres para que lo elija la posición.
+    for (const e of s.edges) {
+      if (nuevas.has(e.target)) {
+        e.sourceHandle = null
+        e.targetHandle = null
+      }
+    }
+    syncCollapse(s.nodes, s.edges)
+  })
+  return elegidos.size
+}
+
 /** Profundidad de cada nodo (las raíces, 0). A prueba de ciclos. */
 export function depths(): Map<string, number> {
   const { nodes, edges } = useMindMapStore.getState()

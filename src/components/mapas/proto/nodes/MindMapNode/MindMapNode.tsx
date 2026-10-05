@@ -1,7 +1,7 @@
 import { memo, useCallback } from 'react'
 import { NodeToolbar, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import { motion } from 'framer-motion'
-import { Trash2, Plus, Palette } from 'lucide-react'
+import { Trash2, Plus, Palette, FlipHorizontal2 } from 'lucide-react'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
@@ -14,6 +14,7 @@ import { NodeEditor } from './NodeEditor'
 import { NodeHandles } from './NodeHandles'
 import { BranchToggle } from './BranchToggle'
 import { addChildAndEdit } from '@/components/mapas/proto/utils/keyboard'
+import { mirrorBranches } from '@/components/mapas/proto/utils/branches'
 
 function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   // Solo se lee lo que este nodo pinta; las acciones se piden a la store en el momento de
@@ -72,6 +73,10 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
     const store = useMindMapStore.getState()
     useHistoryStore.getState().pushSnapshot(store.nodes, store.edges)
     store.deleteNode(id)
+  }, [id])
+
+  const handleMirror = useCallback(() => {
+    mirrorBranches([id])
   }, [id])
 
   const handleOpenStyle = useCallback(() => {
@@ -165,6 +170,11 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
           <ToolbarBtn onClick={handleAddChild} title="Añadir nodo hijo" color={t.accent} hoverBg={t.hoverBg}>
             <Plus size={14} />
           </ToolbarBtn>
+          {data.parentId && (
+            <ToolbarBtn onClick={handleMirror} title="Pasar la rama al otro lado, en espejo (Alt+M)" color={t.textSecondary} hoverBg={t.hoverBg}>
+              <FlipHorizontal2 size={14} />
+            </ToolbarBtn>
+          )}
           <ToolbarBtn onClick={handleOpenStyle} title="Estilos" color={t.accentGreen} hoverBg={t.hoverBg}>
             <Palette size={14} />
           </ToolbarBtn>

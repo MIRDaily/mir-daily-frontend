@@ -8,7 +8,7 @@ import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
 import { applyCategoryToNodes } from '@/components/mapas/proto/utils/categories'
 import { categoryForKey } from '@/lib/mapas/types'
 import { parentMap } from '@/components/mapas/proto/utils/tree'
-import { showUpToLevel, toggleBranch, toggleBranches } from '@/components/mapas/proto/utils/branches'
+import { mirrorBranches, showUpToLevel, toggleBranch, toggleBranches } from '@/components/mapas/proto/utils/branches'
 import {
   addChildAndEdit,
   addSiblingAndEdit,
@@ -102,6 +102,16 @@ export function useMindMapShortcuts() {
         const level = Number(e.code.slice(5))
         showUpToLevel(level === 0 ? null : level)
         return
+      }
+
+      // ── Alt+M: pasar las ramas seleccionadas al otro lado, en espejo ──────
+      if (e.altKey && !isMod && e.code === 'KeyM' && !store.editingNodeId) {
+        const sel = getNodes().filter((n) => n.selected).map((n) => n.id)
+        if (sel.length) {
+          e.preventDefault()
+          mirrorBranches(sel)
+          return
+        }
       }
 
       const inCanvas = target === document.body || !!target.closest?.('.react-flow')
