@@ -588,3 +588,72 @@ test('export: ahorro de tinta quita los rellenos y deja contornos legibles', () 
   assert.ok(/^#([0-9a-f]{2})\1\1$/.test(bw.nodes[0].stroke) && /^#([0-9a-f]{2})\1\1$/.test(bw.nodes[0].textColor))
   assert.equal(applyInk(section, 'color'), section)
 })
+
+// ---- Margen entre bloques y mapa en abanico (IA de mapas) ----
+
+function mapaDeBloques(n: number): { doc: MapDoc; raiz: string } {
+  let doc = createDoc('Tema')
+  const raiz = getRoot(doc).id
+  for (let i = 0; i < n; i++) {
+    const b = addChild(doc, raiz)
+    doc = b.doc
+    doc = addChild(doc, b.id).doc
+    doc = addChild(doc, b.id).doc
+  }
+  return { doc, raiz }
+}
+
+test('computeLayout: depthGaps separa más los hijos de la raíz que los del resto', () => {
+  const { doc, raiz } = mapaDeBloques(4)
+  const plano = computeLayout(doc)
+  const aireado = computeLayout(doc, { depthGaps: [60, 22] })
+  const huecoEntre = (box: Map<string, { y: number; h: number }>, ids: string[]) => {
+    const s = ids.map((id) => box.get(id)!).sort((a, b) => a.y - b.y)
+    return s[1].y - (s[0].y + s[0].h)
+  }
+  const bloques = childrenOf(doc, raiz).map((b) => b.id)
+  assert.ok(huecoEntre(aireado, bloques) > huecoEntre(plano, bloques) + 40)
+  // Los nietos (hijos de un bloque) también ganan algo, pero menos que los bloques.
+  const nietos = childrenOf(doc, bloques[0]).map((b) => b.id)
+  const extraNietos = huecoEntre(aireado, nietos) - huecoEntre(plano, nietos)
+  assert.ok(extraNietos > 0 && extraNietos < 40)
+})
+
+test('computeLayout: twoSidedFrom abre el mapa a ambos lados, equilibrado y sin solapes', () => {
+  const { doc, raiz } = mapaDeBloques(10)
+  const caja = computeLayout(doc, { depthGaps: [60, 22], twoSidedFrom: 8 })
+  const r = caja.get(raiz)!
+  const bloques = childrenOf(doc, raiz).map((b) => caja.get(b.id)!)
+  const derecha = bloques.filter((b) => b.x >= r.x + r.w)
+  const izquierda = bloques.filter((b) => b.x + b.w <= r.x)
+  assert.equal(derecha.length + izquierda.length, 10)
+  assert.ok(derecha.length >= 3 && izquierda.length >= 3)
+  // Orden de lectura: los primeros bloques a la derecha, el resto a la izquierda.
+  const ids = childrenOf(doc, raiz).map((b) => b.id)
+  assert.ok(ids.slice(0, derecha.length).every((id) => caja.get(id)!.x >= r.x + r.w))
+  // Ninguna caja se pisa con otra.
+  const todas = [...caja.values()]
+  for (let i = 0; i < todas.length; i++) {
+    for (let j = i + 1; j < todas.length; j++) {
+      const a = todas[i]
+      const b = todas[j]
+      const solapa = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+      assert.ok(!solapa, `solape entre ${i} y ${j}`)
+    }
+  }
+  // Los hijos de un bloque de la izquierda quedan aún más a la izquierda.
+  const bi = childrenOf(doc, raiz).find((b) => caja.get(b.id)!.x + caja.get(b.id)!.w <= r.x)!
+  const hijoDeIzquierda = caja.get(childrenOf(doc, bi.id)[0].id)!
+  assert.ok(hijoDeIzquierda.x + hijoDeIzquierda.w <= caja.get(bi.id)!.x)
+})
+
+test('computeLayout: con pocos bloques, o sin la opción, todo sigue a la derecha', () => {
+  const pocos = mapaDeBloques(5)
+  const a = computeLayout(pocos.doc, { twoSidedFrom: 8 })
+  const r = a.get(pocos.raiz)!
+  assert.ok(childrenOf(pocos.doc, pocos.raiz).every((b) => a.get(b.id)!.x >= r.x + r.w))
+  const muchos = mapaDeBloques(12)
+  const b = computeLayout(muchos.doc)
+  const rb = b.get(muchos.raiz)!
+  assert.ok(childrenOf(muchos.doc, muchos.raiz).every((k) => b.get(k.id)!.x >= rb.x + rb.w))
+})

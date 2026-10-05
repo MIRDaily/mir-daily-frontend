@@ -1,4 +1,10 @@
 import { computeLayout } from '@/lib/mapas/layout'
+
+// Margen extra entre hermanos: [hijos de la raíz = BLOQUES, hijos de los bloques, ...].
+// Separa los bloques de un mapa grande (p. ej. generado con IA) para que no se pegue todo.
+export const LAYOUT_DEPTH_GAPS = [60, 22]
+// Con tantos bloques o más colgando de la raíz, el mapa se abre a ambos lados.
+export const LAYOUT_TWO_SIDED_FROM = 8
 import { sanitizeDoc } from '@/lib/mapas/tree'
 import { MAP_CATEGORIES, type MapCategoryId, type MapDoc, type MapNode } from '@/lib/mapas/types'
 
@@ -238,7 +244,7 @@ export function treeToGraph(tree: MapDoc): GraphDoc {
     for (let cur: MapNode | undefined = n; cur && cur.parentId !== null; cur = byId.get(cur.parentId)) l++
     return l
   }
-  const boxes = computeLayout(doc, { gapX: 110, gapY: 18 })
+  const boxes = computeLayout(doc, { gapX: 110, gapY: 18, depthGaps: LAYOUT_DEPTH_GAPS, twoSidedFrom: LAYOUT_TWO_SIDED_FROM })
 
   const nodes: GraphNode[] = doc.nodes.map((n) => {
     const level = levelOf(n)
@@ -517,7 +523,7 @@ export function autoLayoutGraph(
       for (const c of kids.get(n.id) ?? []) walk(c)
     }
     for (const r of kids.get(null) ?? []) walk(r)
-    const boxes = computeLayout({ version: 1, nodes: ordered }, { gapX: 110, gapY: 18, sizeOf })
+    const boxes = computeLayout({ version: 1, nodes: ordered }, { gapX: 110, gapY: 18, depthGaps: LAYOUT_DEPTH_GAPS, twoSidedFrom: LAYOUT_TWO_SIDED_FROM, sizeOf })
 
     let maxY = 0
     for (const b of boxes.values()) maxY = Math.max(maxY, b.y + b.h)

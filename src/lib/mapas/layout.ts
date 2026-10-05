@@ -16,6 +16,17 @@ const GAP_Y = 14
 export type LayoutOptions = {
   gapX?: number
   gapY?: number
+  /**
+   * Margen EXTRA entre hermanos según la profundidad de su padre: `[0]` separa los
+   * hijos de la raíz (los bloques), `[1]` los hijos de estos, etc. Lo que no esté
+   * en la lista no suma nada. Con él, los bloques de un mapa grande no se pegan.
+   */
+  depthGaps?: number[]
+  /**
+   * Si la raíz tiene al menos tantos hijos visibles, se reparten a ambos lados
+   * (mapa en abanico) en vez de todos a la derecha. Sin definir: siempre a la derecha.
+   */
+  twoSidedFrom?: number
   /** Tamaño real de un nodo (medido por el navegador); si no hay, se estima por el texto. */
   sizeOf?: (id: string) => { w: number; h: number } | undefined
 }
@@ -91,28 +102,77 @@ export function computeLayout(doc: MapDoc, opts: LayoutOptions = {}): Map<string
 
   const sizes = new Map<string, { w: number; h: number }>()
   const span = new Map<string, number>()
+  const depthOf = new Map<string, number>()
   const visibleKids = (n: MapNode) => (n.collapsed ? [] : kids.get(n.id) ?? [])
-  const childrenSpan = (n: MapNode) =>
-    visibleKids(n).reduce((acc, c, i) => acc + (span.get(c.id) as number) + (i > 0 ? gapY : 0), 0)
+  // Hueco entre hermanos: el base más el extra de la profundidad de su padre.
+  const gapBetween = (parent: MapNode) => gapY + (opts.depthGaps?.[depthOf.get(parent.id) ?? 0] ?? 0)
+  const childrenSpan = (n: MapNode) => {
+    const gap = gapBetween(n)
+    return visibleKids(n).reduce((acc, c, i) => acc + (span.get(c.id) as number) + (i > 0 ? gap : 0), 0)
+  }
 
-  const measure = (n: MapNode) => {
+  const measure = (n: MapNode, depth: number) => {
+    depthOf.set(n.id, depth)
     const size = opts.sizeOf?.(n.id) ?? estimateSize(n.text, n.parentId === null)
     sizes.set(n.id, size)
-    visibleKids(n).forEach(measure)
+    visibleKids(n).forEach((c) => measure(c, depth + 1))
     span.set(n.id, Math.max(size.h, childrenSpan(n)))
   }
-  measure(root)
+  measure(root, 0)
 
-  const place = (n: MapNode, x: number, top: number) => {
+  // `dir` 1 = hacia la derecha, -1 = hacia la izquierda. `edge` es el borde del
+  // lado del padre: la caja arranca ahí (derecha) o termina ahí (izquierda).
+  const place = (n: MapNode, edge: number, top: number, dir: 1 | -1) => {
     const size = sizes.get(n.id) as { w: number; h: number }
     const s = span.get(n.id) as number
+    const x = dir === 1 ? edge : edge - size.w
     out.set(n.id, { x, y: top + (s - size.h) / 2, w: size.w, h: size.h })
+    const gap = gapBetween(n)
     let cursor = top + (s - childrenSpan(n)) / 2
     for (const c of visibleKids(n)) {
-      place(c, x + size.w + gapX, cursor)
-      cursor += (span.get(c.id) as number) + gapY
+      place(c, dir === 1 ? x + size.w + gapX : x - gapX, cursor, dir)
+      cursor += (span.get(c.id) as number) + gap
     }
   }
-  place(root, 0, 0)
+
+  const rootKids = visibleKids(root)
+  if (opts.twoSidedFrom && rootKids.length >= opts.twoSidedFrom) {
+    // Mapa grande: los bloques se reparten a ambos lados de la raíz, en orden de
+    // lectura (los primeros a la derecha, el resto a la izquierda), con la
+    // división que deja las dos mitades más parecidas en alto. Así no es un solo
+    // "corchete" larguísimo.
+    const gap = gapBetween(root)
+    const total = rootKids.reduce((acc, c, i) => acc + (span.get(c.id) as number) + (i > 0 ? gap : 0), 0)
+    let acumulado = 0
+    let corte = 1
+    let mejor = Infinity
+    for (let k = 1; k < rootKids.length; k++) {
+      acumulado += (span.get(rootKids[k - 1].id) as number) + (k > 1 ? gap : 0)
+      const resto = total - acumulado - gap
+      const diff = Math.abs(acumulado - resto)
+      if (diff < mejor) {
+        mejor = diff
+        corte = k
+      }
+    }
+    const lados: [MapNode[], 1 | -1][] = [
+      [rootKids.slice(0, corte), 1],
+      [rootKids.slice(corte), -1],
+    ]
+    const altos = lados.map(([lista]) => lista.reduce((acc, c, i) => acc + (span.get(c.id) as number) + (i > 0 ? gap : 0), 0))
+    const alto = Math.max(...altos, sizes.get(root.id)!.h)
+    const rootSize = sizes.get(root.id) as { w: number; h: number }
+    out.set(root.id, { x: 0, y: (alto - rootSize.h) / 2, w: rootSize.w, h: rootSize.h })
+    lados.forEach(([lista, dir], i) => {
+      let cursor = (alto - altos[i]) / 2
+      for (const c of lista) {
+        place(c, dir === 1 ? rootSize.w + gapX : -gapX, cursor, dir)
+        cursor += (span.get(c.id) as number) + gap
+      }
+    })
+    return out
+  }
+
+  place(root, 0, 0, 1)
   return out
 }
