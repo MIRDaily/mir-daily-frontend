@@ -25,8 +25,8 @@ const MODOS: { id: ModoIA; titulo: string; descripcion: string; ejemplo: string[
   {
     id: 'esquema',
     titulo: 'Esquemático',
-    descripcion: 'Etiquetas cortas para repasar de un vistazo.',
-    ejemplo: ['Hipotiroidismo', 'Etiología › Hashimoto', 'Diagnóstico › TSH alta + T4L baja'],
+    descripcion: 'Mapa compacto por bloques: cada enfermedad con sus datos clave.',
+    ejemplo: ['Hipotiroidismo primario', 'Etiología: autoinmune, antiperoxidasa', 'Diagnóstico: TSH alta con T4L baja'],
   },
   {
     id: 'detalle',

@@ -48,5 +48,9 @@ export const MAX_ARCHIVO_BYTES = 30_000_000
 /** Se deja de leer al pasar de este múltiplo del tope de caracteres del servidor. */
 export const FACTOR_LECTURA = 1.3
 
-/** Nodos aproximados por modo, para avisar de lo que saldrá (mismo reparto que el servidor). */
-export const CARACTERES_POR_NODO: Record<ModoIA, number> = { esquema: 200, detalle: 150 }
+/**
+ * Nodos aproximados por modo, para avisar de lo que saldrá. Es lo que sale de
+ * verdad, no el presupuesto del servidor: en esquema se le piden ~1 por 900
+ * caracteres y el modelo se pasa en torno a un 30 % (medido: 97-143 nodos con 83.000).
+ */
+export const CARACTERES_POR_NODO: Record<ModoIA, number> = { esquema: 700, detalle: 150 }
