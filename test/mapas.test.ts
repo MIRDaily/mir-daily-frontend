@@ -1195,3 +1195,63 @@ test('exportar: la tabla sale con el fondo, la letra y la alineación de cada fi
   assert.ok(!rec2.shapes.some((s) => s.fill === '#FBF3E1'))
   assert.equal(rec2.texts.find((t) => t.str.startsWith('Positiva'))?.color, '#3F6E9A')
 })
+
+// ---- Estilo de una sola celda -----------------------------------------------------------------
+
+import { setCellStyle } from '@/lib/mapas/table'
+
+test('estilo de celda: manda sobre el de su fila y su columna, y solo afecta a esa celda', () => {
+  let t = setColStyle(TABLA, 1, { color: '#3F6E9A', align: 'center' })
+  t = setRowStyle(t, 0, { fill: '#FBF3E1' })
+  t = setCellStyle(t, 0, 1, { fill: '#E8A598', bold: true })
+  assert.deepEqual(cellStyleOf(t, 0, 1), { color: '#3F6E9A', align: 'center', fill: '#E8A598', bold: true })
+  assert.deepEqual(cellStyleOf(t, 0, 2), { fill: '#FBF3E1' })
+  assert.deepEqual(cellStyleOf(t, 1, 1), { color: '#3F6E9A', align: 'center' })
+  // La cabecera: su celda puede quitar la negrita de serie.
+  t = setCellStyle(t, -1, 0, { bold: false })
+  assert.equal(cellStyleOf(t, -1, 0).bold, false)
+  assert.equal(cellStyleOf(t, -1, 1).bold, true)
+  // Quitarlo todo deja la tabla como estaba.
+  const limpia = setCellStyle(setCellStyle(t, 0, 1, null), -1, 0, null)
+  assert.equal(limpia.cellStyles, undefined)
+})
+
+test('estilo de celda: viaja con su celda al insertar, mover y borrar filas y columnas', () => {
+  let t = setCellStyle(TABLA, 1, 2, { color: '#B04A5E' }) // «Positiva débil»
+  const donde = (x: MapTable) => {
+    const out: string[] = []
+    x.cellStyles?.forEach((f, i) => f.forEach((s, j) => s && out.push(i === 0 ? x.columns[j] : x.rows[i - 1][j])))
+    return out
+  }
+  t = insertRow(t, 0)
+  assert.deepEqual(donde(t), ['Positiva débil'])
+  t = moveRow(t, 2, -1)
+  assert.deepEqual(donde(t), ['Positiva débil'])
+  t = insertColumn(t, 1)
+  assert.deepEqual(donde(t), ['Positiva débil'])
+  t = moveColumn(t, 3, -1)
+  assert.deepEqual(donde(t), ['Positiva débil'])
+  t = removeRow(t, 0)
+  assert.deepEqual(donde(t), ['Positiva débil'])
+  t = removeColumn(t, 2)
+  assert.equal(t.cellStyles, undefined)
+})
+
+test('estilo de celda: se sanea al importar, sale en el PDF y el ahorro de tinta quita su fondo', () => {
+  const t = sanitizeTable({ ...TABLA, cellStyles: [[null, { fill: '#zzzzzz' }], [{ color: '#B04A5E', x: 1 }], 'basura', [{ fill: '#FBF3E1' }]] })!
+  assert.equal(t.cellStyles?.length, 3) // cabecera + 2 filas (la cuarta no existe)
+  assert.deepEqual(t.cellStyles?.[1][0], { color: '#B04A5E' })
+  assert.equal(t.cellStyles?.[0][1], null)
+  const base = tableSection()
+  base.nodes[0].table = { ...setCellStyle(TABLA, 0, 1, { fill: '#E8A598', color: '#FFFFFF' }), solid: true }
+  const page = { section: base, region: { x: 0, y: 0, w: 1000, h: 1000 }, scale: 1, w: 1000, h: 1000, area: { x: 0, y: 0, w: 1000, h: 1000 }, clip: false }
+  const rec = recordingPainter()
+  drawPage(rec.p, page, PAGE_OPTS)
+  assert.ok(rec.shapes.some((s) => s.fill === '#E8A598'))
+  assert.equal(rec.texts.find((x) => x.str.startsWith('Urato'))?.color, '#FFFFFF')
+  const rec2 = recordingPainter()
+  drawPage(rec2.p, { ...page, section: applyInk(base, 'save') }, PAGE_OPTS)
+  assert.ok(!rec2.shapes.some((s) => s.fill === '#E8A598'))
+  // La letra blanca no se leería sobre papel: pasa a la de la tabla.
+  assert.notEqual(rec2.texts.find((x) => x.str.startsWith('Urato'))?.color, '#FFFFFF')
+})

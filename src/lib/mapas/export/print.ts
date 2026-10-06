@@ -66,6 +66,7 @@ function tablaSinTinta(t: SceneTable, toGray: boolean): SceneTable {
   }
   if (t.rowStyles) out.rowStyles = t.rowStyles.map(st)
   if (t.colStyles) out.colStyles = t.colStyles.map(st)
+  if (t.cellStyles) out.cellStyles = t.cellStyles.map((f) => f.map(st))
   return out
 }
 

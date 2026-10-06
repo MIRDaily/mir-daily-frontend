@@ -37,6 +37,7 @@ import {
   TABLE_GEOMETRY as G,
   type CellMeasure,
   cellStyleOf,
+  setCellStyle,
   setColStyle,
   setRowStyle,
   type CellStyle,
@@ -420,16 +421,25 @@ function TableBodyInner({ id, table: fromProps, style, selected, editing }: Tabl
 
   const titleActive = ar === -2
   const editingCell = ar !== null && ar >= -1 && ac !== null
-  // Menú de estilo de la fila o la columna de la celda activa (se cierra al salir de la tabla).
-  const [menuAbierto, setMenuEstilo] = useState<'fila' | 'columna' | null>(null)
+  // Menú de estilo de la celda activa, de su fila o de su columna (se cierra al salir de la tabla).
+  const [menuAbierto, setMenuEstilo] = useState<Alcance | null>(null)
   const menuEstilo = editingCell ? menuAbierto : null
   const estiloFila = ar === null ? undefined : ar < 0 ? table.headerStyle : table.rowStyles?.[ar] ?? undefined
   const estiloColumna = ac === null ? undefined : table.colStyles?.[ac] ?? undefined
+  const estiloCelda = ar === null || ac === null ? undefined : table.cellStyles?.[ar + 1]?.[ac] ?? undefined
   const cambiarEstilo = (cambio: Partial<CellStyle> | null) => {
     if (ar === null || ac === null) return
-    if (menuEstilo === 'fila') editTable(id, (x) => setRowStyle(x, ar, cambio))
+    if (menuEstilo === 'celda') editTable(id, (x) => setCellStyle(x, ar, ac, cambio))
+    else if (menuEstilo === 'fila') editTable(id, (x) => setRowStyle(x, ar, cambio))
     else if (menuEstilo === 'columna') editTable(id, (x) => setColStyle(x, ac, cambio))
   }
+  // Negrita que se ve ahora en ese alcance (la cabecera lo es salvo que se le quite).
+  const negritaDe = (a: Alcance) =>
+    a === 'celda'
+      ? ar !== null && ac !== null && cellStyleOf(table, ar, ac).bold === true
+      : a === 'fila'
+        ? estiloFila?.bold ?? ar === -1
+        : estiloColumna?.bold === true
 
   return (
     <>
@@ -563,19 +573,21 @@ function TableBodyInner({ id, table: fromProps, style, selected, editing }: Tabl
             <span style={{ fontSize: 11 }}>col.</span>
           </Btn>
           <Sep t={t} />
-          <Btn title={ar === -1 ? 'Estilo de la cabecera' : 'Estilo de la fila'} activo={menuEstilo === 'fila'} onClick={() => setMenuEstilo((m) => (m === 'fila' ? null : 'fila'))} t={t}>
+          <Btn title="Estilo de la celda, la fila o la columna" activo={!!menuEstilo} onClick={() => setMenuEstilo((m) => (m ? null : 'celda'))} t={t}>
             <Paintbrush size={13} />
-            <span style={{ fontSize: 11 }}>fila</span>
-          </Btn>
-          <Btn title="Estilo de la columna" activo={menuEstilo === 'columna'} onClick={() => setMenuEstilo((m) => (m === 'columna' ? null : 'columna'))} t={t}>
-            <Paintbrush size={13} />
-            <span style={{ fontSize: 11 }}>col.</span>
+            <span style={{ fontSize: 11 }}>estilo</span>
           </Btn>
           {menuEstilo && (
             <MenuEstilo
-              titulo={menuEstilo === 'fila' ? (ar === -1 ? 'Cabecera' : `Fila ${(ar ?? 0) + 1}`) : `Columna ${(ac ?? 0) + 1}`}
-              estilo={(menuEstilo === 'fila' ? estiloFila : estiloColumna) ?? {}}
-              negritaPorDefecto={menuEstilo === 'fila' && ar === -1}
+              alcance={menuEstilo}
+              onAlcance={setMenuEstilo}
+              rotulos={{
+                celda: 'Celda',
+                fila: ar === -1 ? 'Cabecera' : `Fila ${(ar ?? 0) + 1}`,
+                columna: `Columna ${(ac ?? 0) + 1}`,
+              }}
+              estilo={(menuEstilo === 'celda' ? estiloCelda : menuEstilo === 'fila' ? estiloFila : estiloColumna) ?? {}}
+              negrita={negritaDe(menuEstilo)}
               onCambio={cambiarEstilo}
               t={t}
             />
@@ -647,22 +659,32 @@ function Btn({
 const LETRAS = ['#2A2420', '#7D8A96', '#B04A5E', '#B07A1E', '#4F7A4C', '#3F6E9A', '#6F5A99', '#FFFFFF']
 const FONDOS = ['#FCEFEC', '#FBF3E1', '#EDF3EC', '#EAF2F9', '#F1ECF7', '#F1F3F5', '#E8A598', '#D9A441', '#8BA888', '#6E9BC5']
 
-/** Menú de estilo de una fila o una columna: negrita, cursiva, alineación, letra y fondo. */
+type Alcance = 'celda' | 'fila' | 'columna'
+
+/**
+ * Menú de estilo de la celda activa, de su fila o de su columna: negrita, cursiva, alineación,
+ * letra y fondo. En una celda manda lo más concreto: columna < fila < celda.
+ */
 function MenuEstilo({
-  titulo,
+  alcance,
+  onAlcance,
+  rotulos,
   estilo,
-  negritaPorDefecto,
+  negrita,
   onCambio,
   t,
 }: {
-  titulo: string
+  alcance: Alcance
+  onAlcance: (a: Alcance) => void
+  rotulos: Record<Alcance, string>
+  /** Lo fijado en ese alcance (no lo heredado). */
   estilo: CellStyle
-  /** La cabecera va en negrita si no se dice otra cosa. */
-  negritaPorDefecto: boolean
+  /** Si ahora se ve en negrita (la cabecera lo es por defecto). */
+  negrita: boolean
   onCambio: (cambio: Partial<CellStyle> | null) => void
   t: Theme
 }) {
-  const negrita = estilo.bold ?? negritaPorDefecto
+  const titulo = rotulos[alcance]
   const muestra = (color: string, activo: boolean, onClick: () => void, etiqueta: string) => (
     <button
       key={color}
@@ -704,7 +726,31 @@ function MenuEstilo({
         color: t.textSecondary,
       }}
     >
-      <div style={{ fontSize: 11, fontWeight: 700 }}>{titulo}</div>
+      <div role="tablist" aria-label="Aplicar a" style={{ display: 'flex', gap: 2, background: t.hoverBg, borderRadius: 8, padding: 2 }}>
+        {(['celda', 'fila', 'columna'] as const).map((a) => (
+          <button
+            key={a}
+            type="button"
+            role="tab"
+            aria-selected={alcance === a}
+            onClick={() => onAlcance(a)}
+            style={{
+              flex: 1,
+              fontSize: 11,
+              fontWeight: 700,
+              border: 'none',
+              borderRadius: 6,
+              padding: '4px 0',
+              cursor: 'pointer',
+              background: alcance === a ? t.bgPanel : 'transparent',
+              color: alcance === a ? t.textPrimary : t.textMuted,
+              boxShadow: alcance === a ? `0 1px 3px ${t.shadow}` : 'none',
+            }}
+          >
+            {rotulos[a]}
+          </button>
+        ))}
+      </div>
       <div style={fila}>
         <Btn title="Negrita" activo={negrita} onClick={() => onCambio({ bold: !negrita })} t={t}>
           <Bold size={14} />
