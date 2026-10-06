@@ -1,4 +1,5 @@
 import type { Paragraph } from '@/lib/mapas/export/richtext'
+import type { MapTable } from '@/lib/mapas/table'
 
 // Escena de exportación: el mapa ya reducido a lo que hace falta para DIBUJARLO (formas, líneas y
 // texto) en coordenadas del lienzo. La construyen `collect.ts` (a partir de la store y del DOM) y la
@@ -9,7 +10,7 @@ export type SceneShape = 'rectangle' | 'pill' | 'circle' | 'diamond'
 export type Rect = { x: number; y: number; w: number; h: number }
 
 /** Nodo tabla. `solid`: franja del título y cabecera rellenas (en pantalla); sin relleno al ahorrar tinta. */
-export type SceneTable = { title: string; columns: string[]; rows: string[][]; solid: boolean }
+export type SceneTable = MapTable & { solid: boolean }
 
 export type SceneNode = Rect & {
   id: string

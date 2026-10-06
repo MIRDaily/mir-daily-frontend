@@ -1,6 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { NodeToolbar, Position } from '@xyflow/react'
 import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  Italic,
+  Paintbrush,
   BetweenHorizontalEnd,
   BetweenHorizontalStart,
   BetweenVerticalEnd,
@@ -30,6 +36,10 @@ import {
   tableGeometry,
   TABLE_GEOMETRY as G,
   type CellMeasure,
+  cellStyleOf,
+  setColStyle,
+  setRowStyle,
+  type CellStyle,
   type MapTable,
 } from '@/lib/mapas/table'
 
@@ -286,10 +296,14 @@ function TableBodyInner({ id, table: fromProps, style, selected, editing }: Tabl
       case 'blur': {
         // Se ha pulsado fuera: termina la edición (si nadie ha abierto ya otra celda).
         const cur = useUIStore.getState().tableCell
-        if (useMindMapStore.getState().editingNodeId === id && (!cur || (cur.r === r && cur.c === c))) stopTableEdit()
+        if (useMindMapStore.getState().editingNodeId === id && (!cur || (cur.r === r && cur.c === c))) {
+          setMenuEstilo(null)
+          stopTableEdit()
+        }
         return
       }
       case 'exit':
+        setMenuEstilo(null)
         return stopTableEdit()
       case 'next':
         if (r === -2) return go(-1, 0)
@@ -359,15 +373,20 @@ function TableBodyInner({ id, table: fromProps, style, selected, editing }: Tabl
   const renderCell = (r: number, c: number, text: string) => {
     const isActive = ar === r && ac === c
     const Tag = r === -1 ? 'th' : 'td'
+    // Estilo de su columna y, encima, el de su fila (ver cellStyleOf).
+    const st = cellStyleOf(table, r, c)
     return (
       <Tag
         key={c}
         style={{
           ...baseCell,
-          fontWeight: r === -1 ? 700 : 400,
+          fontWeight: st.bold ? 700 : 400,
+          fontStyle: st.italic ? 'italic' : undefined,
+          color: st.color ?? style.textColor,
+          textAlign: st.align ?? 'left',
           borderLeft: c > 0 ? `1px solid ${grid}` : undefined,
           borderTop: `1px solid ${grid}`,
-          background: isActive ? withAlpha(accent, 0.12) : undefined,
+          background: st.fill ?? (isActive ? withAlpha(accent, 0.12) : undefined),
           boxShadow: isActive ? `inset 0 0 0 2px ${accent}` : undefined,
         }}
         onDoubleClick={(e) => {
@@ -401,6 +420,16 @@ function TableBodyInner({ id, table: fromProps, style, selected, editing }: Tabl
 
   const titleActive = ar === -2
   const editingCell = ar !== null && ar >= -1 && ac !== null
+  // Menú de estilo de la fila o la columna de la celda activa (se cierra al salir de la tabla).
+  const [menuAbierto, setMenuEstilo] = useState<'fila' | 'columna' | null>(null)
+  const menuEstilo = editingCell ? menuAbierto : null
+  const estiloFila = ar === null ? undefined : ar < 0 ? table.headerStyle : table.rowStyles?.[ar] ?? undefined
+  const estiloColumna = ac === null ? undefined : table.colStyles?.[ac] ?? undefined
+  const cambiarEstilo = (cambio: Partial<CellStyle> | null) => {
+    if (ar === null || ac === null) return
+    if (menuEstilo === 'fila') editTable(id, (x) => setRowStyle(x, ar, cambio))
+    else if (menuEstilo === 'columna') editTable(id, (x) => setColStyle(x, ac, cambio))
+  }
 
   return (
     <>
@@ -476,6 +505,7 @@ function TableBodyInner({ id, table: fromProps, style, selected, editing }: Tabl
             e.stopPropagation()
           }}
           style={{
+            position: 'relative',
             display: 'flex',
             alignItems: 'center',
             gap: 2,
@@ -532,6 +562,24 @@ function TableBodyInner({ id, table: fromProps, style, selected, editing }: Tabl
             <Trash2 size={13} />
             <span style={{ fontSize: 11 }}>col.</span>
           </Btn>
+          <Sep t={t} />
+          <Btn title={ar === -1 ? 'Estilo de la cabecera' : 'Estilo de la fila'} activo={menuEstilo === 'fila'} onClick={() => setMenuEstilo((m) => (m === 'fila' ? null : 'fila'))} t={t}>
+            <Paintbrush size={13} />
+            <span style={{ fontSize: 11 }}>fila</span>
+          </Btn>
+          <Btn title="Estilo de la columna" activo={menuEstilo === 'columna'} onClick={() => setMenuEstilo((m) => (m === 'columna' ? null : 'columna'))} t={t}>
+            <Paintbrush size={13} />
+            <span style={{ fontSize: 11 }}>col.</span>
+          </Btn>
+          {menuEstilo && (
+            <MenuEstilo
+              titulo={menuEstilo === 'fila' ? (ar === -1 ? 'Cabecera' : `Fila ${(ar ?? 0) + 1}`) : `Columna ${(ac ?? 0) + 1}`}
+              estilo={(menuEstilo === 'fila' ? estiloFila : estiloColumna) ?? {}}
+              negritaPorDefecto={menuEstilo === 'fila' && ar === -1}
+              onCambio={cambiarEstilo}
+              t={t}
+            />
+          )}
         </div>
       </NodeToolbar>
     </>
@@ -549,6 +597,7 @@ function Btn({
   onClick,
   disabled,
   danger,
+  activo,
   t,
   children,
 }: {
@@ -556,6 +605,8 @@ function Btn({
   onClick: () => void
   disabled?: boolean
   danger?: boolean
+  /** Botón que conmuta algo y está encendido. */
+  activo?: boolean
   t: Theme
   children: React.ReactNode
 }) {
@@ -566,11 +617,12 @@ function Btn({
       aria-label={title}
       disabled={disabled}
       onClick={onClick}
+      aria-pressed={activo}
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: 3,
-        background: 'none',
+        background: activo ? t.hoverBg : 'none',
         border: 'none',
         borderRadius: 7,
         padding: '5px 6px',
@@ -582,11 +634,123 @@ function Btn({
         if (!disabled) e.currentTarget.style.background = t.hoverBg
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'none'
+        e.currentTarget.style.background = activo ? t.hoverBg : 'none'
       }}
     >
       {children}
     </button>
+  )
+}
+
+// Colores rápidos: letra legible sobre blanco y fondos suaves (con unos pocos fuertes para
+// resaltar). «Auto» quita el ajuste y vuelve al de la tabla.
+const LETRAS = ['#2A2420', '#7D8A96', '#B04A5E', '#B07A1E', '#4F7A4C', '#3F6E9A', '#6F5A99', '#FFFFFF']
+const FONDOS = ['#FCEFEC', '#FBF3E1', '#EDF3EC', '#EAF2F9', '#F1ECF7', '#F1F3F5', '#E8A598', '#D9A441', '#8BA888', '#6E9BC5']
+
+/** Menú de estilo de una fila o una columna: negrita, cursiva, alineación, letra y fondo. */
+function MenuEstilo({
+  titulo,
+  estilo,
+  negritaPorDefecto,
+  onCambio,
+  t,
+}: {
+  titulo: string
+  estilo: CellStyle
+  /** La cabecera va en negrita si no se dice otra cosa. */
+  negritaPorDefecto: boolean
+  onCambio: (cambio: Partial<CellStyle> | null) => void
+  t: Theme
+}) {
+  const negrita = estilo.bold ?? negritaPorDefecto
+  const muestra = (color: string, activo: boolean, onClick: () => void, etiqueta: string) => (
+    <button
+      key={color}
+      type="button"
+      title={etiqueta}
+      aria-label={etiqueta}
+      aria-pressed={activo}
+      onClick={onClick}
+      style={{
+        width: 18,
+        height: 18,
+        borderRadius: 5,
+        background: color,
+        border: `2px solid ${activo ? t.accent : t.border}`,
+        cursor: 'pointer',
+        padding: 0,
+      }}
+    />
+  )
+  const fila: CSSProperties = { display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }
+  const rotulo: CSSProperties = { fontSize: 10, fontWeight: 700, color: t.textMuted, width: 38, textTransform: 'uppercase' }
+  return (
+    <div
+      role="dialog"
+      aria-label={`Estilo: ${titulo}`}
+      style={{
+        position: 'absolute',
+        top: 'calc(100% + 6px)',
+        right: 0,
+        width: 238,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 7,
+        background: t.bgPanel,
+        border: `1px solid ${t.border}`,
+        borderRadius: 10,
+        padding: '8px 10px',
+        boxShadow: `0 6px 20px ${t.shadow}`,
+        color: t.textSecondary,
+      }}
+    >
+      <div style={{ fontSize: 11, fontWeight: 700 }}>{titulo}</div>
+      <div style={fila}>
+        <Btn title="Negrita" activo={negrita} onClick={() => onCambio({ bold: !negrita })} t={t}>
+          <Bold size={14} />
+        </Btn>
+        <Btn title="Cursiva" activo={!!estilo.italic} onClick={() => onCambio({ italic: estilo.italic ? undefined : true })} t={t}>
+          <Italic size={14} />
+        </Btn>
+        <Sep t={t} />
+        {(['left', 'center', 'right'] as const).map((a) => (
+          <Btn
+            key={a}
+            title={a === 'left' ? 'Alinear a la izquierda' : a === 'center' ? 'Centrar' : 'Alinear a la derecha'}
+            activo={(estilo.align ?? 'left') === a}
+            onClick={() => onCambio({ align: a === 'left' ? undefined : a })}
+            t={t}
+          >
+            {a === 'left' ? <AlignLeft size={14} /> : a === 'center' ? <AlignCenter size={14} /> : <AlignRight size={14} />}
+          </Btn>
+        ))}
+      </div>
+      <div style={fila}>
+        <span style={rotulo}>Letra</span>
+        {LETRAS.map((c) => muestra(c, estilo.color === c, () => onCambio({ color: estilo.color === c ? undefined : c }), `Letra ${c}`))}
+      </div>
+      <div style={fila}>
+        <span style={rotulo}>Fondo</span>
+        {FONDOS.map((c) => muestra(c, estilo.fill === c, () => onCambio({ fill: estilo.fill === c ? undefined : c }), `Fondo ${c}`))}
+      </div>
+      <button
+        type="button"
+        onClick={() => onCambio(null)}
+        style={{
+          alignSelf: 'flex-start',
+          fontSize: 11,
+          fontWeight: 600,
+          color: t.textSecondary,
+          background: 'none',
+          border: `1px solid ${t.border}`,
+          borderRadius: 7,
+          padding: '3px 8px',
+          cursor: 'pointer',
+        }}
+      >
+        Quitar estilo
+      </button>
+    </div>
   )
 }
 

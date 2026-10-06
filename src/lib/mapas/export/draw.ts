@@ -2,7 +2,7 @@ import { LINE_HEIGHT, wrapParagraphs, type FontSpec, type Measure } from '@/lib/
 import { FOOTER_H, MARGIN, type Page } from '@/lib/mapas/export/pages'
 import { intersects, pathBounds, type PathCmd, type Rect, type SceneNode, type SceneShape } from '@/lib/mapas/export/scene'
 import { parseColor } from '@/lib/mapas/export/color'
-import { tableGeometry, TABLE_GEOMETRY as TG } from '@/lib/mapas/table'
+import { cellStyleOf, tableGeometry, TABLE_GEOMETRY as TG } from '@/lib/mapas/table'
 
 // Dibujo de una hoja. No sabe de PDF ni de canvas: habla con un `Painter` en coordenadas de la
 // hoja, así que las dos salidas comparten forma, colores, líneas y reparto del texto.
@@ -127,8 +127,21 @@ function drawTable(p: Painter, n: SceneNode, tx: (x: number) => number, ty: (y: 
     p.shape('rectangle', { x: tx(innerX), y: ty(headerY), w: innerW * s, h: g.rowH[0] * ky * s }, mix(accent, n.fill, 0.14), null, 0, 0)
   }
 
-  const text = (str: string, x: number, top: number, w: number, h: number, padX: number, padY: number, bold: boolean, size: number, color: string) => {
-    const paragraphs = (str || '').split('\n').map((l) => [{ text: l, bold: bold || undefined }])
+  const text = (
+    str: string,
+    x: number,
+    top: number,
+    w: number,
+    h: number,
+    padX: number,
+    padY: number,
+    bold: boolean,
+    size: number,
+    color: string,
+    italic = false,
+    align: 'left' | 'center' | 'right' = 'left',
+  ) => {
+    const paragraphs = (str || '').split('\n').map((l) => [{ text: l, bold: bold || undefined, italic: italic || undefined }])
     let sz = size
     let lines = wrapParagraphs(paragraphs, Math.max(w - 2 * padX, 4), { family: n.fontFamily, size: sz }, p.measure)
     for (let tries = 0; tries < 6 && lines.length * sz * TG.lineHeight > h - 2 * padY + 0.5 && sz > size * 0.6; tries++) {
@@ -137,10 +150,10 @@ function drawTable(p: Painter, n: SceneNode, tx: (x: number) => number, ty: (y: 
     }
     const lineH = sz * TG.lineHeight
     lines.forEach((l, i) => {
-      let cx = x + padX
+      let cx = align === 'left' ? x + padX : align === 'right' ? x + w - padX - l.width : x + (w - l.width) / 2
       const baseline = top + padY + i * lineH + (lineH - sz) / 2 + sz * ASCENT
       for (const run of l.runs) {
-        if (run.text) p.text(run.text, tx(cx), ty(baseline), { family: n.fontFamily, size: sz * s, bold: run.bold, color })
+        if (run.text) p.text(run.text, tx(cx), ty(baseline), { family: n.fontFamily, size: sz * s, bold: run.bold, italic: run.italic, color })
         cx += run.width
       }
     })
@@ -157,9 +170,15 @@ function drawTable(p: Painter, n: SceneNode, tx: (x: number) => number, ty: (y: 
   let y = headerY
   ;[t.columns, ...t.rows].forEach((row, i) => {
     const h = g.rowH[i] * ky
+    // Estilo de cada celda (el de su columna y, encima, el de su fila): primero los fondos.
+    const estilos = row.map((_, j) => cellStyleOf(t, i - 1, j))
+    estilos.forEach((st, j) => {
+      if (st.fill) p.shape('rectangle', { x: tx(xs[j]), y: ty(y), w: (xs[j + 1] - xs[j]) * s, h: h * s }, st.fill, null, 0, 0)
+    })
     if (i > 0 || t.solid) line(innerX, y, innerX + innerW, y, grid)
     row.forEach((cell, j) => {
-      text(cell, xs[j], y, xs[j + 1] - xs[j], h, TG.padX * kx, TG.padY * ky, i === 0, g.cellSize, n.textColor)
+      const st = estilos[j]
+      text(cell, xs[j], y, xs[j + 1] - xs[j], h, TG.padX * kx, TG.padY * ky, !!st.bold, g.cellSize, st.color ?? n.textColor, !!st.italic, st.align)
     })
     y += h
   })

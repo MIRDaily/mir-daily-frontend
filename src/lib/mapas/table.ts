@@ -15,6 +15,58 @@ export type MapTable = {
   columns: string[]
   /** Filas de datos; cada una con exactamente `columns.length` celdas. */
   rows: string[][]
+  /** Estilo de la fila de cabecera. */
+  headerStyle?: CellStyle
+  /** Estilo de cada fila de datos (mismo orden que `rows`; null = ninguno). */
+  rowStyles?: (CellStyle | null)[]
+  /** Estilo de cada columna (mismo orden que `columns`; null = ninguno). */
+  colStyles?: (CellStyle | null)[]
+}
+
+/**
+ * Estilo de una fila o una columna. Lo que falta sigue el de la tabla (el del nodo). En una celda
+ * se juntan el de su columna y el de su fila, y si chocan manda la fila.
+ */
+export type CellStyle = {
+  bold?: boolean
+  italic?: boolean
+  /** Color de la letra (#rrggbb). */
+  color?: string
+  /** Color de fondo (#rrggbb). */
+  fill?: string
+  align?: 'left' | 'center' | 'right'
+}
+
+const HEX = /^#[0-9a-f]{6}$/i
+const ALINEACIONES = ['left', 'center', 'right'] as const
+
+/** Estilo saneado (solo campos válidos); null si no queda nada. */
+export function sanitizeCellStyle(raw: unknown): CellStyle | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const r = raw as Record<string, unknown>
+  const out: CellStyle = {}
+  if (typeof r.bold === 'boolean') out.bold = r.bold
+  if (typeof r.italic === 'boolean') out.italic = r.italic
+  if (typeof r.color === 'string' && HEX.test(r.color)) out.color = r.color
+  if (typeof r.fill === 'string' && HEX.test(r.fill)) out.fill = r.fill
+  if (ALINEACIONES.includes(r.align as CellStyle['align'] & string)) out.align = r.align as CellStyle['align']
+  return Object.keys(out).length ? out : null
+}
+
+/** Lista de estilos del largo dado (rellena o recorta); undefined si no hay ninguno. */
+function estilos(raw: unknown, largo: number): (CellStyle | null)[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const out = Array.from({ length: largo }, (_, i) => sanitizeCellStyle(raw[i]))
+  return out.some(Boolean) ? out : undefined
+}
+
+/**
+ * Estilo con el que se pinta una celda (fila -1 = cabecera): el de su columna y encima el de su
+ * fila. La cabecera va en negrita salvo que se le quite.
+ */
+export function cellStyleOf(t: MapTable, row: number, col: number): CellStyle {
+  const deFila = row < 0 ? t.headerStyle : t.rowStyles?.[row]
+  return { ...(row < 0 ? { bold: true } : {}), ...(t.colStyles?.[col] ?? {}), ...(deFila ?? {}) }
 }
 
 export const TABLE_LIMITS = {
@@ -84,7 +136,17 @@ export function sanitizeTable(raw: unknown, fallbackTitle = ''): MapTable | null
     if (total > TABLE_LIMITS.maxTotal) break
     rows.push(cells)
   }
-  return { title, columns, rows }
+  const headerStyle = sanitizeCellStyle(r.headerStyle)
+  const rowStyles = estilos(r.rowStyles, rows.length)
+  const colStyles = estilos(r.colStyles, columns.length)
+  return {
+    title,
+    columns,
+    rows,
+    ...(headerStyle ? { headerStyle } : {}),
+    ...(rowStyles ? { rowStyles } : {}),
+    ...(colStyles ? { colStyles } : {}),
+  }
 }
 
 export function newTable(): MapTable {
@@ -127,50 +189,106 @@ export function setTitle(t: MapTable, value: string): MapTable {
   return { ...t, title: cleanCell(value, TABLE_LIMITS.maxTitle, 0) }
 }
 
+// Los estilos de filas y columnas viajan con ellas: se insertan, se borran y se mueven a la vez.
+// Una lista que se queda sin ningún estilo desaparece (el JSON de una tabla sin estilos no cambia).
+const limpia = (l: (CellStyle | null)[] | undefined) => (l && l.some(Boolean) ? l : undefined)
+function conEstilos(t: MapTable, campo: 'rowStyles' | 'colStyles', lista: (CellStyle | null)[] | undefined): MapTable {
+  const out = { ...t }
+  const l = limpia(lista)
+  if (l) out[campo] = l
+  else delete out[campo]
+  return out
+}
+const insertar = <T,>(list: T[], i: number, v: T) => [...list.slice(0, i), v, ...list.slice(i)]
+const intercambiar = <T,>(list: T[], a: number, b: number) => {
+  const out = list.slice()
+  ;[out[a], out[b]] = [out[b], out[a]]
+  return out
+}
+/** La lista de estilos con el largo que toca (si no la hay, todo null). */
+const lista = (l: (CellStyle | null)[] | undefined, largo: number) => Array.from({ length: largo }, (_, i) => l?.[i] ?? null)
+
 /** Fila vacía en la posición `at` (0 = la primera de datos). */
 export function insertRow(t: MapTable, at: number): MapTable {
   if (t.rows.length >= TABLE_LIMITS.maxRows) return t
   const i = Math.max(0, Math.min(at, t.rows.length))
-  const rows = t.rows.slice()
-  rows.splice(i, 0, new Array(t.columns.length).fill(''))
-  return { ...t, rows }
+  const rows = insertar(t.rows, i, new Array(t.columns.length).fill(''))
+  return conEstilos({ ...t, rows }, 'rowStyles', t.rowStyles && insertar(lista(t.rowStyles, t.rows.length), i, null))
 }
 
 export function removeRow(t: MapTable, row: number): MapTable {
   if (row < 0 || row >= t.rows.length) return t
-  return { ...t, rows: t.rows.filter((_, i) => i !== row) }
+  const fuera = <T,>(l: T[]) => l.filter((_, i) => i !== row)
+  return conEstilos({ ...t, rows: fuera(t.rows) }, 'rowStyles', t.rowStyles && fuera(lista(t.rowStyles, t.rows.length)))
 }
 
 export function moveRow(t: MapTable, row: number, dir: -1 | 1): MapTable {
   const to = row + dir
   if (row < 0 || to < 0 || to >= t.rows.length) return t
-  const rows = t.rows.slice()
-  ;[rows[row], rows[to]] = [rows[to], rows[row]]
-  return { ...t, rows }
+  return conEstilos(
+    { ...t, rows: intercambiar(t.rows, row, to) },
+    'rowStyles',
+    t.rowStyles && intercambiar(lista(t.rowStyles, t.rows.length), row, to),
+  )
 }
 
 /** Columna vacía en la posición `at`. */
 export function insertColumn(t: MapTable, at: number): MapTable {
   if (t.columns.length >= TABLE_LIMITS.maxColumns) return t
   const i = Math.max(0, Math.min(at, t.columns.length))
-  const add = <T,>(list: T[], v: T) => [...list.slice(0, i), v, ...list.slice(i)]
-  return { ...t, columns: add(t.columns, ''), rows: t.rows.map((r) => add(r, '')) }
+  return conEstilos(
+    { ...t, columns: insertar(t.columns, i, ''), rows: t.rows.map((r) => insertar(r, i, '')) },
+    'colStyles',
+    t.colStyles && insertar(lista(t.colStyles, t.columns.length), i, null),
+  )
 }
 
 export function removeColumn(t: MapTable, col: number): MapTable {
   if (t.columns.length <= 1 || col < 0 || col >= t.columns.length) return t
-  return { ...t, columns: t.columns.filter((_, j) => j !== col), rows: t.rows.map((r) => r.filter((_, j) => j !== col)) }
+  const fuera = <T,>(l: T[]) => l.filter((_, j) => j !== col)
+  return conEstilos(
+    { ...t, columns: fuera(t.columns), rows: t.rows.map(fuera) },
+    'colStyles',
+    t.colStyles && fuera(lista(t.colStyles, t.columns.length)),
+  )
 }
 
 export function moveColumn(t: MapTable, col: number, dir: -1 | 1): MapTable {
   const to = col + dir
   if (col < 0 || to < 0 || to >= t.columns.length) return t
-  const swap = <T,>(list: T[]) => {
-    const out = list.slice()
-    ;[out[col], out[to]] = [out[to], out[col]]
+  return conEstilos(
+    { ...t, columns: intercambiar(t.columns, col, to), rows: t.rows.map((r) => intercambiar(r, col, to)) },
+    'colStyles',
+    t.colStyles && intercambiar(lista(t.colStyles, t.columns.length), col, to),
+  )
+}
+
+/**
+ * Cambia el estilo de una fila (-1 = cabecera) o de una columna. `cambio` se mezcla con lo que
+ * hubiera; un campo a `undefined` se quita; `null` borra el estilo entero.
+ */
+export function setRowStyle(t: MapTable, row: number, cambio: Partial<CellStyle> | null): MapTable {
+  const nuevo = (antes: CellStyle | null | undefined) =>
+    cambio === null ? null : sanitizeCellStyle(Object.fromEntries(Object.entries({ ...antes, ...cambio }).filter(([, v]) => v !== undefined)))
+  if (row < 0) {
+    const h = nuevo(t.headerStyle)
+    const out = { ...t }
+    if (h) out.headerStyle = h
+    else delete out.headerStyle
     return out
   }
-  return { ...t, columns: swap(t.columns), rows: t.rows.map(swap) }
+  if (row >= t.rows.length) return t
+  const l = lista(t.rowStyles, t.rows.length)
+  l[row] = nuevo(l[row])
+  return conEstilos(t, 'rowStyles', l)
+}
+
+export function setColStyle(t: MapTable, col: number, cambio: Partial<CellStyle> | null): MapTable {
+  if (col < 0 || col >= t.columns.length) return t
+  const l = lista(t.colStyles, t.columns.length)
+  l[col] =
+    cambio === null ? null : sanitizeCellStyle(Object.fromEntries(Object.entries({ ...l[col], ...cambio }).filter(([, v]) => v !== undefined)))
+  return conEstilos(t, 'colStyles', l)
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +355,10 @@ export function tableGeometry(t: MapTable, measure: CellMeasure = estimateMeasur
   const cols = t.columns.length
   const natural = new Array(cols).fill(0).map((_, j) => {
     let w = 0
-    const cells: [string, boolean][] = [[t.columns[j], true], ...t.rows.map((r) => [r[j] ?? '', false] as [string, boolean])]
+    const cells: [string, boolean][] = [
+      [t.columns[j], cellStyleOf(t, -1, j).bold === true],
+      ...t.rows.map((r, i) => [r[j] ?? '', cellStyleOf(t, i, j).bold === true] as [string, boolean]),
+    ]
     for (const [text, bold] of cells) for (const line of text.split('\n')) w = Math.max(w, measure(line, bold, cellSize))
     return Math.min(G.maxCol, Math.max(G.minCol, Math.ceil(w + 2 * G.padX + 1)))
   })
@@ -266,7 +387,7 @@ export function tableGeometry(t: MapTable, measure: CellMeasure = estimateMeasur
   const rowH = [t.columns, ...t.rows].map((r, i) => {
     let rows = 1
     r.forEach((c, j) => {
-      rows = Math.max(rows, rowsFor(c, colW[j] - 2 * G.padX, measure, i === 0, cellSize))
+      rows = Math.max(rows, rowsFor(c, colW[j] - 2 * G.padX, measure, cellStyleOf(t, i - 1, j).bold === true, cellSize))
     })
     return rows * line + 2 * G.padY + 1
   })

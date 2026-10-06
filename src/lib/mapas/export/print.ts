@@ -1,5 +1,6 @@
 import { parseColor, type RGBA } from '@/lib/mapas/export/color'
-import type { Section } from '@/lib/mapas/export/scene'
+import type { Section, SceneTable } from '@/lib/mapas/export/scene'
+import type { CellStyle } from '@/lib/mapas/table'
 
 // Modos de tinta para imprimir. La pantalla usa rellenos de color macizos (la rama «Etiología» es un
 // bloque violeta con letra blanca): sobre papel gastan toneladas de tinta y la letra blanca sale mal.
@@ -41,6 +42,33 @@ function darkenIfPale(color: string, fallback: string): string {
   return luminance(c) > 0.82 ? fallback : color
 }
 
+/**
+ * Estilos de fila y columna de una tabla para imprimir: sin fondos; la letra de color se queda si
+ * se lee sobre blanco (en gris en blanco y negro) y la clara pasa a tinta.
+ */
+function tablaSinTinta(t: SceneTable, toGray: boolean): SceneTable {
+  const st = (s: CellStyle | null | undefined): CellStyle | null => {
+    if (!s) return null
+    const out: CellStyle = { ...s }
+    delete out.fill
+    if (out.color) {
+      const c = parseColor(out.color)
+      if (luminance(c) > 0.55) delete out.color
+      else if (toGray) out.color = gray(c, 0.25)
+    }
+    return Object.keys(out).length ? out : null
+  }
+  const out: SceneTable = { ...t, solid: false }
+  if (t.headerStyle) {
+    const h = st(t.headerStyle)
+    if (h) out.headerStyle = h
+    else delete out.headerStyle
+  }
+  if (t.rowStyles) out.rowStyles = t.rowStyles.map(st)
+  if (t.colStyles) out.colStyles = t.colStyles.map(st)
+  return out
+}
+
 export function applyInk(section: Section, mode: InkMode): Section {
   if (mode === 'color') return section
   const toGray = mode === 'gray'
@@ -65,7 +93,7 @@ export function applyInk(section: Section, mode: InkMode): Section {
       strokeWidth: width,
       textColor: text,
       // Tablas: sin franja ni cabecera rellenas; el título va en el color del contorno.
-      ...(n.table ? { table: { ...n.table, solid: false } } : {}),
+      ...(n.table ? { table: tablaSinTinta(n.table, toGray) } : {}),
     }
   })
   const edges = section.edges.map((e) => {

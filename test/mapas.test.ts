@@ -1114,3 +1114,84 @@ test('tablas de PDF: celdas blancas, etiqueta girada y superíndices en su sitio
   assert.equal(tablas[0].filas[1][0], 'GRUPO')
   assert.equal(tablas[0].filas[2][1], '≥1000/mm 3')
 })
+
+// ---- Estilo por fila y por columna ------------------------------------------------------------
+
+import { cellStyleOf, setColStyle, setRowStyle } from '@/lib/mapas/table'
+
+test('estilos de tabla: la fila manda sobre la columna y la cabecera va en negrita por defecto', () => {
+  let t = setColStyle(TABLA, 1, { color: '#B04A5E', fill: '#FCEFEC' })
+  t = setRowStyle(t, 0, { fill: '#EAF2F9', italic: true })
+  assert.deepEqual(cellStyleOf(t, 0, 1), { color: '#B04A5E', fill: '#EAF2F9', italic: true })
+  assert.deepEqual(cellStyleOf(t, 1, 1), { color: '#B04A5E', fill: '#FCEFEC' })
+  assert.deepEqual(cellStyleOf(t, 1, 0), {})
+  assert.equal(cellStyleOf(t, -1, 0).bold, true)
+  assert.equal(cellStyleOf(setRowStyle(t, -1, { bold: false }), -1, 0).bold, false)
+  // Quitar un campo (undefined) y quitar el estilo entero (null).
+  assert.deepEqual(setRowStyle(t, 0, { italic: undefined }).rowStyles?.[0], { fill: '#EAF2F9' })
+  const sinNada = setColStyle(setRowStyle(t, 0, null), 1, null)
+  assert.equal(sinNada.rowStyles, undefined)
+  assert.equal(sinNada.colStyles, undefined)
+  assert.deepEqual(sinNada, TABLA)
+})
+
+test('estilos de tabla: siguen a su fila o columna al insertar, mover y borrar', () => {
+  let t = setRowStyle(TABLA, 1, { bold: true })
+  t = setColStyle(t, 2, { align: 'center' })
+  t = insertRow(t, 0) // la fila con estilo pasa a ser la 2
+  assert.deepEqual(t.rowStyles, [null, null, { bold: true }])
+  t = moveRow(t, 2, -1)
+  assert.deepEqual(t.rowStyles, [null, { bold: true }, null])
+  assert.equal(t.rows[1][0], 'Birrefringencia')
+  t = insertColumn(t, 0)
+  assert.deepEqual(t.colStyles, [null, null, null, { align: 'center' }])
+  t = moveColumn(t, 3, -1)
+  assert.equal(t.colStyles?.[2]?.align, 'center')
+  assert.equal(t.columns[2], 'Pseudogota')
+  t = removeColumn(t, 2)
+  assert.equal(t.colStyles, undefined)
+  t = removeRow(t, 1)
+  assert.equal(t.rowStyles, undefined)
+})
+
+test('estilos de tabla: se sanean al cargar o importar (colores raros, campos de más, largos distintos)', () => {
+  const t = sanitizeTable({
+    ...TABLA,
+    headerStyle: { fill: 'red', color: '#FFFFFF', onclick: 'x' },
+    rowStyles: [{ bold: 'sí', italic: true, align: 'justify' }, { fill: '#123' }, { color: '#D4667A' }],
+    colStyles: 'nada',
+  })!
+  assert.deepEqual(t.headerStyle, { color: '#FFFFFF' })
+  assert.deepEqual(t.rowStyles, [{ italic: true }, null])
+  assert.equal(t.colStyles, undefined)
+  // JSON de ida y vuelta.
+  const style = newGraphDoc().nodes[0].data.style
+  const conEstilo = setColStyle(setRowStyle(TABLA, 0, { fill: '#FBF3E1', bold: true }), 2, { color: '#3F6E9A', align: 'right' })
+  const doc = { version: 2 as const, nodes: [{ id: 't', type: 'mindmap' as const, position: { x: 0, y: 0 }, data: { label: 'x', style, table: conEstilo } }], edges: [] }
+  const back = parseMapFile(serializeMap('M', doc)).doc as typeof doc
+  assert.deepEqual(back.nodes[0].data.table, conEstilo)
+})
+
+test('exportar: la tabla sale con el fondo, la letra y la alineación de cada fila y columna; sin fondos al ahorrar tinta', () => {
+  const base = tableSection()
+  const tabla = setColStyle(setRowStyle(TABLA, 1, { fill: '#FBF3E1', italic: true }), 2, { color: '#3F6E9A', align: 'right' })
+  base.nodes[0].table = { ...tabla, solid: true }
+  const page = { section: base, region: { x: 0, y: 0, w: 1000, h: 1000 }, scale: 1, w: 1000, h: 1000, area: { x: 0, y: 0, w: 1000, h: 1000 }, clip: false }
+  const rec = recordingPainter()
+  drawPage(rec.p, page, PAGE_OPTS)
+  assert.ok(rec.shapes.some((s) => s.fill === '#FBF3E1'), 'fondo de la fila')
+  const negativa = rec.texts.find((t) => t.str === 'Negativa')
+  assert.ok(negativa)
+  const positiva = rec.texts.find((t) => t.str.startsWith('Positiva'))
+  assert.equal(positiva?.color, '#3F6E9A')
+  // Alineada a la derecha: empieza más a la derecha que en la misma tabla sin estilo.
+  const sinEstilo = recordingPainter()
+  drawPage(sinEstilo.p, { ...page, section: tableSection() }, PAGE_OPTS)
+  assert.ok(positiva!.x > sinEstilo.texts.find((t) => t.str.startsWith('Positiva'))!.x)
+  // Ahorro de tinta: ningún fondo de color; la letra azul (oscura) se queda.
+  const ink = applyInk(base, 'save')
+  const rec2 = recordingPainter()
+  drawPage(rec2.p, { ...page, section: ink }, PAGE_OPTS)
+  assert.ok(!rec2.shapes.some((s) => s.fill === '#FBF3E1'))
+  assert.equal(rec2.texts.find((t) => t.str.startsWith('Positiva'))?.color, '#3F6E9A')
+})
