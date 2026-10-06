@@ -1,7 +1,7 @@
 import { memo, useCallback } from 'react'
 import { NodeToolbar, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import { motion } from 'framer-motion'
-import { Trash2, Plus, Palette, FlipHorizontal2 } from 'lucide-react'
+import { Trash2, Plus, Palette, FlipHorizontal2, Table2 } from 'lucide-react'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
@@ -13,8 +13,10 @@ import { NodeLabel } from './NodeLabel'
 import { NodeEditor } from './NodeEditor'
 import { NodeHandles } from './NodeHandles'
 import { BranchToggle } from './BranchToggle'
+import { TableBody } from './TableBody'
 import { addChildAndEdit } from '@/components/mapas/proto/utils/keyboard'
 import { mirrorBranches } from '@/components/mapas/proto/utils/branches'
+import { addTableAndEdit, startTableEdit } from '@/components/mapas/proto/utils/tables'
 
 function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   // Solo se lee lo que este nodo pinta; las acciones se piden a la store en el momento de
@@ -31,12 +33,15 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   const multiSelect = useUIStore((s) => s.multiSelect)
   const editSeed = useMindMapStore((s) => (s.editingNodeId === id ? s.editSeed : null))
 
+  const isTable = !!data.table
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      useMindMapStore.getState().setEditing(id)
+      // En una tabla, el doble clic en una celda abre esa celda (TableBody); en el borde, la cabecera.
+      if (isTable) startTableEdit(id, -1, 0)
+      else useMindMapStore.getState().setEditing(id)
     },
-    [id]
+    [id, isTable]
   )
 
   const handleSave = useCallback(
@@ -75,6 +80,10 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
     store.deleteNode(id)
   }, [id])
 
+  const handleAddTable = useCallback(() => {
+    addTableAndEdit(id)
+  }, [id])
+
   const handleMirror = useCallback(() => {
     mirrorBranches([id])
   }, [id])
@@ -111,7 +120,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
       style={{ position: 'relative', width: '100%', height: '100%' }}
     >
       <NodeResizer
-        isVisible={!!selected && !isEditing}
+        isVisible={!!selected && !isEditing && !isTable}
         minWidth={100}
         minHeight={36}
         lineStyle={{ display: 'none' }}
@@ -138,6 +147,9 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
           filter: selected ? `drop-shadow(0 0 14px ${data.style.glowColor}88)` : undefined,
         }}
       >
+        {data.table ? (
+          <TableBody id={id} table={data.table} style={data.style} selected={!!selected} editing={isEditing} />
+        ) : (
         <NodeBody style={data.style} isSelected={!!selected} isDark={t.isDark}>
           {isEditing ? (
             <NodeEditor
@@ -153,6 +165,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
             <NodeLabel label={data.label} style={data.style} />
           )}
         </NodeBody>
+        )}
       </motion.div>
 
       <NodeToolbar isVisible={!!selected && !isEditing && !multiSelect} position={Position.Top}>
@@ -169,6 +182,9 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
         >
           <ToolbarBtn onClick={handleAddChild} title="Añadir nodo hijo" color={t.accent} hoverBg={t.hoverBg}>
             <Plus size={14} />
+          </ToolbarBtn>
+          <ToolbarBtn onClick={handleAddTable} title="Añadir una tabla hija (Alt+T)" color={t.accent} hoverBg={t.hoverBg}>
+            <Table2 size={14} />
           </ToolbarBtn>
           {data.parentId && (
             <ToolbarBtn onClick={handleMirror} title="Pasar la rama al otro lado, en espejo (Alt+M)" color={t.textSecondary} hoverBg={t.hoverBg}>
@@ -234,6 +250,7 @@ export const MindMapNodeComponent = memo(MindMapNodeInner, (prev, next) => {
     prev.data.childCount === next.data.childCount &&
     prev.data.hiddenCount === next.data.hiddenCount &&
     prev.data.childSide === next.data.childSide &&
+    prev.data.table === next.data.table &&
     JSON.stringify(prev.data.style) === JSON.stringify(next.data.style) &&
     (prev as { id: string }).id === (next as { id: string }).id
   )

@@ -69,6 +69,7 @@ function toEngine(doc: GraphDoc): { nodes: MindMapNode[]; edges: MindMapEdge[] }
       ...(n.data.parentId ? { parentId: n.data.parentId } : {}),
       ...(n.data.category ? { category: n.data.category } : {}),
       ...(n.data.collapsed ? { collapsed: true } : {}),
+      ...(n.data.table ? { table: n.data.table } : {}),
       isEditing: false,
       isFocused: false,
       isNew: false,
@@ -105,6 +106,7 @@ function fromEngine(nodes: MindMapNode[], edges: MindMapEdge[], settings?: Edito
       ...(n.data.parentId ? { parentId: n.data.parentId } : {}),
       ...(n.data.category ? { category: n.data.category as GraphNode['data']['category'] } : {}),
       ...(n.data.collapsed ? { collapsed: true } : {}),
+      ...(n.data.table ? { table: n.data.table } : {}),
     },
   }))
   const gEdges: GraphEdge[] = edges.map((e) => {
@@ -351,7 +353,7 @@ function EditorInner({
       const scope = nodes.filter((n) => !n.hidden && (!only || only.has(n.id)))
       const scopeIds = new Set(scope.map((n) => n.id))
       const pos = autoLayoutGraph(
-        scope.map((n) => ({ id: n.id, data: { label: n.data.label, parentId: n.data.parentId } })),
+        scope.map((n) => ({ id: n.id, data: { label: n.data.label, parentId: n.data.parentId, table: n.data.table } })),
         edges
           .filter((e) => scopeIds.has(e.source) && scopeIds.has(e.target))
           .map((e) => ({ source: e.source, target: e.target })),

@@ -1,10 +1,21 @@
 import { toGraphDoc, type GraphNode } from '@/lib/mapas/graph'
+import { tableGeometry } from '@/lib/mapas/table'
 
 // Lo que la lista de mapas necesita de un documento sin abrir el editor: una miniatura dibujable,
 // el texto de sus nodos (para buscar) y su tamaño. Se calcula en el navegador a partir del propio
 // documento, así que la miniatura nunca se queda desfasada y no hay nada que guardar aparte.
 
-export type ThumbNode = { x: number; y: number; w: number; h: number; fill: string; stroke: string; r: number }
+export type ThumbNode = {
+  x: number
+  y: number
+  w: number
+  h: number
+  fill: string
+  stroke: string
+  r: number
+  /** Nodo tabla: alto de la franja del título y altura (relativa al nodo) de cada raya entre filas. */
+  table?: { band: number; lines: number[] }
+}
 export type ThumbEdge = { d: string; color: string }
 export type Thumb = { w: number; h: number; nodes: ThumbNode[]; edges: ThumbEdge[] }
 
@@ -22,6 +33,10 @@ export function searchable(text: string): string {
 
 /** Tamaño aproximado de un nodo (no se guarda: lo mide el navegador al dibujarlo). */
 function sizeOf(n: GraphNode): { w: number; h: number } {
+  if (n.data.table) {
+    const g = tableGeometry(n.data.table, undefined, n.data.style.fontSize || 14)
+    return { w: g.width, h: g.height }
+  }
   if (n.width && n.height) return { w: n.width, h: n.height }
   const text = n.data.label.replace(/<[^>]*>/g, '')
   const fs = n.data.style.fontSize || 14
@@ -33,15 +48,16 @@ function sizeOf(n: GraphNode): { w: number; h: number } {
 
 const WHITE = '#FFFFFF'
 
-export function summarizeDoc(raw: unknown): { thumb: Thumb | null; text: string } {
+export function summarizeDoc(raw: unknown): { thumb: Thumb | null; text: string; tables: number } {
   let doc
   try {
     doc = toGraphDoc(raw).doc
   } catch {
-    return { thumb: null, text: '' }
+    return { thumb: null, text: '', tables: 0 }
   }
+  const tables = doc.nodes.filter((n) => n.data.table).length
   const items = doc.nodes.filter((n) => n.position && Number.isFinite(n.position.x) && Number.isFinite(n.position.y))
-  if (items.length === 0) return { thumb: null, text: '' }
+  if (items.length === 0) return { thumb: null, text: '', tables }
 
   const boxes = new Map<string, { x: number; y: number; w: number; h: number }>()
   let minX = Infinity
@@ -63,7 +79,20 @@ export function summarizeDoc(raw: unknown): { thumb: Thumb | null; text: string 
   const nodes: ThumbNode[] = items.map((n) => {
     const b = boxes.get(n.id)!
     const st = n.data.style
+    let table: ThumbNode['table']
+    if (n.data.table) {
+      const g = tableGeometry(n.data.table, undefined, st.fontSize || 14)
+      const k = b.h / g.height
+      const lines: number[] = []
+      let y = g.titleH
+      for (const h of g.rowH) {
+        lines.push(y * k)
+        y += h
+      }
+      table = { band: g.titleH * k, lines }
+    }
     return {
+      ...(table ? { table } : {}),
       x: b.x - minX,
       y: b.y - minY,
       w: b.w,
@@ -89,5 +118,5 @@ export function summarizeDoc(raw: unknown): { thumb: Thumb | null; text: string 
     edges.push({ d: `M${x1.toFixed(0)} ${y1.toFixed(0)}C${mx.toFixed(0)} ${y1.toFixed(0)} ${mx.toFixed(0)} ${y2.toFixed(0)} ${x2.toFixed(0)} ${y2.toFixed(0)}`, color: e.data.color || '#7D8A96' })
   }
 
-  return { thumb: { w: width, h: height, nodes, edges }, text: searchable(items.map((n) => n.data.label).join(' ')) }
+  return { thumb: { w: width, h: height, nodes, edges }, text: searchable(items.map((n) => n.data.label).join(' ')), tables }
 }

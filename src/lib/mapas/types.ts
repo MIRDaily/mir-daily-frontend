@@ -1,3 +1,5 @@
+import type { MapTable } from '@/lib/mapas/table'
+
 // Modelo del mapa mental: un ÁRBOL de nodos tipados, no un grafo libre.
 //
 // Es a propósito: el mismo formato sirve para el editor manual y, más
@@ -42,6 +44,8 @@ export type MapNode = {
   text: string
   category: MapCategoryId
   collapsed?: boolean
+  /** Nodo tabla (ver `table.ts`). Su título es `text`. */
+  table?: MapTable
 }
 
 export type MapDoc = {

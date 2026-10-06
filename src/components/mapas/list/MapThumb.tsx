@@ -20,9 +20,20 @@ export function MapThumb({ thumb }: { thumb: Thumb | null }) {
       {thumb.edges.map((e, i) => (
         <path key={i} d={e.d} fill="none" stroke={e.color} strokeWidth={1.6} strokeLinecap="round" vectorEffect="non-scaling-stroke" opacity={0.75} />
       ))}
-      {thumb.nodes.map((n, i) => (
-        <rect key={i} x={n.x} y={n.y} width={n.w} height={n.h} rx={n.r} fill={n.fill} stroke={n.stroke} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-      ))}
+      {thumb.nodes.map((n, i) =>
+        n.table ? (
+          // Tabla: recuadro con la franja del título y una raya por fila.
+          <g key={i}>
+            <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={6} fill={n.fill} stroke={n.stroke} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            <rect x={n.x} y={n.y} width={n.w} height={n.table.band} rx={6} fill={n.stroke} />
+            {n.table.lines.map((ly, j) => (
+              <line key={j} x1={n.x} x2={n.x + n.w} y1={n.y + ly} y2={n.y + ly} stroke={n.stroke} strokeWidth={0.8} vectorEffect="non-scaling-stroke" opacity={0.6} />
+            ))}
+          </g>
+        ) : (
+          <rect key={i} x={n.x} y={n.y} width={n.w} height={n.h} rx={n.r} fill={n.fill} stroke={n.stroke} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        ),
+      )}
     </svg>
   )
 }

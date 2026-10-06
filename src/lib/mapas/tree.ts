@@ -1,4 +1,5 @@
 import { MAP_CATEGORIES, type MapCategoryId, type MapDoc, type MapNode } from '@/lib/mapas/types'
+import { sanitizeTable } from '@/lib/mapas/table'
 
 let counter = 0
 export function newNodeId(): string {
@@ -153,16 +154,22 @@ export function sanitizeDoc(raw: unknown): MapDoc {
     seen.add(id)
     const category =
       typeof r.category === 'string' && r.category in MAP_CATEGORIES ? (r.category as MapCategoryId) : 'general'
+    const text = typeof r.text === 'string' ? r.text.slice(0, 2000) : ''
+    // Tabla: en el árbol el título va en `text` (así la escribe la IA); si la tabla trae el suyo, vale ese.
+    const table = sanitizeTable(r.table, text)
     nodes.push({
       id,
       parentId: typeof r.parentId === 'string' ? r.parentId : null,
-      text: typeof r.text === 'string' ? r.text.slice(0, 2000) : '',
+      text: table ? table.title : text,
       category,
       ...(r.collapsed === true ? { collapsed: true } : {}),
+      ...(table ? { table } : {}),
     })
   }
   const root = nodes.find((n) => n.parentId === null) ?? nodes[0]
   if (!root) return createDoc()
+  // La raíz no puede ser una tabla: se queda con su título.
+  if (root.table) delete root.table
   const ids = new Set(nodes.map((n) => n.id))
   // Huérfanos, raíces sobrantes y autorreferencias cuelgan de la raíz.
   const fixed = nodes.map((n) => {

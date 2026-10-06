@@ -126,8 +126,9 @@ export async function extraerPptx(file: File, { maxChars }: Opciones): Promise<E
     }
     // Tablas (a:tbl): una línea por fila, celdas separadas por " | ".
     for (const fila of Array.from(doc.getElementsByTagNameNS(NS_A, 'tr'))) {
-      const celdas = Array.from(fila.getElementsByTagNameNS(NS_A, 'tc')).map((c) => parrafos(c).join(' ')).filter(Boolean)
-      if (celdas.length) cuerpo.push(celdas.join(' | '))
+      // Las celdas vacías se conservan: quitarlas descuadra las columnas de la tabla.
+      const celdas = Array.from(fila.getElementsByTagNameNS(NS_A, 'tc')).map((c) => parrafos(c).join(' '))
+      if (celdas.some(Boolean)) cuerpo.push(celdas.join(' | '))
     }
 
     // Notas del orador: en clases y seminarios suelen llevar la explicación.

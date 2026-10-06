@@ -6,7 +6,11 @@ import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import { DEFAULT_NODE_STYLE } from '@/components/mapas/proto/types/node.types'
 import { nanoid } from '@/components/mapas/proto/utils/nanoid'
 import { useHistoryStore } from './history.store'
+import { useUIStore } from './ui.store'
 import { syncCollapse } from '@/components/mapas/proto/utils/tree'
+import { styleForCategory, styleForTable } from '@/lib/mapas/graph'
+import { newTable, tableToLabel } from '@/lib/mapas/table'
+import { MAP_CATEGORIES, type MapCategoryId } from '@/lib/mapas/types'
 
 // Debounce: only push a snapshot once per 600ms window to avoid flooding history on slider drags
 let lastStyleSnapshot = 0
@@ -156,6 +160,38 @@ export const useMindMapStore = create<MindMapState>()(
       }, 700)
 
       return id
+    },
+
+    addTable: (parentId) => {
+      const id = get().addNode(parentId)
+      const parent = get().nodes.find((n) => n.id === parentId)
+      const category: MapCategoryId =
+        parent?.data.category && parent.data.category in MAP_CATEGORIES ? (parent.data.category as MapCategoryId) : 'general'
+      const table = newTable()
+      // Estilo de nodo de detalle con el color de la categoría (y lo que el usuario haya fijado para ella).
+      const style = styleForCategory(styleForTable(category), category, useUIStore.getState().categoryStyles)
+      set((s) => {
+        const node = s.nodes.find((n) => n.id === id)
+        if (!node) return
+        node.data.table = table
+        node.data.label = tableToLabel(table)
+        node.data.category = category
+        node.data.style = style
+      })
+      return id
+    },
+
+    updateTable: (id, fn) => {
+      const current = get().nodes.find((n) => n.id === id)?.data.table
+      if (!current) return
+      const next = fn(current)
+      if (next === current) return
+      set((s) => {
+        const node = s.nodes.find((n) => n.id === id)
+        if (!node) return
+        node.data.table = next
+        node.data.label = tableToLabel(next)
+      })
     },
 
     deleteNode: (id) =>

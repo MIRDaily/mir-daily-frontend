@@ -17,6 +17,7 @@ import {
   naturalShape,
   styleForCategory,
   styleForNode,
+  styleForTable,
   type CategoryStyleOverride,
   type CategoryStyles,
   type GraphShape,
@@ -101,7 +102,9 @@ export function changeCategoryStyle(category: MapCategoryId, patch: CategoryPatc
     return {
       nodes: s.nodes.map((n) => {
         if (n.data.category !== category) return n
-        const natural = styleForNode(levelOf(n.id), category, n.data.label.replace(/<[^>]*>/g, ''))
+        const natural = n.data.table
+          ? styleForTable(category)
+          : styleForNode(levelOf(n.id), category, n.data.label.replace(/<[^>]*>/g, ''))
         // Al quitar la forma fija cada nodo vuelve a la suya (la que le toca por su nivel).
         const style = styleForCategory(n.data.style, category, next, { prev, natural })
         if (prev?.shape && !next[category]?.shape) style.shape = naturalShape(levelOf(n.id), n.data.label)

@@ -1,6 +1,8 @@
 import { LINE_HEIGHT, wrapParagraphs, type FontSpec, type Measure } from '@/lib/mapas/export/layout'
 import { FOOTER_H, MARGIN, type Page } from '@/lib/mapas/export/pages'
 import { intersects, pathBounds, type PathCmd, type Rect, type SceneNode, type SceneShape } from '@/lib/mapas/export/scene'
+import { parseColor } from '@/lib/mapas/export/color'
+import { tableGeometry, TABLE_GEOMETRY as TG } from '@/lib/mapas/table'
 
 // Dibujo de una hoja. No sabe de PDF ni de canvas: habla con un `Painter` en coordenadas de la
 // hoja, así que las dos salidas comparten forma, colores, líneas y reparto del texto.
@@ -81,6 +83,92 @@ function drawNode(p: Painter, n: SceneNode, tx: (x: number) => number, ty: (y: n
   })
 }
 
+/** Mezcla de dos colores (t = peso de `a`), en hexadecimal: el PDF no sabe de transparencias. */
+function mix(a: string, b: string, t: number): string {
+  const A = parseColor(a)
+  const B = parseColor(b, { r: 255, g: 255, b: 255, a: 1 })
+  const m = (x: number, y: number) => Math.round(x * t + y * (1 - t)).toString(16).padStart(2, '0')
+  return `#${m(A.r, B.r)}${m(A.g, B.g)}${m(A.b, B.b)}`
+}
+
+function readableOn(bg: string): string {
+  const c = parseColor(bg)
+  return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255 > 0.62 ? '#2A2420' : '#FFFFFF'
+}
+
+/**
+ * Nodo tabla: la misma geometría que en pantalla (`tableGeometry`, con la medida del pintor),
+ * ajustada a la caja medida del nodo. Franja del título, cabecera tintada, rejilla y el texto de
+ * cada celda partido en líneas (y encogido un poco si con otra tipografía no cabe).
+ */
+function drawTable(p: Painter, n: SceneNode, tx: (x: number) => number, ty: (y: number) => number, s: number) {
+  const t = n.table!
+  const bw = Math.max(1, n.strokeWidth)
+  const g = tableGeometry(t, (text, bold, size) => p.measure(text, { family: n.fontFamily, size, bold }), n.fontSize, bw)
+  const kx = n.w / g.width
+  const ky = n.h / g.height
+  const accent = n.stroke
+  const radius = 10 * s
+  const box: Rect = { x: tx(n.x), y: ty(n.y), w: n.w * s, h: n.h * s }
+  const innerX = n.x + bw
+  const innerW = n.w - 2 * bw
+  const titleH = g.titleH * ky
+  const headerY = n.y + bw + titleH
+  const bottom = n.y + n.h - bw
+  const line = (x1: number, y1: number, x2: number, y2: number, color: string) =>
+    p.path([['M', tx(x1), ty(y1)], ['L', tx(x2), ty(y2)]], color, s, null)
+
+  p.shape('rectangle', box, n.fill, null, 0, radius)
+  if (t.solid) {
+    // Franja del título: esquinas de arriba redondeadas y de abajo rectas.
+    const bandH = bw + titleH
+    p.shape('rectangle', { x: box.x, y: box.y, w: box.w, h: bandH * s }, accent, null, 0, radius)
+    p.shape('rectangle', { x: box.x, y: ty(n.y + bandH / 2), w: box.w, h: (bandH / 2) * s }, accent, null, 0, 0)
+    p.shape('rectangle', { x: tx(innerX), y: ty(headerY), w: innerW * s, h: g.rowH[0] * ky * s }, mix(accent, n.fill, 0.14), null, 0, 0)
+  }
+
+  const text = (str: string, x: number, top: number, w: number, h: number, padX: number, padY: number, bold: boolean, size: number, color: string) => {
+    const paragraphs = (str || '').split('\n').map((l) => [{ text: l, bold: bold || undefined }])
+    let sz = size
+    let lines = wrapParagraphs(paragraphs, Math.max(w - 2 * padX, 4), { family: n.fontFamily, size: sz }, p.measure)
+    for (let tries = 0; tries < 6 && lines.length * sz * TG.lineHeight > h - 2 * padY + 0.5 && sz > size * 0.6; tries++) {
+      sz *= 0.92
+      lines = wrapParagraphs(paragraphs, Math.max(w - 2 * padX, 4), { family: n.fontFamily, size: sz }, p.measure)
+    }
+    const lineH = sz * TG.lineHeight
+    lines.forEach((l, i) => {
+      let cx = x + padX
+      const baseline = top + padY + i * lineH + (lineH - sz) / 2 + sz * ASCENT
+      for (const run of l.runs) {
+        if (run.text) p.text(run.text, tx(cx), ty(baseline), { family: n.fontFamily, size: sz * s, bold: run.bold, color })
+        cx += run.width
+      }
+    })
+  }
+
+  // Título.
+  text(t.title, innerX, n.y + bw, innerW, titleH, TG.titlePadX * kx, TG.titlePadY * ky, true, n.fontSize, t.solid ? readableOn(accent) : accent)
+  if (!t.solid) line(innerX, headerY, innerX + innerW, headerY, accent)
+
+  // Rejilla y celdas.
+  const grid = mix(accent, n.fill, 0.38)
+  const xs = [innerX]
+  for (const w of g.colW) xs.push(xs[xs.length - 1] + w * kx)
+  let y = headerY
+  ;[t.columns, ...t.rows].forEach((row, i) => {
+    const h = g.rowH[i] * ky
+    if (i > 0 || t.solid) line(innerX, y, innerX + innerW, y, grid)
+    row.forEach((cell, j) => {
+      text(cell, xs[j], y, xs[j + 1] - xs[j], h, TG.padX * kx, TG.padY * ky, i === 0, g.cellSize, n.textColor)
+    })
+    y += h
+  })
+  for (let j = 1; j < xs.length - 1; j++) line(xs[j], headerY, xs[j], bottom, grid)
+
+  // El marco, encima de todo.
+  p.shape('rectangle', box, null, accent, bw * s, radius)
+}
+
 export function drawPage(p: Painter, page: Page, o: DrawOptions) {
   p.beginPage(page.w, page.h, o.background)
   const { region, scale: s, area, section } = page
@@ -120,7 +208,8 @@ export function drawPage(p: Painter, page: Page, o: DrawOptions) {
   }
   for (const n of section.nodes) {
     if (!intersects(n, region)) continue
-    drawNode(p, n, tx, ty, s)
+    if (n.table) drawTable(p, n, tx, ty, s)
+    else drawNode(p, n, tx, ty, s)
   }
   p.restore()
 

@@ -18,6 +18,7 @@ export const LESSON_IDS = [
   'estilo',
   'panel',
   'lineas',
+  'tablas',
   'ordenar',
   'exportar',
   'fin',

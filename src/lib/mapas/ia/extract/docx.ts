@@ -46,7 +46,8 @@ export async function extraerDocx(file: File, { maxChars }: Opciones): Promise<E
         titulo = limpiarTexto(hijo.textContent ?? '').slice(0, 100) || undefined
       } else if (etiqueta === 'TR') {
         const celdas = Array.from(hijo.children).map((c) => limpiarTexto(c.textContent ?? ''))
-        const fila = celdas.filter(Boolean).join(' | ')
+        // Las celdas vacías se conservan: quitarlas descuadra las columnas de la tabla.
+        const fila = celdas.some(Boolean) ? celdas.join(' | ') : ''
         if (fila) lineas.push(fila)
         acumulado += fila.length
       } else if (BLOQUES.has(etiqueta)) {

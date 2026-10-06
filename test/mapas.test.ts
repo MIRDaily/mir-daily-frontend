@@ -750,3 +750,265 @@ test('sanitizeGraph, treeToGraph y la importación sanean los labels', () => {
   const tree = parseMapFile(JSON.stringify({ nodes: [{ id: 'r', parentId: null, text: evil }] })).doc
   assert.equal(toGraphDoc(tree).doc.nodes[0].data.label, '<b>Hola</b>')
 })
+
+// ---- Nodo tabla -----------------------------------------------------------
+
+import {
+  cleanCell,
+  insertColumn,
+  insertRow,
+  moveColumn,
+  moveRow,
+  removeColumn,
+  removeRow,
+  sanitizeTable,
+  setCell,
+  tableGeometry,
+  tableToLabel,
+  TABLE_GEOMETRY,
+  TABLE_LIMITS,
+  type MapTable,
+} from '@/lib/mapas/table'
+import { estimateTableSize } from '@/lib/mapas/layout'
+
+const TABLA: MapTable = {
+  title: 'Gota frente a pseudogota',
+  columns: ['', 'Gota', 'Pseudogota'],
+  rows: [
+    ['Cristal', 'Urato monosódico', 'Pirofosfato cálcico'],
+    ['Birrefringencia', 'Negativa', 'Positiva débil'],
+  ],
+}
+
+test('tabla: celdas en texto plano (sin HTML ni invisibles), acotadas y con pocos saltos', () => {
+  assert.equal(cleanCell('<img src=x onerror=alert(1)>Urato <b>monosódico</b>'), 'Urato monosódico')
+  assert.equal(cleanCell('a​b‮c\u{E0041}'), 'abc')
+  assert.equal(cleanCell('a\tb   c'), 'a b c')
+  assert.equal(cleanCell('1\n\n\n2\n3\n4\n5'), '1\n2\n3\n4 5')
+  assert.equal(cleanCell(42), '42')
+  assert.equal(cleanCell({ x: 1 }), '')
+  assert.equal(cleanCell('x'.repeat(500)).length, TABLE_LIMITS.maxCell)
+})
+
+test('tabla: sanitizeTable arregla filas irregulares, acota y rechaza lo que no es tabla', () => {
+  const t = sanitizeTable({
+    title: '<script>x</script>Título',
+    columns: ['A', 'B', 'C'],
+    rows: [['1'], ['1', '2', '3', '4', '5'], 'basura', [{ o: 1 }, 7, null]],
+  })!
+  assert.equal(t.title, 'Título')
+  assert.deepEqual(t.rows, [['1', '', ''], ['1', '2', '3 / 4 / 5'], ['', '', ''], ['', '7', '']])
+  assert.equal(sanitizeTable(null), null)
+  assert.equal(sanitizeTable({ columns: [] }), null)
+  assert.equal(sanitizeTable({ columns: 'A|B' }), null)
+  const grande = sanitizeTable({
+    columns: Array.from({ length: 20 }, (_, i) => `C${i}`),
+    rows: Array.from({ length: 100 }, () => Array.from({ length: 20 }, () => 'x'.repeat(100))),
+  })!
+  assert.equal(grande.columns.length, TABLE_LIMITS.maxColumns)
+  assert.ok(grande.rows.length <= TABLE_LIMITS.maxRows)
+  assert.ok(grande.rows.flat().join('').length <= TABLE_LIMITS.maxTotal)
+})
+
+test('tabla: el label es una copia segura en texto (título, cabecera y filas)', () => {
+  const l = tableToLabel({ title: 'A <b> & C', columns: ['x', 'y'], rows: [['1 < 2', 'línea\notra']] })
+  assert.equal(l, '<b>A &lt;b&gt; &amp; C</b><br>x | y<br>1 &lt; 2 | línea otra')
+  assert.equal(sanitizeLabelHtml(l), l)
+  const larga = tableToLabel({ title: 'T', columns: ['a'], rows: Array.from({ length: 40 }, () => ['z'.repeat(150)]) })
+  assert.ok(larga.length <= 4000 && larga.endsWith('…'))
+})
+
+test('tabla: insertar, borrar y mover filas y columnas', () => {
+  let t = insertRow(TABLA, 1)
+  assert.deepEqual(t.rows[1], ['', '', ''])
+  t = moveRow(t, 2, -1)
+  assert.equal(t.rows[1][0], 'Birrefringencia')
+  t = removeRow(t, 2)
+  assert.equal(t.rows.length, 2)
+  t = insertColumn(t, 1)
+  assert.deepEqual(t.columns, ['', '', 'Gota', 'Pseudogota'])
+  assert.ok(t.rows.every((r) => r.length === 4))
+  t = moveColumn(removeColumn(t, 1), 2, -1)
+  assert.deepEqual(t.columns, ['', 'Pseudogota', 'Gota'])
+  assert.equal(t.rows[0][1], 'Pirofosfato cálcico')
+  assert.equal(removeColumn({ title: '', columns: ['a'], rows: [] }, 0).columns.length, 1)
+  assert.equal(setCell(t, -1, 0, '<i>Rasgo</i>').columns[0], 'Rasgo')
+  // Los límites no se pasan.
+  const llena = { title: '', columns: Array(TABLE_LIMITS.maxColumns).fill('c'), rows: [] }
+  assert.equal(insertColumn(llena, 0), llena)
+})
+
+test('tabla: geometría con ancho máximo, columnas mínimas y filas que crecen con el texto', () => {
+  const g = tableGeometry(TABLA)
+  assert.equal(g.colW.length, 3)
+  assert.equal(g.rowH.length, 3)
+  assert.ok(g.width >= TABLE_GEOMETRY.minWidth && g.width <= TABLE_GEOMETRY.maxWidth)
+  const ancha = tableGeometry({ title: 'T', columns: ['a', 'b', 'c', 'd', 'e', 'f'], rows: [Array(6).fill('palabra '.repeat(30))] })
+  assert.ok(ancha.width <= TABLE_GEOMETRY.maxWidth + 0.5)
+  assert.ok(ancha.colW.every((w) => w >= TABLE_GEOMETRY.minCol - 0.5))
+  assert.ok(ancha.rowH[1] > ancha.rowH[0] * 3, 'la fila con mucho texto es más alta')
+  const size = estimateTableSize(TABLA)
+  assert.ok(size.w > 100 && size.h > 60)
+})
+
+test('tabla: árbol v1 → grafo (estilo de contorno, label de copia) y el layout la mide', () => {
+  const tree = {
+    version: 1 as const,
+    nodes: [
+      { id: 'r', parentId: null, text: 'Microcristales', category: 'general' as const },
+      { id: 't', parentId: 'r', text: 'Gota frente a pseudogota', category: 'diagnostico' as const, table: { columns: TABLA.columns, rows: TABLA.rows } },
+    ],
+  }
+  const doc = sanitizeDoc(tree)
+  assert.equal(doc.nodes[1].table?.title, 'Gota frente a pseudogota')
+  const g = treeToGraph(doc)
+  const n = g.nodes.find((x) => x.id === 't')!
+  assert.deepEqual(n.data.table?.rows, TABLA.rows)
+  assert.equal(n.data.label, tableToLabel(n.data.table!))
+  // Aunque cuelgue de la raíz (nivel 1), contorno del color de la categoría y no relleno macizo.
+  assert.equal(n.data.style.borderWidth, 2)
+  assert.equal(n.data.style.color, '#FFFFFF')
+  const boxes = computeLayout(doc)
+  assert.ok((boxes.get('t')?.w ?? 0) > 200, 'la caja de la tabla es la de la tabla, no la de su título')
+  // La raíz nunca es una tabla.
+  const raiz = sanitizeDoc({ nodes: [{ id: 'r', parentId: null, text: 'x', table: TABLA }] })
+  assert.equal(raiz.nodes[0].table, undefined)
+})
+
+test('tabla: sanitizeGraph regenera el label desde la tabla y descarta tablas rotas', () => {
+  const style = newGraphDoc().nodes[0].data.style
+  const g = sanitizeGraph({
+    version: 2,
+    nodes: [
+      { id: 'a', position: { x: 0, y: 0 }, data: { label: '<img src=x onerror=alert(1)>mentira', style, table: TABLA } },
+      { id: 'b', position: { x: 0, y: 0 }, data: { label: 'Texto', style, table: { columns: 'roto' } } },
+    ],
+    edges: [],
+  })
+  assert.equal(g.nodes[0].data.label, tableToLabel(TABLA))
+  assert.equal(g.nodes[1].data.table, undefined)
+  assert.equal(g.nodes[1].data.label, 'Texto')
+})
+
+test('tabla: exportar e importar JSON la conserva; un mapa sin tablas no cambia', () => {
+  const style = newGraphDoc().nodes[0].data.style
+  const doc = {
+    version: 2 as const,
+    nodes: [
+      { id: 'r', type: 'mindmap' as const, position: { x: 0, y: 0 }, data: { label: 'Raíz', style } },
+      { id: 't', type: 'mindmap' as const, position: { x: 300, y: 0 }, data: { label: tableToLabel(TABLA), style, parentId: 'r', table: TABLA } },
+    ],
+    edges: [],
+  }
+  const back = parseMapFile(serializeMap('Mapa', doc)).doc as typeof doc
+  assert.deepEqual(back.nodes[1].data.table, TABLA)
+  // Un grafo sin tablas sale idéntico (no se re-guarda ningún mapa existente por esto).
+  const sinTablas = { version: 2 as const, nodes: [doc.nodes[0]], edges: [] }
+  assert.deepEqual(sanitizeGraph(sinTablas), sinTablas)
+})
+
+test('tabla: la lista la cuenta, la dibuja y encuentra el texto de sus celdas', () => {
+  const style = newGraphDoc().nodes[0].data.style
+  const s = summarizeDoc({
+    version: 2,
+    nodes: [
+      { id: 'r', type: 'mindmap', position: { x: 0, y: 0 }, data: { label: 'Raíz', style } },
+      { id: 't', type: 'mindmap', position: { x: 300, y: 0 }, data: { label: 'x', style, parentId: 'r', table: TABLA } },
+    ],
+    edges: [],
+  })
+  assert.equal(s.tables, 1)
+  assert.ok(s.text.includes('pirofosfato calcico'))
+  const thumb = s.thumb!.nodes.find((n) => n.table)!
+  assert.equal(thumb.table!.lines.length, 3)
+})
+
+// ---- Exportar una tabla (PDF/PNG comparten drawPage) ------------------------
+
+import { drawPage, type Painter } from '@/lib/mapas/export/draw'
+
+function recordingPainter() {
+  const texts: { str: string; x: number; y: number; color: string; bold?: boolean }[] = []
+  const shapes: { fill: string | null; stroke: string | null }[] = []
+  let paths = 0
+  const p: Painter = {
+    measure: (text, font) => text.length * font.size * 0.55,
+    beginPage() {},
+    save() {},
+    restore() {},
+    clipRect() {},
+    shape(_k, _r, fill, stroke) {
+      shapes.push({ fill, stroke })
+    },
+    path(cmds) {
+      for (const c of cmds) for (const v of c.slice(1)) assert.ok(Number.isFinite(v as number))
+      paths += 1
+    },
+    text(str, x, y, font) {
+      texts.push({ str, x, y, color: font.color, bold: font.bold })
+    },
+  }
+  return { p, texts, shapes, paths: () => paths }
+}
+
+function tableSection(): Section {
+  const g = tableGeometry(TABLA)
+  return {
+    title: '',
+    edges: [],
+    nodes: [
+      {
+        id: 't',
+        parentId: null,
+        x: 100,
+        y: 50,
+        w: g.width,
+        h: g.height,
+        shape: 'rectangle',
+        fill: '#FFFFFF',
+        stroke: '#D9A441',
+        strokeWidth: 2,
+        textColor: '#2A2420',
+        fontFamily: 'Lexend',
+        fontSize: 14,
+        align: 'center',
+        paragraphs: [],
+        table: { ...TABLA, solid: true },
+      },
+    ],
+  }
+}
+
+const PAGE_OPTS = { background: null, mapTitle: 'M', withTitle: false, bare: true, dateLabel: '', pageNo: 1, pageCount: 1, ink: '#000', muted: '#999' }
+
+test('exportar: la tabla sale con todas sus celdas, dentro de su caja, con rejilla y franja', () => {
+  const section = tableSection()
+  const n = section.nodes[0]
+  const page = { section, region: { x: 0, y: 0, w: 1000, h: 1000 }, scale: 1, w: 1000, h: 1000, area: { x: 0, y: 0, w: 1000, h: 1000 }, clip: false }
+  const rec = recordingPainter()
+  drawPage(rec.p, page, PAGE_OPTS)
+  const all = rec.texts.map((t) => t.str).join(' ')
+  for (const cell of [TABLA.title, ...TABLA.columns, ...TABLA.rows.flat()].filter(Boolean)) {
+    for (const word of cell.split(' ')) assert.ok(all.includes(word), `falta «${word}» en «${all}»`)
+  }
+  for (const t of rec.texts) {
+    assert.ok(t.x >= n.x && t.x <= n.x + n.w, `x fuera de la caja: ${t.str}`)
+    assert.ok(t.y >= n.y && t.y <= n.y + n.h, `y fuera de la caja: ${t.str}`)
+  }
+  // Franja del título con el color de la categoría y título legible sobre ella (sobre el amarillo
+  // de «Diagnóstico», oscuro; como en pantalla); cabecera en negrita.
+  assert.ok(rec.shapes.some((s) => s.fill === '#D9A441'))
+  assert.equal(rec.texts.find((t) => t.str.startsWith('Gota'))?.color, '#2A2420')
+  assert.ok(rec.texts.find((t) => t.str === 'Pseudogota')?.bold)
+  assert.ok(rec.paths() >= 2 + 3, 'rayas entre filas y entre columnas')
+})
+
+test('exportar con ahorro de tinta: la tabla pierde la franja rellena y el título va en color', () => {
+  const section = applyInk(tableSection(), 'save')
+  assert.equal(section.nodes[0].table?.solid, false)
+  const page = { section, region: { x: 0, y: 0, w: 1000, h: 1000 }, scale: 1, w: 1000, h: 1000, area: { x: 0, y: 0, w: 1000, h: 1000 }, clip: false }
+  const rec = recordingPainter()
+  drawPage(rec.p, page, PAGE_OPTS)
+  assert.ok(!rec.shapes.some((s) => s.fill && s.fill !== '#FFFFFF'), 'sin rellenos de color')
+  assert.equal(rec.texts.find((t) => t.str.startsWith('Gota'))?.color, '#D9A441')
+})

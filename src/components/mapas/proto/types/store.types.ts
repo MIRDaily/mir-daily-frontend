@@ -1,4 +1,5 @@
 import type { CategoryStyles } from '@/lib/mapas/graph'
+import type { MapTable } from '@/lib/mapas/table'
 import type { NodeChange, EdgeChange, Connection } from '@xyflow/react'
 import type { MindMapNode, NodeData, NodeStyle } from './node.types'
 import type { MindMapEdge, EdgeData } from './edge.types'
@@ -17,6 +18,10 @@ export interface MindMapState {
   onNodesChange: (changes: NodeChange<MindMapNode>[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
   addNode: (parentId?: string, direction?: 'top' | 'bottom' | 'left' | 'right') => string
+  /** Tabla nueva colgando de `parentId` (o suelta). Devuelve su id. */
+  addTable: (parentId?: string) => string
+  /** Cambia la tabla de un nodo (y su label, que es su copia en texto). */
+  updateTable: (id: string, fn: (t: MapTable) => MapTable) => void
   deleteNode: (id: string) => void
   updateNodeData: (id: string, data: Partial<NodeData>) => void
   updateNodeStyle: (id: string, style: Partial<NodeStyle>) => void
@@ -39,7 +44,21 @@ export interface MindMapState {
 
 export type BgStyle = 'flat' | 'dots-light' | 'dots'
 
+/** Celda de una tabla que se está editando. Fila -2 = título, -1 = cabecera. */
+export type TableCell = {
+  id: string
+  r: number
+  c: number
+  /** Sube en cada apertura: reabre el editor aunque la celda sea la misma (con otro contenido). */
+  rev: number
+  /** Entrar con el contenido seleccionado (llegando con el teclado: lo que se escribe lo sustituye). */
+  select?: boolean
+}
+
 export interface UIState {
+  /** Celda activa de la tabla en edición (la del nodo `editingNodeId`). */
+  tableCell: TableCell | null
+  setTableCell: (cell: TableCell | null) => void
   stylePanelOpen: boolean
   /** Hay más de un nodo seleccionado: la barra de grupo sustituye a la de cada nodo. */
   multiSelect: boolean

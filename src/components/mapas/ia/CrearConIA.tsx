@@ -55,6 +55,9 @@ export default function CrearConIA({
   const [extraido, setExtraido] = useState<Extraido | null>(null)
   const [titulo, setTitulo] = useState('')
   const [modo, setModo] = useState<ModoIA>('esquema')
+  // Opción «Incluir tablas»: solo si el servidor la ofrece.
+  const [tablas, setTablas] = useState(false)
+  const conTablas = !!estado.opciones?.tablas && tablas
   const [error, setError] = useState<string | null>(null)
   const [progreso, setProgreso] = useState<{ hecho: number; total: number } | null>(null)
   const [segundos, setSegundos] = useState(0)
@@ -129,7 +132,13 @@ export default function CrearConIA({
     abortRef.current = ctl
     try {
       const r = await iaGenerar(
-        { titulo: titulo.trim(), modo, secciones: extraido.secciones, paginas: extraido.paginas },
+        {
+          titulo: titulo.trim(),
+          modo,
+          secciones: extraido.secciones,
+          paginas: extraido.paginas,
+          ...(conTablas ? { tablas: true as const } : {}),
+        },
         ctl.signal,
       )
       const id = await createMap(r.titulo, r.doc)
@@ -325,6 +334,25 @@ export default function CrearConIA({
                   )
                 })}
               </div>
+
+              {estado.opciones?.tablas && (
+                <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl bg-white px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={tablas}
+                    onChange={(e) => setTablas(e.target.checked)}
+                    style={{ accentColor: '#E8A598', width: 16, height: 16, marginTop: 2, flexShrink: 0 }}
+                  />
+                  <span>
+                    <span className="block text-sm font-extrabold text-[#2C3E50]">Incluir tablas</span>
+                    <span className="mt-0.5 block text-xs text-[#7D8A96]">
+                      La IA rehace, con los datos del texto, las tablas que comparan enfermedades (diagnóstico
+                      diferencial, tablas resumen) y los criterios con puntos. No copia imágenes: lo que solo esté en
+                      una imagen no se lee. Revisa las tablas que salgan de un PDF: sus columnas llegan desordenadas.
+                    </span>
+                  </span>
+                </label>
+              )}
 
               <p className="mt-4 text-xs text-[#7D8A96]">
                 Saldrán unos {fmt(nodosAprox)} nodos y tardará {segMin}–{segMax} segundos. Hoy te quedan {restantes} de{' '}

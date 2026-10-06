@@ -9,6 +9,7 @@ import { applyCategoryToNodes } from '@/components/mapas/proto/utils/categories'
 import { categoryForKey } from '@/lib/mapas/types'
 import { parentMap } from '@/components/mapas/proto/utils/tree'
 import { mirrorBranches, showUpToLevel, toggleBranch, toggleBranches } from '@/components/mapas/proto/utils/branches'
+import { addTableAndEdit } from '@/components/mapas/proto/utils/tables'
 import {
   addChildAndEdit,
   addSiblingAndEdit,
@@ -112,6 +113,14 @@ export function useMindMapShortcuts() {
           mirrorBranches(sel)
           return
         }
+      }
+
+      // ── Alt+T: tabla hija del nodo seleccionado (o suelta) ────────────────────
+      if (e.altKey && !isMod && e.code === 'KeyT' && !store.editingNodeId) {
+        e.preventDefault()
+        const sel = getNodes().filter((n) => n.selected && !n.hidden)
+        addTableAndEdit(sel.length === 1 ? sel[0].id : undefined)
+        return
       }
 
       const inCanvas = target === document.body || !!target.closest?.('.react-flow')

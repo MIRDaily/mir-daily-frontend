@@ -67,6 +67,7 @@ function build(ids: Set<string> | null, title: string): Section {
       fontSize: st.fontSize ?? 14,
       align: st.textAlign ?? 'center',
       paragraphs: parseLabel(n.data.label),
+      ...(n.data.table ? { table: { ...n.data.table, solid: true } } : {}),
     })
     included.add(n.id)
   }
@@ -93,7 +94,11 @@ export function collectSections(scope: Scope): Section[] {
     return [build(ids, 'Selección')]
   }
   // Una hoja por rama principal (los hijos de la raíz), más una portada con el mapa entero.
-  const labelOf = (id: string) => plainText(nodes.find((n) => n.id === id)?.data.label ?? '') || 'Sin título'
+  const labelOf = (id: string) => {
+    const n = nodes.find((x) => x.id === id)
+    // De una tabla, el título (su label es la tabla entera en texto).
+    return (n?.data.table ? n.data.table.title : plainText(n?.data.label ?? '')) || 'Sin título'
+  }
   const roots = nodes.filter((n) => !n.hidden && !parents.has(n.id))
   const sections: Section[] = [build(null, 'Mapa completo')]
   for (const root of roots) {

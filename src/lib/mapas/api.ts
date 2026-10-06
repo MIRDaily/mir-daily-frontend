@@ -15,6 +15,8 @@ export type MapSummary = {
   subject: string | null
   updated_at: string
   nodeCount: number
+  /** Nodos tabla del mapa. */
+  tableCount: number
   /** Mapa de ejemplo temporal repartido a todos (sql/2026-10-mapa-ejemplo-para-todos.sql): se marca con una asignatura reservada. */
   example: boolean
   /** Fijado arriba en la lista. */
@@ -56,6 +58,7 @@ export async function listMaps(): Promise<{ maps: MapSummary[]; pinSupported: bo
       subject: row.subject === EXAMPLE_SUBJECT ? null : ((row.subject as string | null) ?? null),
       updated_at: row.updated_at as string,
       nodeCount: docNodeCount(row.doc),
+      tableCount: sum.tables,
       example: row.subject === EXAMPLE_SUBJECT,
       pinned: row.pinned === true,
       thumb: sum.thumb,

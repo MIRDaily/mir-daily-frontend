@@ -8,6 +8,9 @@ export type SceneShape = 'rectangle' | 'pill' | 'circle' | 'diamond'
 
 export type Rect = { x: number; y: number; w: number; h: number }
 
+/** Nodo tabla. `solid`: franja del título y cabecera rellenas (en pantalla); sin relleno al ahorrar tinta. */
+export type SceneTable = { title: string; columns: string[]; rows: string[][]; solid: boolean }
+
 export type SceneNode = Rect & {
   id: string
   parentId: string | null
@@ -20,6 +23,7 @@ export type SceneNode = Rect & {
   fontSize: number
   align: 'left' | 'center' | 'right'
   paragraphs: Paragraph[]
+  table?: SceneTable
 }
 
 export type PathCmd =

@@ -22,6 +22,8 @@ export type ModoIA = 'esquema' | 'detalle'
 export type EstadoIA = {
   disponible: boolean
   modos: ModoIA[]
+  /** Opciones que entiende el servidor (uno antiguo no las manda). */
+  opciones?: { tablas?: boolean }
   limites: { maxChars: number; maxPaginas: number }
   cupo: {
     generacionesHoy: number

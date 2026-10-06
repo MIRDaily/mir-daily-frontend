@@ -104,6 +104,12 @@ function reparented(ctx: CheckCtx): boolean {
 
 const selectedNode = (ctx: CheckCtx) => ctx.nodes.find((n) => n.selected)
 
+/** Tablas que no estaban al empezar la práctica. */
+function newTables(ctx: CheckCtx) {
+  const before = new Set(ctx.base.nodes.map((n) => n.id))
+  return ctx.nodes.filter((n) => !before.has(n.id) && n.data.table)
+}
+
 function categoryChanged(ctx: CheckCtx): boolean {
   const was = new Map(ctx.base.nodes.map((n) => [n.id, n.data.category]))
   return ctx.nodes.some((n) => was.has(n.id) && was.get(n.id) !== n.data.category)
@@ -405,6 +411,36 @@ export const LESSONS: Lesson[] = [
       },
     ],
     done: { pose: 'celebracion', text: 'Si cambias la categoría de un nodo, la línea que llega a él toma el color de la categoría.' },
+  },
+  {
+    id: 'tablas',
+    title: 'Tablas',
+    intro: [
+      { pose: 'hablando', text: 'Para comparar varias cosas (un diagnóstico diferencial, unos criterios con puntos) una tabla se lee mejor que muchas ramas.' },
+      { pose: 'senalando', text: 'Una tabla es un nodo más: se mueve con su rama, se pliega y toma el color de su categoría.' },
+    ],
+    tasks: [
+      {
+        id: 'crear-tabla',
+        text: 'Selecciona un nodo y crea una tabla hija con Alt+T (o el botón «Tabla» de arriba)',
+        keys: ['Alt', 'T'],
+        check: (ctx) => newTables(ctx).length > 0,
+        glow: 'button[title^="Tabla hija"]',
+      },
+      {
+        id: 'celdas',
+        text: 'Escribe en dos celdas: doble clic en una y Tab para pasar a la siguiente',
+        keys: ['Tab'],
+        check: (ctx) =>
+          newTables(ctx).some((n) => [...n.data.table!.columns, ...n.data.table!.rows.flat()].filter((c) => c && !/^Columna \d$/.test(c)).length >= 2),
+      },
+      {
+        id: 'fila',
+        text: 'Añade una fila: Tab en la última celda o el botón de la barra que sale encima de la tabla',
+        check: (ctx) => newTables(ctx).some((n) => n.data.table!.rows.length > 2),
+      },
+    ],
+    done: { pose: 'celebracion', text: 'Con Alt y las flechas mueves la fila o la columna de la celda en la que estás.' },
   },
   {
     id: 'ordenar',

@@ -1,4 +1,5 @@
 import type { MapDoc, MapNode } from '@/lib/mapas/types'
+import { tableGeometry, type MapTable } from '@/lib/mapas/table'
 
 export type NodeBox = { x: number; y: number; w: number; h: number }
 
@@ -83,6 +84,13 @@ export function estimateSize(text: string, isRoot = false): { w: number; h: numb
   return { w, h: Math.max(MIN_H, rows * LINE_H + PAD_Y) }
 }
 
+/** Tamaño de un nodo tabla (misma geometría que al pintarla), con la medición registrada si la hay. */
+export function estimateTableSize(table: MapTable, fontSize = 14): { w: number; h: number } {
+  const m = measurer
+  const g = tableGeometry(table, m ? (text, bold, size) => (m(text, bold) * size) / 14 : undefined, fontSize)
+  return { w: Math.ceil(g.width), h: Math.ceil(g.height) }
+}
+
 /**
  * Árbol horizontal (raíz a la izquierda). Devuelve la caja de cada nodo VISIBLE:
  * los descendientes de un nodo plegado no aparecen.
@@ -113,7 +121,7 @@ export function computeLayout(doc: MapDoc, opts: LayoutOptions = {}): Map<string
 
   const measure = (n: MapNode, depth: number) => {
     depthOf.set(n.id, depth)
-    const size = opts.sizeOf?.(n.id) ?? estimateSize(n.text, n.parentId === null)
+    const size = opts.sizeOf?.(n.id) ?? (n.table ? estimateTableSize(n.table) : estimateSize(n.text, n.parentId === null))
     sizes.set(n.id, size)
     visibleKids(n).forEach((c) => measure(c, depth + 1))
     span.set(n.id, Math.max(size.h, childrenSpan(n)))

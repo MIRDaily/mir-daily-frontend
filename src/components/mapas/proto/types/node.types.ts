@@ -1,4 +1,5 @@
 import type { Node } from '@xyflow/react'
+import type { MapTable } from '@/lib/mapas/table'
 
 export type NodeShape = 'rectangle' | 'pill' | 'circle' | 'diamond'
 
@@ -31,6 +32,8 @@ export interface NodeData extends Record<string, unknown> {
   childSide?: 'left' | 'right'
   /** Categoría MIR (definición, clínica…): semántica del nodo, el estilo es aparte. */
   category?: string
+  /** Nodo tabla: `label` es una copia en texto de la tabla (la regenera `updateTable`). */
+  table?: MapTable
 }
 
 export type MindMapNode = Node<NodeData, 'mindmap'>

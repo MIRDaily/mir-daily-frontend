@@ -25,7 +25,10 @@ function execFmt(cmd: string) {
 
 /** Solo monta el contenido mientras se edita un texto: el resto del tiempo no vigila los nodos. */
 export function TextFormatPopup() {
-  const editing = useMindMapStore((s) => s.editingNodeId !== null)
+  // En una tabla las celdas son texto plano y la tabla tiene su propia barra: no hay formato.
+  const editing = useMindMapStore(
+    (s) => s.editingNodeId !== null && !s.nodes.find((n) => n.id === s.editingNodeId)?.data.table,
+  )
   return editing ? <TextFormatBody /> : null
 }
 

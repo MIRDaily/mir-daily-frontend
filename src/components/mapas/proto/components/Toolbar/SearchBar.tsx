@@ -150,7 +150,8 @@ function SearchBox() {
       const cur: Range[] = []
       for (const id of matches) {
         const node = document.querySelector(`.mapa-root .react-flow__node[data-id="${id}"]`)
-        const label = node?.querySelector('.node-label')
+        // En un nodo tabla se resalta dentro de sus celdas.
+        const label = node?.querySelector('.node-label, .node-table')
         if (!node || !label) continue
         if (!api) {
           node.classList.add(id === current ? CURRENT : MATCH)

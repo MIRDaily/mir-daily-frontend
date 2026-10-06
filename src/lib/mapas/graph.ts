@@ -1,5 +1,6 @@
 import { sanitizeLabelHtml } from '@/lib/mapas/labelHtml'
 import { computeLayout } from '@/lib/mapas/layout'
+import { sanitizeTable, tableToLabel, type MapTable } from '@/lib/mapas/table'
 
 // Margen extra entre hermanos: [hijos de la raíz = BLOQUES, hijos de los bloques, ...].
 // Separa los bloques de un mapa grande (p. ej. generado con IA) para que no se pegue todo.
@@ -50,6 +51,8 @@ export type GraphNode = {
     /** Rama plegada en el editor. */
     collapsed?: boolean
     category?: MapCategoryId
+    /** Nodo tabla: `label` es entonces una copia en texto de la tabla (ver `table.ts`). */
+    table?: MapTable
   }
 }
 
@@ -203,6 +206,14 @@ export function styleForCategory(
   return out
 }
 
+/**
+ * Estilo de serie de un nodo tabla: el de un nodo de detalle (contorno del color de la categoría),
+ * esté donde esté. Un relleno macizo con letra blanca (el de los bloques) no sirve para una tabla.
+ */
+export function styleForTable(category: MapCategoryId): GraphNodeStyle {
+  return styleForNode(2, category, '')
+}
+
 /** Título de una categoría: el que le ha puesto el usuario o el de serie. */
 export function categoryLabel(category: MapCategoryId, overrides?: CategoryStyles): string {
   return overrides?.[category]?.label?.trim() || MAP_CATEGORIES[category].label
@@ -249,7 +260,7 @@ export function treeToGraph(tree: MapDoc): GraphDoc {
 
   const nodes: GraphNode[] = doc.nodes.map((n) => {
     const level = levelOf(n)
-    const style = styleForNode(level, n.category, n.text)
+    const style = n.table ? styleForTable(n.category) : styleForNode(level, n.category, n.text)
     const box = boxes.get(n.id)
     const isCircle = style.shape === 'circle'
     return {
@@ -259,10 +270,11 @@ export function treeToGraph(tree: MapDoc): GraphDoc {
       ...(isCircle ? { width: ROOT_CIRCLE, height: ROOT_CIRCLE } : {}),
       data: {
         // El texto del árbol (IA, archivo importado) se pinta como HTML: se sanea igual.
-        label: sanitizeLabelHtml(n.text),
+        label: n.table ? tableToLabel(n.table) : sanitizeLabelHtml(n.text),
         style,
         ...(n.parentId ? { parentId: n.parentId } : {}),
         category: n.category,
+        ...(n.table ? { table: n.table } : {}),
       },
     }
   })
@@ -382,6 +394,8 @@ export function sanitizeGraph(raw: unknown): GraphDoc {
         : undefined
     const w = typeof r.width === 'number' && Number.isFinite(r.width) ? num(r.width, 20, 2000, 0) : 0
     const h = typeof r.height === 'number' && Number.isFinite(r.height) ? num(r.height, 20, 2000, 0) : 0
+    // Tabla: se sanea entera y su label se REGENERA desde ella (no se fía del guardado).
+    const table = sanitizeTable(data.table)
     nodes.push({
       id,
       type: 'mindmap',
@@ -389,11 +403,12 @@ export function sanitizeGraph(raw: unknown): GraphDoc {
       ...(w ? { width: w } : {}),
       ...(h ? { height: h } : {}),
       data: {
-        label: sanitizeLabelHtml(str(data.label, 4000, '')),
+        label: table ? tableToLabel(table) : sanitizeLabelHtml(str(data.label, 4000, '')),
         style: sanitizeStyle(data.style),
         ...(typeof data.parentId === 'string' ? { parentId: data.parentId.slice(0, 80) } : {}),
         ...(category ? { category } : {}),
         ...(data.collapsed === true ? { collapsed: true } : {}),
+        ...(table ? { table } : {}),
       },
     })
   }
@@ -450,7 +465,7 @@ export function sanitizeGraph(raw: unknown): GraphDoc {
 // Autoordenado de un grafo (usa la jerarquía lógica, no las posiciones)
 // ---------------------------------------------------------------------------
 
-type LayoutNode = { id: string; data: { label: string; parentId?: string } }
+type LayoutNode = { id: string; data: { label: string; parentId?: string; table?: MapTable } }
 type LayoutEdge = { source: string; target: string }
 
 /**
@@ -510,6 +525,7 @@ export function autoLayoutGraph(
         parentId: n.id === rootId ? null : (parentOf.get(n.id) as string),
         text: n.data.label,
         category: 'general' as const,
+        ...(n.data.table ? { table: n.data.table } : {}),
       })),
     }
     // El array debe empezar por la raíz y agrupar hijos: se ordena en profundidad.

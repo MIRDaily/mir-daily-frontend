@@ -58,7 +58,15 @@ export function applyInk(section: Section, mode: InkMode): Section {
       outline = gray(parseColor(outline))
       text = gray(parseColor(text), 0.25)
     }
-    return { ...n, fill: '#FFFFFF', stroke: outline, strokeWidth: width, textColor: text }
+    return {
+      ...n,
+      fill: '#FFFFFF',
+      stroke: outline,
+      strokeWidth: width,
+      textColor: text,
+      // Tablas: sin franja ni cabecera rellenas; el título va en el color del contorno.
+      ...(n.table ? { table: { ...n.table, solid: false } } : {}),
+    }
   })
   const edges = section.edges.map((e) => {
     let color = darkenIfPale(e.color, '#7D8A96')

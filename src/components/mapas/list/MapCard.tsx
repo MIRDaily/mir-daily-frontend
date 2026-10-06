@@ -71,7 +71,8 @@ export function MapCard({ map, pinSupported, renaming, onStartRename, onRename, 
           </Link>
         )}
         <p className="text-xs font-medium text-[#7D8A96]">
-          {map.nodeCount} {map.nodeCount === 1 ? 'nodo' : 'nodos'} · {formatDate(map.updated_at)}
+          {map.nodeCount} {map.nodeCount === 1 ? 'nodo' : 'nodos'}
+          {map.tableCount > 0 ? ` · ${map.tableCount} ${map.tableCount === 1 ? 'tabla' : 'tablas'}` : ''} · {formatDate(map.updated_at)}
         </p>
         <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
           {subj && (

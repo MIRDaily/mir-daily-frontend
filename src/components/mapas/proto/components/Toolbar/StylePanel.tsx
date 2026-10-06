@@ -92,6 +92,10 @@ function StylePanelBody() {
     useShallow((s) => s.nodes.filter((n) => targetIds.includes(n.id)).map((n) => n.data.category)),
   )
   const updateNodesStyle = useMindMapStore((s) => s.updateNodesStyle)
+  // Las tablas no tienen forma (son siempre un recuadro): con solo tablas, la sección lo dice.
+  const onlyTables = useMindMapStore(
+    (s) => targetIds.length > 0 && targetIds.every((tid) => !!s.nodes.find((n) => n.id === tid)?.data.table),
+  )
   const categoryStyles = useUIStore((s) => s.categoryStyles)
   const t = useTheme()
 
@@ -254,6 +258,9 @@ function StylePanelBody() {
 
           {/* Forma */}
           <Section label="Forma" textMuted={t.textMuted}>
+            {onlyTables ? (
+              <p style={{ margin: 0, fontSize: 11, color: t.textMuted }}>Las tablas son siempre un recuadro.</p>
+            ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 5 }}>
               {SHAPES.map((sh) => {
                 const isActive = shared('shape') === sh.value
@@ -287,6 +294,7 @@ function StylePanelBody() {
                 )
               })}
             </div>
+            )}
           </Section>
 
           {/* Relleno */}

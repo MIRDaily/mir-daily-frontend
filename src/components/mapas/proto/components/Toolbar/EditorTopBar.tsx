@@ -15,6 +15,7 @@ import {
   Shapes,
   SlidersHorizontal,
   Sun,
+  Table2,
   Undo2,
 } from 'lucide-react'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
@@ -22,6 +23,7 @@ import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import { showUpToLevel } from '@/components/mapas/proto/utils/branches'
+import { addTableAndEdit } from '@/components/mapas/proto/utils/tables'
 import type { BgStyle } from '@/components/mapas/proto/types/store.types'
 
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'error'
@@ -60,6 +62,12 @@ export function EditorTopBar({ title, onTitleChange, save, onRetry, statusText, 
       const node = useMindMapStore.getState().nodes.find((n) => n.id === newId)
       if (node) void setCenter(node.position.x, node.position.y, { duration: 600, zoom: 1 })
     }, 150)
+  }
+
+  // Tabla hija del nodo seleccionado (si hay uno solo); si no, suelta.
+  const addTable = () => {
+    const sel = useMindMapStore.getState().nodes.filter((n) => n.selected && !n.hidden)
+    addTableAndEdit(sel.length === 1 ? sel[0].id : undefined)
   }
 
   const status =
@@ -144,6 +152,9 @@ export function EditorTopBar({ title, onTitleChange, save, onRetry, statusText, 
       <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
         <Btn t={t} onClick={addNode} title="Nuevo nodo sin relaciones (N, o Alt+N)" tone="accent" label="Añadir">
           <Plus size={16} />
+        </Btn>
+        <Btn t={t} onClick={addTable} title="Tabla hija del nodo seleccionado, o suelta (Alt+T)" label="Tabla">
+          <Table2 size={16} />
         </Btn>
         <Sep t={t} />
         <Btn t={t} onClick={() => useHistoryStore.getState().undo()} title="Deshacer (Ctrl+Z)">

@@ -1,7 +1,7 @@
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
-import { categoryAccent, styleForCategory, styleForNode } from '@/lib/mapas/graph'
+import { categoryAccent, styleForCategory, styleForNode, styleForTable } from '@/lib/mapas/graph'
 import { depths } from '@/components/mapas/proto/utils/branches'
 import type { MapCategoryId } from '@/lib/mapas/types'
 
@@ -26,7 +26,8 @@ export function resetNodesStyle(ids: string[]) {
       if (!targets.has(n.id)) return n
       const category = (n.data.category ?? 'general') as MapCategoryId
       const plain = n.data.label.replace(/<[^>]*>/g, '')
-      const base = styleForNode(depth.get(n.id) ?? 1, category, plain)
+      // Una tabla vuelve al estilo de tabla (contorno), esté al nivel que esté.
+      const base = n.data.table ? styleForTable(category) : styleForNode(depth.get(n.id) ?? 1, category, plain)
       return { ...n, data: { ...n.data, style: styleForCategory(base, category, overrides) } }
     }),
   }))
@@ -46,7 +47,9 @@ export function applyCategoryToNodes(ids: string[], category: MapCategoryId) {
       if (!targets.has(n.id)) return n
       // Lo que fijaba la categoría anterior y no fija la nueva vuelve a lo natural del nodo.
       const was = overrides[(n.data.category ?? 'general') as MapCategoryId]
-      const natural = styleForNode(depth.get(n.id) ?? 1, category, n.data.label.replace(/<[^>]*>/g, ''))
+      const natural = n.data.table
+        ? styleForTable(category)
+        : styleForNode(depth.get(n.id) ?? 1, category, n.data.label.replace(/<[^>]*>/g, ''))
       return {
         ...n,
         data: { ...n.data, category, style: styleForCategory(n.data.style, category, overrides, { prev: was, natural }) },
