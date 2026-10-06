@@ -1308,3 +1308,25 @@ test('tope de caracteres: editar no deja pasar de él, así la tabla no pierde f
   // Y al volver a cargarla no se pierde nada.
   assert.deepEqual(sanitizeTable(t), t)
 })
+
+// ---- Popup de la tabla: bloque de varias celdas ------------------------------------------------
+
+import { cellRange, fillRange, gridToHtml, gridToTsv, rangeCells } from '@/lib/mapas/table'
+
+test('bloque: esquinas en cualquier orden, su texto, vaciarlo y rellenarlo', () => {
+  const g = cellRange([1, 2], [-1, 1])
+  assert.deepEqual(g, { r1: -1, c1: 1, r2: 1, c2: 2 })
+  assert.deepEqual(rangeCells(TABLA, g), [['Gota', 'Pseudogota'], ['Urato monosódico', 'Pirofosfato cálcico'], ['Negativa', 'Positiva débil']])
+  const vacia = fillRange(TABLA, cellRange([0, 1], [1, 2]))
+  assert.deepEqual(vacia.rows, [['Cristal', '', ''], ['Birrefringencia', '', '']])
+  assert.deepEqual(vacia.columns, TABLA.columns)
+  assert.deepEqual(fillRange(TABLA, cellRange([0, 0], [1, 0]), '<b>x</b>').rows.map((r) => r[0]), ['x', 'x'])
+})
+
+test('copiar un bloque: lo que entienden Excel y Word, y se vuelve a pegar igual', () => {
+  const celdas = [['BNP', '125\n(edad)'], ['"Gota" úrica', 'a\tb'], ['<b>', '']]
+  const tsv = gridToTsv(celdas)
+  assert.equal(tsv, 'BNP\t"125\n(edad)"\n"""Gota"" úrica"\t"a\tb"\n<b>\t')
+  assert.deepEqual(parseClipboardGrid(tsv), celdas)
+  assert.equal(gridToHtml([['<b>', 'a\nb']]), '<table><tr><td>&lt;b&gt;</td><td>a<br>b</td></tr></table>')
+})

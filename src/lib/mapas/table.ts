@@ -264,6 +264,43 @@ export function parseClipboardGrid(text: string): string[][] {
   return rows
 }
 
+/** Bloque de celdas (fila -1 = cabecera), con r1 ≤ r2 y c1 ≤ c2. */
+export type CellRange = { r1: number; c1: number; r2: number; c2: number }
+
+/** El bloque entre dos esquinas cualesquiera. */
+export function cellRange(a: [number, number], b: [number, number]): CellRange {
+  return { r1: Math.min(a[0], b[0]), c1: Math.min(a[1], b[1]), r2: Math.max(a[0], b[0]), c2: Math.max(a[1], b[1]) }
+}
+
+/** El texto de las celdas del bloque, fila a fila. */
+export function rangeCells(t: MapTable, g: CellRange): string[][] {
+  const out: string[][] = []
+  for (let r = g.r1; r <= g.r2; r++) out.push((r < 0 ? t.columns : t.rows[r] ?? []).slice(g.c1, g.c2 + 1))
+  return out
+}
+
+/** Pone el mismo texto en todas las celdas del bloque ('' = vaciarlas). */
+export function fillRange(t: MapTable, g: CellRange, value = ''): MapTable {
+  let out = t
+  for (let r = g.r1; r <= g.r2; r++) for (let c = g.c1; c <= g.c2; c++) out = setCell(out, r, c, value)
+  return out
+}
+
+/**
+ * Celdas en el formato que entienden Excel y Word al pegar: tabuladores y saltos de línea, con la
+ * celda entre comillas si lleva alguno de los dos o empieza por comilla (como hace Excel).
+ */
+export function gridToTsv(grid: string[][]): string {
+  const cell = (s: string) => (/[\t\n]|^"/.test(s) ? `"${s.replace(/"/g, '""')}"` : s)
+  return grid.map((r) => r.map(cell).join('\t')).join('\n')
+}
+
+/** Las mismas celdas como tabla HTML (texto escapado), para pegar con forma de tabla en Word. */
+export function gridToHtml(grid: string[][]): string {
+  const td = (s: string) => `<td>${escapeHtml(s).replace(/\n/g, '<br>')}</td>`
+  return `<table>${grid.map((r) => `<tr>${r.map(td).join('')}</tr>`).join('')}</table>`
+}
+
 /**
  * Pega un bloque de celdas desde la celda (row, col) (fila -1 = cabecera): la tabla crece en filas
  * y columnas hasta sus topes. `cut`: algo no ha cabido (por filas, columnas o caracteres).

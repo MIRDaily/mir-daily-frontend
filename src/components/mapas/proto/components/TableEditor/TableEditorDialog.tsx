@@ -29,8 +29,14 @@ import { readableOn, tableAccent, withAlpha } from '@/components/mapas/proto/uti
 import type { TableEditorTarget } from '@/components/mapas/proto/types/store.types'
 import type { NodeStyle } from '@/components/mapas/proto/types/node.types'
 import {
+  cellRange,
   cellStyleOf,
   cleanCell,
+  fillRange,
+  gridToHtml,
+  gridToTsv,
+  rangeCells,
+  type CellRange,
   insertColumn,
   insertRow,
   moveColumn,
@@ -54,7 +60,8 @@ import {
 // guarda en el mapa como UN paso de deshacer; «Descartar» la tira. Dentro tiene su propio
 // deshacer (Ctrl+Z / Ctrl+Y). La rejilla va a tamaño fijo y legible, sin depender del zoom del
 // lienzo. Se mueve como antes en el nodo: Tab, Enter y flechas; Alt+flechas mueve la fila o la
-// columna. Pegar celdas de Excel o Word las reparte desde la celda activa.
+// columna. Pegar celdas de Excel o Word las reparte desde la celda activa. Arrastrar, Mayús+clic o
+// Mayús+flechas seleccionan un bloque: Supr lo vacía, Ctrl+C/X lo copia y el estilo se le aplica.
 
 type Theme = ReturnType<typeof useTheme>
 
@@ -68,7 +75,24 @@ export function TableEditorDialog() {
 
 // ---- editor de una celda ---------------------------------------------------------------------
 
-type Move = 'next' | 'prev' | 'up' | 'down' | 'enter' | 'save' | 'undo' | 'redo' | 'rowUp' | 'rowDown' | 'colLeft' | 'colRight'
+type Move =
+  | 'next'
+  | 'prev'
+  | 'up'
+  | 'down'
+  | 'enter'
+  | 'save'
+  | 'undo'
+  | 'redo'
+  | 'rowUp'
+  | 'rowDown'
+  | 'colLeft'
+  | 'colRight'
+  // Mayús+flecha desde el borde del texto: empieza a seleccionar celdas.
+  | 'extUp'
+  | 'extDown'
+  | 'extLeft'
+  | 'extRight'
 
 /** Lo que el popup necesita del editor abierto: su texto y poder soltarlo sin efectos. */
 type ActiveEditor = { value: () => string; close: () => void }
@@ -204,14 +228,17 @@ function CellEditor({ initial, seed, selectAll, multiline, onMove, onCommit, onG
         } else if (e.altKey && !mod && k.startsWith('Arrow')) {
           e.preventDefault()
           finish(k === 'ArrowUp' ? 'rowUp' : k === 'ArrowDown' ? 'rowDown' : k === 'ArrowLeft' ? 'colLeft' : 'colRight')
-        } else if (!e.shiftKey && !mod && k.startsWith('Arrow')) {
+        } else if (!mod && k.startsWith('Arrow')) {
+          // Sin Mayús, salta de celda; con Mayús, selecciona celdas. Solo desde el borde del texto
+          // y sin texto seleccionado: dentro del texto, las flechas (y Mayús) son las de siempre.
           const c = caret()
           if (!c) return
+          const s = e.shiftKey
           const move: Move | null =
-            k === 'ArrowUp' && c.firstLine ? 'up'
-              : k === 'ArrowDown' && c.lastLine ? 'down'
-                : k === 'ArrowLeft' && c.start ? 'prev'
-                  : k === 'ArrowRight' && c.end ? 'next'
+            k === 'ArrowUp' && c.firstLine ? (s ? 'extUp' : 'up')
+              : k === 'ArrowDown' && c.lastLine ? (s ? 'extDown' : 'down')
+                : k === 'ArrowLeft' && c.start ? (s ? 'extLeft' : 'prev')
+                  : k === 'ArrowRight' && c.end ? (s ? 'extRight' : 'next')
                     : null
           if (move) {
             e.preventDefault()
@@ -256,10 +283,30 @@ function EditorBody({ target }: { target: TableEditorTarget }) {
     return { r, c, rev: 0, select: target.select, seed: target.seed }
   })
   const activeRef = useRef(active)
-  const go = (r: number, c: number, select = true) => {
-    const next = { r, c, rev: activeRef.current.rev + 1, select, seed: null }
+
+  // Selección de varias celdas: la activa es una esquina (el ancla) y `sel`, la otra. Mientras
+  // hay un bloque, no hay editor abierto: el teclado lo recibe la rejilla (Supr, Ctrl+C, …).
+  const [sel, setSelState] = useState<{ fr: number; fc: number } | null>(null)
+  const selRef = useRef(sel)
+  const setSel = (v: { fr: number; fc: number } | null) => {
+    selRef.current = v
+    setSelState(v)
+  }
+  const rejilla = useRef<HTMLDivElement>(null)
+  const arrastrando = useRef(false)
+  /** El bloque seleccionado (null si solo hay una celda). */
+  const rangoActual = (): CellRange | null => {
+    const s = selRef.current
+    const a = activeRef.current
+    return s && a.r >= -1 ? cellRange([a.r, a.c], [s.fr, s.fc]) : null
+  }
+
+  /** Abre el editor en una celda (y quita la selección de bloque, si la había). */
+  const go = (r: number, c: number, select = true, seed: string | null = null) => {
+    const next = { r, c, rev: activeRef.current.rev + 1, select, seed }
     activeRef.current = next
     setActiveState(next)
+    if (selRef.current) setSel(null)
   }
 
   const editor = useRef<ActiveEditor | null>(null)
@@ -331,9 +378,88 @@ function EditorBody({ target }: { target: TableEditorTarget }) {
   /** Clic en otra celda: guarda la abierta y abre esa con el cursor al final. */
   const abrir = (r: number, c: number) => {
     const a = activeRef.current
-    if (a.r === r && a.c === c && editor.current) return
+    if (a.r === r && a.c === c && editor.current && !selRef.current) return
     guardarEditor(true)
     go(r, c, false)
+  }
+
+  /** Lleva la otra esquina del bloque a (fr, fc): arrastrar, Mayús+clic, Mayús+flechas. */
+  const extender = (fr: number, fc: number) => {
+    const a = activeRef.current
+    if (a.r < -1) return
+    const d = histRef.current.draft
+    const r = Math.max(-1, Math.min(fr, d.rows.length - 1))
+    const c = Math.max(0, Math.min(fc, d.columns.length - 1))
+    if (r === a.r && c === a.c) {
+      // De vuelta a una sola celda: se vuelve a editar.
+      if (selRef.current) go(a.r, a.c, false)
+      return
+    }
+    if (!selRef.current) guardarEditor(true)
+    setSel({ fr: r, fc: c })
+    rejilla.current?.focus({ preventScroll: true })
+    requestAnimationFrame(() => rejilla.current?.querySelector(`[data-celda="${r}:${c}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
+  }
+
+  const copiar = (e: React.ClipboardEvent, cortar: boolean) => {
+    const g = rangoActual()
+    if (!g) return
+    e.preventDefault()
+    const celdas = rangeCells(histRef.current.draft, g)
+    e.clipboardData.setData('text/plain', gridToTsv(celdas))
+    e.clipboardData.setData('text/html', gridToHtml(celdas))
+    if (cortar) change((x) => fillRange(x, g))
+  }
+
+  const pegarEnBloque = (e: React.ClipboardEvent) => {
+    const g = rangoActual()
+    if (!g) return
+    e.preventDefault()
+    const grid = parseClipboardGrid(e.clipboardData.getData('text/plain'))
+    if (!grid.length) return
+    // Un solo valor rellena todo el bloque; varias celdas se pegan desde su esquina.
+    if (grid.length === 1 && grid[0].length === 1) return change((x) => fillRange(x, g, grid[0][0]))
+    const { table, cut } = pasteGrid(histRef.current.draft, g.r1, g.c1, grid)
+    change(() => table)
+    if (cut) avisar('Parte de lo pegado no cabe en la tabla.')
+  }
+
+  /** Teclado con un bloque seleccionado (el foco en la rejilla, no en una celda). */
+  const teclaEnBloque = (e: React.KeyboardEvent) => {
+    if ((e.target as HTMLElement).isContentEditable) return
+    const g = rangoActual()
+    const s = selRef.current
+    if (!g || !s) return
+    const a = activeRef.current
+    const k = e.key
+    const mod = e.ctrlKey || e.metaKey
+    const d = histRef.current.draft
+    const delta: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }
+    if (delta[k] && !mod && !e.altKey) {
+      e.preventDefault()
+      const [dr, dc] = delta[k]
+      if (e.shiftKey) return extender(s.fr + dr, s.fc + dc)
+      const [nr, nc] = clamp(d, Math.max(-1, a.r + dr), Math.max(0, a.c + dc))
+      return go(nr, nc)
+    }
+    if (k === 'Delete' || k === 'Backspace') {
+      e.preventDefault()
+      return change((x) => fillRange(x, g))
+    }
+    if (mod && !e.altKey && k.toLowerCase() === 'a') {
+      e.preventDefault()
+      go(-1, 0)
+      return extender(d.rows.length - 1, d.columns.length - 1)
+    }
+    if (k === 'Enter' || k === 'F2' || k === 'Tab') {
+      e.preventDefault()
+      return go(a.r, a.c, false)
+    }
+    // Escribir sustituye la celda del ancla, como en una hoja de cálculo.
+    if (!mod && !e.altKey && k.length === 1) {
+      e.preventDefault()
+      go(a.r, a.c, false, k)
+    }
   }
 
   const onMove = (r: number, c: number, value: string, move: Move) => {
@@ -347,6 +473,18 @@ function EditorBody({ target }: { target: TableEditorTarget }) {
       case 'undo':
       case 'redo':
         return historia(move)
+      case 'extUp':
+      case 'extDown':
+      case 'extLeft':
+      case 'extRight': {
+        // El título no entra en un bloque.
+        if (r === -2) return go(r, c, false)
+        const [dr, dc] = { extUp: [-1, 0], extDown: [1, 0], extLeft: [0, -1], extRight: [0, 1] }[move]
+        extender(r + dr, c + dc)
+        // En el borde de la tabla no hay a dónde ampliar: se sigue editando.
+        if (!selRef.current) go(r, c, false)
+        return
+      }
       case 'next':
         if (r === -2) return go(-1, 0)
         if (c + 1 < cols) return go(r, c + 1)
@@ -402,13 +540,16 @@ function EditorBody({ target }: { target: TableEditorTarget }) {
     go(nr, nc)
   }
 
-  // Teclado fuera de una celda (el foco en un botón): Esc guarda y cierra; Ctrl+Z / Ctrl+Y.
+  // Teclado fuera de una celda (el foco en un botón): Esc guarda y cierra (o, con un bloque
+  // seleccionado, lo quita); Ctrl+Z / Ctrl+Y.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
         e.stopPropagation()
-        cerrar(true)
+        const a = activeRef.current
+        if (selRef.current) go(a.r, a.c, false)
+        else cerrar(true)
         return
       }
       if ((e.target as HTMLElement | null)?.isContentEditable) return
@@ -422,6 +563,15 @@ function EditorBody({ target }: { target: TableEditorTarget }) {
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   })
+
+  // Arrastrar para seleccionar termina al soltar el botón, esté donde esté el ratón.
+  useEffect(() => {
+    const up = () => {
+      arrastrando.current = false
+    }
+    window.addEventListener('mouseup', up)
+    return () => window.removeEventListener('mouseup', up)
+  }, [])
 
   // La tabla ya no existe (no debería pasar: el lienzo queda tapado): se cierra sin más.
   useEffect(() => {
@@ -465,36 +615,95 @@ function EditorBody({ target }: { target: TableEditorTarget }) {
         : draft.colStyles?.[ac]) ?? {}
   const negritaDe = (a: Alcance) =>
     a === 'celda' ? cellStyleOf(draft, ar, ac).bold === true : a === 'fila' ? estiloDe('fila').bold ?? ar === -1 : estiloDe('columna').bold === true
+  // Bloque seleccionado (o la celda activa sola): el estilo se aplica a todas sus celdas, filas o
+  // columnas; lo que muestra el menú es lo del ancla.
+  const bloque: CellRange | null = sel && !enTitulo ? cellRange([ar, ac], [sel.fr, sel.fc]) : null
+  const zona: CellRange = bloque ?? { r1: ar, c1: ac, r2: ar, c2: ac }
+  const enBloque = (r: number, c: number) => !!bloque && r >= bloque.r1 && r <= bloque.r2 && c >= bloque.c1 && c <= bloque.c2
   const cambiarEstilo = (cambio: Partial<CellStyle> | null) => {
     if (enTitulo || !menu) return
     // Lo escrito se guarda antes: así Ctrl+Z deshace los pasos en el orden en que se dieron.
-    guardarEditor(false)
-    if (menu === 'celda') change((x) => setCellStyle(x, ar, ac, cambio))
-    else if (menu === 'fila') change((x) => setRowStyle(x, ar, cambio))
-    else change((x) => setColStyle(x, ac, cambio))
+    if (!bloque) guardarEditor(false)
+    change((x) => {
+      let y = x
+      if (menu === 'celda') {
+        for (let r = zona.r1; r <= zona.r2; r++) for (let c = zona.c1; c <= zona.c2; c++) y = setCellStyle(y, r, c, cambio)
+      } else if (menu === 'fila') {
+        for (let r = zona.r1; r <= zona.r2; r++) y = setRowStyle(y, r, cambio)
+      } else {
+        for (let c = zona.c1; c <= zona.c2; c++) y = setColStyle(y, c, cambio)
+      }
+      return y
+    })
+  }
+  const nFilas = zona.r2 - zona.r1 + 1
+  const nCols = zona.c2 - zona.c1 + 1
+  const rotulos: Record<Alcance, string> = {
+    celda: bloque ? `${nFilas * nCols} celdas` : 'Celda',
+    fila: nFilas > 1 ? `${nFilas} filas` : ar === -1 ? 'Cabecera' : `Fila ${ar + 1}`,
+    columna: nCols > 1 ? `${nCols} columnas` : `Columna ${ac + 1}`,
+  }
+
+  /** Borra las filas (o columnas) del bloque, o la de la celda activa. */
+  const borrarFilas = () => {
+    const desde = Math.max(0, zona.r1)
+    if (zona.r2 < 0) return
+    guardarEditor(true)
+    change((x) => {
+      let y = x
+      for (let r = zona.r2; r >= desde; r--) y = removeRow(y, r)
+      return y
+    })
+    const quedan = histRef.current.draft.rows.length
+    go(quedan ? Math.min(desde, quedan - 1) : -1, ac)
+  }
+  const borrarColumnas = () => {
+    if (cols - nCols < 1) return
+    guardarEditor(true)
+    change((x) => {
+      let y = x
+      for (let c = zona.c2; c >= zona.c1; c--) y = removeColumn(y, c)
+      return y
+    })
+    go(ar, Math.min(zona.c1, histRef.current.draft.columns.length - 1))
   }
 
   const chars = tableChars(draft)
   const headerTint = withAlpha(accent, 0.14)
+  const marca = withAlpha(accent, 0.24)
 
   const celda = (r: number, c: number, text: string) => {
     const st = cellStyleOf(draft, r, c)
     const activa = ar === r && ac === c
+    const editando = activa && !bloque
+    const marcada = enBloque(r, c)
     const Tag = r === -1 ? 'th' : 'td'
     const cabecera = r === -1
     const fondo: CSSProperties = st.fill
-      ? { background: st.fill }
+      ? { backgroundColor: st.fill }
       : cabecera
         ? // La cabecera se queda fija al bajar: necesita fondo opaco.
           { backgroundColor: style.color, backgroundImage: `linear-gradient(${headerTint}, ${headerTint})` }
         : {}
+    // Tinte de la celda en edición o del bloque, encima de su fondo (que se sigue viendo).
+    const tinte = marcada ? marca : editando && !st.fill ? withAlpha(accent, 0.1) : null
     return (
       <Tag
         key={c}
+        data-celda={`${r}:${c}`}
         onMouseDown={(e) => {
-          if (activa) return
+          if (e.button !== 0) return
+          arrastrando.current = true
+          if (e.shiftKey && ar >= -1) {
+            e.preventDefault()
+            return extender(r, c)
+          }
+          if (editando) return
           e.preventDefault()
           abrir(r, c)
+        }}
+        onMouseEnter={() => {
+          if (arrastrando.current) extender(r, c)
         }}
         style={{
           padding: '8px 10px',
@@ -511,12 +720,14 @@ function EditorBody({ target }: { target: TableEditorTarget }) {
           borderTop: r === 0 ? undefined : `1px solid ${grid}`,
           borderBottom: cabecera ? `1px solid ${grid}` : undefined,
           cursor: 'text',
+          userSelect: bloque ? 'none' : undefined,
           ...fondo,
-          ...(activa ? { boxShadow: `inset 0 0 0 2px ${accent}`, ...(st.fill ? {} : { backgroundImage: `linear-gradient(${withAlpha(accent, 0.1)}, ${withAlpha(accent, 0.1)})` }) } : {}),
+          ...(tinte ? { backgroundImage: `linear-gradient(${tinte}, ${tinte})` } : {}),
+          ...(activa ? { boxShadow: `inset 0 0 0 2px ${accent}` } : {}),
           ...(cabecera ? { position: 'sticky', top: 0, zIndex: 1 } : {}),
         }}
       >
-        {activa ? (
+        {editando ? (
           <CellEditor
             key={`${r}:${c}:${active.rev}`}
             initial={text}
@@ -640,25 +851,13 @@ function EditorBody({ target }: { target: TableEditorTarget }) {
             <ChevronRight size={14} />
           </Btn>
           <Sep t={t} />
-          <Btn
-            title="Borrar la fila"
-            danger
-            disabled={ar < 0}
-            onClick={() => op((x, r) => removeRow(x, r), (x, r, c) => (x.rows.length ? [Math.min(r, x.rows.length - 1), c] : [-1, c]))}
-            t={t}
-          >
+          <Btn title={zona.r2 > Math.max(0, zona.r1) ? 'Borrar las filas seleccionadas' : 'Borrar la fila'} danger disabled={enTitulo || zona.r2 < 0} onClick={borrarFilas} t={t}>
             <Trash2 size={13} />
-            <span style={{ fontSize: 11 }}>fila</span>
+            <span style={{ fontSize: 11 }}>{zona.r2 > Math.max(0, zona.r1) ? 'filas' : 'fila'}</span>
           </Btn>
-          <Btn
-            title="Borrar la columna"
-            danger
-            disabled={enTitulo || cols <= 1}
-            onClick={() => op((x, _r, c) => removeColumn(x, c), (x, r, c) => [r, Math.min(c, x.columns.length - 1)])}
-            t={t}
-          >
+          <Btn title={nCols > 1 ? 'Borrar las columnas seleccionadas' : 'Borrar la columna'} danger disabled={enTitulo || cols - nCols < 1} onClick={borrarColumnas} t={t}>
             <Trash2 size={13} />
-            <span style={{ fontSize: 11 }}>col.</span>
+            <span style={{ fontSize: 11 }}>{nCols > 1 ? 'cols.' : 'col.'}</span>
           </Btn>
           <Sep t={t} />
           <div style={{ position: 'relative' }}>
@@ -670,7 +869,7 @@ function EditorBody({ target }: { target: TableEditorTarget }) {
               <MenuEstilo
                 alcance={menu}
                 onAlcance={setMenu}
-                rotulos={{ celda: 'Celda', fila: ar === -1 ? 'Cabecera' : `Fila ${ar + 1}`, columna: `Columna ${ac + 1}` }}
+                rotulos={rotulos}
                 estilo={estiloDe(menu)}
                 negrita={negritaDe(menu)}
                 onCambio={cambiarEstilo}
@@ -680,10 +879,19 @@ function EditorBody({ target }: { target: TableEditorTarget }) {
           </div>
         </div>
 
-        {/* La tabla, a tamaño legible: la cabecera se queda arriba al bajar. */}
+        {/* La tabla, a tamaño legible: la cabecera se queda arriba al bajar. Con un bloque
+            seleccionado, el foco y el teclado (Supr, Ctrl+C/X/V, Mayús+flechas) son de la rejilla. */}
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 18px 12px' }}>
           <div
+            ref={rejilla}
+            tabIndex={-1}
+            aria-label="Celdas de la tabla"
+            onKeyDown={teclaEnBloque}
+            onCopy={(e) => copiar(e, false)}
+            onCut={(e) => copiar(e, true)}
+            onPaste={pegarEnBloque}
             style={{
+              outline: 'none',
               border: `${Math.max(1, style.borderWidth)}px solid ${accent}`,
               borderRadius: 10,
               overflow: 'clip',
@@ -748,7 +956,17 @@ function EditorBody({ target }: { target: TableEditorTarget }) {
                 {aviso}
               </span>
             ) : (
-              <>Tab, Enter y flechas para moverte · Alt+flechas mueve la fila o la columna · Puedes pegar celdas de Excel o Word</>
+              bloque ? (
+                <>
+                  <b style={{ color: t.textSecondary }}>{nFilas * nCols} celdas seleccionadas</b> · Supr las vacía · Ctrl+C copia · Ctrl+V pega · Mayús+flechas
+                  amplía · Esc vuelve a una celda
+                </>
+              ) : (
+                <>
+                  Tab, Enter y flechas para moverte · Mayús+clic o arrastrar selecciona varias celdas · Alt+flechas mueve la fila o la columna · Puedes
+                  pegar celdas de Excel o Word
+                </>
+              )
             )}
             {chars > TABLE_LIMITS.maxTotal * 0.8 && (
               <div style={{ marginTop: 2, color: chars >= TABLE_LIMITS.maxTotal ? t.danger : t.textMuted }}>

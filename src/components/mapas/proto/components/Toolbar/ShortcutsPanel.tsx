@@ -19,6 +19,7 @@ const SHORTCUTS: { keys: string[]; desc: string }[] = [
   { keys: ['Tabla: flechas'], desc: 'Saltar de celda desde el borde del texto; Enter baja, ⇧Enter salto de línea' },
   { keys: ['Tabla: Alt', '← ↑ → ↓'], desc: 'Mover la fila o la columna de la celda' },
   { keys: ['Tabla: Ctrl', 'V'], desc: 'Pegar celdas de Excel o Word: se reparten desde la celda activa' },
+  { keys: ['Tabla: ⇧ clic / arrastrar'], desc: 'Seleccionar varias celdas: Supr las vacía, Ctrl+C las copia, «Estilo» las cambia' },
   { keys: ['Ctrl', 'F'], desc: 'Buscar en el mapa' },
   { keys: ['Ctrl', 'P'], desc: 'Exportar / imprimir (PDF, imagen)' },
   { keys: ['Ctrl', 'Arrastrar'], desc: 'Soltar sobre otro nodo: cambia de rama' },
