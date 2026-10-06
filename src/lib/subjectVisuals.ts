@@ -75,16 +75,18 @@ const SUBJECT_VISUALS: Record<string, SubjectVisualEntry> = {
   otorrinolaringologia: { label: 'Otorrinolaringología', sigla: 'OR', icon: 'hearing', color: 'teal', category: 'QUIRÚRGICA' },
   traumatologia: { label: 'Traumatología', sigla: 'TM', icon: 'orthopedics', color: 'slate', category: 'QUIRÚRGICA' },
   urologia: { label: 'Urología', sigla: 'UR', icon: 'water_drop', color: 'teal', category: 'QUIRÚRGICA' },
-  cirugiaplastica: { label: 'Cirugía Plástica', sigla: 'CP', icon: 'healing', color: 'rose', category: 'QUIRÚRGICA' },
+  // La clave es "plastica" y no "cirugiaplastica": el emparejador acepta prefijos de 5+ letras, y
+  // "cirugia" lo es de "cirugiaplastica", así que se llevaba "Cirugía General y Digestivo".
+  plastica: { label: 'Cirugía Plástica', sigla: 'CP', icon: 'healing', color: 'rose', category: 'QUIRÚRGICA' },
 }
 
 // Nombres con los que el usuario puede bautizar el mazo y que no casan solos.
 // Ojo: se comparan PALABRAS sueltas, así que "cirugia" no puede ser alias de
-// nada — se la comen también "Cirugía General y Digestivo" y "Cirugía
-// Ortopédica y Trauma", que deben resolverse por su otra palabra.
+// nada (ni el principio de una clave) — se la comen también "Cirugía General y
+// Digestivo" y "Cirugía Ortopédica y Trauma", que deben resolverse por su otra palabra.
 const VISUAL_ALIASES: Record<string, string> = {
   bioestadistica: 'estadistica',
-  plastica: 'cirugiaplastica',
+  cirugiaplastica: 'plastica',
   farmaco: 'farmacologia',
   farmacia: 'farmacologia',
   legislacion: 'bioetica',
