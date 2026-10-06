@@ -1026,3 +1026,91 @@ test('tabla: cabecera sin la celda de la esquina → se añade y las columnas no
   // Con la esquina ya puesta (o una sola fila larga entre varias), no se toca.
   assert.deepEqual(sanitizeTable({ columns: ['', 'A'], rows: [['x', '1'], ['y', '2']] })!.columns, ['', 'A'])
 })
+
+// ---- Tablas de PDF leídas con su estructura (extract/tablasPdf.ts) ---------------------------
+
+import { cajasDibujadas, componerTexto, detectarTablas, type CodigosPdf, type ItemTexto } from '@/lib/mapas/ia/extract/tablasPdf'
+
+const OPS_PDF: CodigosPdf = {
+  save: 10, restore: 11, transform: 12, constructPath: 91, paintFormXObjectBegin: 74, paintFormXObjectEnd: 75,
+  setFillRGBColor: 59, fill: 22, eoFill: 23, fillStroke: 24, eoFillStroke: 25, closeFillStroke: 26, closeEOFillStroke: 27,
+  stroke: 20, closeStroke: 21,
+}
+
+/** Ruta de pdf.js 5 con rectángulos (moveTo, 3 lineTo, closePath). */
+function rutaDe(rects: [number, number, number, number][]): number[] {
+  const out: number[] = []
+  for (const [x, y, w, h] of rects) out.push(0, x, y, 1, x + w, y, 1, x + w, y + h, 1, x, y + h, 4)
+  return out
+}
+
+/** Página con unos rectángulos rellenos (en un formulario desplazado, como en AMIR). */
+function pagina(rects: [number, number, number, number][], color = '#e3e3e3') {
+  return {
+    fnArray: [OPS_PDF.paintFormXObjectBegin, OPS_PDF.save, OPS_PDF.transform, OPS_PDF.setFillRGBColor, OPS_PDF.constructPath, OPS_PDF.restore, OPS_PDF.paintFormXObjectEnd],
+    argsArray: [[[1, 0, 0, 1, 0, 0], [0, 0, 600, 800]], null, [1, 0, 0, 1, 10, 20], [color], [OPS_PDF.fill, [rutaDe(rects)], null], null, null],
+  }
+}
+
+const texto = (str: string, x: number, y: number, w = str.length * 4, h = 8): ItemTexto => ({ str, transform: [h, 0, 0, h, x, y], width: w, height: h })
+
+// Rejilla 3×3 de celdas de 100×20 con hueco de 1 pt, desde (40, 500) en la página (30+10, 480+20).
+const CELDAS: [number, number, number, number][] = []
+for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) CELDAS.push([30 + c * 101, 480 + (2 - r) * 21, 100, 20])
+const celda = (r: number, c: number): [number, number] => [40 + c * 101 + 5, 500 + (2 - r) * 21 + 6]
+
+test('tablas de PDF: una rejilla de celdas rellenas sale como filas «celda | celda», cada texto en su columna', () => {
+  const p = pagina(CELDAS)
+  const cajas = cajasDibujadas(p.fnArray, p.argsArray, OPS_PDF)
+  assert.equal(cajas.length, 9)
+  const items: ItemTexto[] = [
+    texto('Antes de la tabla', 40, 600),
+    texto('Gota', ...celda(0, 1)),
+    texto('Pseudogota', ...celda(0, 2)),
+    texto('Cristal', ...celda(1, 0)),
+    texto('Aguja', ...celda(1, 1)),
+    texto('Romboidal', ...celda(1, 2)),
+    texto('Birrefringencia', ...celda(2, 0)),
+    texto('Negativa', ...celda(2, 1)),
+    texto('Positiva débil', ...celda(2, 2)),
+    texto('Tabla 1. Resumen', 40, 470),
+  ]
+  const { tablas, deTabla } = detectarTablas(cajas, items)
+  assert.equal(tablas.length, 1)
+  assert.deepEqual(tablas[0].filas, [
+    ['', 'Gota', 'Pseudogota'],
+    ['Cristal', 'Aguja', 'Romboidal'],
+    ['Birrefringencia', 'Negativa', 'Positiva débil'],
+  ])
+  const t = componerTexto(items, tablas, deTabla)
+  assert.equal(t, 'Antes de la tabla\n | Gota | Pseudogota\nCristal | Aguja | Romboidal\nBirrefringencia | Negativa | Positiva débil\nTabla 1. Resumen')
+})
+
+test('tablas de PDF: un diagrama de cajas sueltas o un recuadro con texto no son una tabla', () => {
+  // Cajas de un esquema: no comparten bordes (no forman rejilla).
+  const p = pagina([[30, 400, 80, 30], [200, 450, 120, 25], [90, 300, 60, 40], [260, 320, 70, 20]])
+  const cajas = cajasDibujadas(p.fnArray, p.argsArray, OPS_PDF)
+  const items = [texto('Artritis', 45, 425), texto('Colchicina', 215, 475), texto('AINE', 105, 330), texto('Corticoides', 275, 345)]
+  assert.equal(detectarTablas(cajas, items).tablas.length, 0)
+  // Un recuadro («Recuerda…») con texto: un solo rectángulo.
+  const q = pagina([[30, 400, 300, 80]])
+  assert.equal(detectarTablas(cajasDibujadas(q.fnArray, q.argsArray, OPS_PDF), [texto('Recuerda', 50, 450)]).tablas.length, 0)
+})
+
+test('tablas de PDF: celdas blancas, etiqueta girada y superíndices en su sitio', () => {
+  const p = pagina(CELDAS, '#ffffff')
+  const cajas = cajasDibujadas(p.fnArray, p.argsArray, OPS_PDF)
+  // Etiqueta vertical (girada 90°) en la primera columna de la segunda fila; «3» de mm³ más alto.
+  const [gx, gy] = celda(1, 0)
+  const girada: ItemTexto = { str: 'GRUPO', transform: [0, 8, -8, 0, gx + 10, gy - 4], width: 12, height: 8 }
+  const [ex, ey] = celda(2, 1)
+  const items = [
+    texto('A', ...celda(0, 1)), texto('B', ...celda(0, 2)),
+    girada, texto('x', ...celda(1, 1)), texto('y', ...celda(1, 2)),
+    texto('fila', ...celda(2, 0)), texto('≥1000/mm', ex, ey, 34), texto('3', ex + 34, ey + 3, 3, 5), texto('z', ...celda(2, 2)),
+  ]
+  const { tablas } = detectarTablas(cajas, items)
+  assert.equal(tablas.length, 1)
+  assert.equal(tablas[0].filas[1][0], 'GRUPO')
+  assert.equal(tablas[0].filas[2][1], '≥1000/mm 3')
+})

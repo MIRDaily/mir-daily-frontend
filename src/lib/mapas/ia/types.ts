@@ -8,6 +8,8 @@ export type Extraido = {
   titulo: string
   secciones: Seccion[]
   paginas: number
+  /** Tablas leídas con su estructura (filas y columnas). */
+  tablas?: number
   /** Cómo se llaman las «páginas» de este formato, para el diálogo. */
   unidad?: 'página' | 'diapositiva'
   caracteres: number

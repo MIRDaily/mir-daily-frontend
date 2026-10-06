@@ -1,5 +1,6 @@
 import { ExtractError, FACTOR_LECTURA, type Extraido } from '../types'
 import { limpiarTexto, quitarRepetidas, tituloDeArchivo } from './limpiar'
+import { cajasDibujadas, componerTexto, detectarTablas, type ItemTexto } from './tablasPdf'
 
 type Opciones = { maxChars: number; onProgreso?: (hecho: number, total: number) => void }
 
@@ -27,22 +28,25 @@ export async function extraerPdf(file: File, { maxChars, onProgreso }: Opciones)
 
   const topeLectura = maxChars * FACTOR_LECTURA
   const paginas: string[] = []
+  let tablas = 0
   let acumulado = 0
   let truncado = false
 
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i)
     const contenido = await page.getTextContent()
-    let texto = ''
-    let ultimaY: number | null = null
-    for (const item of contenido.items) {
-      if (!('str' in item)) continue
-      const y = item.transform[5]
-      if (ultimaY !== null && Math.abs(y - ultimaY) > 2) texto += '\n'
-      else if (texto && !texto.endsWith(' ') && !texto.endsWith('\n')) texto += ' '
-      texto += item.str
-      ultimaY = y
+    const items = contenido.items.filter((it): it is ItemTexto & typeof it => 'str' in it)
+    // Tablas con su estructura (rejilla dibujada en la página): salen como filas «celda | celda»
+    // en vez de columna tras columna. Si algo falla, el texto de siempre.
+    let detectadas: ReturnType<typeof detectarTablas> = { tablas: [], deTabla: items.map(() => -1) }
+    try {
+      const ops = await page.getOperatorList()
+      detectadas = detectarTablas(cajasDibujadas(ops.fnArray, ops.argsArray, pdfjs.OPS), items)
+    } catch {
+      /* sin tablas: texto plano */
     }
+    tablas += detectadas.tablas.length
+    const texto = componerTexto(items, detectadas.tablas, detectadas.deTabla)
     page.cleanup()
     const limpio = limpiarTexto(texto)
     paginas.push(limpio)
@@ -78,6 +82,7 @@ export async function extraerPdf(file: File, { maxChars, onProgreso }: Opciones)
     titulo: titulo.length >= 4 ? titulo : tituloDeArchivo(file.name),
     secciones,
     paginas: pdf.numPages,
+    tablas,
     caracteres: secciones.reduce((s, x) => s + x.texto.length, 0),
     avisos,
     truncado,

@@ -259,6 +259,7 @@ export default function CrearConIA({
                   <p className="text-xs text-[#7D8A96]">
                     {fmt(extraido.paginas)} {extraido.unidad ?? 'página'}
                     {extraido.paginas === 1 ? '' : 's'} · {fmt(extraido.caracteres)} caracteres
+                    {extraido.tablas ? ` · ${extraido.tablas} ${extraido.tablas === 1 ? 'tabla' : 'tablas'}` : ''}
                   </p>
                 </div>
                 <button
@@ -346,9 +347,9 @@ export default function CrearConIA({
                   <span>
                     <span className="block text-sm font-extrabold text-[#2C3E50]">Incluir tablas</span>
                     <span className="mt-0.5 block text-xs text-[#7D8A96]">
-                      La IA rehace, con los datos del texto, las tablas que comparan enfermedades (diagnóstico
-                      diferencial, tablas resumen) y los criterios con puntos. No copia imágenes: lo que solo esté en
-                      una imagen no se lee. Revisa las tablas que salgan de un PDF: sus columnas llegan desordenadas.
+                      La IA prepara, con los datos del documento, tablas que comparan enfermedades (diagnóstico
+                      diferencial), criterios con puntos y clasificaciones. Las tablas del documento se leen con sus
+                      filas y columnas; lo que solo esté en una imagen no se lee.
                     </span>
                   </span>
                 </label>
