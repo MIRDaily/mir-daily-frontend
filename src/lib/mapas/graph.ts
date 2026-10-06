@@ -1,3 +1,4 @@
+import { sanitizeLabelHtml } from '@/lib/mapas/labelHtml'
 import { computeLayout } from '@/lib/mapas/layout'
 
 // Margen extra entre hermanos: [hijos de la raíz = BLOQUES, hijos de los bloques, ...].
@@ -257,7 +258,8 @@ export function treeToGraph(tree: MapDoc): GraphDoc {
       position: { x: box?.x ?? 0, y: box?.y ?? 0 },
       ...(isCircle ? { width: ROOT_CIRCLE, height: ROOT_CIRCLE } : {}),
       data: {
-        label: n.text,
+        // El texto del árbol (IA, archivo importado) se pinta como HTML: se sanea igual.
+        label: sanitizeLabelHtml(n.text),
         style,
         ...(n.parentId ? { parentId: n.parentId } : {}),
         category: n.category,
@@ -387,7 +389,7 @@ export function sanitizeGraph(raw: unknown): GraphDoc {
       ...(w ? { width: w } : {}),
       ...(h ? { height: h } : {}),
       data: {
-        label: str(data.label, 4000, ''),
+        label: sanitizeLabelHtml(str(data.label, 4000, '')),
         style: sanitizeStyle(data.style),
         ...(typeof data.parentId === 'string' ? { parentId: data.parentId.slice(0, 80) } : {}),
         ...(category ? { category } : {}),

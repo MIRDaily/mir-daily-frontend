@@ -657,3 +657,96 @@ test('computeLayout: con pocos bloques, o sin la opción, todo sigue a la derech
   const rb = b.get(muchos.raiz)!
   assert.ok(childrenOf(muchos.doc, muchos.raiz).every((k) => b.get(k.id)!.x >= rb.x + rb.w))
 })
+
+// ---------------------------------------------------------------------------
+// Saneado del HTML de los nodos (XSS al importar o abrir un mapa ajeno)
+// ---------------------------------------------------------------------------
+
+import { sanitizeLabelHtml } from '@/lib/mapas/labelHtml'
+
+test('sanitizeLabelHtml: lo que deja el editor sale igual', () => {
+  const tal = [
+    'Neumonía',
+    '<b>Negrita</b> y <i>cursiva</i>',
+    '<u>sub</u><strike>tachado</strike><s>s</s><strong>f</strong><em>e</em>',
+    'Línea 1<br>Línea 2',
+    '<div>Uno</div><div><br></div><div>Dos</div>',
+    'a&nbsp;b &amp; c &lt;d&gt;',
+    '<span style="font-weight: normal">x</span>',
+    '<b><i>anidado</i></b>',
+  ]
+  for (const html of tal) assert.equal(sanitizeLabelHtml(html), html)
+  assert.equal(sanitizeLabelHtml(''), '')
+})
+
+test('sanitizeLabelHtml: fuera eventos, scripts, URLs y etiquetas peligrosas', () => {
+  const ataques = [
+    '<img src=x onerror=alert(1)>',
+    '<script>alert(1)</script>',
+    '<svg onload=alert(1)><circle/></svg>',
+    '<iframe src="javascript:alert(1)"></iframe>',
+    '<a href="javascript:alert(1)">pulsa</a>',
+    '<b onclick="alert(1)">x</b>',
+    '<b/onmouseover=alert(1)>x</b>',
+    '<div style="background-image: url(javascript:alert(1))">x</div>',
+    '<span style="width: expression(alert(1))">x</span>',
+    '<span style="color: red; background: url(//evil)">x</span>',
+    '<span style="position: fixed; top: 0">x</span>',
+    '<<script>alert(1)//<</script>',
+    '<!--<img src=x onerror=alert(1)>-->',
+    '<b title="<img src=x onerror=alert(1)>">x</b>',
+    '<style>*{background:url(//evil)}</style>',
+    '<object data="x"></object><embed src="x"><form action="x"><input onfocus=alert(1) autofocus>',
+    '<math><mtext><table><mglyph><style><img src=x onerror=alert(1)>',
+    '<b style="color: &quot;red&quot;; behavior: url(x.htc)">x</b>',
+  ]
+  for (const html of ataques) {
+    const out = sanitizeLabelHtml(html)
+    assert.doesNotMatch(out, /<(?!\/?(b|i|u|s|em|strong|strike|del|span|sub|sup|div|p|br)[ >])/i, out)
+    assert.doesNotMatch(out, /\son\w+\s*=|javascript:|url\(|expression|position/i, out)
+    assert.equal(sanitizeLabelHtml(out), out, 'idempotente')
+  }
+  // Se queda el texto visible; el contenido de <script>/<style> no.
+  assert.equal(sanitizeLabelHtml('<a href="javascript:x">pulsa</a>'), 'pulsa')
+  assert.equal(sanitizeLabelHtml('a<script>alert(1)</script>b'), 'ab')
+  assert.equal(sanitizeLabelHtml('<b onclick="alert(1)">x</b>'), '<b>x</b>')
+  assert.equal(sanitizeLabelHtml('<span style="color: red; background: url(//evil)">x</span>'), '<span style="color: red">x</span>')
+})
+
+test('sanitizeLabelHtml: escapa el texto suelto y cierra lo que queda abierto', () => {
+  assert.equal(sanitizeLabelHtml('FEVI < 40% y > 2'), 'FEVI &lt; 40% y &gt; 2')
+  assert.equal(sanitizeLabelHtml('<b>sin cerrar'), '<b>sin cerrar</b>')
+  assert.equal(sanitizeLabelHtml('x</b></div>'), 'x')
+  assert.equal(sanitizeLabelHtml('<b><i>x</b>y'), '<b><i>x</i></b>y')
+  assert.equal(sanitizeLabelHtml('R&D'), 'R&amp;D')
+  // Lo pegado de otras webs: bloques a <div>, estilos de texto razonables, comillas a simples.
+  assert.equal(sanitizeLabelHtml('<ul><li>a</li><li>b</li></ul>'), '<div>a</div><div>b</div>')
+  assert.equal(
+    sanitizeLabelHtml('<span style="font-family: &quot;Times New Roman&quot;; color: rgb(10, 20, 30);">t</span>'),
+    `<span style="font-family: 'Times New Roman'; color: rgb(10, 20, 30)">t</span>`,
+  )
+})
+
+test('sanitizeGraph, treeToGraph y la importación sanean los labels', () => {
+  const evil = '<img src=x onerror=alert(1)><b>Hola</b>'
+  const g = sanitizeGraph({
+    version: 2,
+    nodes: [{ id: 'a', position: { x: 0, y: 0 }, data: { label: evil } }],
+    edges: [],
+  })
+  assert.equal(g.nodes[0].data.label, '<b>Hola</b>')
+
+  const t = treeToGraph({ version: 1, nodes: [{ id: 'r', parentId: null, text: evil, category: 'general' }] })
+  assert.equal(t.nodes[0].data.label, '<b>Hola</b>')
+
+  const file = serializeMap('x', {
+    version: 2,
+    nodes: [{ id: 'a', type: 'mindmap', position: { x: 0, y: 0 }, data: { label: evil, style: newGraphDoc().nodes[0].data.style } }],
+    edges: [],
+  })
+  const imported = parseMapFile(file).doc as { nodes: { data: { label: string } }[] }
+  assert.equal(imported.nodes[0].data.label, '<b>Hola</b>')
+  // Al abrir un árbol importado (o guardado) también.
+  const tree = parseMapFile(JSON.stringify({ nodes: [{ id: 'r', parentId: null, text: evil }] })).doc
+  assert.equal(toGraphDoc(tree).doc.nodes[0].data.label, '<b>Hola</b>')
+})

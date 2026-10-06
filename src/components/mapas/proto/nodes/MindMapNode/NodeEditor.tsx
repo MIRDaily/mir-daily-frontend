@@ -1,4 +1,5 @@
 import { resolveFont } from '@/components/mapas/proto/utils/font'
+import { sanitizeLabelHtml } from '@/lib/mapas/labelHtml'
 import { useRef, useEffect } from 'react'
 import type { NodeStyle } from '@/components/mapas/proto/types/node.types'
 
@@ -25,7 +26,7 @@ export function NodeEditor({ label, style, onSave, onExit, onTab, selectAll, see
 
     // Set initial HTML content (supports rich formatting from previous edits)
     if (seed != null) el.textContent = seed
-    else el.innerHTML = label
+    else el.innerHTML = sanitizeLabelHtml(label)
 
     // Un nodo recién creado está oculto (visibility: hidden) hasta que React Flow lo mide, y
     // focus() no funciona sobre algo oculto: se reintenta durante un momento (con temporizador, no
@@ -54,7 +55,8 @@ export function NodeEditor({ label, style, onSave, onExit, onTab, selectAll, see
   const handleSaveAndExit = (el: HTMLDivElement) => {
     if (savedRef.current) return
     savedRef.current = true
-    const html = el.innerHTML.trim()
+    // Lo pegado de otras webs entra con su HTML: se guarda ya saneado.
+    const html = sanitizeLabelHtml(el.innerHTML.trim())
     onSave(html || label)
     onExit()
   }

@@ -1,4 +1,6 @@
+import { useMemo } from 'react'
 import { resolveFont } from '@/components/mapas/proto/utils/font'
+import { sanitizeLabelHtml } from '@/lib/mapas/labelHtml'
 import type { NodeStyle } from '@/components/mapas/proto/types/node.types'
 
 interface NodeLabelProps {
@@ -7,6 +9,8 @@ interface NodeLabelProps {
 }
 
 export function NodeLabel({ label, style }: NodeLabelProps) {
+  // Defensa extra: el label ya llega saneado al cargar, pero se pinta como HTML.
+  const html = useMemo(() => sanitizeLabelHtml(label), [label])
   return (
     <div
       className="node-label"
@@ -20,7 +24,7 @@ export function NodeLabel({ label, style }: NodeLabelProps) {
         width: '100%',
         wordBreak: 'break-word',
       }}
-      dangerouslySetInnerHTML={{ __html: label }}
+      dangerouslySetInnerHTML={{ __html: html }}
     />
   )
 }
