@@ -4,9 +4,8 @@ import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { revealNode, selectOnly } from '@/components/mapas/proto/utils/keyboard'
 import type { MapTable } from '@/lib/mapas/table'
 
-// Acciones del editor sobre los nodos tabla. Cada cambio es un paso de deshacer; la edición de
-// celdas usa `editingNodeId` (como un texto) más la celda activa de la store de interfaz, así los
-// atajos globales se apagan mientras se escribe en una celda.
+// Acciones del editor sobre los nodos tabla. Una tabla se edita en su popup (TableEditorDialog):
+// trabaja sobre una copia y al cerrarlo la guarda con editTable, un solo paso de deshacer.
 
 const same = (a: MapTable, b: MapTable) => JSON.stringify(a) === JSON.stringify(b)
 
@@ -21,31 +20,24 @@ export function editTable(id: string, fn: (t: MapTable) => MapTable) {
   store.updateTable(id, () => next)
 }
 
-let rev = 0
-
 /**
- * Empieza a editar una celda (fila -2 = título, -1 = cabecera). `seed`: texto que sustituye al de
- * la celda. `select`: con su contenido seleccionado (al llegar con el teclado, como en Word).
+ * Abre el popup de la tabla en una celda (fila -2 = título, -1 = cabecera). `seed`: texto que
+ * sustituye al de la celda. `select`: con su contenido seleccionado (al llegar con el teclado).
  */
-export function startTableEdit(id: string, r: number, c: number, seed: string | null = null, select = false) {
-  rev += 1
-  useUIStore.getState().setTableCell({ id, r, c, rev, select })
-  useMindMapStore.getState().setEditing(id, seed)
-}
-
-export function stopTableEdit() {
-  useUIStore.getState().setTableCell(null)
+export function openTableEditor(id: string, r = -1, c = 0, seed: string | null = null, select = false) {
+  if (!isTableNode(id)) return
   useMindMapStore.getState().setEditing(null)
+  useUIStore.getState().setTableEditor({ id, r, c, seed, select })
 }
 
-/** Tabla nueva colgando del nodo (o suelta), seleccionada y con su primera cabecera en edición. */
+/** Tabla nueva colgando del nodo (o suelta), seleccionada y abierta en su popup. */
 export function addTableAndEdit(parentId?: string): string {
   const store = useMindMapStore.getState()
   useHistoryStore.getState().pushSnapshot(store.nodes, store.edges)
   const id = store.addTable(parentId)
   selectOnly(id)
-  startTableEdit(id, -1, 0, null, true)
   requestAnimationFrame(() => revealNode(id))
+  openTableEditor(id, -1, 0, null, true)
   return id
 }
 

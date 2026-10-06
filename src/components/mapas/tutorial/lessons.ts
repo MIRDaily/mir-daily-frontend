@@ -429,18 +429,27 @@ export const LESSONS: Lesson[] = [
       },
       {
         id: 'celdas',
-        text: 'Escribe en dos celdas: doble clic en una y Tab para pasar a la siguiente',
+        text: 'La tabla se abre en grande para editarla: escribe en dos celdas (Tab pasa a la siguiente) y pulsa «Hecho»',
         keys: ['Tab'],
         check: (ctx) =>
           newTables(ctx).some((n) => [...n.data.table!.columns, ...n.data.table!.rows.flat()].filter((c) => c && !/^Columna \d$/.test(c)).length >= 2),
       },
       {
         id: 'fila',
-        text: 'Añade una fila: Tab en la última celda o el botón de la barra que sale encima de la tabla',
+        text: 'Vuelve a abrirla con doble clic y añade una fila: Tab en la última celda o un botón de la barra',
         check: (ctx) => newTables(ctx).some((n) => n.data.table!.rows.length > 2),
       },
+      {
+        id: 'estilo-tabla',
+        text: 'Con el botón «Estilo» pon en negrita o en color una celda, una fila o una columna',
+        check: (ctx) =>
+          newTables(ctx).some((n) => {
+            const t = n.data.table!
+            return !!(t.headerStyle || t.rowStyles || t.colStyles || t.cellStyles)
+          }),
+      },
     ],
-    done: { pose: 'celebracion', text: 'Con Alt y las flechas mueves la fila o la columna de la celda en la que estás.' },
+    done: { pose: 'celebracion', text: 'Con Alt y las flechas mueves la fila o la columna, y puedes pegar una tabla de Excel o Word tal cual.' },
   },
   {
     id: 'ordenar',

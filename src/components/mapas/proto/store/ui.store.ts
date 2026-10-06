@@ -2,8 +2,8 @@ import { create } from 'zustand'
 import type { UIState } from '@/components/mapas/proto/types/store.types'
 
 export const useUIStore = create<UIState>((set) => ({
-  tableCell: null,
-  setTableCell: (tableCell) => set({ tableCell }),
+  tableEditor: null,
+  setTableEditor: (tableEditor) => set({ tableEditor }),
   stylePanelOpen: false,
   multiSelect: false,
   exportOpen: false,

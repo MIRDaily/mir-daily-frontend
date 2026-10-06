@@ -9,7 +9,7 @@ import { applyCategoryToNodes } from '@/components/mapas/proto/utils/categories'
 import { categoryForKey } from '@/lib/mapas/types'
 import { parentMap } from '@/components/mapas/proto/utils/tree'
 import { mirrorBranches, showUpToLevel, toggleBranch, toggleBranches } from '@/components/mapas/proto/utils/branches'
-import { addTableAndEdit } from '@/components/mapas/proto/utils/tables'
+import { addTableAndEdit, isTableNode, openTableEditor } from '@/components/mapas/proto/utils/tables'
 import {
   addChildAndEdit,
   addSiblingAndEdit,
@@ -44,6 +44,8 @@ export function useMindMapShortcuts() {
         target.tagName === 'TEXTAREA'
 
       if (isEditing) return
+      // Con el popup de una tabla abierto, el teclado es suyo (Supr no borra nodos, etc.).
+      if (useUIStore.getState().tableEditor) return
 
       const isMod = e.metaKey || e.ctrlKey
       // Estado leído en el momento del evento: suscribirse a las stores enteras re-registraba
@@ -132,6 +134,12 @@ export function useMindMapShortcuts() {
           addChildAndEdit(one)
           return
         }
+        // En una tabla, Enter y F2 abren su popup (escribir también: la letra va a la cabecera).
+        if (one && isTableNode(one) && (e.key === 'Enter' || e.key === 'F2')) {
+          e.preventDefault()
+          openTableEditor(one)
+          return
+        }
         if (one && e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault()
           addSiblingAndEdit(one)
@@ -158,7 +166,8 @@ export function useMindMapShortcuts() {
         // sustituye al texto. Los números 1-7 con el ratón encima de un nodo siguen siendo categorías.
         if (one && e.key.length === 1 && e.key !== ' ' && !(categoryForKey(e.key) && store.hoveredNodeId)) {
           e.preventDefault()
-          store.setEditing(one, e.key)
+          if (isTableNode(one)) openTableEditor(one, -1, 0, e.key)
+          else store.setEditing(one, e.key)
           return
         }
         const dir = ARROWS[e.key]

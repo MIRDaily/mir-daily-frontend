@@ -1,7 +1,7 @@
 import { memo, useCallback } from 'react'
 import { NodeToolbar, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import { motion } from 'framer-motion'
-import { Trash2, Plus, Palette, FlipHorizontal2, Table2 } from 'lucide-react'
+import { Trash2, Plus, Palette, FlipHorizontal2, Table2, PenLine } from 'lucide-react'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
@@ -16,7 +16,7 @@ import { BranchToggle } from './BranchToggle'
 import { TableBody } from './TableBody'
 import { addChildAndEdit } from '@/components/mapas/proto/utils/keyboard'
 import { mirrorBranches } from '@/components/mapas/proto/utils/branches'
-import { addTableAndEdit, startTableEdit } from '@/components/mapas/proto/utils/tables'
+import { addTableAndEdit, openTableEditor } from '@/components/mapas/proto/utils/tables'
 
 function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   // Solo se lee lo que este nodo pinta; las acciones se piden a la store en el momento de
@@ -37,8 +37,8 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      // En una tabla, el doble clic en una celda abre esa celda (TableBody); en el borde, la cabecera.
-      if (isTable) startTableEdit(id, -1, 0)
+      // En una tabla, el doble clic abre su popup (en la celda pulsada: ver TableBody).
+      if (isTable) openTableEditor(id)
       else useMindMapStore.getState().setEditing(id)
     },
     [id, isTable]
@@ -82,6 +82,10 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
 
   const handleAddTable = useCallback(() => {
     addTableAndEdit(id)
+  }, [id])
+
+  const handleEditTable = useCallback(() => {
+    openTableEditor(id)
   }, [id])
 
   const handleMirror = useCallback(() => {
@@ -148,7 +152,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
         }}
       >
         {data.table ? (
-          <TableBody id={id} table={data.table} style={data.style} selected={!!selected} editing={isEditing} />
+          <TableBody id={id} table={data.table} style={data.style} selected={!!selected} />
         ) : (
         <NodeBody style={data.style} isSelected={!!selected} isDark={t.isDark}>
           {isEditing ? (
@@ -180,6 +184,11 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
             boxShadow: `0 4px 16px ${t.shadow}`,
           }}
         >
+          {isTable && (
+            <ToolbarBtn onClick={handleEditTable} title="Editar la tabla (doble clic o Enter)" color={t.accent} hoverBg={t.hoverBg}>
+              <PenLine size={14} />
+            </ToolbarBtn>
+          )}
           <ToolbarBtn onClick={handleAddChild} title="Añadir nodo hijo" color={t.accent} hoverBg={t.hoverBg}>
             <Plus size={14} />
           </ToolbarBtn>

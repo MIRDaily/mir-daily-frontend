@@ -44,21 +44,21 @@ export interface MindMapState {
 
 export type BgStyle = 'flat' | 'dots-light' | 'dots'
 
-/** Celda de una tabla que se está editando. Fila -2 = título, -1 = cabecera. */
-export type TableCell = {
+/** Tabla abierta en su editor (el popup). Celda de entrada: fila -2 = título, -1 = cabecera. */
+export type TableEditorTarget = {
   id: string
   r: number
   c: number
-  /** Sube en cada apertura: reabre el editor aunque la celda sea la misma (con otro contenido). */
-  rev: number
-  /** Entrar con el contenido seleccionado (llegando con el teclado: lo que se escribe lo sustituye). */
-  select?: boolean
+  /** Texto que sustituye al de la celda (se abrió escribiendo con la tabla seleccionada). */
+  seed: string | null
+  /** Entrar con el contenido seleccionado (lo que se escribe lo sustituye). */
+  select: boolean
 }
 
 export interface UIState {
-  /** Celda activa de la tabla en edición (la del nodo `editingNodeId`). */
-  tableCell: TableCell | null
-  setTableCell: (cell: TableCell | null) => void
+  /** Tabla abierta en el popup de edición. */
+  tableEditor: TableEditorTarget | null
+  setTableEditor: (target: TableEditorTarget | null) => void
   stylePanelOpen: boolean
   /** Hay más de un nodo seleccionado: la barra de grupo sustituye a la de cada nodo. */
   multiSelect: boolean

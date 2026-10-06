@@ -201,14 +201,97 @@ export function tablePlainText(t: MapTable): string {
 // Edición (funciones puras: devuelven una tabla nueva). Fila -1 = cabecera.
 // ---------------------------------------------------------------------------
 
+/** Caracteres que cuentan para el tope de la tabla (la misma cuenta que hace sanitizeTable). */
+export function tableChars(t: MapTable): number {
+  return t.title.length + t.columns.join('').length + t.rows.reduce((n, r) => n + r.join('').length, 0)
+}
+
+/**
+ * Lo que cabe de `v` en lugar de `old` sin pasar el tope de toda la tabla. Sin esto, una tabla
+ * editada por encima del tope perdía sus últimas filas al volver a cargarla (sanitizeTable corta).
+ */
+const dentroDelTope = (t: MapTable, old: string, v: string) =>
+  v.slice(0, Math.max(0, TABLE_LIMITS.maxTotal - (tableChars(t) - old.length))).trim()
+
 export function setCell(t: MapTable, row: number, col: number, value: string): MapTable {
-  const v = cleanCell(value)
+  const old = row < 0 ? t.columns[col] : t.rows[row]?.[col]
+  if (old === undefined) return t
+  const v = dentroDelTope(t, old, cleanCell(value))
   if (row < 0) return { ...t, columns: t.columns.map((c, j) => (j === col ? v : c)) }
   return { ...t, rows: t.rows.map((r, i) => (i === row ? r.map((c, j) => (j === col ? v : c)) : r)) }
 }
 
 export function setTitle(t: MapTable, value: string): MapTable {
-  return { ...t, title: cleanCell(value, TABLE_LIMITS.maxTitle, 0) }
+  return { ...t, title: dentroDelTope(t, t.title, cleanCell(value, TABLE_LIMITS.maxTitle, 0)) }
+}
+
+/**
+ * Celdas copiadas de una hoja de cálculo o de una tabla de Word: filas por salto de línea y
+ * celdas por tabulador. Excel entrecomilla la celda que lleva saltos de línea o comillas ("" es
+ * una comilla); una comilla que no cierra así es texto normal.
+ */
+export function parseClipboardGrid(text: string): string[][] {
+  const s = text.replace(/\r\n?/g, '\n')
+  const rows: string[][] = []
+  let row: string[] = []
+  let cell = ''
+  let quoted = false
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]
+    if (quoted) {
+      if (ch !== '"') cell += ch
+      else if (s[i + 1] === '"') {
+        cell += '"'
+        i++
+      } else if (i + 1 === s.length || s[i + 1] === '\t' || s[i + 1] === '\n') quoted = false
+      else cell += ch
+    } else if (ch === '"' && cell === '') quoted = true
+    else if (ch === '\t') {
+      row.push(cell)
+      cell = ''
+    } else if (ch === '\n') {
+      row.push(cell)
+      rows.push(row)
+      row = []
+      cell = ''
+    } else cell += ch
+  }
+  // Comilla sin cerrar: no era una celda entrecomillada. Se lee tal cual.
+  if (quoted) return s.split('\n').filter((l, i, all) => l || i < all.length - 1).map((l) => l.split('\t'))
+  if (cell !== '' || row.length) rows.push([...row, cell])
+  // Las filas vacías del final (Excel termina con un salto de línea) sobran.
+  while (rows.length && rows[rows.length - 1].every((c) => !c.trim())) rows.pop()
+  return rows
+}
+
+/**
+ * Pega un bloque de celdas desde la celda (row, col) (fila -1 = cabecera): la tabla crece en filas
+ * y columnas hasta sus topes. `cut`: algo no ha cabido (por filas, columnas o caracteres).
+ */
+export function pasteGrid(t: MapTable, row: number, col: number, grid: string[][]): { table: MapTable; cut: boolean } {
+  let out = t
+  let cut = false
+  const width = Math.max(0, ...grid.map((r) => r.length))
+  if (col + width > TABLE_LIMITS.maxColumns) cut = true
+  while (out.columns.length < Math.min(col + width, TABLE_LIMITS.maxColumns)) out = insertColumn(out, out.columns.length)
+  grid.forEach((cells, k) => {
+    const r = row + k
+    if (r >= out.rows.length) {
+      if (out.rows.length >= TABLE_LIMITS.maxRows) {
+        cut = true
+        return
+      }
+      out = insertRow(out, out.rows.length)
+    }
+    cells.forEach((v, j) => {
+      const c = col + j
+      if (c >= out.columns.length) return
+      out = setCell(out, r, c, v)
+      const puesto = r < 0 ? out.columns[c] : out.rows[r][c]
+      if (puesto.length < cleanCell(v).length || v.trim().length > TABLE_LIMITS.maxCell) cut = true
+    })
+  })
+  return { table: out, cut }
 }
 
 // Los estilos de filas y columnas viajan con ellas: se insertan, se borran y se mueven a la vez.

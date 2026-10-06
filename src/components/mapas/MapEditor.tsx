@@ -20,6 +20,7 @@ import { MindMapCanvas } from '@/components/mapas/proto/components/Canvas/MindMa
 import { InteractiveBackground } from '@/components/mapas/proto/components/Canvas/InteractiveBackground'
 import { CustomMiniMap } from '@/components/mapas/proto/components/Canvas/CustomMiniMap'
 import { ExportDialog } from '@/components/mapas/proto/components/Toolbar/ExportDialog'
+import { TableEditorDialog } from '@/components/mapas/proto/components/TableEditor/TableEditorDialog'
 import { BAR_H, EditorTopBar, type SaveState } from '@/components/mapas/proto/components/Toolbar/EditorTopBar'
 import { CategoryStylesPanel } from '@/components/mapas/proto/components/Toolbar/CategoryStylesPanel'
 import { StylePanel } from '@/components/mapas/proto/components/Toolbar/StylePanel'
@@ -491,6 +492,7 @@ function EditorInner({
         {overlay}
       </div>
       <ExportDialog mapTitle={title} onExportJson={onExportJson} />
+      <TableEditorDialog />
     </div>
   )
 }

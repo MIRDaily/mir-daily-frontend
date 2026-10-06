@@ -1255,3 +1255,56 @@ test('estilo de celda: se sanea al importar, sale en el PDF y el ahorro de tinta
   // La letra blanca no se leería sobre papel: pasa a la de la tabla.
   assert.notEqual(rec2.texts.find((x) => x.str.startsWith('Urato'))?.color, '#FFFFFF')
 })
+
+// ---- Popup de la tabla: pegar desde Excel o Word y tope de caracteres --------------------------
+
+import { parseClipboardGrid, pasteGrid, setTitle, tableChars } from '@/lib/mapas/table'
+
+test('pegar: lee las celdas de Excel (tabuladores, comillas, salto final) y de Word', () => {
+  assert.deepEqual(parseClipboardGrid('a\tb\r\nc\td\r\n'), [['a', 'b'], ['c', 'd']])
+  // Excel entrecomilla la celda con saltos de línea o comillas ("" = una comilla).
+  assert.deepEqual(parseClipboardGrid('BNP\t"125\n(edad)"\nx\t"dijo ""no"""\n'), [['BNP', '125\n(edad)'], ['x', 'dijo "no"']])
+  // Una comilla que no abre una celda entrecomillada es texto normal.
+  assert.deepEqual(parseClipboardGrid('"Gota" úrica\tsí'), [['"Gota" úrica', 'sí']])
+  assert.deepEqual(parseClipboardGrid('"sin cerrar\tb'), [['"sin cerrar', 'b']])
+  // Una sola columna (sin tabuladores) también es una tabla; las celdas vacías se conservan.
+  assert.deepEqual(parseClipboardGrid('a\n\nc\n\n'), [['a'], [''], ['c']])
+})
+
+test('pegar: reparte desde la celda activa y la tabla crece hasta sus topes', () => {
+  const { table, cut } = pasteGrid(TABLA, 1, 1, [['N', 'P', 'extra'], ['x', 'y', 'z']])
+  assert.equal(cut, false)
+  assert.deepEqual(table.columns, ['', 'Gota', 'Pseudogota', ''])
+  assert.deepEqual(table.rows[1], ['Birrefringencia', 'N', 'P', 'extra'])
+  assert.deepEqual(table.rows[2], ['', 'x', 'y', 'z'])
+  // En la cabecera: la primera fila pegada es la cabecera.
+  const cab = pasteGrid(TABLA, -1, 0, [['A', 'B', 'C'], ['1', '2', '3']]).table
+  assert.deepEqual(cab.columns, ['A', 'B', 'C'])
+  assert.deepEqual(cab.rows[0], ['1', '2', '3'])
+  assert.equal(cab.rows.length, 2)
+  // Lo que no cabe se avisa (columnas, filas, largo de celda).
+  const ancho = pasteGrid(TABLA, 0, 0, [Array.from({ length: 12 }, (_, i) => `c${i}`)])
+  assert.equal(ancho.cut, true)
+  assert.equal(ancho.table.columns.length, TABLE_LIMITS.maxColumns)
+  const largo = pasteGrid(TABLA, 0, 0, Array.from({ length: 60 }, (_, i) => [`f${i}`]))
+  assert.equal(largo.cut, true)
+  assert.equal(largo.table.rows.length, TABLE_LIMITS.maxRows)
+  assert.equal(pasteGrid(TABLA, 0, 0, [['x'.repeat(400)]]).cut, true)
+  // Lo pegado es texto plano.
+  assert.equal(pasteGrid(TABLA, 0, 0, [['<b>Urato</b>']]).table.rows[0][0], 'Urato')
+})
+
+test('tope de caracteres: editar no deja pasar de él, así la tabla no pierde filas al recargar', () => {
+  let t: MapTable = { title: '', columns: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], rows: [] }
+  const grid = Array.from({ length: 40 }, () => Array.from({ length: 8 }, () => 'x'.repeat(150)))
+  const pegado = pasteGrid(t, 0, 0, grid)
+  assert.equal(pegado.cut, true)
+  t = pegado.table
+  assert.ok(tableChars(t) <= TABLE_LIMITS.maxTotal)
+  // Escribir más en una celda tampoco pasa del tope.
+  t = setCell(t, 39, 7, 'y'.repeat(150))
+  t = setTitle(t, 'Un título largo')
+  assert.ok(tableChars(t) <= TABLE_LIMITS.maxTotal)
+  // Y al volver a cargarla no se pierde nada.
+  assert.deepEqual(sanitizeTable(t), t)
+})
