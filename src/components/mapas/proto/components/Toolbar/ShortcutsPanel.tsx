@@ -28,7 +28,7 @@ const SHORTCUTS: { keys: string[]; desc: string }[] = [
   { keys: ['Click +'], desc: 'Añadir nodo hijo' },
   { keys: ['Supr'], desc: 'Eliminar selección' },
   { keys: ['Ctrl', 'Z'], desc: 'Deshacer' },
-  { keys: ['Ctrl', '⇧Z'], desc: 'Rehacer' },
+  { keys: ['Ctrl', 'Y'], desc: 'Rehacer (también Ctrl+⇧Z)' },
   { keys: ['Ctrl', 'C'], desc: 'Copiar nodos' },
   { keys: ['Ctrl', 'X'], desc: 'Cortar nodos' },
   { keys: ['Ctrl', 'V'], desc: 'Pegar nodos' },

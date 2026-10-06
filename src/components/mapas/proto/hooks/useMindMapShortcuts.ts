@@ -238,7 +238,8 @@ export function useMindMapShortcuts() {
         e.preventDefault()
         history.undo()
       }
-      if (isMod && (e.key === 'Z' || (e.key === 'z' && e.shiftKey))) {
+      // Rehacer: Ctrl+Mayús+Z o Ctrl+Y (lo habitual en Windows).
+      if (isMod && !e.altKey && (e.key === 'Z' || (e.key === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y')) {
         e.preventDefault()
         history.redo()
       }

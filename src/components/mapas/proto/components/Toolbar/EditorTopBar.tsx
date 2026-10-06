@@ -160,7 +160,7 @@ export function EditorTopBar({ title, onTitleChange, save, onRetry, statusText, 
         <Btn t={t} onClick={() => useHistoryStore.getState().undo()} title="Deshacer (Ctrl+Z)">
           <Undo2 size={16} />
         </Btn>
-        <Btn t={t} onClick={() => useHistoryStore.getState().redo()} title="Rehacer (Ctrl+Mayús+Z)">
+        <Btn t={t} onClick={() => useHistoryStore.getState().redo()} title="Rehacer (Ctrl+Y o Ctrl+Mayús+Z)">
           <Redo2 size={16} />
         </Btn>
         <Sep t={t} />
