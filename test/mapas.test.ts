@@ -1012,3 +1012,17 @@ test('exportar con ahorro de tinta: la tabla pierde la franja rellena y el títu
   assert.ok(!rec.shapes.some((s) => s.fill && s.fill !== '#FFFFFF'), 'sin rellenos de color')
   assert.equal(rec.texts.find((t) => t.str.startsWith('Gota'))?.color, '#D9A441')
 })
+
+test('tabla: cabecera sin la celda de la esquina → se añade y las columnas no se corren', () => {
+  const t = sanitizeTable({
+    columns: ['UMS', 'PPCD', 'HA', 'OXCA'],
+    rows: [
+      ['Forma del cristal', 'Aguja', 'Romboidal pequeño', 'Muy pequeños', 'Bipiramidal'],
+      ['Birrefringencia', 'Muy negativa', 'Débil positiva', 'No', 'Muy positiva'],
+    ],
+  })!
+  assert.deepEqual(t.columns, ['', 'UMS', 'PPCD', 'HA', 'OXCA'])
+  assert.deepEqual(t.rows[1], ['Birrefringencia', 'Muy negativa', 'Débil positiva', 'No', 'Muy positiva'])
+  // Con la esquina ya puesta (o una sola fila larga entre varias), no se toca.
+  assert.deepEqual(sanitizeTable({ columns: ['', 'A'], rows: [['x', '1'], ['y', '2']] })!.columns, ['', 'A'])
+})

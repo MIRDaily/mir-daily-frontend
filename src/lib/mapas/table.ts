@@ -68,7 +68,13 @@ export function sanitizeTable(raw: unknown, fallbackTitle = ''): MapTable | null
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const r = raw as Record<string, unknown>
   if (!Array.isArray(r.columns) || r.columns.length === 0) return null
-  const columns = r.columns.slice(0, TABLE_LIMITS.maxColumns).map((c) => cleanCell(c))
+  const header = r.columns.map((c) => cleanCell(c))
+  // Cabecera sin la celda de la esquina (la mayoría de las filas trae una celda más): se añade
+  // vacía delante. Si no, las filas se juntaban por el final y las columnas quedaban corridas.
+  const lengths = (Array.isArray(r.rows) ? r.rows : []).filter(Array.isArray).map((x) => (x as unknown[]).length)
+  const oneMore = lengths.filter((n) => n === header.length + 1).length
+  if (header[0] !== '' && oneMore > lengths.length / 2) header.unshift('')
+  const columns = header.slice(0, TABLE_LIMITS.maxColumns)
   const title = cleanCell(typeof r.title === 'string' ? r.title : fallbackTitle, TABLE_LIMITS.maxTitle, 0)
   let total = title.length + columns.join('').length
   const rows: string[][] = []
