@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { useReactFlow } from '@xyflow/react'
 import {
   ArrowLeft,
+  BookOpenCheck,
   Check,
   ChevronDown,
   FileDown,
@@ -24,6 +25,7 @@ import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import { showUpToLevel } from '@/components/mapas/proto/utils/branches'
 import { addTableAndEdit } from '@/components/mapas/proto/utils/tables'
+import { setStudyMode } from '@/components/mapas/proto/utils/study'
 import type { BgStyle } from '@/components/mapas/proto/types/store.types'
 
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'error'
@@ -53,6 +55,7 @@ export function EditorTopBar({ title, onTitleChange, save, onRetry, statusText, 
   const categoriesOpen = useUIStore((s) => s.categoriesPanelOpen)
   const setCategoriesOpen = useUIStore((s) => s.setCategoriesPanelOpen)
   const exportOpen = useUIStore((s) => s.exportOpen)
+  const study = useUIStore((s) => s.studyMode)
 
   const addNode = () => {
     const store = useMindMapStore.getState()
@@ -150,6 +153,19 @@ export function EditorTopBar({ title, onTitleChange, save, onRetry, statusText, 
 
       {/* Centro: lo que se usa a cada rato */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+        <Btn
+          t={t}
+          onClick={() => setStudyMode(!study)}
+          title={study ? 'Salir del modo estudio (Esc sin nada seleccionado)' : 'Modo estudio: tapa las hojas y destápalas con un clic'}
+          label={study ? 'Salir de estudio' : 'Estudiar'}
+          active={study}
+        >
+          <BookOpenCheck size={16} />
+        </Btn>
+        {/* En el modo estudio no se edita: fuera añadir, tabla, deshacer y ordenar. */}
+        {!study && (
+          <>
+        <Sep t={t} />
         <Btn t={t} onClick={addNode} title="Nuevo nodo sin relaciones (N, o Alt+N)" tone="accent" label="Añadir">
           <Plus size={16} />
         </Btn>
@@ -167,11 +183,13 @@ export function EditorTopBar({ title, onTitleChange, save, onRetry, statusText, 
         <Btn t={t} onClick={onAutoLayout} title="Ordenar el mapa automáticamente" label="Ordenar">
           <Network size={16} />
         </Btn>
+          </>
+        )}
         <span className="hide-md" style={{ display: 'contents' }}>
           <Btn t={t} onClick={() => useUIStore.getState().setSearchOpen(true)} title="Buscar en el mapa (Ctrl+F)" label="Buscar">
             <Search size={16} />
           </Btn>
-          <Btn
+          {!study && <Btn
             t={t}
             onClick={() => setCategoriesOpen(!categoriesOpen)}
             title="Estilos de las categorías"
@@ -179,7 +197,7 @@ export function EditorTopBar({ title, onTitleChange, save, onRetry, statusText, 
             active={categoriesOpen}
           >
             <Shapes size={16} />
-          </Btn>
+          </Btn>}
           <LevelsMenu t={t} />
         </span>
       </div>

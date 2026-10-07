@@ -52,6 +52,8 @@ export function MindMapCanvas() {
 
   const t               = useTheme()
   const setStylePanelOpen = useUIStore((s) => s.setStylePanelOpen)
+  // Modo estudio: el lienzo se mueve y se pliega, pero nada se arrastra, conecta ni estiliza.
+  const study = useUIStore((s) => s.studyMode)
   // Used to set data-selected-count for CSS-based multi-select indicator
   const wrapperRef = useRef<HTMLDivElement>(null)
 
@@ -93,6 +95,11 @@ export function MindMapCanvas() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={connectNodes}
+        nodesDraggable={!study}
+        nodesConnectable={!study}
+        // Con los nodos fijos, React Flow deja que el zoom del lienzo se quede el doble clic sobre
+        // un nodo (y lo para): en el modo estudio el doble clic destapa la rama.
+        zoomOnDoubleClick={!study}
         onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
@@ -119,8 +126,8 @@ export function MindMapCanvas() {
         proOptions={PRO_OPTIONS}
       >
         <Controls style={controlsStyle} />
-        <EdgeStylePanel />
-        <GroupToolbar />
+        {!study && <EdgeStylePanel />}
+        {!study && <GroupToolbar />}
       </ReactFlow>
     </div>
   )

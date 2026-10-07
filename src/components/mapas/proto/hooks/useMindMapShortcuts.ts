@@ -11,6 +11,7 @@ import { parentMap } from '@/components/mapas/proto/utils/tree'
 import { mirrorBranches, showUpToLevel, toggleBranch, toggleBranches } from '@/components/mapas/proto/utils/branches'
 import { addTableAndEdit, isTableNode, openTableEditor } from '@/components/mapas/proto/utils/tables'
 import { goToPending, markReviewed } from '@/components/mapas/proto/utils/review'
+import { setStudyMode, toggleBranchReveal } from '@/components/mapas/proto/utils/study'
 import { isPendingReview } from '@/lib/mapas/ia/revision'
 import {
   addChildAndEdit,
@@ -55,6 +56,40 @@ export function useMindMapShortcuts() {
       const store   = useMindMapStore.getState()
       const history = useHistoryStore.getState()
       const ui      = useUIStore.getState()
+
+      // ── Modo estudio: solo mirar. Moverse, plegar, buscar y destapar; nada que edite. ──
+      if (ui.studyMode) {
+        const onCanvas = target === document.body || !!target.closest?.('.react-flow')
+        const sel = getNodes().filter((n) => n.selected && !n.hidden).map((n) => n.id)
+        if (isMod && !e.altKey && e.key.toLowerCase() === 'f') {
+          e.preventDefault()
+          ui.setSearchOpen(true)
+        } else if (isMod && !e.altKey && e.key.toLowerCase() === 'p') {
+          e.preventDefault()
+          ui.setExportOpen(true)
+        } else if (e.altKey && !isMod && /^Digit[0-9]$/.test(e.code)) {
+          e.preventDefault()
+          const level = Number(e.code.slice(5))
+          showUpToLevel(level === 0 ? null : level)
+        } else if (onCanvas && !isMod && !e.altKey && ARROWS[e.key] && sel.length === 1) {
+          e.preventDefault()
+          navigate(sel[0], ARROWS[e.key])
+        } else if (onCanvas && !isMod && e.key === ' ' && sel.length) {
+          e.preventDefault()
+          if (sel.length > 1) toggleBranches(sel)
+          else toggleBranch(sel[0])
+        } else if (onCanvas && !isMod && e.key === 'Enter' && sel.length) {
+          // Enter: destapa (o vuelve a tapar) lo seleccionado, con toda su rama.
+          e.preventDefault()
+          toggleBranchReveal(sel)
+        } else if (e.key === 'Escape') {
+          if (sel.length) useMindMapStore.setState((s) => { for (const n of s.nodes) if (n.selected) n.selected = false })
+          else setStudyMode(false)
+        } else if (isMod && ['z', 'y', 'x', 'v'].includes(e.key.toLowerCase())) {
+          e.preventDefault() // ni deshacer ni pegar: en estudio no se cambia el mapa
+        }
+        return
+      }
 
       // ── Teclado tipo XMind: Tab = hijo, Enter = hermano, F2 = editar, flechas = moverse ──
       // Solo con exactamente un nodo seleccionado y el foco en el lienzo (o en ninguna parte): con

@@ -1,7 +1,7 @@
 import { memo, useCallback } from 'react'
 import { NodeToolbar, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import { motion } from 'framer-motion'
-import { Trash2, Plus, Palette, FlipHorizontal2, Table2, PenLine, CheckCheck } from 'lucide-react'
+import { Trash2, Plus, Palette, FlipHorizontal2, Table2, PenLine, CheckCheck, Eye, EyeOff, WalletCards } from 'lucide-react'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
@@ -20,6 +20,10 @@ import { addTableAndEdit, openTableEditor } from '@/components/mapas/proto/utils
 import { markReviewed } from '@/components/mapas/proto/utils/review'
 import { isPendingReview } from '@/lib/mapas/ia/revision'
 import { IAHoverChip } from './IAHoverChip'
+import { StudyLabel } from './StudyLabel'
+import { branchLeaves, toggleBranchReveal, toggleLeafReveal } from '@/components/mapas/proto/utils/study'
+import { isCoverable } from '@/lib/mapas/study'
+import { openFlashcardsFromBranch } from '@/components/mapas/proto/utils/flashcards'
 
 function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   // Solo se lee lo que este nodo pinta; las acciones se piden a la store en el momento de
@@ -36,15 +40,40 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   const multiSelect = useUIStore((s) => s.multiSelect)
   const editSeed = useMindMapStore((s) => (s.editingNodeId === id ? s.editSeed : null))
 
+  // Modo estudio: las hojas se tapan; un clic las destapa (o las vuelve a tapar).
+  const study = useUIStore((s) => s.studyMode)
+  const coverable = study && isCoverable({ id, data })
+  const covered = useUIStore((s) => coverable && !s.revealed.has(id))
+  // ¿Está toda la rama destapada? (para el botón de la barra del nodo en el modo estudio)
+  const branchShown = useUIStore((s) => {
+    if (!s.studyMode || !data.childCount || !selected) return false
+    const leaves = branchLeaves([id])
+    return leaves.length > 0 && leaves.every((l) => s.revealed.has(l))
+  })
+
   const isTable = !!data.table
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
+      if (useUIStore.getState().studyMode) {
+        // En el modo estudio no se edita: el doble clic en una rama la destapa entera.
+        if (data.childCount) toggleBranchReveal([id])
+        return
+      }
       // En una tabla, el doble clic abre su popup (en la celda pulsada: ver TableBody).
       if (isTable) openTableEditor(id)
       else useMindMapStore.getState().setEditing(id)
     },
-    [id, isTable]
+    [id, isTable, data.childCount]
+  )
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      // Solo el primer clic: el segundo de un doble clic lo deshacía.
+      if (!coverable || e.detail > 1) return
+      toggleLeafReveal(id)
+    },
+    [id, coverable]
   )
 
   const handleSave = useCallback(
@@ -69,6 +98,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   }, [])
 
   const spawnChild = useCallback((direction?: 'top' | 'bottom' | 'left' | 'right') => {
+    if (useUIStore.getState().studyMode) return
     const store = useMindMapStore.getState()
     useHistoryStore.getState().pushSnapshot(store.nodes, store.edges)
     const newId = store.addNode(id, direction)
@@ -96,6 +126,10 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
     openTableEditor(id)
   }, [id])
 
+  const handleFlashcards = useCallback(() => {
+    openFlashcardsFromBranch(id)
+  }, [id])
+
   const handleReviewed = useCallback(() => {
     markReviewed(id, true)
   }, [id])
@@ -113,7 +147,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   // Ctrl+Right-click → open style popup
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
-      if (!e.ctrlKey) return
+      if (!e.ctrlKey || useUIStore.getState().studyMode) return
       e.preventDefault()
       e.stopPropagation()
       const ui = useUIStore.getState()
@@ -125,11 +159,15 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
 
   const animateState = isEditing ? 'editing' : selected ? 'selected' : 'idle'
   const t = useTheme()
-  const pending = isPendingReview(data.ia)
+  const pending = isPendingReview(data.ia) && !study
+  const rootClass = ['mindmap-node-root', pending && 'ia-dudoso', coverable && (covered ? 'estudio-tapado' : 'estudio-destapado')]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <div
-      className={pending ? 'mindmap-node-root ia-dudoso' : 'mindmap-node-root'}
+      className={rootClass}
+      onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       onMouseEnter={() => useMindMapStore.getState().setHovered(id)}
@@ -137,7 +175,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
       style={{ position: 'relative', width: '100%', height: '100%' }}
     >
       <NodeResizer
-        isVisible={!!selected && !isEditing && !isTable}
+        isVisible={!!selected && !isEditing && !isTable && !study}
         minWidth={100}
         minHeight={36}
         lineStyle={{ display: 'none' }}
@@ -165,7 +203,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
         }}
       >
         {data.table ? (
-          <TableBody id={id} table={data.table} style={data.style} selected={!!selected} ia={data.ia} />
+          <TableBody id={id} table={data.table} style={data.style} selected={!!selected} ia={data.ia} covered={covered} />
         ) : (
         <NodeBody style={data.style} isSelected={!!selected} isDark={t.isDark}>
           {isEditing ? (
@@ -178,6 +216,8 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
               selectAll={data.label === 'Nueva idea'}
               seed={editSeed}
             />
+          ) : covered ? (
+            <StudyLabel label={data.label} style={data.style} />
           ) : (
             <NodeLabel label={data.label} style={data.style} />
           )}
@@ -189,9 +229,34 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
           ?
         </span>
       )}
-      {data.ia && !isEditing && <IAHoverChip id={id} ia={data.ia} />}
+      {data.ia && !isEditing && !study && <IAHoverChip id={id} ia={data.ia} />}
 
-      <NodeToolbar isVisible={!!selected && !isEditing && !multiSelect} position={Position.Top}>
+      {/* Modo estudio: la barra del nodo solo destapa o tapa su rama. */}
+      <NodeToolbar isVisible={study && !!selected && !multiSelect && !!data.childCount} position={Position.Top}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 4,
+            background: t.bgPanel,
+            border: `1px solid ${t.border}`,
+            borderRadius: 10,
+            padding: '4px 6px',
+            boxShadow: `0 4px 16px ${t.shadow}`,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => toggleBranchReveal([id])}
+            title={branchShown ? 'Volver a tapar esta rama' : 'Destapar esta rama (o doble clic)'}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: t.accent, padding: '5px 8px', borderRadius: 7, fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 700 }}
+          >
+            {branchShown ? <EyeOff size={14} /> : <Eye size={14} />}
+            {branchShown ? 'Tapar rama' : 'Destapar rama'}
+          </button>
+        </div>
+      </NodeToolbar>
+
+      <NodeToolbar isVisible={!!selected && !isEditing && !multiSelect && !study} position={Position.Top}>
         <div
           style={{
             display: 'flex',
@@ -218,6 +283,9 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
           </ToolbarBtn>
           <ToolbarBtn onClick={handleAddTable} title="Añadir una tabla hija (Alt+T)" color={t.accent} hoverBg={t.hoverBg}>
             <Table2 size={14} />
+          </ToolbarBtn>
+          <ToolbarBtn onClick={handleFlashcards} title="Crear flashcards con esta rama" color={t.textSecondary} hoverBg={t.hoverBg}>
+            <WalletCards size={14} />
           </ToolbarBtn>
           {data.parentId && (
             <ToolbarBtn onClick={handleMirror} title="Pasar la rama al otro lado, en espejo (Alt+M)" color={t.textSecondary} hoverBg={t.hoverBg}>

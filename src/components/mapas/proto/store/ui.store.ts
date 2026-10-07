@@ -19,6 +19,8 @@ export const useUIStore = create<UIState>((set) => ({
       return changed ? { revealed: next } : s
     }),
   coverAll: () => set((s) => (s.revealed.size ? { revealed: new Set() } : s)),
+  flashcardsFrom: null,
+  setFlashcardsFrom: (flashcardsFrom) => set({ flashcardsFrom }),
   tableEditor: null,
   setTableEditor: (tableEditor) => set({ tableEditor }),
   stylePanelOpen: false,

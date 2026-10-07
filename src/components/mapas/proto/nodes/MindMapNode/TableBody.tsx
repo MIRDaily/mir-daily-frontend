@@ -3,6 +3,7 @@ import type { NodeStyle } from '@/components/mapas/proto/types/node.types'
 import { resolveFont } from '@/components/mapas/proto/utils/font'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import { openTableEditor } from '@/components/mapas/proto/utils/tables'
+import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { readableOn, tableAccent, withAlpha } from '@/components/mapas/proto/utils/tableColors'
 import {
   cellStyleOf,
@@ -59,9 +60,12 @@ interface TableBodyProps {
   selected: boolean
   /** Revisión guiada: las celdas dudosas de una tabla pendiente se marcan en ámbar. */
   ia?: NodoIA
+  /** Modo estudio con la tabla tapada: se ven el título, la cabecera y la primera columna. */
+  covered?: boolean
 }
 
-function TableBodyInner({ id, table, style, selected, ia }: TableBodyProps) {
+function TableBodyInner({ id, table, style, selected, ia, covered = false }: TableBodyProps) {
+  const study = useUIStore((s) => s.studyMode)
   const t = useTheme()
   const fontSize = style.fontSize ?? 14
   const family = resolveFont(style.fontFamily)
@@ -74,6 +78,8 @@ function TableBodyInner({ id, table, style, selected, ia }: TableBodyProps) {
 
   /** Doble clic: el popup se abre con el cursor en esa celda. */
   const open = (r: number, c: number) => (e: React.MouseEvent) => {
+    // En el modo estudio no se edita: el doble clic llega al nodo (que no hace nada en una hoja).
+    if (study) return
     e.stopPropagation()
     openTableEditor(id, r, c)
   }
@@ -111,7 +117,7 @@ function TableBodyInner({ id, table, style, selected, ia }: TableBodyProps) {
         }}
         onDoubleClick={open(r, c)}
       >
-        {cellText(text)}
+        {r >= 0 && c > 0 && covered && text ? <span className="estudio-tapa" style={{ ['--tapa' as string]: st.color ?? style.textColor }}>{text}</span> : cellText(text)}
       </Tag>
     )
   }
@@ -125,7 +131,7 @@ function TableBodyInner({ id, table, style, selected, ia }: TableBodyProps) {
   return (
     <div
       className="node-body node-table"
-      title="Doble clic para editar la tabla"
+      title={study ? (covered ? 'Clic para destapar la tabla' : 'Clic para volver a taparla') : 'Doble clic para editar la tabla'}
       style={{
         width: g.width,
         boxSizing: 'border-box',

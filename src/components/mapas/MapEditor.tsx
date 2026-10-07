@@ -28,6 +28,7 @@ import { TextFormatPopup } from '@/components/mapas/proto/components/Toolbar/Tex
 import { ShortcutsPanel } from '@/components/mapas/proto/components/Toolbar/ShortcutsPanel'
 import { SearchBar } from '@/components/mapas/proto/components/Toolbar/SearchBar'
 import ReviewBanner from '@/components/mapas/ia/ReviewBanner'
+import { StudyBar } from '@/components/mapas/proto/components/Toolbar/StudyBar'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
@@ -191,6 +192,8 @@ export default function MapEditor(props: Props) {
     ui.setSelectedNodeId(null)
     ui.setStylePanelOpen(false)
     ui.setFocusBlur(true) // el desenfoque al pasar el ratón empieza siempre activado
+    ui.setStudyMode(false) // cada mapa se abre para editar, con todo tapado si se entra a estudiar
+    ui.setFlashcardsFrom(null)
     ownTick.current = useMindMapStore.getState().loadTick
   }, [prepared])
 
@@ -215,6 +218,7 @@ function EditorInner({
 }: Props & { fromTree: boolean; initialSaved: string; ownTick: React.RefObject<number> }) {
   const theme = useUIStore((s) => s.theme)
   const bgStyle = useUIStore((s) => s.bgStyle)
+  const studyMode = useUIStore((s) => s.studyMode)
   const isDark = theme === 'dark'
   const { fitView, getNodes } = useReactFlow()
   const nodesInitialized = useNodesInitialized()
@@ -471,7 +475,7 @@ function EditorInner({
   )
 
   return (
-    <div className={`mapa-root ${MAP_FONT_CLASSES}`} data-theme={theme} style={rootStyle}>
+    <div className={`mapa-root ${MAP_FONT_CLASSES}`} data-theme={theme} data-study={studyMode ? '' : undefined} style={rootStyle}>
       {/* Capa 0: fondo de puntos interactivo. Capa 1+: lienzo y controles (transparentes). */}
       <InteractiveBackground isDark={isDark} bgStyle={bgStyle} />
       {/* Cabecera única: título, acciones y vista en una sola franja (nada flota ni se pisa). */}
@@ -490,6 +494,7 @@ function EditorInner({
         <StylePanel />
         <SearchBar />
         <ReviewBanner />
+        <StudyBar />
         <TextFormatPopup />
         <ShortcutsPanel />
         <CustomMiniMap />

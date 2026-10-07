@@ -108,3 +108,23 @@ test('N / Mayús+N: orden de lectura (lado derecho y luego izquierdo, de arriba 
   assert.equal(nextPending(order, isP, 'der1b', -1), 'izq')
   assert.equal(nextPending(order, () => false, 'root', 1), null)
 })
+
+// ---------- modo estudio ----------
+
+test('estudio: la faceta queda a la vista y solo se tapa el dato', async () => {
+  const { splitFacet, splitFacetLabel, isCoverable } = await import('@/lib/mapas/study')
+  assert.deepEqual(splitFacet('Clínica: cefalea temporal'), { faceta: 'Clínica', dato: 'cefalea temporal' })
+  assert.deepEqual(splitFacet('Anatomía patológica: necrosis fibrinoide'), { faceta: 'Anatomía patológica', dato: 'necrosis fibrinoide' })
+  assert.deepEqual(splitFacet('Cefalea temporal'), { faceta: '', dato: 'Cefalea temporal' })
+  // Más de 4 palabras antes de los dos puntos: no es una faceta, se tapa todo.
+  assert.equal(splitFacet('Clasificación de Chapel Hill 2012 revisada: grandes vasos').faceta, '')
+  // Desde el label con formato del editor.
+  assert.deepEqual(splitFacetLabel('<b>Tratamiento</b>: corticoides&nbsp;y <i>tocilizumab</i>'), {
+    faceta: 'Tratamiento',
+    dato: 'corticoides y tocilizumab',
+  })
+  // Solo se tapan las hojas que cuelgan de algo (la raíz y los sueltos sin hijos, no).
+  assert.equal(isCoverable({ id: 'a', data: { parentId: 'r', childCount: 0 } }), true)
+  assert.equal(isCoverable({ id: 'a', data: { parentId: 'r', childCount: 3 } }), false)
+  assert.equal(isCoverable({ id: 'r', data: {} }), false)
+})

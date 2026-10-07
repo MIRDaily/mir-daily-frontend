@@ -68,6 +68,9 @@ export interface UIState {
   setRevealed: (ids: Iterable<string>, on: boolean) => void
   /** Tapa todo otra vez. */
   coverAll: () => void
+  /** Nodo del que se van a crear flashcards (abre su diálogo). */
+  flashcardsFrom: string | null
+  setFlashcardsFrom: (id: string | null) => void
   /** Tabla abierta en el popup de edición. */
   tableEditor: TableEditorTarget | null
   setTableEditor: (target: TableEditorTarget | null) => void
