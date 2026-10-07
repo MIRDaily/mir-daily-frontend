@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { createMap } from '@/lib/mapas/api'
 import { extraerDocumento, FORMATOS_ACEPTADOS } from '@/lib/mapas/ia/extract'
 import { iaGenerar } from '@/lib/mapas/ia/api'
+import { aplicarEvento, type FaseIA, type LineaProvisional } from '@/lib/mapas/ia/stream'
+import { INK, ProgresoIA } from './ProgresoIA'
 import {
   NODOS_POR_RAIZ,
   ExtractError,
@@ -61,6 +63,9 @@ export default function CrearConIA({
   const [error, setError] = useState<string | null>(null)
   const [progreso, setProgreso] = useState<{ hecho: number; total: number } | null>(null)
   const [segundos, setSegundos] = useState(0)
+  // Streaming: fase en curso y ramas provisionales (solo una vista; no se guardan).
+  const [faseIA, setFaseIA] = useState<FaseIA>('leyendo')
+  const [lineas, setLineas] = useState<LineaProvisional[]>([])
   const [arrastrando, setArrastrando] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -127,6 +132,8 @@ export default function CrearConIA({
     if (!extraido || !puedeGenerar) return
     setError(null)
     setSegundos(0)
+    setFaseIA('leyendo')
+    setLineas([])
     setFase('generando')
     const ctl = new AbortController()
     abortRef.current = ctl
@@ -141,7 +148,13 @@ export default function CrearConIA({
           ...(extraido.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
         },
         ctl.signal,
+        (e) => {
+          if (!montado.current || ctl.signal.aborted) return
+          if (e.tipo === 'fase') setFaseIA(e.fase)
+          else if (e.tipo === 'rama' || e.tipo === 'reinicio') setLineas((ls) => aplicarEvento(ls, e))
+        },
       )
+      // Lo que se guarda es el mapa VALIDADO del final, nunca el borrador.
       const id = await createMap(r.titulo, r.doc)
       if (!montado.current) return
       router.push(`/mapas/${id}?ia=1`)
@@ -166,7 +179,8 @@ export default function CrearConIA({
         role="dialog"
         aria-modal="true"
         aria-labelledby="crear-ia-titulo"
-        className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-[#FAF7F4] shadow-2xl"
+        className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-[#FAF7F4]"
+        style={{ border: `2px solid ${INK}`, boxShadow: `6px 6px 0 0 ${INK}` }}
       >
         <header className="flex items-start justify-between gap-4 px-6 pb-3 pt-6">
           <div>
@@ -252,7 +266,7 @@ export default function CrearConIA({
           )}
 
           {(fase === 'ajustes' || fase === 'generando') && extraido && (
-            <div className={fase === 'generando' ? 'pointer-events-none opacity-50' : ''}>
+            <div className={fase === 'generando' ? 'hidden' : ''}>
               <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3">
                 <span className="material-symbols-outlined text-[28px] text-[#E8A598]">description</span>
                 <div className="min-w-0 flex-1">
@@ -369,27 +383,30 @@ export default function CrearConIA({
           )}
 
           {fase === 'generando' && (
-            <div className="mt-4 rounded-2xl bg-white px-4 py-4" role="status" aria-live="polite">
-              <div className="h-1.5 overflow-hidden rounded-full bg-[#F1F3F5]">
-                <div
-                  className="h-full w-1/3 rounded-full bg-[#E8A598]"
-                  style={{ animation: 'ia-barra 1.4s ease-in-out infinite' }}
-                />
-              </div>
-              <p className="mt-3 text-sm font-bold text-[#2C3E50]">Generando el mapa… {segundos} s</p>
-              <p className="text-xs text-[#7D8A96]">No cierres esta ventana. Al terminar se abrirá el editor.</p>
-              <button
-                type="button"
-                onClick={() => {
-                  abortRef.current?.abort()
-                  setError('Generación cancelada. Si el servidor ya estaba trabajando, esta generación cuenta en tu cupo de hoy.')
-                  setFase('ajustes')
-                }}
-                className="pointer-events-auto mt-2 text-xs font-bold text-[#7D8A96] hover:text-[#B04A5E]"
-              >
-                Cancelar
-              </button>
-            </div>
+            <>
+              <ProgresoIA
+                fases={conTablas ? ['leyendo', 'estructura', 'tablas', 'ordenando'] : ['leyendo', 'estructura', 'ordenando']}
+                fase={faseIA}
+                lineas={lineas}
+                segundos={segundos}
+              />
+              <p className="mt-2 text-xs text-[#7D8A96]">
+                No cierres esta ventana. Al terminar se abrirá el editor con el mapa ya revisado y ordenado.{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    abortRef.current?.abort()
+                    // El servidor corta la llamada al modelo y la apunta como fallida: no cuenta en
+                    // los mapas del día (lo gastado sí cuenta en el tope global de gasto).
+                    setError('Generación cancelada: la IA ha dejado de trabajar y no cuenta en tus mapas de hoy.')
+                    setFase('ajustes')
+                  }}
+                  className="pointer-events-auto font-bold text-[#7D8A96] underline hover:text-[#B04A5E]"
+                >
+                  Cancelar
+                </button>
+              </p>
+            </>
           )}
         </div>
 
@@ -421,7 +438,7 @@ export default function CrearConIA({
           </footer>
         )}
       </div>
-      <style>{`@keyframes ia-barra{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}`}</style>
+      <style>{`@keyframes ia-barra{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}@keyframes ia-entra{from{opacity:0;transform:translateX(-0.25rem)}to{opacity:1;transform:none}}.ia-prov-entra{animation:ia-entra .25s ease-out}`}</style>
     </div>
   )
 }

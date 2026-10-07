@@ -39,13 +39,15 @@ export type EstadoIA = {
 /** Error con mensaje listo para enseñar al usuario. */
 export class ExtractError extends Error {}
 
+// Sin «parameter properties» (readonly en el constructor): Node no las sabe quitar y los tests
+// (npm test) no podrían cargar este módulo.
 export class IAError extends Error {
-  constructor(
-    message: string,
-    readonly status = 0,
-    readonly codigo = '',
-  ) {
+  readonly status: number
+  readonly codigo: string
+  constructor(message: string, status = 0, codigo = '') {
     super(message)
+    this.status = status
+    this.codigo = codigo
   }
 }
 
