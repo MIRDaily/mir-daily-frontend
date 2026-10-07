@@ -97,7 +97,7 @@ function toEngine(doc: GraphDoc): { nodes: MindMapNode[]; edges: MindMapEdge[] }
 const round = (v: number) => Math.round(v * 10) / 10
 
 /** Lo que se guarda: solo datos del mapa, nada de estado de interfaz (selección, edición, animaciones). */
-type EditorSettings = Pick<ReturnType<typeof useUIStore.getState>, 'theme' | 'bgStyle' | 'categoryStyles'>
+type EditorSettings = Pick<ReturnType<typeof useUIStore.getState>, 'theme' | 'bgStyle' | 'categoryStyles' | 'labelStyle'>
 
 function fromEngine(nodes: MindMapNode[], edges: MindMapEdge[], settings?: EditorSettings): GraphDoc {
   const gNodes: GraphNode[] = nodes.map((n) => ({
@@ -133,12 +133,17 @@ function fromEngine(nodes: MindMapNode[], edges: MindMapEdge[], settings?: Edito
       },
     }
   })
-  const { theme, bgStyle, categoryStyles } = settings ?? useUIStore.getState()
+  const { theme, bgStyle, categoryStyles, labelStyle } = settings ?? useUIStore.getState()
   return {
     version: 2,
     nodes: gNodes,
     edges: gEdges,
-    settings: { theme, bgStyle, ...(Object.keys(categoryStyles).length ? { categoryStyles } : {}) },
+    settings: {
+      theme,
+      bgStyle,
+      ...(Object.keys(categoryStyles).length ? { categoryStyles } : {}),
+      ...(labelStyle && Object.keys(labelStyle).length ? { labelStyle } : {}),
+    },
   }
 }
 
@@ -187,6 +192,7 @@ export default function MapEditor(props: Props) {
     ui.setTheme(doc.settings?.theme ?? 'light')
     ui.setBgStyle(doc.settings?.bgStyle ?? 'dots-light')
     ui.setCategoryStyles(doc.settings?.categoryStyles ?? {})
+    ui.setLabelStyle(doc.settings?.labelStyle ?? {})
     ui.setCategoriesPanelOpen(false)
     ui.setSearchOpen(false)
     // La física solo deshace solapes (no recoloca el mapa), así que vale también en mapas grandes.
@@ -222,6 +228,7 @@ function EditorInner({
   const theme = useUIStore((s) => s.theme)
   const bgStyle = useUIStore((s) => s.bgStyle)
   const studyMode = useUIStore((s) => s.studyMode)
+  const labelStyle = useUIStore((s) => s.labelStyle)
   const isDark = theme === 'dark'
   const { fitView, getNodes } = useReactFlow()
   const nodesInitialized = useNodesInitialized()
@@ -251,7 +258,7 @@ function EditorInner({
       return {
         nodes: s.nodes,
         edges: s.edges,
-        settings: { theme: u.theme, bgStyle: u.bgStyle, categoryStyles: u.categoryStyles } as EditorSettings,
+        settings: { theme: u.theme, bgStyle: u.bgStyle, categoryStyles: u.categoryStyles, labelStyle: u.labelStyle } as EditorSettings,
       }
     })(),
   )
@@ -301,8 +308,11 @@ function EditorInner({
     })
     const unsubUi = useUIStore.subscribe((s, p) => {
       if (!isMine()) return
-      if (s.theme !== p.theme || s.bgStyle !== p.bgStyle || s.categoryStyles !== p.categoryStyles) {
-        own.current = { ...own.current, settings: { theme: s.theme, bgStyle: s.bgStyle, categoryStyles: s.categoryStyles } }
+      if (s.theme !== p.theme || s.bgStyle !== p.bgStyle || s.categoryStyles !== p.categoryStyles || s.labelStyle !== p.labelStyle) {
+        own.current = {
+          ...own.current,
+          settings: { theme: s.theme, bgStyle: s.bgStyle, categoryStyles: s.categoryStyles, labelStyle: s.labelStyle },
+        }
         schedule()
       }
     })
@@ -473,12 +483,15 @@ function EditorInner({
       transition: 'background 400ms ease',
       // El tutorial deja a la izquierda la columna de la mascota: los popups anchos se centran al resto.
       ...(sandbox ? ({ '--mapa-inset-left': '424px' } as React.CSSProperties) : null),
+      // Rótulos (forma «label»): los colores que haya elegido el usuario para este mapa (ver mapas.css).
+      ...(labelStyle.color ? ({ '--rotulo-color': labelStyle.color } as React.CSSProperties) : null),
+      ...(labelStyle.studyColor ? ({ '--rotulo-estudio': labelStyle.studyColor } as React.CSSProperties) : null),
     }),
-    [isDark, sandbox],
+    [isDark, sandbox, labelStyle.color, labelStyle.studyColor],
   )
 
   return (
-    <div className={`mapa-root ${MAP_FONT_CLASSES}`} data-theme={theme} data-study={studyMode ? '' : undefined} style={rootStyle}>
+    <div className={`mapa-root ${MAP_FONT_CLASSES}`} data-theme={theme} data-study={studyMode ? '' : undefined} data-rotulo-minusculas={labelStyle.upper === false ? '' : undefined} style={rootStyle}>
       {/* Capa 0: fondo de puntos interactivo. Capa 1+: lienzo y controles (transparentes). */}
       <InteractiveBackground isDark={isDark} bgStyle={bgStyle} />
       {/* Cabecera única: título, acciones y vista en una sola franja (nada flota ni se pisa). */}

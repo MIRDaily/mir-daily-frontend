@@ -457,16 +457,25 @@
    sobre la rama, en gris. En el modo estudio, más marcado (es la guía de lo que va debajo), con el
    mismo tamaño: el mapa no se mueve al cambiar de modo. */
 .mapa-root .shape-label .node-label {
-  color: #8A96A3 !important;
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: var(--rotulo-color, #8A96A3) !important;
 }
 .mapa-root[data-theme="dark"] .shape-label .node-label {
-  color: #8F877E !important;
+  color: var(--rotulo-color, #8F877E) !important;
 }
 .mapa-root[data-study] .shape-label .node-label {
-  color: #2C3E50 !important;
+  color: var(--rotulo-estudio, #2C3E50) !important;
 }
 .mapa-root[data-theme="dark"][data-study] .shape-label .node-label {
-  color: #FAF7F4 !important;
+  color: var(--rotulo-estudio, #FAF7F4) !important;
+}
+/* Pestaña «Rótulos» de Categorías: sin mayúsculas. */
+.mapa-root[data-rotulo-minusculas] .shape-label .node-label {
+  text-transform: none;
+  letter-spacing: 0.01em;
 }
 .mapa-root .mindmap-node-root:hover .shape-label {
   background: rgba(125, 138, 150, 0.1) !important;

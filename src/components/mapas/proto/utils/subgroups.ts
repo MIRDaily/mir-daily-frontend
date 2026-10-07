@@ -2,6 +2,7 @@ import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { isSubgroup } from '@/lib/mapas/subgroups'
 import { toLabelStyle } from '@/lib/mapas/graph'
+import { labelFont } from '@/components/mapas/proto/utils/categories'
 import { plainText } from '@/lib/mapas/export/richtext'
 
 // «Convertir subgrupos en rótulos» para los mapas que ya estaban hechos: la regla de
@@ -43,9 +44,10 @@ export function convertToLabels(ids: string[]): number {
   const changed = store.nodes.filter((n) => targets.has(n.id) && n.data.style.shape !== 'label')
   if (changed.length === 0) return 0
   useHistoryStore.getState().pushSnapshot(store.nodes, store.edges)
+  const size = labelFont()
   useMindMapStore.setState((s) => {
     for (const n of s.nodes) {
-      if (targets.has(n.id) && n.data.style.shape !== 'label') n.data.style = toLabelStyle(n.data.style)
+      if (targets.has(n.id) && n.data.style.shape !== 'label') n.data.style = toLabelStyle(n.data.style, size)
     }
   })
   return changed.length

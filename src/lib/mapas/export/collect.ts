@@ -1,4 +1,6 @@
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
+import { useUIStore } from '@/components/mapas/proto/store/ui.store'
+import { LABEL_INK } from '@/lib/mapas/graph'
 import { childrenMap, descendantsOf, parentMap } from '@/components/mapas/proto/utils/tree'
 import { parseColor, toCss } from '@/lib/mapas/export/color'
 import { parseLabel, plainText } from '@/lib/mapas/export/richtext'
@@ -51,6 +53,9 @@ function build(ids: Set<string> | null, title: string): Section {
     const h = n.measured?.height ?? (typeof n.height === 'number' ? n.height : undefined)
     if (!w || !h) continue
     const st = n.data.style
+    // Un rótulo sale con el color y las mayúsculas de la pestaña «Rótulos» (de serie, gris).
+    const label = st.shape === 'label'
+    const labelStyle = useUIStore.getState().labelStyle
     sceneNodes.push({
       id: n.id,
       parentId: n.data.parentId ?? null,
@@ -62,7 +67,8 @@ function build(ids: Set<string> | null, title: string): Section {
       fill: cssColor(st.color, '#FFFFFF'),
       stroke: cssColor(st.borderColor, '#EDE6DE'),
       strokeWidth: st.borderWidth,
-      textColor: cssColor(st.textColor, '#2A2420'),
+      textColor: label ? labelStyle.color ?? LABEL_INK : cssColor(st.textColor, '#2A2420'),
+      ...(label ? { upper: labelStyle.upper !== false } : {}),
       fontFamily: st.fontFamily,
       fontSize: st.fontSize ?? 14,
       align: st.textAlign ?? 'center',

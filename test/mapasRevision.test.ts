@@ -271,7 +271,7 @@ test('exportar: un rótulo sale sin caja, en mayúsculas y en gris', async () =>
   }
   const node = {
     id: 'sg', parentId: null, x: 0, y: 0, w: 220, h: 26, shape: 'label' as const, fill: '#FFFFFF', stroke: '#7D8A96',
-    strokeWidth: 2, textColor: '#2A2420', fontFamily: 'Lexend', fontSize: 11, align: 'center' as const,
+    strokeWidth: 2, textColor: '#7D8A96', fontFamily: 'Lexend', fontSize: 11, align: 'center' as const,
     paragraphs: parseLabel('Clínica y complicaciones'),
   }
   const page = { section: { title: '', edges: [], nodes: [node] }, region: { x: 0, y: 0, w: 500, h: 500 }, scale: 1, w: 500, h: 500, area: { x: 0, y: 0, w: 500, h: 500 }, clip: false }
@@ -279,4 +279,48 @@ test('exportar: un rótulo sale sin caja, en mayúsculas y en gris', async () =>
   assert.equal(shapes.length, 0, 'sin caja')
   assert.ok(texts.length > 0 && texts.every((t) => t.str === t.str.toUpperCase() && t.bold && t.color === '#7D8A96'))
   assert.ok(texts.map((t) => t.str).join(' ').includes('CLÍNICA'))
+})
+
+test('rótulos: ajustes del mapa saneados, rótulo fijado por categoría con su letra y vuelta atrás', async () => {
+  const { sanitizeLabelStyle, styleForCategory, styleForNode, LABEL_FONT_SIZE } = await import('@/lib/mapas/graph')
+  assert.deepEqual(sanitizeLabelStyle({ color: '#123456', studyColor: 'rojo', fontSize: 99, upper: false, otro: 1 }), {
+    color: '#123456',
+    fontSize: 20,
+    upper: false,
+  })
+  assert.deepEqual(sanitizeLabelStyle(null), {})
+  // Se guardan con el mapa.
+  const g = sanitizeGraph({ version: 2, nodes: [{ id: 'a', data: { label: 'A' } }], edges: [], settings: { labelStyle: { color: '#ABCDEF', upper: false } } })
+  assert.deepEqual(g.settings?.labelStyle, { color: '#ABCDEF', upper: false })
+  // Forma «rótulo» fijada para una categoría: sus nodos pasan a rótulo con la letra de rótulo…
+  const natural = styleForNode(2, 'clinica', 'Clínica: cefalea')
+  const forced = styleForCategory(natural, 'clinica', { clinica: { shape: 'label' } }, { natural }, 12)
+  assert.equal(forced.shape, 'label')
+  assert.equal(forced.fontSize, 12)
+  // …y al quitarla vuelven a su forma y a su letra.
+  const back = styleForCategory(forced, 'clinica', {}, { prev: { shape: 'label' }, natural })
+  assert.equal(back.shape, natural.shape)
+  assert.equal(back.fontSize, natural.fontSize)
+  assert.equal(styleForCategory(natural, 'clinica', { clinica: { shape: 'label' } }, { natural }).fontSize, LABEL_FONT_SIZE)
+})
+
+test('exportar: un rótulo en minúsculas si el mapa lo pide', async () => {
+  const { drawPage } = await import('@/lib/mapas/export/draw')
+  const { parseLabel } = await import('@/lib/mapas/export/richtext')
+  const texts: string[] = []
+  const p = {
+    measure: (text: string, font: { size: number }) => text.length * font.size * 0.55,
+    beginPage() {}, save() {}, restore() {}, clipRect() {}, shape() {}, path() {},
+    text(str: string) {
+      texts.push(str)
+    },
+  }
+  const node = {
+    id: 'sg', parentId: null, x: 0, y: 0, w: 220, h: 26, shape: 'label' as const, fill: '#FFFFFF', stroke: '#7D8A96',
+    strokeWidth: 2, textColor: '#123456', fontFamily: 'Lexend', fontSize: 11, align: 'center' as const,
+    paragraphs: parseLabel('Clínica y complicaciones'), upper: false,
+  }
+  const page = { section: { title: '', edges: [], nodes: [node] }, region: { x: 0, y: 0, w: 500, h: 500 }, scale: 1, w: 500, h: 500, area: { x: 0, y: 0, w: 500, h: 500 }, clip: false }
+  drawPage(p as never, page as never, { background: null, mapTitle: 'M', withTitle: false, bare: true, dateLabel: '', pageNo: 1, pageCount: 1, ink: '#000', muted: '#999' })
+  assert.ok(texts.join(' ').includes('Clínica'))
 })

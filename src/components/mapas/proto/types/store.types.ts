@@ -1,4 +1,4 @@
-import type { CategoryStyles } from '@/lib/mapas/graph'
+import type { CategoryStyles, LabelStyle } from '@/lib/mapas/graph'
 import type { MapTable } from '@/lib/mapas/table'
 import type { NodeChange, EdgeChange, Connection } from '@xyflow/react'
 import type { MindMapNode, NodeData, NodeStyle } from './node.types'
@@ -68,6 +68,9 @@ export interface UIState {
   setRevealed: (ids: Iterable<string>, on: boolean) => void
   /** Tapa todo otra vez. */
   coverAll: () => void
+  /** Cómo se ven los rótulos (forma `label`) en este mapa. Se guarda en sus ajustes. */
+  labelStyle: LabelStyle
+  setLabelStyle: (s: LabelStyle) => void
   /** Panel «Convertir subgrupos en rótulos» abierto. */
   subgroupConvertOpen: boolean
   setSubgroupConvertOpen: (v: boolean) => void

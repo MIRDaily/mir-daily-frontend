@@ -169,7 +169,7 @@ export const useMindMapStore = create<MindMapState>()(
         parent?.data.category && parent.data.category in MAP_CATEGORIES ? (parent.data.category as MapCategoryId) : 'general'
       const table = newTable()
       // Estilo de nodo de detalle con el color de la categoría (y lo que el usuario haya fijado para ella).
-      const style = styleForCategory(styleForTable(category), category, useUIStore.getState().categoryStyles)
+      const style = styleForCategory(styleForTable(category), category, useUIStore.getState().categoryStyles, undefined, useUIStore.getState().labelStyle.fontSize)
       set((s) => {
         const node = s.nodes.find((n) => n.id === id)
         if (!node) return

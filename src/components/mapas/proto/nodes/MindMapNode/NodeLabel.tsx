@@ -23,10 +23,8 @@ export function NodeLabel({ label, style }: NodeLabelProps) {
         userSelect: 'none',
         width: '100%',
         wordBreak: 'break-word',
-        // Rótulo (forma `label`): mayúsculas pequeñas en una línea; el color lo pone mapas.css.
-        ...(style.shape === 'label'
-          ? { textTransform: 'uppercase' as const, fontWeight: 800, letterSpacing: '0.06em', whiteSpace: 'nowrap' as const }
-          : null),
+        // Un rótulo (forma `label`) se ve en mayúsculas y en gris: lo pone mapas.css (con los
+        // ajustes de la pestaña «Rótulos» de Categorías).
       }}
       dangerouslySetInnerHTML={{ __html: html }}
     />

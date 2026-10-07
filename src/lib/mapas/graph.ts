@@ -96,11 +96,18 @@ export type CategoryStyleOverride = {
 }
 export type CategoryStyles = Partial<Record<MapCategoryId, CategoryStyleOverride>>
 
+/**
+ * Cómo se ven los rótulos (forma `label`) en ESTE mapa (pestaña «Rótulos» de Categorías). Todo es
+ * opcional: lo que falta sigue el estilo de serie (gris en el mapa, oscuro en el modo estudio,
+ * mayúsculas). `fontSize` es el de los rótulos nuevos; al cambiarlo se aplica a los que ya hay.
+ */
+export type LabelStyle = { color?: string; studyColor?: string; fontSize?: number; upper?: boolean }
+
 export type GraphDoc = {
   version: 2
   nodes: GraphNode[]
   edges: GraphEdge[]
-  settings?: { theme?: 'light' | 'dark'; bgStyle?: GraphBgStyle; categoryStyles?: CategoryStyles }
+  settings?: { theme?: 'light' | 'dark'; bgStyle?: GraphBgStyle; categoryStyles?: CategoryStyles; labelStyle?: LabelStyle }
 }
 
 /** Lo que puede haber guardado o importado. */
@@ -181,6 +188,8 @@ export function styleForCategory(
   /** Lo que tenía la categoría ANTES (si cambia) y el estilo de serie del nodo: lo que se quita de
    *  la categoría vuelve a lo natural en vez de quedarse con el valor viejo. */
   restore?: { prev?: CategoryStyleOverride; natural: GraphNodeStyle },
+  /** Tamaño de letra de los rótulos de este mapa. */
+  labelFont: number = LABEL_FONT_SIZE,
 ): GraphNodeStyle {
   const accent = categoryAccent(category, overrides)
   const o = overrides?.[category]
@@ -197,6 +206,10 @@ export function styleForCategory(
   }
   if (o?.shape) out.shape = o.shape
   else if (prev?.shape && nat) out.shape = nat.shape
+  // Un rótulo lleva letra de rótulo (salvo que la categoría fije otra); al dejar de serlo, vuelve
+  // a la natural.
+  if (out.shape === 'label' && current.shape !== 'label' && o?.fontSize === undefined) out.fontSize = labelFont
+  else if (out.shape !== 'label' && current.shape === 'label' && o?.fontSize === undefined) out.fontSize = nat?.fontSize ?? 14
   const field = <K extends keyof GraphNodeStyle>(key: K, set: GraphNodeStyle[K] | undefined, was: unknown) => {
     if (set !== undefined) out[key] = set
     else if (was !== undefined && nat) out[key] = nat[key]
@@ -220,14 +233,31 @@ export function styleForTable(category: MapCategoryId): GraphNodeStyle {
 
 /** Tamaño de letra de un rótulo (forma `label`): menor que el de un nodo, va en mayúsculas. */
 export const LABEL_FONT_SIZE = 11
+/** Color de serie de un rótulo al exportar (en pantalla, gris en el mapa y oscuro en el modo estudio). */
+export const LABEL_INK = '#7D8A96'
 
 /**
  * Un nodo pasado a rótulo: forma `label` y letra pequeña; lo demás (categoría, colores de la línea)
  * se conserva. El borde se mantiene aunque no se dibuja: con borde 0, aplicar una categoría lo
  * trataría como nodo macizo (letra blanca).
  */
-export function toLabelStyle(style: GraphNodeStyle): GraphNodeStyle {
-  return { ...style, shape: 'label', fontSize: LABEL_FONT_SIZE, borderWidth: Math.max(1, style.borderWidth) }
+export function toLabelStyle(style: GraphNodeStyle, fontSize: number = LABEL_FONT_SIZE): GraphNodeStyle {
+  return { ...style, shape: 'label', fontSize, borderWidth: Math.max(1, style.borderWidth) }
+}
+
+/** Ajustes de los rótulos leídos de fuera (BD, JSON importado): colores hexadecimales y tamaño acotado. */
+export function sanitizeLabelStyle(raw: unknown): LabelStyle {
+  if (!raw || typeof raw !== 'object') return {}
+  const r = raw as Record<string, unknown>
+  const hex = (x: unknown) => (typeof x === 'string' && HEX_COLOR.test(x) ? x : undefined)
+  const out: LabelStyle = {}
+  const color = hex(r.color)
+  if (color) out.color = color
+  const studyColor = hex(r.studyColor)
+  if (studyColor) out.studyColor = studyColor
+  if (typeof r.fontSize === 'number' && Number.isFinite(r.fontSize)) out.fontSize = Math.min(20, Math.max(8, Math.round(r.fontSize)))
+  if (r.upper === false) out.upper = false
+  return out
 }
 
 /** Título de una categoría: el que le ha puesto el usuario o el de serie. */
@@ -474,11 +504,13 @@ export function sanitizeGraph(raw: unknown): GraphDoc {
 
   const s = src.settings && typeof src.settings === 'object' ? (src.settings as Record<string, unknown>) : null
   const categoryStyles = s ? sanitizeCategoryStyles(s.categoryStyles) : undefined
+  const labelStyle = s ? sanitizeLabelStyle(s.labelStyle) : undefined
   const settings: GraphDoc['settings'] | undefined = s
     ? {
         ...(s.theme === 'light' || s.theme === 'dark' ? { theme: s.theme as 'light' | 'dark' } : {}),
         ...(BG_STYLES.includes(s.bgStyle as GraphBgStyle) ? { bgStyle: s.bgStyle as GraphBgStyle } : {}),
         ...(categoryStyles && Object.keys(categoryStyles).length ? { categoryStyles } : {}),
+        ...(labelStyle && Object.keys(labelStyle).length ? { labelStyle } : {}),
       }
     : undefined
 

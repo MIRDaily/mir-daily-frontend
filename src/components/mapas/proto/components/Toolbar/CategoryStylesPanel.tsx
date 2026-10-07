@@ -6,11 +6,12 @@ import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
-import { applyCategoryToNodes } from '@/components/mapas/proto/utils/categories'
+import { applyCategoryToNodes, changeLabelStyle, labelFont } from '@/components/mapas/proto/utils/categories'
 import { NodeBody } from '@/components/mapas/proto/nodes/MindMapNode/NodeBody'
 import { NodeLabel } from '@/components/mapas/proto/nodes/MindMapNode/NodeLabel'
 import { resolveFont } from '@/components/mapas/proto/utils/font'
 import {
+  LABEL_FONT_SIZE,
   ROOT_CIRCLE,
   categoryAccent,
   categoryLabel,
@@ -36,6 +37,7 @@ const SHAPES: { value: GraphShape; label: string }[] = [
   { value: 'pill', label: 'Píldora' },
   { value: 'circle', label: 'Círculo' },
   { value: 'diamond', label: 'Rombo' },
+  { value: 'label', label: 'Rótulo (texto sin caja, como los subgrupos)' },
 ]
 
 /** Miniatura de una forma, para elegirla y para ver el resultado. */
@@ -47,6 +49,12 @@ function ShapeIcon({ shape, color, size = 18 }: { shape: GraphShape; color: stri
       {shape === 'pill' && <rect x="1" y="5" width="18" height="10" rx="5" {...common} />}
       {shape === 'circle' && <circle cx="10" cy="10" r="7.5" {...common} />}
       {shape === 'diamond' && <path d="M10 2 L18 10 L10 18 L2 10 Z" strokeLinejoin="round" {...common} />}
+      {shape === 'label' && (
+        <>
+          <rect x="2" y="6.5" width="16" height="2.6" rx="1.3" {...common} />
+          <rect x="5" y="11" width="10" height="2.6" rx="1.3" {...common} />
+        </>
+      )}
     </svg>
   )
 }
@@ -106,7 +114,7 @@ export function changeCategoryStyle(category: MapCategoryId, patch: CategoryPatc
           ? styleForTable(category)
           : styleForNode(levelOf(n.id), category, n.data.label.replace(/<[^>]*>/g, ''))
         // Al quitar la forma fija cada nodo vuelve a la suya (la que le toca por su nivel).
-        const style = styleForCategory(n.data.style, category, next, { prev, natural })
+        const style = styleForCategory(n.data.style, category, next, { prev, natural }, labelFont())
         if (prev?.shape && !next[category]?.shape) style.shape = naturalShape(levelOf(n.id), n.data.label)
         const out = { ...n, data: { ...n.data, style } }
         // El círculo de la raíz tiene tamaño fijo; con otra forma vuelve a ajustarse al texto.
@@ -133,8 +141,12 @@ export function CategoryStylesPanel() {
 function CategoryStylesBody() {
   const setOpen = useUIStore((s) => s.setCategoriesPanelOpen)
   const styles = useUIStore((s) => s.categoryStyles)
+  const labelStyle = useUIStore((s) => s.labelStyle)
   const t = useTheme()
-  const [current, setCurrent] = useState<MapCategoryId>('clinica')
+  // Pestaña abierta: una categoría o «Rótulos» (cómo se ven los subgrupos sin caja).
+  const [tab, setTab] = useState<MapCategoryId | 'rotulos'>('clinica')
+  const current: MapCategoryId = tab === 'rotulos' ? 'general' : tab
+  const labelCount = useMindMapStore((s) => s.nodes.filter((n) => n.data.style.shape === 'label').length)
 
   // Cuántos nodos tiene cada categoría y cuántos hay seleccionados (para «Aplicar a la selección»).
   const counts = useMindMapStore(
@@ -157,7 +169,7 @@ function CategoryStylesBody() {
     const title = categoryLabel(current, styles)
     return [1, 2].map((level) => {
       const natural = styleForNode(level, current, title)
-      return styleForCategory(natural, current, styles, { natural })
+      return styleForCategory(natural, current, styles, { natural }, labelFont())
     })
   }, [current, styles])
   const title = categoryLabel(current, styles)
@@ -244,7 +256,7 @@ function CategoryStylesBody() {
             {/* Las siete categorías, en fila */}
             <div role="tablist" aria-label="Categorías" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {MAP_CATEGORY_LIST.map((c) => {
-                const on = c.id === current
+                const on = c.id === tab
                 const color = categoryAccent(c.id, styles)
                 const n = counts[c.id] ?? 0
                 return (
@@ -253,7 +265,7 @@ function CategoryStylesBody() {
                     role="tab"
                     aria-selected={on}
                     data-cat={c.id}
-                    onClick={() => setCurrent(c.id)}
+                    onClick={() => setTab(c.id)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -278,9 +290,39 @@ function CategoryStylesBody() {
                   </button>
                 )
               })}
+              {/* Los rótulos no son una categoría (cada uno conserva la suya): su pestaña va aparte. */}
+              <span aria-hidden style={{ width: 1, alignSelf: 'stretch', background: t.border, margin: '2px 4px' }} />
+              <button
+                role="tab"
+                aria-selected={tab === 'rotulos'}
+                onClick={() => setTab('rotulos')}
+                title="Cómo se ven los rótulos (los subgrupos sin caja)"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  padding: '6px 11px 6px 9px',
+                  borderRadius: 999,
+                  border: `1.5px solid ${tab === 'rotulos' ? t.textSecondary : t.border}`,
+                  background: tab === 'rotulos' ? `${t.textSecondary}1F` : 'transparent',
+                  color: tab === 'rotulos' ? t.textPrimary : t.textSecondary,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  fontFamily: 'inherit',
+                }}
+              >
+                <ShapeIcon shape="label" color={t.textSecondary} size={14} />
+                Rótulos
+                <span style={{ opacity: 0.5, fontSize: 10.5, fontWeight: 600 }}>· {labelCount}</span>
+                {Object.keys(labelStyle).length > 0 && <span title="Personalizados" style={{ width: 5, height: 5, borderRadius: '50%', background: t.accent }} />}
+              </button>
             </div>
 
+            {tab === 'rotulos' && <LabelsEditor t={t} count={labelCount} />}
+
             {/* Editor de la categoría elegida */}
+            {tab !== 'rotulos' && (
             <div
               style={{
                 display: 'grid',
@@ -377,7 +419,8 @@ function CategoryStylesBody() {
               {/* Forma y tipografía */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <Group label="Forma" t={t} auto={o?.shape !== undefined} onAuto={() => set({ shape: undefined })}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                  {/* Rejilla que se ajusta: con cinco formas, la fila fija de cuatro cortaba la última. */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(40px, 1fr))', gap: 6 }}>
                     {SHAPES.map((s) => {
                       const active = o?.shape === s.value
                       return (
@@ -447,7 +490,10 @@ function CategoryStylesBody() {
               </div>
             </div>
 
+            )}
+
             {/* Pie */}
+            {tab !== 'rotulos' && (
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               {customized && (
                 <MiniBtn onClick={() => changeCategoryStyle(current, null)} t={t} title="Vuelve al estilo de serie para esta categoría">
@@ -461,6 +507,7 @@ function CategoryStylesBody() {
                 </MiniBtn>
               )}
             </div>
+            )}
           </motion.div>
         </div>
       )}
@@ -673,5 +720,122 @@ function MiniBtn({
     >
       {children}
     </button>
+  )
+}
+
+/**
+ * Pestaña «Rótulos»: cómo se ven en ESTE mapa los nodos con forma de rótulo (los subgrupos sin caja):
+ * color en el mapa, color en el modo estudio, tamaño y mayúsculas. Se guarda en los ajustes del mapa
+ * y se aplica también al exportar.
+ */
+function LabelsEditor({ t, count }: { t: Theme; count: number }) {
+  const ls = useUIStore((s) => s.labelStyle)
+  const color = ls.color ?? (t.isDark ? '#8F877E' : '#8A96A3')
+  const studyColor = ls.studyColor ?? (t.isDark ? '#FAF7F4' : '#2C3E50')
+  const size = ls.fontSize ?? LABEL_FONT_SIZE
+  const upper = ls.upper !== false
+  const sample: React.CSSProperties = {
+    fontSize: size,
+    fontWeight: 800,
+    letterSpacing: upper ? '0.06em' : '0.01em',
+    textTransform: upper ? 'uppercase' : 'none',
+    whiteSpace: 'nowrap',
+  }
+  const selectLabels = () =>
+    useMindMapStore.setState((s) => ({
+      nodes: s.nodes.map((n) => {
+        const on = !n.hidden && n.data.style.shape === 'label'
+        return !!n.selected === on ? n : { ...n, selected: on }
+      }),
+    }))
+
+  return (
+    <>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gap: 18,
+          paddingTop: 14,
+          borderTop: `1px solid ${t.border}`,
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Group label="Vista previa" t={t}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, borderRadius: 12, background: t.bgPanel2 }}>
+              <span style={{ fontSize: 10.5, color: t.textMuted }}>En el mapa</span>
+              <span style={{ ...sample, color }}>Concepto y epidemiología</span>
+              <span style={{ fontSize: 10.5, color: t.textMuted, marginTop: 4 }}>En el modo estudio</span>
+              <span style={{ ...sample, color: studyColor }}>Concepto y epidemiología</span>
+            </div>
+          </Group>
+          <div style={{ color: t.textMuted, fontSize: 11.5, lineHeight: 1.45 }}>
+            Un rótulo es un nodo sin caja, sobre la rama: los subgrupos que reparten una enfermedad por aspectos. Cualquier nodo
+            puede serlo (Estilos → Forma → Rótulo) y una categoría entera también (Forma, en su pestaña).
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <MiniBtn disabled={count === 0} onClick={selectLabels} t={t} title="Selecciona todos los rótulos del mapa">
+              Seleccionar todos ({count})
+            </MiniBtn>
+            <MiniBtn onClick={() => useUIStore.getState().setSubgroupConvertOpen(true)} t={t} title="Busca subgrupos que aún tienen caja y los propone">
+              Convertir subgrupos…
+            </MiniBtn>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Group label="Color en el mapa" t={t} auto={ls.color !== undefined} onAuto={() => changeLabelStyle({ color: undefined })}>
+            <ColorRow value={ls.color} current={color} onPick={(c) => changeLabelStyle({ color: c })} t={t} name="rótulo" />
+          </Group>
+          <Group label="Color en el modo estudio" hint="más marcado: guía lo que va debajo" t={t} auto={ls.studyColor !== undefined} onAuto={() => changeLabelStyle({ studyColor: undefined })}>
+            <ColorRow value={ls.studyColor} current={studyColor} onPick={(c) => changeLabelStyle({ studyColor: c })} t={t} name="rótulo en estudio" />
+          </Group>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Group label="Tamaño de letra" t={t} auto={ls.fontSize !== undefined} onAuto={() => changeLabelStyle({ fontSize: undefined })}>
+            <Slider label="" value={size} min={8} max={20} suffix=" px" onChange={(v) => changeLabelStyle({ fontSize: v })} t={t} />
+          </Group>
+          <Group label="Letra" t={t} auto={ls.upper !== undefined} onAuto={() => changeLabelStyle({ upper: undefined })}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {([true, false] as const).map((u) => {
+                const on = upper === u
+                return (
+                  <button
+                    key={String(u)}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => changeLabelStyle({ upper: u ? undefined : false })}
+                    style={{
+                      height: 34,
+                      borderRadius: 9,
+                      cursor: 'pointer',
+                      border: `1.5px solid ${on ? t.accent : t.border}`,
+                      background: on ? `${t.accent}22` : 'transparent',
+                      color: t.textPrimary,
+                      fontFamily: 'inherit',
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      letterSpacing: u ? '0.06em' : 0,
+                    }}
+                  >
+                    {u ? 'MAYÚSCULAS' : 'Normal'}
+                  </button>
+                )
+              })}
+            </div>
+          </Group>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        {Object.keys(ls).length > 0 && (
+          <MiniBtn onClick={() => changeLabelStyle(null)} t={t} title="Vuelve al estilo de serie de los rótulos">
+            <RotateCcw size={11} style={{ marginRight: 5, verticalAlign: -1 }} />
+            Restablecer rótulos
+          </MiniBtn>
+        )}
+      </div>
+    </>
   )
 }

@@ -25,6 +25,8 @@ export type SceneNode = Rect & {
   align: 'left' | 'center' | 'right'
   paragraphs: Paragraph[]
   table?: SceneTable
+  /** Rótulo (forma `label`) en mayúsculas (lo de serie); false si el mapa los quiere en minúsculas. */
+  upper?: boolean
 }
 
 export type PathCmd =

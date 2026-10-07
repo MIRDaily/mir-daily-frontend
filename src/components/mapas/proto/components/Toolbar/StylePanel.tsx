@@ -7,8 +7,8 @@ import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import type { NodeShape, NodeStyle } from '@/components/mapas/proto/types/node.types'
-import { categoryAccent, categoryLabel, LABEL_FONT_SIZE } from '@/lib/mapas/graph'
-import { applyCategoryToNodes, resetNodesStyle } from '@/components/mapas/proto/utils/categories'
+import { categoryAccent, categoryLabel } from '@/lib/mapas/graph'
+import { applyCategoryToNodes, labelFont, resetNodesStyle } from '@/components/mapas/proto/utils/categories'
 import { MAP_CATEGORY_LIST, categoryNumber, type MapCategoryId } from '@/lib/mapas/types'
 
 const BG_COLORS = [
@@ -120,9 +120,9 @@ function StylePanelBody() {
    */
   const shapeChange = (shape: NodeShape): Partial<NodeStyle> => {
     if (shape === 'label') {
-      return { shape, fontSize: LABEL_FONT_SIZE, ...(targetStyles.some((st) => st.borderWidth === 0) ? { borderWidth: 1 } : {}) }
+      return { shape, fontSize: labelFont(), ...(targetStyles.some((st) => st.borderWidth === 0) ? { borderWidth: 1 } : {}) }
     }
-    if (shared('shape') === 'label' && shared('fontSize') === LABEL_FONT_SIZE) return { shape, fontSize: 14 }
+    if (shared('shape') === 'label' && shared('fontSize') === labelFont()) return { shape, fontSize: 14 }
     return { shape }
   }
   const sharedCategory = targetCategories.every((c) => c === targetCategories[0]) ? targetCategories[0] : undefined
