@@ -68,6 +68,9 @@ export interface UIState {
   setRevealed: (ids: Iterable<string>, on: boolean) => void
   /** Tapa todo otra vez. */
   coverAll: () => void
+  /** Panel «Convertir subgrupos en rótulos» abierto. */
+  subgroupConvertOpen: boolean
+  setSubgroupConvertOpen: (v: boolean) => void
   /** Nodo del que se van a crear flashcards (abre su diálogo). */
   flashcardsFrom: string | null
   setFlashcardsFrom: (id: string | null) => void

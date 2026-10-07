@@ -44,24 +44,33 @@ const PAD_X = 16
 const PAD_Y = 10
 const DIAMOND_PAD_X = 52
 const DIAMOND_PAD_Y = 18
+// Rótulo (forma `label`): sin caja, poco relleno, mayúsculas en negrita y gris (como en pantalla).
+const LABEL_PAD_X = 8
+const LABEL_PAD_Y = 4
+const LABEL_INK = '#7D8A96'
 const ASCENT = 0.8
 
 function drawNode(p: Painter, n: SceneNode, tx: (x: number) => number, ty: (y: number) => number, s: number) {
   const bw = n.strokeWidth
   const half = bw / 2
   const box: Rect = { x: tx(n.x) + half * s, y: ty(n.y) + half * s, w: (n.w - bw) * s, h: (n.h - bw) * s }
-  p.shape(n.shape, box, n.fill, bw > 0 ? n.stroke : null, bw * s, n.shape === 'pill' ? box.h / 2 : 12 * s)
+  const label = n.shape === 'label'
+  if (!label) p.shape(n.shape, box, n.fill, bw > 0 ? n.stroke : null, bw * s, n.shape === 'pill' ? box.h / 2 : 12 * s)
 
-  const padX = (n.shape === 'diamond' ? DIAMOND_PAD_X : PAD_X) + bw
-  const padY = (n.shape === 'diamond' ? DIAMOND_PAD_Y : PAD_Y) + bw
+  const padX = label ? LABEL_PAD_X : (n.shape === 'diamond' ? DIAMOND_PAD_X : PAD_X) + bw
+  const padY = label ? LABEL_PAD_Y : (n.shape === 'diamond' ? DIAMOND_PAD_Y : PAD_Y) + bw
+  const paragraphs = label
+    ? n.paragraphs.map((par) => par.map((run) => ({ ...run, text: run.text.toUpperCase(), bold: true })))
+    : n.paragraphs
+  const ink = label ? LABEL_INK : n.textColor
   const innerW = Math.max(n.w - 2 * padX, 8)
   const innerH = Math.max(n.h - 2 * padY, 8)
   let size = n.fontSize
-  let lines = wrapParagraphs(n.paragraphs, innerW, { family: n.fontFamily, size }, p.measure)
+  let lines = wrapParagraphs(paragraphs, innerW, { family: n.fontFamily, size }, p.measure)
   // Si con la letra de pantalla no cabe (otra tipografía en la salida), se encoge un poco.
   for (let tries = 0; tries < 6 && lines.length * size * LINE_HEIGHT > innerH && size > n.fontSize * 0.6; tries++) {
     size *= 0.92
-    lines = wrapParagraphs(n.paragraphs, innerW, { family: n.fontFamily, size }, p.measure)
+    lines = wrapParagraphs(paragraphs, innerW, { family: n.fontFamily, size }, p.measure)
   }
   const lineH = size * LINE_HEIGHT
   const top = n.y + (n.h - lines.length * lineH) / 2
@@ -75,7 +84,7 @@ function drawNode(p: Painter, n: SceneNode, tx: (x: number) => number, ty: (y: n
         run.text,
         tx(x),
         ty(baseline),
-        { family: n.fontFamily, size: size * s, bold: run.bold, italic: run.italic, color: n.textColor },
+        { family: n.fontFamily, size: size * s, bold: run.bold, italic: run.italic, color: ink },
         run.underline || run.strike ? { underline: run.underline, strike: run.strike, width: run.width * s } : undefined,
       )
       x += run.width

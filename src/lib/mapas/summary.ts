@@ -97,8 +97,9 @@ export function summarizeDoc(raw: unknown): { thumb: Thumb | null; text: string;
       y: b.y - minY,
       w: b.w,
       h: b.h,
-      fill: st.color || WHITE,
-      stroke: st.borderWidth > 0 ? st.borderColor : st.color || WHITE,
+      // Un rótulo (forma `label`) no tiene caja: en la miniatura, una mancha gris suave.
+      fill: st.shape === 'label' ? '#EFE9E3' : st.color || WHITE,
+      stroke: st.shape === 'label' ? '#EFE9E3' : st.borderWidth > 0 ? st.borderColor : st.color || WHITE,
       r: st.shape === 'pill' || st.shape === 'circle' ? b.h / 2 : 8,
     }
   })

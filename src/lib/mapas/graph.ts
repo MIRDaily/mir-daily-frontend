@@ -21,7 +21,8 @@ import { MAP_CATEGORIES, type MapCategoryId, type MapDoc, type MapNode } from '@
 
 export const GRAPH_MAX_NODES = 5000
 
-export type GraphShape = 'rectangle' | 'pill' | 'circle' | 'diamond'
+/** `label` (rótulo): texto pequeño en mayúsculas, sin caja; para los subgrupos («Concepto y epidemiología»). */
+export type GraphShape = 'rectangle' | 'pill' | 'circle' | 'diamond' | 'label'
 export type GraphEdgeVariant = 'solid' | 'dashed' | 'dotted'
 export type GraphBgStyle = 'flat' | 'dots-light' | 'dots'
 
@@ -119,7 +120,7 @@ export const DEFAULT_GRAPH_STYLE: GraphNodeStyle = {
 }
 
 const ROOT_COLOR = '#E8A598'
-const SHAPES: GraphShape[] = ['rectangle', 'pill', 'circle', 'diamond']
+const SHAPES: GraphShape[] = ['rectangle', 'pill', 'circle', 'diamond', 'label']
 const VARIANTS: GraphEdgeVariant[] = ['solid', 'dashed', 'dotted']
 const BG_STYLES: GraphBgStyle[] = ['flat', 'dots-light', 'dots']
 const ALIGNS = ['left', 'center', 'right'] as const
@@ -217,6 +218,18 @@ export function styleForTable(category: MapCategoryId): GraphNodeStyle {
   return styleForNode(2, category, '')
 }
 
+/** Tamaño de letra de un rótulo (forma `label`): menor que el de un nodo, va en mayúsculas. */
+export const LABEL_FONT_SIZE = 11
+
+/**
+ * Un nodo pasado a rótulo: forma `label` y letra pequeña; lo demás (categoría, colores de la línea)
+ * se conserva. El borde se mantiene aunque no se dibuja: con borde 0, aplicar una categoría lo
+ * trataría como nodo macizo (letra blanca).
+ */
+export function toLabelStyle(style: GraphNodeStyle): GraphNodeStyle {
+  return { ...style, shape: 'label', fontSize: LABEL_FONT_SIZE, borderWidth: Math.max(1, style.borderWidth) }
+}
+
 /** Título de una categoría: el que le ha puesto el usuario o el de serie. */
 export function categoryLabel(category: MapCategoryId, overrides?: CategoryStyles): string {
   return overrides?.[category]?.label?.trim() || MAP_CATEGORIES[category].label
@@ -263,7 +276,12 @@ export function treeToGraph(tree: MapDoc): GraphDoc {
 
   const nodes: GraphNode[] = doc.nodes.map((n) => {
     const level = levelOf(n)
-    const style = n.table ? styleForTable(n.category) : styleForNode(level, n.category, n.text)
+    // Subgrupo marcado por la IA («Concepto y epidemiología»): nace como rótulo.
+    const style = n.table
+      ? styleForTable(n.category)
+      : n.ia?.subgrupo
+        ? toLabelStyle(styleForNode(level, n.category, n.text))
+        : styleForNode(level, n.category, n.text)
     const box = boxes.get(n.id)
     const isCircle = style.shape === 'circle'
     return {

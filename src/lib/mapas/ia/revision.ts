@@ -22,6 +22,8 @@ export type NodoIA = {
   dudoso?: MotivoDudoso
   celdas?: CeldaDudosa[]
   revisado?: boolean
+  /** Subgrupo que creó la IA al repartir las hojas de una enfermedad por aspecto: nace como rótulo. */
+  subgrupo?: boolean
 }
 
 const MOTIVOS: MotivoDudoso[] = ['anclaje', 'tratamiento', 'celdas']
@@ -61,6 +63,7 @@ export function sanitizeIA(raw: unknown): NodoIA | undefined {
     if (celdas.length) out.celdas = celdas
   }
   if (r.revisado === true) out.revisado = true
+  if (r.subgrupo === true) out.subgrupo = true
   return Object.keys(out).length ? out : undefined
 }
 

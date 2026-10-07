@@ -2,7 +2,7 @@ import type { Node } from '@xyflow/react'
 import type { MapTable } from '@/lib/mapas/table'
 import type { NodoIA } from '@/lib/mapas/ia/revision'
 
-export type NodeShape = 'rectangle' | 'pill' | 'circle' | 'diamond'
+export type NodeShape = 'rectangle' | 'pill' | 'circle' | 'diamond' | 'label'
 
 export interface NodeStyle {
   color: string

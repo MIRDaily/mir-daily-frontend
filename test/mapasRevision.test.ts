@@ -205,3 +205,78 @@ test('flashcards: «Faceta: dato» → «Ruta del padre · Faceta» / «dato», 
     ],
   )
 })
+
+// ---------- subgrupos como rótulo ----------
+
+test('subgrupos: nombre de aspecto, nodo de contorno con hijos que son hojas', async () => {
+  const { looksLikeSubgroupLabel, isSubgroup } = await import('@/lib/mapas/subgroups')
+  for (const s of ['Concepto y epidemiología', 'Clínica y complicaciones', 'Diagnóstico y tratamiento', 'Clasificación y pruebas', 'Etiología y mecanismo']) {
+    assert.equal(looksLikeSubgroupLabel(s), true, s)
+  }
+  for (const s of ['Arteritis de células gigantes', 'Vasculitis de grandes vasos', 'Enfermedad de Kawasaki', '', 'y de la']) {
+    assert.equal(looksLikeSubgroupLabel(s), false, s)
+  }
+  const base = { label: 'Clínica y complicaciones', parentId: 'acg', childCount: 2, outlined: true }
+  assert.equal(isSubgroup(base, true), true)
+  assert.equal(isSubgroup(base, false), false) // algún hijo tiene rama propia
+  assert.equal(isSubgroup({ ...base, outlined: false }, true), false) // relleno: un bloque o una categoría pintada
+  assert.equal(isSubgroup({ ...base, parentId: undefined }, true), false)
+  assert.equal(isSubgroup({ ...base, childCount: 0 }, true), false)
+})
+
+test('rótulo: forma propia que se guarda, el subgrupo de la IA nace así y vuelve a 14 al cambiar', async () => {
+  const { toLabelStyle, LABEL_FONT_SIZE, styleForNode } = await import('@/lib/mapas/graph')
+  const base = styleForNode(3, 'general', 'Clínica y complicaciones')
+  const label = toLabelStyle(base)
+  assert.equal(label.shape, 'label')
+  assert.equal(label.fontSize, LABEL_FONT_SIZE)
+  assert.ok(label.borderWidth >= 1) // con borde 0, aplicar una categoría lo pondría macizo
+  // Se conserva al guardar (sanitizeGraph) y el subgrupo marcado por la IA nace como rótulo.
+  const graph = treeToGraph(
+    sanitizeDoc({
+      version: 1,
+      nodes: [
+        { id: 'r', parentId: null, text: 'Vasculitis', category: 'general' },
+        { id: 'acg', parentId: 'r', text: 'Arteritis de células gigantes', category: 'general' },
+        { id: 'sg', parentId: 'acg', text: 'Clínica y complicaciones', category: 'general', ia: { anclaje: 1, subgrupo: true } },
+        { id: 'h', parentId: 'sg', text: 'Clínica: cefalea temporal', category: 'clinica' },
+      ],
+    }),
+  )
+  const byId = (id: string) => graph.nodes.find((n) => n.id === id)!
+  assert.equal(byId('sg').data.style.shape, 'label')
+  assert.notEqual(byId('acg').data.style.shape, 'label')
+  assert.notEqual(byId('h').data.style.shape, 'label')
+  assert.equal(sanitizeGraph(JSON.parse(JSON.stringify(graph))).nodes.find((n) => n.id === 'sg')?.data.style.shape, 'label')
+})
+
+test('exportar: un rótulo sale sin caja, en mayúsculas y en gris', async () => {
+  const { drawPage } = await import('@/lib/mapas/export/draw')
+  const { parseLabel } = await import('@/lib/mapas/export/richtext')
+  const shapes: string[] = []
+  const texts: { str: string; color: string; bold?: boolean }[] = []
+  const p = {
+    measure: (text: string, font: { size: number }) => text.length * font.size * 0.55,
+    beginPage() {},
+    save() {},
+    restore() {},
+    clipRect() {},
+    shape(kind: string) {
+      shapes.push(kind)
+    },
+    path() {},
+    text(str: string, _x: number, _y: number, font: { color: string; bold?: boolean }) {
+      texts.push({ str, color: font.color, bold: font.bold })
+    },
+  }
+  const node = {
+    id: 'sg', parentId: null, x: 0, y: 0, w: 220, h: 26, shape: 'label' as const, fill: '#FFFFFF', stroke: '#7D8A96',
+    strokeWidth: 2, textColor: '#2A2420', fontFamily: 'Lexend', fontSize: 11, align: 'center' as const,
+    paragraphs: parseLabel('Clínica y complicaciones'),
+  }
+  const page = { section: { title: '', edges: [], nodes: [node] }, region: { x: 0, y: 0, w: 500, h: 500 }, scale: 1, w: 500, h: 500, area: { x: 0, y: 0, w: 500, h: 500 }, clip: false }
+  drawPage(p as never, page as never, { background: null, mapTitle: 'M', withTitle: false, bare: true, dateLabel: '', pageNo: 1, pageCount: 1, ink: '#000', muted: '#999' })
+  assert.equal(shapes.length, 0, 'sin caja')
+  assert.ok(texts.length > 0 && texts.every((t) => t.str === t.str.toUpperCase() && t.bold && t.color === '#7D8A96'))
+  assert.ok(texts.map((t) => t.str).join(' ').includes('CLÍNICA'))
+})

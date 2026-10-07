@@ -452,3 +452,22 @@
     animation: none;
   }
 }
+
+/* Rótulo (forma «label»): el subgrupo de una enfermedad («Concepto y epidemiología») sin caja,
+   sobre la rama, en gris. En el modo estudio, más marcado (es la guía de lo que va debajo), con el
+   mismo tamaño: el mapa no se mueve al cambiar de modo. */
+.mapa-root .shape-label .node-label {
+  color: #8A96A3 !important;
+}
+.mapa-root[data-theme="dark"] .shape-label .node-label {
+  color: #8F877E !important;
+}
+.mapa-root[data-study] .shape-label .node-label {
+  color: #2C3E50 !important;
+}
+.mapa-root[data-theme="dark"][data-study] .shape-label .node-label {
+  color: #FAF7F4 !important;
+}
+.mapa-root .mindmap-node-root:hover .shape-label {
+  background: rgba(125, 138, 150, 0.1) !important;
+}

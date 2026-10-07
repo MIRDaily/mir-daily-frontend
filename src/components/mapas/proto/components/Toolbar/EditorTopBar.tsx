@@ -17,6 +17,7 @@ import {
   SlidersHorizontal,
   Sun,
   Table2,
+  Tags,
   Undo2,
 } from 'lucide-react'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
@@ -483,6 +484,16 @@ function ViewMenu({ t }: { t: Theme }) {
 
           <Switch t={t} checked={focusBlur} onChange={setFocusBlur} text="Desenfocar al pasar el ratón" hint="Atenúa lo que no está conectado al nodo." />
           <Switch t={t} checked={physics} onChange={setPhysics} text="Física" hint="Los nodos se apartan al añadir o soltar." />
+          <div style={{ height: 1, background: t.border, margin: '6px 0' }} />
+          <MenuRow
+            t={t}
+            icon={<Tags size={15} />}
+            text="Convertir subgrupos en rótulos"
+            onClick={() => {
+              setOpen(false)
+              useUIStore.getState().setSubgroupConvertOpen(true)
+            }}
+          />
         </div>
       )}
     </div>

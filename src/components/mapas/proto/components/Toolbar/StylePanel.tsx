@@ -7,7 +7,7 @@ import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import type { NodeShape, NodeStyle } from '@/components/mapas/proto/types/node.types'
-import { categoryAccent, categoryLabel } from '@/lib/mapas/graph'
+import { categoryAccent, categoryLabel, LABEL_FONT_SIZE } from '@/lib/mapas/graph'
 import { applyCategoryToNodes, resetNodesStyle } from '@/components/mapas/proto/utils/categories'
 import { MAP_CATEGORY_LIST, categoryNumber, type MapCategoryId } from '@/lib/mapas/types'
 
@@ -31,6 +31,8 @@ const SHAPES: { value: NodeShape; label: string }[] = [
   { value: 'pill', label: 'Píldora' },
   { value: 'circle', label: 'Círculo' },
   { value: 'diamond', label: 'Rombo' },
+  // Rótulo: texto pequeño en mayúsculas, sin caja (los subgrupos, «Concepto y epidemiología»).
+  { value: 'label', label: 'Rótulo' },
 ]
 
 function ShapeIcon({ shape }: { shape: NodeShape }) {
@@ -41,6 +43,7 @@ function ShapeIcon({ shape }: { shape: NodeShape }) {
       {shape === 'pill' && <rect x="2" y="5" width="22" height="10" rx="5" {...common} />}
       {shape === 'circle' && <circle cx="13" cy="10" r="7.5" {...common} />}
       {shape === 'diamond' && <path d="M13 2 L23 10 L13 18 L3 10 Z" strokeLinejoin="round" {...common} />}
+      {shape === 'label' && <path d="M4 8 H22 M7 12.5 H19" strokeLinecap="round" {...common} strokeWidth={2.2} />}
     </svg>
   )
 }
@@ -110,6 +113,17 @@ function StylePanelBody() {
   const shared = <K extends keyof NodeStyle>(key: K): NodeStyle[K] | undefined => {
     const first = targetStyles[0]?.[key]
     return targetStyles.every((st) => st[key] === first) ? first : undefined
+  }
+  /**
+   * Cambio de forma. A rótulo: letra pequeña (y borde ≥ 1, que no se dibuja: con borde 0 aplicar una
+   * categoría lo pondría macizo con letra blanca). De rótulo a otra forma: la letra vuelve a 14.
+   */
+  const shapeChange = (shape: NodeShape): Partial<NodeStyle> => {
+    if (shape === 'label') {
+      return { shape, fontSize: LABEL_FONT_SIZE, ...(targetStyles.some((st) => st.borderWidth === 0) ? { borderWidth: 1 } : {}) }
+    }
+    if (shared('shape') === 'label' && shared('fontSize') === LABEL_FONT_SIZE) return { shape, fontSize: 14 }
+    return { shape }
   }
   const sharedCategory = targetCategories.every((c) => c === targetCategories[0]) ? targetCategories[0] : undefined
   const many = targetIds.length > 1
@@ -261,13 +275,13 @@ function StylePanelBody() {
             {onlyTables ? (
               <p style={{ margin: 0, fontSize: 11, color: t.textMuted }}>Las tablas son siempre un recuadro.</p>
             ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 5 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 5 }}>
               {SHAPES.map((sh) => {
                 const isActive = shared('shape') === sh.value
                 return (
                   <button
                     key={sh.value}
-                    onClick={() => update({ shape: sh.value })}
+                    onClick={() => update(shapeChange(sh.value))}
                     title={sh.label}
                     aria-label={sh.label}
                     aria-pressed={isActive}

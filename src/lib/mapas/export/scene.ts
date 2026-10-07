@@ -5,7 +5,7 @@ import type { MapTable } from '@/lib/mapas/table'
 // texto) en coordenadas del lienzo. La construyen `collect.ts` (a partir de la store y del DOM) y la
 // consumen los pintores (PDF vectorial y PNG), de modo que los dos formatos salen idénticos.
 
-export type SceneShape = 'rectangle' | 'pill' | 'circle' | 'diamond'
+export type SceneShape = 'rectangle' | 'pill' | 'circle' | 'diamond' | 'label'
 
 export type Rect = { x: number; y: number; w: number; h: number }
 

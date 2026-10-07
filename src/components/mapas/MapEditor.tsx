@@ -29,6 +29,7 @@ import { ShortcutsPanel } from '@/components/mapas/proto/components/Toolbar/Shor
 import { SearchBar } from '@/components/mapas/proto/components/Toolbar/SearchBar'
 import ReviewBanner from '@/components/mapas/ia/ReviewBanner'
 import { StudyBar } from '@/components/mapas/proto/components/Toolbar/StudyBar'
+import { SubgroupConvertPanel } from '@/components/mapas/proto/components/Toolbar/SubgroupConvertPanel'
 import { FlashcardsFromBranch } from '@/components/mapas/flashcards/FlashcardsFromBranch'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
@@ -195,6 +196,7 @@ export default function MapEditor(props: Props) {
     ui.setFocusBlur(true) // el desenfoque al pasar el ratón empieza siempre activado
     ui.setStudyMode(false) // cada mapa se abre para editar, con todo tapado si se entra a estudiar
     ui.setFlashcardsFrom(null)
+    ui.setSubgroupConvertOpen(false)
     ownTick.current = useMindMapStore.getState().loadTick
   }, [prepared])
 
@@ -496,6 +498,7 @@ function EditorInner({
         <SearchBar />
         <ReviewBanner />
         <StudyBar />
+        <SubgroupConvertPanel />
         <TextFormatPopup />
         <ShortcutsPanel />
         <CustomMiniMap />

@@ -11,6 +11,9 @@ function getShapeStyles(shape: NodeShape): CSSProperties {
       // El rombo se dibuja con un polígono SVG detrás del texto (ver NodeBody): girar la caja 45°
       // desbordaba el texto y no coincidía con el tamaño que mide React Flow.
       return { borderRadius: 0, minWidth: 130, minHeight: 64, padding: '18px 52px' }
+    case 'label':
+      // Rótulo: sin caja (el fondo, el borde y la sombra los quita NodeBody), poco relleno.
+      return { borderRadius: 8, minWidth: 0, padding: '4px 8px' }
     default:
       return { borderRadius: '12px' }
   }
@@ -51,6 +54,24 @@ export function NodeBody({ style, children, isSelected, isDark }: NodeBodyProps)
     justifyContent: 'center',
     transition: 'border-color 200ms ease, box-shadow 200ms ease, filter 750ms cubic-bezier(0.4, 0, 0.2, 1), opacity 750ms cubic-bezier(0.4, 0, 0.2, 1)',
     ...getShapeStyles(style.shape),
+  }
+
+  if (style.shape === 'label') {
+    // Rótulo de un subgrupo: solo el texto (ver mapas.css: mayúsculas, gris; más marcado en el modo
+    // estudio). Seleccionado, un aro fino para que se vea qué está seleccionado.
+    return (
+      <div
+        className="node-body shape-label"
+        style={{
+          ...containerStyle,
+          background: 'transparent',
+          border: 'none',
+          boxShadow: isSelected ? `0 0 0 2px ${style.glowColor}` : 'none',
+        }}
+      >
+        {children}
+      </div>
+    )
   }
 
   if (style.shape === 'diamond') {
