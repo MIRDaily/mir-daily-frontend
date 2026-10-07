@@ -1,12 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createMap } from '@/lib/mapas/api'
 import { extraerDocumento, FORMATOS_ACEPTADOS } from '@/lib/mapas/ia/extract'
 import { iaGenerar } from '@/lib/mapas/ia/api'
 import { aplicarEvento, type FaseIA, type LineaProvisional } from '@/lib/mapas/ia/stream'
 import { INK, ProgresoIA } from './ProgresoIA'
+import { SelectorParte } from './SelectorParte'
+import { construirIndice, estadoEntrada, resumenSeleccion } from '@/lib/mapas/ia/indice'
 import {
   NODOS_POR_RAIZ,
   ExtractError,
@@ -67,12 +69,21 @@ export default function CrearConIA({
   const [faseIA, setFaseIA] = useState<FaseIA>('leyendo')
   const [lineas, setLineas] = useState<LineaProvisional[]>([])
   const [arrastrando, setArrastrando] = useState(false)
+  // Qué parte del documento se usa: índices de sección marcados (al servidor solo viaja eso).
+  const [sel, setSel] = useState<Set<number>>(new Set())
+  const [selectorAbierto, setSelectorAbierto] = useState(false)
+  // Último título puesto solo (el del archivo o el del tema marcado): si el usuario no lo ha
+  // cambiado, marcar un único tema le pone su nombre al mapa.
+  const tituloAuto = useRef('')
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const montado = useRef(true)
 
   const { maxChars, maxPaginas } = estado.limites
   const restantes = Math.max(0, estado.cupo.maxGeneracionesDia - estado.cupo.generacionesHoy)
+  const charsRestantesHoy = Math.max(0, estado.cupo.maxCaracteresDia - estado.cupo.caracteresHoy)
+  // Se lee más de lo que cabe en un mapa: así se puede elegir una parte de un documento largo.
+  const topeLectura = Math.max(maxChars * 4, estado.limites.maxCharsLibro ?? 0)
 
   useEffect(() => {
     montado.current = true
@@ -109,12 +120,17 @@ export default function CrearConIA({
     setProgreso(null)
     try {
       const r = await extraerDocumento(file, {
-        maxChars,
+        maxChars: topeLectura,
         onProgreso: (hecho, total) => montado.current && setProgreso({ hecho, total }),
       })
       if (!montado.current) return
       setExtraido(r)
       setTitulo(r.titulo)
+      tituloAuto.current = r.titulo
+      // Si cabe, todo marcado; si no, nada marcado y el índice abierto para elegir una parte.
+      const cabe = r.caracteres <= maxChars && r.paginas <= maxPaginas
+      setSel(cabe ? new Set(r.secciones.map((_, i) => i)) : new Set())
+      setSelectorAbierto(!cabe)
       setFase('ajustes')
     } catch (e) {
       if (!montado.current) return
@@ -123,10 +139,32 @@ export default function CrearConIA({
     }
   }
 
-  const excedeTexto = !!extraido && extraido.caracteres > maxChars
-  const excedePaginas = !!extraido && extraido.paginas > maxPaginas
+  const indice = useMemo(() => (extraido ? construirIndice(extraido.secciones, extraido.marcadores) : []), [extraido])
+  const eleccion = useMemo(() => (extraido ? resumenSeleccion(extraido.secciones, sel) : null), [extraido, sel])
+  const todoElegido = !!extraido && sel.size === extraido.secciones.length
+
+  const elegir = (nuevo: Set<number>) => {
+    setSel(nuevo)
+    if (!extraido || titulo !== tituloAuto.current) return
+    const unico = indice.filter((e) => e.nivel === 1 && estadoEntrada(e, nuevo) !== 'nada')
+    const propuesto =
+      unico.length === 1 && estadoEntrada(unico[0], nuevo) === 'todo' && unico[0].hasta - unico[0].desde + 1 === nuevo.size
+        ? unico[0].titulo
+        : extraido.titulo
+    tituloAuto.current = propuesto
+    setTitulo(propuesto)
+  }
+  const caracteres = eleccion?.caracteres ?? 0
+  // Páginas que se mandan: las elegidas (en Word, que no tiene páginas, la estimación de siempre).
+  const paginasElegidas = !extraido ? 0 : todoElegido ? extraido.paginas : (eleccion?.paginas ?? 0)
+  const documentoGrande = !!extraido && (extraido.caracteres > maxChars || extraido.paginas > maxPaginas)
+  const nadaElegido = !!extraido && caracteres < 200
+  const excedeTexto = caracteres > maxChars
+  const excedePaginas = paginasElegidas > maxPaginas
+  const excedeCupoChars = caracteres > charsRestantesHoy
   const sinCupo = restantes === 0
-  const puedeGenerar = !!extraido && !excedeTexto && !excedePaginas && !sinCupo && titulo.trim().length > 0
+  const puedeGenerar =
+    !!extraido && !nadaElegido && !excedeTexto && !excedePaginas && !excedeCupoChars && !sinCupo && titulo.trim().length > 0
 
   const generar = async () => {
     if (!extraido || !puedeGenerar) return
@@ -142,8 +180,8 @@ export default function CrearConIA({
         {
           titulo: titulo.trim(),
           modo,
-          secciones: extraido.secciones,
-          paginas: extraido.paginas,
+          secciones: eleccion?.elegidas ?? [],
+          paginas: Math.max(1, paginasElegidas),
           ...(conTablas ? { tablas: true as const } : {}),
           ...(extraido.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
         },
@@ -166,9 +204,16 @@ export default function CrearConIA({
     }
   }
 
-  const nodosAprox = extraido ? Math.max(5, Math.round(NODOS_POR_RAIZ[modo] * Math.sqrt(extraido.caracteres))) : 0
-  const segMin = extraido ? Math.max(5, Math.round(extraido.caracteres / 6000)) : 0
-  const segMax = extraido ? Math.max(10, Math.round(extraido.caracteres / 3500)) : 0
+  const nodosAprox = Math.max(5, Math.round(NODOS_POR_RAIZ[modo] * Math.sqrt(caracteres)))
+  const segMin = Math.max(5, Math.round(caracteres / 6000))
+  const segMax = Math.max(10, Math.round(caracteres / 3500))
+  const resumenParte = !extraido
+    ? ''
+    : todoElegido
+      ? `Todo el documento · ${fmt(caracteres)} caracteres`
+      : sel.size === 0
+        ? 'Nada marcado'
+        : `${fmt(eleccion?.elegidas.length ?? 0)} de ${fmt(extraido.secciones.length)} ${extraido.unidad === 'diapositiva' ? 'diapositivas' : 'secciones'} · ${fmt(caracteres)} caracteres`
 
   return (
     <div
@@ -296,14 +341,36 @@ export default function CrearConIA({
                   {a}
                 </p>
               ))}
+              {documentoGrande && (
+                <p className="mt-3 rounded-xl bg-[#FBF3E1] px-3 py-2 text-[0.8rem] font-semibold text-[#8A6418]">
+                  El documento tiene {fmt(extraido.caracteres)} caracteres y en un mapa caben {fmt(maxChars)}
+                  {extraido.paginas > maxPaginas ? ` (y ${maxPaginas} páginas)` : ''}. Elige qué parte usar.
+                </p>
+              )}
+
+              <SelectorParte
+                secciones={extraido.secciones}
+                indice={indice}
+                sel={sel}
+                onChange={elegir}
+                unidad={extraido.unidad ?? 'página'}
+                abierto={selectorAbierto}
+                onAbrir={setSelectorAbierto}
+                resumen={resumenParte}
+              />
               {excedeTexto && (
                 <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
-                  Supera el máximo de {fmt(maxChars)} caracteres. Divide el documento por temas y genera un mapa de cada parte.
+                  Lo marcado tiene {fmt(caracteres)} caracteres: el máximo por mapa es {fmt(maxChars)}. Desmarca alguna parte.
                 </p>
               )}
               {excedePaginas && (
                 <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
-                  Tiene más de {maxPaginas} páginas. Divídelo por temas.
+                  Lo marcado tiene más de {maxPaginas} páginas. Desmarca alguna parte.
+                </p>
+              )}
+              {!excedeTexto && excedeCupoChars && (
+                <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
+                  Hoy te quedan {fmt(charsRestantesHoy)} caracteres de IA y lo marcado tiene {fmt(caracteres)}. Marca menos o vuelve mañana.
                 </p>
               )}
 
@@ -370,10 +437,15 @@ export default function CrearConIA({
                 </label>
               )}
 
-              <p className="mt-4 text-xs text-[#7D8A96]">
-                Saldrán unos {fmt(nodosAprox)} nodos y tardará {segMin}–{segMax} segundos. Hoy te quedan {restantes} de{' '}
-                {estado.cupo.maxGeneracionesDia} mapas.
-              </p>
+              {nadaElegido ? (
+                <p className="mt-4 text-xs font-bold text-[#B04A5E]">Marca al menos una parte del documento.</p>
+              ) : (
+                <p className="mt-4 text-xs text-[#7D8A96]" aria-live="polite">
+                  {fmt(caracteres)} caracteres: saldrán unos {fmt(nodosAprox)} nodos y tardará {segMin}–{segMax} segundos
+                  {conTablas ? ' (con tablas, el doble de gasto)' : ''}. Usará {fmt(caracteres)} de los {fmt(charsRestantesHoy)}{' '}
+                  caracteres que te quedan hoy; mapas: te quedan {restantes} de {estado.cupo.maxGeneracionesDia}.
+                </p>
+              )}
               {sinCupo && (
                 <p role="alert" className="mt-1 text-sm font-bold text-[#B04A5E]">
                   Has llegado al máximo de mapas con IA de hoy. Vuelve mañana.

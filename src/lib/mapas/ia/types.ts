@@ -18,6 +18,8 @@ export type Extraido = {
   avisos: string[]
   /** Se dejó de leer al llegar al tope de lectura. */
   truncado: boolean
+  /** Marcadores del PDF (índice del propio archivo): título y página donde empieza. */
+  marcadores?: { titulo: string; pagina: number; nivel?: 1 | 2 }[]
 }
 
 export type ModoIA = 'esquema' | 'detalle'
@@ -27,7 +29,8 @@ export type EstadoIA = {
   modos: ModoIA[]
   /** Opciones que entiende el servidor (uno antiguo no las manda). */
   opciones?: { tablas?: boolean }
-  limites: { maxChars: number; maxPaginas: number }
+  /** `maxChars`/`maxPaginas`: un mapa. `maxCharsLibro`/`maxTemas`: documento largo tema a tema (servidor nuevo). */
+  limites: { maxChars: number; maxPaginas: number; maxCharsLibro?: number; maxPaginasLibro?: number; maxTemas?: number }
   cupo: {
     generacionesHoy: number
     maxGeneracionesDia: number

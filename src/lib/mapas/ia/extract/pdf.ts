@@ -74,6 +74,30 @@ export async function extraerPdf(file: File, { maxChars, onProgreso }: Opciones)
     /* sin metadatos */
   }
 
+  // Marcadores (el índice del propio PDF): para elegir qué parte usar. Si algo falla, sin ellos.
+  const marcadores: { titulo: string; pagina: number; nivel: 1 | 2 }[] = []
+  try {
+    const outline = (await pdf.getOutline()) ?? []
+    const paginaDe = async (dest: unknown): Promise<number | null> => {
+      const explicito = typeof dest === 'string' ? await pdf.getDestination(dest) : dest
+      if (!Array.isArray(explicito) || !explicito[0]) return null
+      const ref = explicito[0]
+      const indice = typeof ref === 'number' ? ref : await pdf.getPageIndex(ref)
+      return Number.isInteger(indice) ? indice + 1 : null
+    }
+    const recorrer = async (items: typeof outline, nivel: 1 | 2) => {
+      for (const it of items.slice(0, 300)) {
+        const pagina = await paginaDe(it.dest).catch(() => null)
+        const titulo = limpiarTexto(it.title ?? '').slice(0, 120)
+        if (pagina && titulo && pagina <= paginas.length) marcadores.push({ titulo, pagina, nivel })
+        if (nivel === 1 && it.items?.length) await recorrer(it.items, 2)
+      }
+    }
+    await recorrer(outline, 1)
+  } catch {
+    /* sin marcadores */
+  }
+
   const limpias = quitarRepetidas(paginas)
   // Cada página lleva su número: el servidor lo devuelve como página de origen de cada nodo.
   const secciones = limpias.map((texto, i) => ({ texto, pagina: i + 1 })).filter((s) => s.texto.length >= 10)
@@ -87,5 +111,6 @@ export async function extraerPdf(file: File, { maxChars, onProgreso }: Opciones)
     caracteres: secciones.reduce((s, x) => s + x.texto.length, 0),
     avisos,
     truncado,
+    ...(marcadores.length >= 2 ? { marcadores } : {}),
   }
 }
