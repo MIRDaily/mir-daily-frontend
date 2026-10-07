@@ -79,6 +79,8 @@ export type PeticionGenerar = {
   paginas: number
   tablas?: true
   unidad?: 'diapositiva'
+  /** Añadir a un mapa que ya existe: sus bloques y enfermedades como guía de la estructura. */
+  guia?: { bloques: string[]; entidades: string[] }
   /** Documento largo: cada tema como rango [desde, hasta] de `secciones`. */
   temas?: { titulo: string; desde: number; hasta: number }[]
 }

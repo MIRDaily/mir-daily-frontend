@@ -87,6 +87,9 @@ export interface UIState {
   /** Menú de clic derecho de un nodo (rehacer, ampliar o resumir con IA). */
   menuRama: { id: string; x: number; y: number } | null
   setMenuRama: (m: { id: string; x: number; y: number } | null) => void
+  /** Diálogo «Añadir un documento al mapa» abierto. */
+  anadirDoc: boolean
+  setAnadirDoc: (v: boolean) => void
   /** Diálogo de rama con IA abierto. */
   ramaIA: { id: string; accion: AccionRama } | null
   setRamaIA: (r: { id: string; accion: AccionRama } | null) => void

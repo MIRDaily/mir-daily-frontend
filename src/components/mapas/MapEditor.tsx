@@ -33,6 +33,7 @@ import { SubgroupConvertPanel } from '@/components/mapas/proto/components/Toolba
 import { FlashcardsFromBranch } from '@/components/mapas/flashcards/FlashcardsFromBranch'
 import { MenuRamaIA } from '@/components/mapas/ia/MenuRamaIA'
 import { RamaIADialog } from '@/components/mapas/ia/RamaIADialog'
+import { AnadirDocumentoIA } from '@/components/mapas/ia/AnadirDocumentoIA'
 import { iaEstado } from '@/lib/mapas/ia/api'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
@@ -205,6 +206,7 @@ export default function MapEditor(props: Props) {
     ui.setMapaId(props.sandbox ? null : props.mapId)
     ui.setMenuRama(null)
     ui.setRamaIA(null)
+    ui.setAnadirDoc(false)
     ui.setCategoriesPanelOpen(false)
     ui.setSearchOpen(false)
     // La física solo deshace solapes (no recoloca el mapa), así que vale también en mapas grandes.
@@ -547,6 +549,7 @@ function EditorInner({
       <FlashcardsFromBranch mapTitle={title} />
       <MenuRamaIA />
       <RamaIADialog mapTitle={title} />
+      <AnadirDocumentoIA mapTitle={title} />
     </div>
   )
 }

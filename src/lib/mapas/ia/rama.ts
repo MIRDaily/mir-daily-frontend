@@ -177,7 +177,17 @@ export function aplicarRama<N extends NodoMapa, E extends LineaMapa>(
   edges: E[],
   id: string,
   doc: MapDoc,
-  opts: { nuevoId: () => string; categoryStyles?: CategoryStyles; labelFont?: number; marcarNuevos?: boolean },
+  opts: {
+    nuevoId: () => string
+    categoryStyles?: CategoryStyles
+    labelFont?: number
+    /** Los nodos nuevos quedan pendientes de revisar (motivo «nuevo») si no traen otro. */
+    marcarNuevos?: boolean
+    /** AÑADIR en vez de sustituir: lo que ya cuelga de `id` se queda y lo nuevo va debajo. */
+    conservar?: boolean
+    /** Documento de donde salen los nodos (otro que el del mapa): su página va como «nombre, pág. N». */
+    origen?: string
+  },
 ): { nodes: N[]; edges: E[]; nuevos: string[] } | null {
   const raiz = nodes.find((n) => n.id === id)
   const arbol = sanitizeDoc(doc)
@@ -193,7 +203,7 @@ export function aplicarRama<N extends NodoMapa, E extends LineaMapa>(
       recoger(h.id)
     }
   }
-  recoger(id)
+  if (!opts.conservar) recoger(id)
   const revisados = new Set(nodes.filter((n) => viejos.has(n.id) && n.data.ia?.revisado).map(textoDe))
 
   // Nivel de la raíz en el mapa (para el estilo de cada nivel) y lado hacia el que se abre.
@@ -203,7 +213,23 @@ export function aplicarRama<N extends NodoMapa, E extends LineaMapa>(
   const padre = raiz.data.parentId ? byId.get(raiz.data.parentId) : undefined
   const w = (n: NodoMapa) => n.measured?.width ?? n.width ?? 160
   const h = (n: NodoMapa) => n.measured?.height ?? n.height ?? 44
-  const izquierda = !!padre && raiz.position.x + w(raiz) / 2 < padre.position.x + w(padre) / 2
+  // Al añadir, lo nuevo va del lado donde ya están sus hijos (si tiene)...
+  const yaHijos = opts.conservar ? (hijos.get(id) ?? []) : []
+  const izquierda = yaHijos.length
+    ? yaHijos.reduce((n, x) => n + x.position.x + w(x) / 2, 0) / yaHijos.length < raiz.position.x + w(raiz) / 2
+    : !!padre && raiz.position.x + w(raiz) / 2 < padre.position.x + w(padre) / 2
+  // ...y debajo de todo lo que ya cuelga de ella.
+  const descendientes: NodoMapa[] = []
+  if (opts.conservar) {
+    const bajar = (x: string) => {
+      for (const c of hijos.get(x) ?? []) {
+        descendientes.push(c)
+        bajar(c.id)
+      }
+    }
+    bajar(id)
+  }
+  const fondo = descendientes.length ? Math.max(...descendientes.map((d) => d.position.y + h(d))) : null
 
   const cajas = computeLayout(arbol, { gapX: 110, gapY: 18, depthGaps: LAYOUT_DEPTH_GAPS.slice(Math.min(nivel, LAYOUT_DEPTH_GAPS.length)) })
   const propia = cajas.get(raizArbol.id)
@@ -237,9 +263,20 @@ export function aplicarRama<N extends NodoMapa, E extends LineaMapa>(
     }
     const texto = n.table ? n.table.title : n.text
     const revisado = revisados.has(texto.replace(/\s+/g, ' ').trim())
+    // La página es la del OTRO documento: se dice cuál, como sección (el chip de origen la enseña).
+    const pag = ia?.pagina ?? ia?.diapositiva
+    const iaOrigen: NodoIA | undefined =
+      ia && opts.origen
+        ? {
+            ...ia,
+            pagina: undefined,
+            diapositiva: undefined,
+            ...(pag ? { seccion: `${opts.origen}, ${ia.diapositiva ? 'diap.' : 'pág.'} ${pag}`.slice(0, 80) } : {}),
+          }
+        : ia
     const iaFinal: NodoIA | undefined = opts.marcarNuevos
-      ? { ...(ia ?? {}), dudoso: ia?.dudoso ?? 'nuevo' }
-      : ia
+      ? { ...(iaOrigen ?? {}), dudoso: iaOrigen?.dudoso ?? 'nuevo' }
+      : iaOrigen
         ? { ...ia, ...(revisado ? { revisado: true } : {}) }
         : undefined
     const parentId = idNuevo.get(n.parentId) as string
@@ -276,6 +313,12 @@ export function aplicarRama<N extends NodoMapa, E extends LineaMapa>(
     } as unknown as E)
   }
 
+  // Al añadir: todo el bloque nuevo, debajo de lo que ya había.
+  if (fondo !== null && nuevosNodos.length) {
+    const arriba = Math.min(...nuevosNodos.map((n) => n.position.y))
+    const bajar = fondo + 30 - arriba
+    for (const n of nuevosNodos) n.position = { x: n.position.x, y: n.position.y + bajar }
+  }
   const quedan = nodes
     .filter((n) => !viejos.has(n.id))
     // La rama se ve: si estaba plegada, se despliega.

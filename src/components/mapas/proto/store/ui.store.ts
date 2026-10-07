@@ -31,6 +31,8 @@ export const useUIStore = create<UIState>((set) => ({
   setIaRamas: (iaRamas) => set({ iaRamas }),
   menuRama: null,
   setMenuRama: (menuRama) => set({ menuRama }),
+  anadirDoc: false,
+  setAnadirDoc: (anadirDoc) => set({ anadirDoc }),
   ramaIA: null,
   setRamaIA: (ramaIA) => set({ ramaIA }),
   flashcardsFrom: null,

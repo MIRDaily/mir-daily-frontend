@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Sparkles } from 'lucide-react'
+import { FilePlus2, Sparkles } from 'lucide-react'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import { ACCIONES_RAMA } from '@/lib/mapas/ia/rama'
@@ -38,7 +38,7 @@ export function MenuRamaIA() {
   const borde = t.isDark ? t.border2 : '#2C3E50'
   // Dentro de la ventana aunque el clic sea en un borde.
   const ancho = 272
-  const alto = 196
+  const alto = 262
   const x = Math.min(menu.x, (typeof window !== 'undefined' ? window.innerWidth : 1200) - ancho - 8)
   const y = Math.min(menu.y, (typeof window !== 'undefined' ? window.innerHeight : 800) - alto - 8)
 
@@ -93,6 +93,25 @@ export function MenuRamaIA() {
           <span style={{ display: 'block', fontSize: '0.72rem', color: t.textSecondary, lineHeight: 1.3 }}>{a.descripcion}</span>
         </button>
       ))}
+      <div style={{ height: 1, background: t.border, margin: '4px 6px' }} />
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => {
+          const ui = useUIStore.getState()
+          ui.setMenuRama(null)
+          ui.setAnadirDoc(true)
+        }}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '7px 9px', border: 0, borderRadius: 9, background: 'transparent', color: ink, fontFamily: 'inherit', cursor: 'pointer' }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = t.hoverBg)}
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+      >
+        <FilePlus2 size={16} color={t.accent} style={{ flexShrink: 0 }} />
+        <span>
+          <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800 }}>Añadir un documento al mapa</span>
+          <span style={{ display: 'block', fontSize: '0.72rem', color: t.textSecondary, lineHeight: 1.3 }}>Otro PDF, Word o PowerPoint del mismo tema: lo nuevo, a su sitio.</span>
+        </span>
+      </button>
     </div>
   )
 }
