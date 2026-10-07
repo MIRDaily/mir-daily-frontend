@@ -35,6 +35,8 @@ import { MenuRamaIA } from '@/components/mapas/ia/MenuRamaIA'
 import { RamaIADialog } from '@/components/mapas/ia/RamaIADialog'
 import { AnadirDocumentoIA } from '@/components/mapas/ia/AnadirDocumentoIA'
 import { iaEstado } from '@/lib/mapas/ia/api'
+import { animarEntrada } from '@/components/mapas/proto/utils/entryAnimation'
+import { reducedMotion } from '@/components/mapas/proto/utils/positionTween'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
@@ -244,7 +246,7 @@ function EditorInner({
   const studyMode = useUIStore((s) => s.studyMode)
   const labelStyle = useUIStore((s) => s.labelStyle)
   const isDark = theme === 'dark'
-  const { fitView, getNodes } = useReactFlow()
+  const { fitView, getNodes, getViewport, setViewport } = useReactFlow()
   const nodesInitialized = useNodesInitialized()
 
   const [title, setTitle] = useState(initialTitle)
@@ -255,6 +257,10 @@ function EditorInner({
   const inFlight = useRef(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const needsRelayout = useRef(fromTree)
+  // Entrada animada la primera vez que se abre un mapa recién generado o importado (viene de un
+  // árbol): hasta tener el orden definitivo no se enseña nada (antes los nodos saltaban de una
+  // posición provisional a la buena) y luego el mapa crece desde la raíz. No en el tutorial.
+  const [entrada, setEntrada] = useState(fromTree && !sandbox)
 
   // ---- guardado -----------------------------------------------------------
 
@@ -443,7 +449,35 @@ function EditorInner({
     if (!needsRelayout.current || !nodesInitialized) return
     needsRelayout.current = false
     layoutNow(false)
-  }, [nodesInitialized, layoutNow])
+    if (!entrada) return
+    // Dos fotogramas: en el primero layoutNow encuadra; en el segundo los nodos ya están en su sitio.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (!reducedMotion()) {
+          // La cámara empieza un poco acercada y se asienta mientras el mapa crece.
+          const v = getViewport()
+          const caja = document.querySelector('.mapa-root .react-flow')?.getBoundingClientRect()
+          if (caja) {
+            const k = 1.12
+            const cx = caja.width / 2
+            const cy = caja.height / 2
+            void setViewport({ x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k, zoom: v.zoom * k })
+            void setViewport(v, { duration: 1100 })
+          }
+          animarEntrada()
+        }
+        setEntrada(false)
+      }),
+    )
+  }, [nodesInitialized, layoutNow, entrada, getViewport, setViewport])
+
+  // Red de seguridad: si el editor no llega a medir los nodos (pestaña en segundo plano), el mapa
+  // se enseña igual.
+  useEffect(() => {
+    if (!entrada) return
+    const t = setTimeout(() => setEntrada(false), 3000)
+    return () => clearTimeout(t)
+  }, [entrada])
 
   const onAutoLayout = useCallback(() => {
     const { nodes, edges } = useMindMapStore.getState()
@@ -518,7 +552,7 @@ function EditorInner({
   )
 
   return (
-    <div className={`mapa-root ${MAP_FONT_CLASSES}`} data-theme={theme} data-study={studyMode ? '' : undefined} data-rotulo-minusculas={labelStyle.upper === false ? '' : undefined} style={rootStyle}>
+    <div className={`mapa-root ${MAP_FONT_CLASSES}`} data-theme={theme} data-study={studyMode ? '' : undefined} data-entrada={entrada ? '' : undefined} data-rotulo-minusculas={labelStyle.upper === false ? '' : undefined} style={rootStyle}>
       {/* Capa 0: fondo de puntos interactivo. Capa 1+: lienzo y controles (transparentes). */}
       <InteractiveBackground isDark={isDark} bgStyle={bgStyle} />
       {/* Cabecera única: título, acciones y vista en una sola franja (nada flota ni se pisa). */}

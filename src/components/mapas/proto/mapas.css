@@ -480,3 +480,9 @@
 .mapa-root .mindmap-node-root:hover .shape-label {
   background: rgba(125, 138, 150, 0.1) !important;
 }
+
+/* Entrada de un mapa recién generado o importado (MapEditor): nada se ve hasta tener el orden
+   definitivo; después crece desde la raíz (proto/utils/entryAnimation.ts). */
+.mapa-root[data-entrada] .react-flow__viewport {
+  opacity: 0;
+}
