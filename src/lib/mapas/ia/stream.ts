@@ -10,12 +10,17 @@ import { IAError } from '@/lib/mapas/ia/types'
 export type FaseIA = 'leyendo' | 'estructura' | 'tablas' | 'ordenando'
 export const FASES_IA: FaseIA[] = ['leyendo', 'estructura', 'tablas', 'ordenando']
 
-export type LineaProvisional = { parte: number; d: number; t: string }
+/** `tema`: en un documento largo tema a tema, el tema al que pertenece la rama. */
+export type LineaProvisional = { parte: number; tema?: number; d: number; t: string }
+
+export type EstadoTema = 'empieza' | 'listo' | 'fallo'
 
 export type EventoIA =
   | { tipo: 'fase'; fase: FaseIA }
   | ({ tipo: 'rama' } & LineaProvisional)
-  | { tipo: 'reinicio'; parte: number }
+  | { tipo: 'reinicio'; parte: number; tema?: number }
+  | { tipo: 'temas'; temas: { titulo: string; chars: number }[] }
+  | { tipo: 'tema'; i: number; estado: EstadoTema; nodos?: number }
   | { tipo: 'latido' }
   | { tipo: 'fin'; datos: Record<string, unknown> }
   | { tipo: 'error'; error: string; codigo: string; status: number }
@@ -23,6 +28,8 @@ export type EventoIA =
 const MAX_TEXTO = 300
 const MAX_NIVEL = 8
 const MAX_PARTE = 10000
+const MAX_TEMA = 1000
+const ESTADOS_TEMA: EstadoTema[] = ['empieza', 'listo', 'fallo']
 
 const entero = (v: unknown, min: number, max: number) =>
   typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max ? v : null
@@ -45,11 +52,27 @@ export function leerEvento(linea: string): EventoIA | null {
       const parte = entero(r.parte, 0, MAX_PARTE)
       const d = entero(r.d, 1, MAX_NIVEL)
       if (parte === null || d === null || typeof r.t !== 'string' || !r.t.trim()) return null
-      return { tipo: 'rama', parte, d, t: r.t.trim().slice(0, MAX_TEXTO) }
+      const tema = entero(r.tema, 0, MAX_TEMA)
+      return { tipo: 'rama', parte, ...(tema !== null ? { tema } : {}), d, t: r.t.trim().slice(0, MAX_TEXTO) }
     }
     case 'reinicio': {
       const parte = entero(r.parte, 0, MAX_PARTE)
-      return parte === null ? null : { tipo: 'reinicio', parte }
+      const tema = entero(r.tema, 0, MAX_TEMA)
+      return parte === null ? null : { tipo: 'reinicio', parte, ...(tema !== null ? { tema } : {}) }
+    }
+    case 'temas': {
+      if (!Array.isArray(r.temas)) return null
+      const temas = r.temas.slice(0, MAX_TEMA).map((t) => {
+        const x = t && typeof t === 'object' ? (t as Record<string, unknown>) : {}
+        return { titulo: typeof x.titulo === 'string' ? x.titulo.slice(0, 160) : '', chars: entero(x.chars, 0, 10_000_000) ?? 0 }
+      })
+      return { tipo: 'temas', temas }
+    }
+    case 'tema': {
+      const i = entero(r.i, 0, MAX_TEMA)
+      if (i === null || !ESTADOS_TEMA.includes(r.estado as EstadoTema)) return null
+      const nodos = entero(r.nodos, 0, 100000)
+      return { tipo: 'tema', i, estado: r.estado as EstadoTema, ...(nodos !== null ? { nodos } : {}) }
     }
     case 'latido':
       return { tipo: 'latido' }
@@ -91,8 +114,8 @@ export function crearLectorLineas(onLinea: (linea: string) => void) {
 
 /** Lo que el diálogo acumula: las líneas provisionales, con los reinicios ya aplicados. */
 export function aplicarEvento(lineas: LineaProvisional[], e: EventoIA): LineaProvisional[] {
-  if (e.tipo === 'rama') return [...lineas, { parte: e.parte, d: e.d, t: e.t }]
-  if (e.tipo === 'reinicio') return lineas.filter((l) => l.parte !== e.parte)
+  if (e.tipo === 'rama') return [...lineas, { parte: e.parte, ...(e.tema !== undefined ? { tema: e.tema } : {}), d: e.d, t: e.t }]
+  if (e.tipo === 'reinicio') return lineas.filter((l) => l.parte !== e.parte || l.tema !== e.tema)
   return lineas
 }
 
@@ -120,6 +143,19 @@ export function arbolProvisional(lineas: LineaProvisional[]): RamaProvisional[] 
     }
   }
   return raices
+}
+
+/**
+ * Documento largo: un bloque por tema (con su título) y debajo su borrador. Solo los temas que ya
+ * tienen ramas, en el orden del documento.
+ */
+export function arbolLibro(lineas: LineaProvisional[], titulos: string[]): RamaProvisional[] {
+  const temas = [...new Set(lineas.map((l) => l.tema ?? 0))].sort((a, b) => a - b)
+  return temas.map((i) => ({
+    key: `tema-${i}`,
+    t: titulos[i] || `Tema ${i + 1}`,
+    hijos: arbolProvisional(lineas.filter((l) => (l.tema ?? 0) === i)).map((n) => ({ ...n, key: `${i}-${n.key}` })),
+  }))
 }
 
 /** Cuerpo JSON de una respuesta, o IAError con el mensaje seguro del servidor. */

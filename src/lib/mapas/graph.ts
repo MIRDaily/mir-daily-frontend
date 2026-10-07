@@ -1,5 +1,5 @@
 import { sanitizeLabelHtml } from '@/lib/mapas/labelHtml'
-import { computeLayout } from '@/lib/mapas/layout'
+import { computeLayout, type NodeBox } from '@/lib/mapas/layout'
 import { sanitizeTable, tableToLabel, type MapTable } from '@/lib/mapas/table'
 import { sanitizeIA, type NodoIA } from '@/lib/mapas/ia/revision'
 
@@ -293,6 +293,41 @@ export function newGraphDoc(rootLabel = 'Tema principal'): GraphDoc {
   }
 }
 
+/**
+ * Lo que cuelga de una rama plegada no tiene sitio en el ordenado (no se ve), y al desplegarla el
+ * editor no recoloca nada: aparecía todo amontonado en (0, 0). Cada rama plegada se ordena aparte,
+ * como si solo ella estuviera abierta, y se coloca hacia fuera desde su nodo (en espejo si el nodo
+ * quedó a la izquierda de la raíz). Muta `boxes`.
+ */
+function placeCollapsed(doc: MapDoc, boxes: Map<string, NodeBox>) {
+  const kids = new Map<string, MapNode[]>()
+  for (const n of doc.nodes) if (n.parentId) (kids.get(n.parentId) ?? kids.set(n.parentId, []).get(n.parentId)!).push(n)
+  const root = doc.nodes.find((n) => n.parentId === null)
+  const rootBox = root ? boxes.get(root.id) : undefined
+  for (const c of doc.nodes) {
+    const cb = boxes.get(c.id)
+    if (!c.collapsed || !cb || !kids.get(c.id)?.length) continue
+    // La rama, con su nodo como raíz y abierta (lo plegado dentro de ella, se queda plegado).
+    const sub: MapNode[] = []
+    const walk = (n: MapNode) => {
+      sub.push(n === c ? { ...n, parentId: null, collapsed: false } : n)
+      if (n === c || !n.collapsed) for (const k of kids.get(n.id) ?? []) walk(k)
+    }
+    walk(c)
+    const sb = computeLayout({ version: 1, nodes: sub }, { gapX: 110, gapY: 18, depthGaps: LAYOUT_DEPTH_GAPS.slice(1) })
+    const own = sb.get(c.id)
+    if (!own) continue
+    const left = !!rootBox && cb.x + cb.w / 2 < rootBox.x + rootBox.w / 2
+    for (const [id, b] of sb) {
+      if (id === c.id) continue
+      const dx = b.x - own.x
+      const y = cb.y + cb.h / 2 + (b.y + b.h / 2 - (own.y + own.h / 2)) - b.h / 2
+      const x = left ? cb.x + cb.w - dx - b.w : cb.x + dx
+      boxes.set(id, { ...b, x, y })
+    }
+  }
+}
+
 /** Árbol → grafo con el aspecto del prototipo. Las posiciones son una primera pasada: el editor reordena con tamaños reales. */
 export function treeToGraph(tree: MapDoc): GraphDoc {
   const doc = sanitizeDoc(tree)
@@ -303,6 +338,7 @@ export function treeToGraph(tree: MapDoc): GraphDoc {
     return l
   }
   const boxes = computeLayout(doc, { gapX: 110, gapY: 18, depthGaps: LAYOUT_DEPTH_GAPS, twoSidedFrom: LAYOUT_TWO_SIDED_FROM })
+  placeCollapsed(doc, boxes)
 
   const nodes: GraphNode[] = doc.nodes.map((n) => {
     const level = levelOf(n)
@@ -325,6 +361,8 @@ export function treeToGraph(tree: MapDoc): GraphDoc {
         style,
         ...(n.parentId ? { parentId: n.parentId } : {}),
         category: n.category,
+        // Rama plegada en el árbol (p. ej. cada tema de un libro generado tema a tema).
+        ...(n.collapsed ? { collapsed: true } : {}),
         ...(n.table ? { table: n.table } : {}),
         ...(n.ia ? { ia: n.ia } : {}),
       },

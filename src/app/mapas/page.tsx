@@ -525,7 +525,7 @@ export default function MapasPage() {
           onAction={undo && toast.tone === 'neutral' ? () => void onUndo() : undefined}
         />
       ) : null}
-      {iaOpen && ia ? <CrearConIA estado={ia} onClose={() => setIaOpen(false)} /> : null}
+      {iaOpen && ia ? <CrearConIA estado={ia} onClose={() => setIaOpen(false)} onCreados={() => void reload()} /> : null}
     </main>
   )
 }

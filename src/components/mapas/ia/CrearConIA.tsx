@@ -4,11 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createMap } from '@/lib/mapas/api'
 import { extraerDocumento, FORMATOS_ACEPTADOS } from '@/lib/mapas/ia/extract'
-import { iaGenerar } from '@/lib/mapas/ia/api'
-import { aplicarEvento, type FaseIA, type LineaProvisional } from '@/lib/mapas/ia/stream'
+import { iaGenerar, iaIndice } from '@/lib/mapas/ia/api'
+import { aplicarEvento, arbolLibro, type EstadoTema, type FaseIA, type LineaProvisional } from '@/lib/mapas/ia/stream'
 import { INK, ProgresoIA } from './ProgresoIA'
 import { SelectorParte } from './SelectorParte'
 import { construirIndice, estadoEntrada, resumenSeleccion } from '@/lib/mapas/ia/indice'
+import { entradasDeTemas, nodosLibro, temasParaEnviar, unirTemas, type TemaIndice } from '@/lib/mapas/ia/libro'
+import type { MapDoc } from '@/lib/mapas/types'
 import {
   NODOS_POR_RAIZ,
   ExtractError,
@@ -23,7 +25,11 @@ import {
 // El archivo no se sube: solo viaja su texto, y nada se guarda hasta que el
 // mapa se ha generado bien.
 
-type Fase = 'elegir' | 'leyendo' | 'ajustes' | 'generando'
+type Fase = 'elegir' | 'leyendo' | 'ajustes' | 'generando' | 'hecho'
+
+/** Cómo se guarda un documento largo generado tema a tema. */
+type GuardarComo = 'temas' | 'uno'
+type ProgresoTema = { titulo: string; estado: EstadoTema | 'espera' }
 
 const MODOS: { id: ModoIA; titulo: string; descripcion: string; ejemplo: string[] }[] = [
   {
@@ -49,9 +55,12 @@ const fmt = (n: number) => n.toLocaleString('es-ES')
 export default function CrearConIA({
   estado,
   onClose,
+  onCreados,
 }: {
   estado: EstadoIA
   onClose: () => void
+  /** Se han creado mapas sin abrir el editor (un mapa por tema): la lista debe recargarse. */
+  onCreados?: () => void
 }) {
   const router = useRouter()
   const [fase, setFase] = useState<Fase>('elegir')
@@ -75,6 +84,15 @@ export default function CrearConIA({
   // Último título puesto solo (el del archivo o el del tema marcado): si el usuario no lo ha
   // cambiado, marcar un único tema le pone su nombre al mapa.
   const tituloAuto = useRef('')
+  // Documento largo TEMA A TEMA: el índice lo saca el servidor (una llamada barata) y cada tema
+  // se genera aparte; al final, un mapa por tema o uno grande con cada tema plegado.
+  const [temasLibro, setTemasLibro] = useState<TemaIndice[] | null>(null)
+  const [cargandoIndice, setCargandoIndice] = useState(false)
+  const [guardarComo, setGuardarComo] = useState<GuardarComo>('temas')
+  const [progresoTemas, setProgresoTemas] = useState<ProgresoTema[]>([])
+  const [creados, setCreados] = useState<{ id: string; titulo: string; nodos: number }[]>([])
+  const [fallidos, setFallidos] = useState<{ titulo: string; motivo: string }[]>([])
+  const porTemas = !!temasLibro
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const montado = useRef(true)
@@ -127,6 +145,7 @@ export default function CrearConIA({
       setExtraido(r)
       setTitulo(r.titulo)
       tituloAuto.current = r.titulo
+      setTemasLibro(null)
       // Si cabe, todo marcado; si no, nada marcado y el índice abierto para elegir una parte.
       const cabe = r.caracteres <= maxChars && r.paginas <= maxPaginas
       setSel(cabe ? new Set(r.secciones.map((_, i) => i)) : new Set())
@@ -139,13 +158,22 @@ export default function CrearConIA({
     }
   }
 
-  const indice = useMemo(() => (extraido ? construirIndice(extraido.secciones, extraido.marcadores) : []), [extraido])
+  const indiceLocal = useMemo(() => (extraido ? construirIndice(extraido.secciones, extraido.marcadores) : []), [extraido])
+  // Tema a tema, el índice es el del servidor (temas y sus apartados).
+  const indice = useMemo(
+    () => (extraido && temasLibro ? entradasDeTemas(temasLibro, extraido.secciones) : indiceLocal),
+    [extraido, temasLibro, indiceLocal],
+  )
   const eleccion = useMemo(() => (extraido ? resumenSeleccion(extraido.secciones, sel) : null), [extraido, sel])
+  const envioLibro = useMemo(
+    () => (extraido && temasLibro ? temasParaEnviar(extraido.secciones, sel, temasLibro) : null),
+    [extraido, temasLibro, sel],
+  )
   const todoElegido = !!extraido && sel.size === extraido.secciones.length
 
   const elegir = (nuevo: Set<number>) => {
     setSel(nuevo)
-    if (!extraido || titulo !== tituloAuto.current) return
+    if (!extraido || porTemas || titulo !== tituloAuto.current) return
     const unico = indice.filter((e) => e.nivel === 1 && estadoEntrada(e, nuevo) !== 'nada')
     const propuesto =
       unico.length === 1 && estadoEntrada(unico[0], nuevo) === 'todo' && unico[0].hasta - unico[0].desde + 1 === nuevo.size
@@ -154,17 +182,71 @@ export default function CrearConIA({
     tituloAuto.current = propuesto
     setTitulo(propuesto)
   }
-  const caracteres = eleccion?.caracteres ?? 0
+  // Tema a tema solo viaja lo marcado DENTRO de algún tema.
+  const caracteres = envioLibro ? envioLibro.caracteres : (eleccion?.caracteres ?? 0)
   // Páginas que se mandan: las elegidas (en Word, que no tiene páginas, la estimación de siempre).
-  const paginasElegidas = !extraido ? 0 : todoElegido ? extraido.paginas : (eleccion?.paginas ?? 0)
+  const paginasElegidas = !extraido
+    ? 0
+    : envioLibro
+      ? resumenSeleccion(envioLibro.secciones, new Set(envioLibro.secciones.map((_, i) => i))).paginas
+      : todoElegido
+        ? extraido.paginas
+        : (eleccion?.paginas ?? 0)
   const documentoGrande = !!extraido && (extraido.caracteres > maxChars || extraido.paginas > maxPaginas)
+  // Tema a tema se ofrece en un documento largo o con varios temas detectados.
+  const ofrecerLibro =
+    !!estado.opciones?.libro && !!extraido && (documentoGrande || indiceLocal.filter((e) => e.nivel === 1 && !e.key.startsWith('inicio')).length >= 2)
+  const maxCharsUsado = porTemas ? (estado.limites.maxCharsLibro ?? maxChars) : maxChars
+  const maxPaginasUsado = porTemas ? (estado.limites.maxPaginasLibro ?? maxPaginas) : maxPaginas
   const nadaElegido = !!extraido && caracteres < 200
-  const excedeTexto = caracteres > maxChars
-  const excedePaginas = paginasElegidas > maxPaginas
+  const excedeTexto = caracteres > maxCharsUsado
+  const excedePaginas = paginasElegidas > maxPaginasUsado
+  const excedeTemas = !!envioLibro && envioLibro.temas.length > (estado.limites.maxTemas ?? 40)
   const excedeCupoChars = caracteres > charsRestantesHoy
   const sinCupo = restantes === 0
   const puedeGenerar =
-    !!extraido && !nadaElegido && !excedeTexto && !excedePaginas && !excedeCupoChars && !sinCupo && titulo.trim().length > 0
+    !!extraido &&
+    !nadaElegido &&
+    !excedeTexto &&
+    !excedePaginas &&
+    !excedeTemas &&
+    !excedeCupoChars &&
+    !sinCupo &&
+    !cargandoIndice &&
+    titulo.trim().length > 0
+
+  /** Pide el índice al servidor y pasa a tema a tema, con todos los temas marcados. */
+  const activarTemas = async () => {
+    if (!extraido) return
+    setError(null)
+    setCargandoIndice(true)
+    try {
+      const temas = await iaIndice({ titulo: titulo.trim() || extraido.titulo, secciones: extraido.secciones })
+      if (!montado.current) return
+      if (temas.length < 1) throw new IAError('La IA no encontró temas en este documento. Elige una parte a mano.')
+      const nuevo = new Set<number>()
+      for (const t of temas) for (let i = t.desde; i <= t.hasta; i++) nuevo.add(i)
+      setTemasLibro(temas)
+      setSel(nuevo)
+      setSelectorAbierto(true)
+      if (titulo === tituloAuto.current) {
+        setTitulo(extraido.titulo)
+        tituloAuto.current = extraido.titulo
+      }
+    } catch (e) {
+      if (!montado.current) return
+      setError(e instanceof Error ? e.message : 'No se pudo sacar el índice')
+    } finally {
+      if (montado.current) setCargandoIndice(false)
+    }
+  }
+
+  const desactivarTemas = () => {
+    if (!extraido) return
+    setTemasLibro(null)
+    const cabe = extraido.caracteres <= maxChars && extraido.paginas <= maxPaginas
+    setSel(cabe ? new Set(extraido.secciones.map((_, i) => i)) : new Set())
+  }
 
   const generar = async () => {
     if (!extraido || !puedeGenerar) return
@@ -172,26 +254,44 @@ export default function CrearConIA({
     setSegundos(0)
     setFaseIA('leyendo')
     setLineas([])
+    setProgresoTemas([])
     setFase('generando')
     const ctl = new AbortController()
     abortRef.current = ctl
+    const onEvento = (e: Parameters<NonNullable<Parameters<typeof iaGenerar>[2]>>[0]) => {
+      if (!montado.current || ctl.signal.aborted) return
+      if (e.tipo === 'fase') setFaseIA(e.fase)
+      else if (e.tipo === 'rama' || e.tipo === 'reinicio') setLineas((ls) => aplicarEvento(ls, e))
+      else if (e.tipo === 'temas') setProgresoTemas(e.temas.map((t) => ({ titulo: t.titulo, estado: 'espera' })))
+      else if (e.tipo === 'tema') setProgresoTemas((ps) => ps.map((p, i) => (i === e.i ? { ...p, estado: e.estado } : p)))
+    }
+    const comun = {
+      titulo: titulo.trim(),
+      modo,
+      paginas: Math.max(1, paginasElegidas),
+      ...(conTablas ? { tablas: true as const } : {}),
+      ...(extraido.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
+    }
     try {
-      const r = await iaGenerar(
-        {
-          titulo: titulo.trim(),
-          modo,
-          secciones: eleccion?.elegidas ?? [],
-          paginas: Math.max(1, paginasElegidas),
-          ...(conTablas ? { tablas: true as const } : {}),
-          ...(extraido.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
-        },
-        ctl.signal,
-        (e) => {
-          if (!montado.current || ctl.signal.aborted) return
-          if (e.tipo === 'fase') setFaseIA(e.fase)
-          else if (e.tipo === 'rama' || e.tipo === 'reinicio') setLineas((ls) => aplicarEvento(ls, e))
-        },
-      )
+      if (envioLibro) {
+        const r = await iaGenerar({ ...comun, secciones: envioLibro.secciones, temas: envioLibro.temas }, ctl.signal, onEvento)
+        // Lo que se guarda son los mapas VALIDADOS del final, nunca el borrador.
+        const hechos: { id: string; titulo: string; nodos: number }[] = []
+        if (guardarComo === 'uno') {
+          const doc = unirTemas(r.titulo, r.temas.map((t) => ({ titulo: t.titulo, doc: t.doc as MapDoc })))
+          const id = await createMap(r.titulo, doc)
+          hechos.push({ id, titulo: r.titulo, nodos: r.temas.reduce((n, t) => n + t.stats.nodos, 0) })
+        } else {
+          for (const t of r.temas) hechos.push({ id: await createMap(t.titulo, t.doc), titulo: t.titulo, nodos: t.stats.nodos })
+        }
+        if (!montado.current) return
+        setCreados(hechos)
+        setFallidos(r.fallidos.map((f) => ({ titulo: f.titulo, motivo: f.motivo })))
+        onCreados?.()
+        setFase('hecho')
+        return
+      }
+      const r = await iaGenerar({ ...comun, secciones: eleccion?.elegidas ?? [] }, ctl.signal, onEvento)
       // Lo que se guarda es el mapa VALIDADO del final, nunca el borrador.
       const id = await createMap(r.titulo, r.doc)
       if (!montado.current) return
@@ -204,12 +304,27 @@ export default function CrearConIA({
     }
   }
 
-  const nodosAprox = Math.max(5, Math.round(NODOS_POR_RAIZ[modo] * Math.sqrt(caracteres)))
-  const segMin = Math.max(5, Math.round(caracteres / 6000))
-  const segMax = Math.max(10, Math.round(caracteres / 3500))
+  // Tema a tema: cada tema crece con la raíz de su texto y van de 3 en 3 (vasculitis sola, 84.000
+  // caracteres, 10-20 s; el libro de reumatología, 16 temas y 421.000 caracteres, 41 s).
+  const charsPorTema = useMemo(
+    () =>
+      envioLibro && extraido
+        ? envioLibro.temas.map((t) => envioLibro.secciones.slice(t.desde, t.hasta + 1).reduce((n, s) => n + s.texto.length, 0))
+        : [],
+    [envioLibro, extraido],
+  )
+  const nodosAprox = envioLibro
+    ? nodosLibro(charsPorTema, NODOS_POR_RAIZ[modo])
+    : Math.max(5, Math.round(NODOS_POR_RAIZ[modo] * Math.sqrt(caracteres)))
+  const segMin = Math.max(5, Math.round(caracteres / (envioLibro ? 18000 : 6000)))
+  const segMax = Math.max(10, Math.round(caracteres / (envioLibro ? 10500 : 3500)) + (envioLibro ? 10 : 0))
+  const temasListos = progresoTemas.filter((p) => p.estado === 'listo').length
+  const temasFallidos = progresoTemas.filter((p) => p.estado === 'fallo').length
   const resumenParte = !extraido
     ? ''
-    : todoElegido
+    : envioLibro
+      ? `${fmt(envioLibro.temas.length)} de ${fmt(temasLibro?.length ?? 0)} temas · ${fmt(caracteres)} caracteres`
+      : todoElegido
       ? `Todo el documento · ${fmt(caracteres)} caracteres`
       : sel.size === 0
         ? 'Nada marcado'
@@ -341,11 +456,46 @@ export default function CrearConIA({
                   {a}
                 </p>
               ))}
-              {documentoGrande && (
+              {documentoGrande && !porTemas && (
                 <p className="mt-3 rounded-xl bg-[#FBF3E1] px-3 py-2 text-[0.8rem] font-semibold text-[#8A6418]">
                   El documento tiene {fmt(extraido.caracteres)} caracteres y en un mapa caben {fmt(maxChars)}
-                  {extraido.paginas > maxPaginas ? ` (y ${maxPaginas} páginas)` : ''}. Elige qué parte usar.
+                  {extraido.paginas > maxPaginas ? ` (y ${maxPaginas} páginas)` : ''}.{' '}
+                  {ofrecerLibro ? 'Hazlo tema a tema o elige qué parte usar.' : 'Elige qué parte usar.'}
                 </p>
+              )}
+
+              {ofrecerLibro && (
+                <div
+                  className="mt-3 flex items-center gap-3 rounded-2xl bg-white px-4 py-3"
+                  style={{ border: `2px solid ${porTemas ? '#E8A598' : INK}` }}
+                >
+                  <span aria-hidden className="inline-block text-[#E8A598]">
+                    <span className="material-symbols-outlined text-[1.4rem] leading-none">library_books</span>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-extrabold text-[#2C3E50]">Tema a tema</span>
+                    <span className="block text-xs text-[#7D8A96]">
+                      {porTemas
+                        ? `${temasLibro?.length ?? 0} temas encontrados. Cada uno se genera aparte, como si fuera un documento suelto.`
+                        : 'Primero la IA saca el índice (unos segundos) y luego hace cada tema por separado.'}
+                    </span>
+                  </span>
+                  {porTemas ? (
+                    <button type="button" onClick={desactivarTemas} className="text-xs font-bold text-[#7D8A96] hover:text-[#B04A5E]">
+                      Quitar
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void activarTemas()}
+                      disabled={cargandoIndice}
+                      className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-extrabold text-white disabled:opacity-60"
+                      style={{ background: '#E8A598', border: `2px solid ${INK}`, boxShadow: `2px 2px 0 0 ${INK}` }}
+                    >
+                      {cargandoIndice ? 'Sacando el índice…' : 'Sacar el índice'}
+                    </button>
+                  )}
+                </div>
               )}
 
               <SelectorParte
@@ -360,13 +510,44 @@ export default function CrearConIA({
               />
               {excedeTexto && (
                 <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
-                  Lo marcado tiene {fmt(caracteres)} caracteres: el máximo por mapa es {fmt(maxChars)}. Desmarca alguna parte.
+                  Lo marcado tiene {fmt(caracteres)} caracteres: el máximo {porTemas ? 'tema a tema' : 'por mapa'} es {fmt(maxCharsUsado)}. Desmarca alguna parte.
                 </p>
               )}
               {excedePaginas && (
                 <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
-                  Lo marcado tiene más de {maxPaginas} páginas. Desmarca alguna parte.
+                  Lo marcado tiene más de {maxPaginasUsado} páginas. Desmarca alguna parte.
                 </p>
+              )}
+              {excedeTemas && (
+                <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
+                  Como mucho {estado.limites.maxTemas ?? 40} temas de una vez. Desmarca alguno.
+                </p>
+              )}
+              {porTemas && (
+                <div className="mt-4" role="radiogroup" aria-label="Cómo guardarlo">
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#7D8A96]">Cómo guardarlo</p>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {(
+                      [
+                        ['temas', 'Un mapa por tema', `${fmt(envioLibro?.temas.length ?? 0)} mapas en tu lista, cada uno con su título.`],
+                        ['uno', 'Un mapa grande', 'Todos los temas en un solo mapa, cada tema plegado: se abre el que vayas a estudiar.'],
+                      ] as const
+                    ).map(([id, nombre, desc]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        role="radio"
+                        aria-checked={guardarComo === id}
+                        onClick={() => setGuardarComo(id)}
+                        className="rounded-2xl bg-white p-3 text-left"
+                        style={{ border: `2px solid ${guardarComo === id ? '#E8A598' : '#EDE6DE'}` }}
+                      >
+                        <span className="block text-sm font-extrabold text-[#2C3E50]">{nombre}</span>
+                        <span className="mt-0.5 block text-xs text-[#7D8A96]">{desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
               {!excedeTexto && excedeCupoChars && (
                 <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
@@ -375,7 +556,7 @@ export default function CrearConIA({
               )}
 
               <label className="mt-5 block text-xs font-bold uppercase tracking-wide text-[#7D8A96]" htmlFor="ia-titulo">
-                Título del mapa
+                {porTemas ? (guardarComo === 'uno' ? 'Título del mapa' : 'Nombre del documento') : 'Título del mapa'}
               </label>
               <input
                 id="ia-titulo"
@@ -441,7 +622,7 @@ export default function CrearConIA({
                 <p className="mt-4 text-xs font-bold text-[#B04A5E]">Marca al menos una parte del documento.</p>
               ) : (
                 <p className="mt-4 text-xs text-[#7D8A96]" aria-live="polite">
-                  {fmt(caracteres)} caracteres: saldrán unos {fmt(nodosAprox)} nodos y tardará {segMin}–{segMax} segundos
+                  {fmt(caracteres)} caracteres{envioLibro ? ` en ${fmt(envioLibro.temas.length)} temas` : ''}: saldrán unos {fmt(nodosAprox)} nodos y tardará {segMin}–{segMax} segundos
                   {conTablas ? ' (con tablas, el doble de gasto)' : ''}. Usará {fmt(caracteres)} de los {fmt(charsRestantesHoy)}{' '}
                   caracteres que te quedan hoy; mapas: te quedan {restantes} de {estado.cupo.maxGeneracionesDia}.
                 </p>
@@ -457,13 +638,25 @@ export default function CrearConIA({
           {fase === 'generando' && (
             <>
               <ProgresoIA
-                fases={conTablas ? ['leyendo', 'estructura', 'tablas', 'ordenando'] : ['leyendo', 'estructura', 'ordenando']}
+                fases={conTablas && !porTemas ? ['leyendo', 'estructura', 'tablas', 'ordenando'] : ['leyendo', 'estructura', 'ordenando']}
                 fase={faseIA}
                 lineas={lineas}
                 segundos={segundos}
+                {...(porTemas
+                  ? {
+                      arbol: arbolLibro(lineas, progresoTemas.map((t) => t.titulo)),
+                      temas: progresoTemas,
+                      detalle: progresoTemas.length
+                        ? `Temas: ${temasListos} de ${progresoTemas.length} listos${temasFallidos ? ` · ${temasFallidos} no salieron` : ''}`
+                        : undefined,
+                    }
+                  : {})}
               />
               <p className="mt-2 text-xs text-[#7D8A96]">
-                No cierres esta ventana. Al terminar se abrirá el editor con el mapa ya revisado y ordenado.{' '}
+                No cierres esta ventana.{' '}
+                {porTemas
+                  ? 'Al terminar se guardan los mapas, ya revisados y ordenados.'
+                  : 'Al terminar se abrirá el editor con el mapa ya revisado y ordenado.'}{' '}
                 <button
                   type="button"
                   onClick={() => {
@@ -480,7 +673,75 @@ export default function CrearConIA({
               </p>
             </>
           )}
+
+          {fase === 'hecho' && (
+            <div className="rounded-2xl bg-white px-4 py-4" style={{ border: `2px solid ${INK}`, boxShadow: `4px 4px 0 0 ${INK}` }}>
+              <p className="flex items-center gap-2 text-base font-extrabold text-[#2C3E50]">
+                <span aria-hidden className="inline-block text-[#8BA888]">
+                  <span className="material-symbols-outlined text-[1.4rem] leading-none">task_alt</span>
+                </span>
+                {creados.length === 1 && guardarComo === 'uno'
+                  ? `Mapa creado con ${fmt(progresoTemas.length - fallidos.length)} temas`
+                  : `${fmt(creados.length)} mapas creados`}
+                <span className="text-sm font-semibold text-[#7D8A96]">
+                  · {fmt(creados.reduce((n, c) => n + c.nodos, 0))} nodos
+                </span>
+              </p>
+              <ul className="mt-3 max-h-[16rem] space-y-1 overflow-y-auto">
+                {creados.map((c) => (
+                  <li key={c.id}>
+                    <a
+                      href={`/mapas/${c.id}?ia=1`}
+                      className="flex items-center justify-between gap-3 rounded-lg px-2 py-1 text-[0.82rem] font-bold text-[#2C3E50] hover:bg-[#FAF7F4]"
+                    >
+                      <span className="min-w-0 truncate">{c.titulo}</span>
+                      <span className="shrink-0 text-[0.72rem] font-semibold text-[#7D8A96]">{fmt(c.nodos)} nodos</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              {fallidos.length > 0 && (
+                <div className="mt-3 rounded-xl bg-[#FAEAED] px-3 py-2 text-[0.78rem] text-[#B04A5E]">
+                  <p className="font-extrabold">No salieron {fallidos.length === 1 ? 'este tema' : `estos ${fallidos.length} temas`}:</p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {fallidos.map((f) => (
+                      <li key={f.titulo}>
+                        {f.titulo}: {f.motivo}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1">Puedes generarlos aparte: vuelve a elegir el archivo y marca solo ese tema.</p>
+                </div>
+              )}
+              <p className="mt-3 text-[0.75rem] text-[#7D8A96]">
+                Cada nodo lleva la página de donde sale: la revisión guiada te lleva a lo dudoso.
+              </p>
+            </div>
+          )}
         </div>
+
+        {fase === 'hecho' && (
+          <footer className="flex justify-end gap-3 border-t border-[#7D8A96]/15 bg-white px-6 py-4">
+            {creados.length === 1 ? (
+              <button
+                type="button"
+                onClick={() => router.push(`/mapas/${creados[0].id}?ia=1`)}
+                className="flex items-center gap-2 rounded-2xl bg-[#E8A598] px-5 py-2.5 text-sm font-bold text-white"
+                style={{ border: `2px solid ${INK}`, boxShadow: `3px 3px 0 0 ${INK}` }}
+              >
+                Abrir el mapa
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl px-4 py-2.5 text-sm font-bold text-[#2C3E50]"
+              style={{ border: `2px solid ${INK}` }}
+            >
+              Cerrar
+            </button>
+          </footer>
+        )}
 
         {(fase === 'ajustes' || fase === 'generando') && (
           <footer className="border-t border-[#7D8A96]/15 bg-white px-6 py-4">
@@ -504,7 +765,7 @@ export default function CrearConIA({
                 className="flex items-center gap-2 rounded-2xl bg-[#E8A598] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#d18d80] disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
-                {fase === 'generando' ? 'Generando…' : 'Generar mapa'}
+                {fase === 'generando' ? 'Generando…' : porTemas ? 'Generar los temas' : 'Generar mapa'}
               </button>
             </div>
           </footer>

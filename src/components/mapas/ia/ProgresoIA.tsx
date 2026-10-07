@@ -17,6 +17,8 @@ const NOMBRE: Record<FaseIA, string> = {
   ordenando: 'Ordenando',
 }
 
+const ESTADO_TEMA = { espera: 'en espera', empieza: 'generando', listo: 'listo', fallo: 'no salió' } as const
+
 // Color de cada bloque de primer nivel (los de las categorías del editor, en orden).
 const COLORES = ['#6E9BC5', '#9B86BD', '#E8A598', '#D9A441', '#8BA888', '#D4667A', '#7D8A96']
 
@@ -26,6 +28,8 @@ export function ProgresoIA({
   lineas,
   segundos,
   detalle,
+  arbol: arbolDado,
+  temas,
 }: {
   /** Las fases que tiene esta generación (sin «Incluir tablas», no hay fase de tablas). */
   fases: FaseIA[]
@@ -34,8 +38,13 @@ export function ProgresoIA({
   segundos: number
   /** Texto extra bajo las fases (p. ej. «Tema 3 de 16»). */
   detalle?: string
+  /** Árbol ya montado (documento largo: un bloque por tema); si no, sale de `lineas`. */
+  arbol?: RamaProvisional[]
+  /** Documento largo: cómo va cada tema. */
+  temas?: { titulo: string; estado: 'espera' | 'empieza' | 'listo' | 'fallo' }[]
 }) {
-  const arbol = useMemo(() => arbolProvisional(lineas), [lineas])
+  const propio = useMemo(() => arbolProvisional(lineas), [lineas])
+  const arbol = arbolDado ?? propio
   const actual = fases.indexOf(fase)
   const caja = useRef<HTMLDivElement>(null)
   // Se sigue el final mientras el usuario no suba a mirar algo.
@@ -80,6 +89,24 @@ export function ProgresoIA({
         <li className="ml-auto text-[0.75rem] font-bold tabular-nums text-[#7D8A96]">{segundos} s</li>
       </ol>
       {detalle && <p className="mt-2 text-[0.75rem] font-bold text-[#2C3E50]">{detalle}</p>}
+      {temas && temas.length > 0 && (
+        <ol className="mt-2 flex flex-wrap gap-1" aria-label="Temas">
+          {temas.map((t, i) => (
+            <li
+              key={i}
+              title={`${t.titulo}: ${ESTADO_TEMA[t.estado]}`}
+              className={`flex h-[1.4rem] min-w-[1.6rem] items-center justify-center rounded-md px-1 text-[0.68rem] font-extrabold tabular-nums ${t.estado === 'empieza' ? 'animate-pulse' : ''}`}
+              style={{
+                border: `1.5px solid ${t.estado === 'espera' ? '#D4C8BE' : INK}`,
+                background: t.estado === 'listo' ? '#8BA888' : t.estado === 'fallo' ? '#D4667A' : t.estado === 'empieza' ? '#E8A598' : '#FFFFFF',
+                color: t.estado === 'espera' ? '#7D8A96' : '#FFFFFF',
+              }}
+            >
+              {i + 1}
+            </li>
+          ))}
+        </ol>
+      )}
 
       <div className="mt-3 flex items-baseline justify-between gap-2">
         <p className="text-[0.7rem] font-extrabold uppercase tracking-wide text-[#7D8A96]">Borrador</p>

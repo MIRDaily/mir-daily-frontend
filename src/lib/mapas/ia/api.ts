@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabaseBrowser'
 import { IAError, type EstadoIA, type ModoIA, type Seccion } from './types'
 import { cuerpoOError, leerRespuesta, type EventoIA } from '@/lib/mapas/ia/stream'
 import type { StoredDoc } from '@/lib/mapas/graph'
+import { resumenParaIndice, sanitizeTemas, type TemaIndice } from '@/lib/mapas/ia/libro'
 
 // Llamadas a /api/admin/mapas-ia. El permiso (rol admin, interruptor y cupos)
 // lo valida SIEMPRE el backend; aquí solo se pinta lo que devuelva.
@@ -45,17 +46,52 @@ export type MapaGenerado = {
   stats: { modo: ModoIA; caracteres: number; nodos: number; tablas?: number; dudosos?: number }
 }
 
+/** Documento largo tema a tema: un mapa por tema y los temas que no salieron. */
+export type LibroGenerado = {
+  titulo: string
+  temas: { i: number; titulo: string; doc: StoredDoc; stats: { nodos: number; tablas?: number; dudosos?: number } }[]
+  fallidos: { i: number; titulo: string; motivo: string }[]
+  generadoPorIA: true
+  stats: { modo: ModoIA; caracteres: number; nodos: number; tablas?: number; dudosos?: number }
+}
+
+/**
+ * Índice de un documento largo (una llamada barata en el servidor). Solo viaja el principio de
+ * cada sección y su tamaño, no el documento entero.
+ */
+export async function iaIndice(input: { titulo: string; secciones: Seccion[] }, signal?: AbortSignal): Promise<TemaIndice[]> {
+  const r = (await llamar('/indice', {
+    method: 'POST',
+    body: JSON.stringify({ titulo: input.titulo, secciones: resumenParaIndice(input.secciones) }),
+    signal,
+  })) as { temas?: unknown }
+  return sanitizeTemas(r?.temas, input.secciones.length)
+}
+
 /**
  * Genera el mapa. Con `onEvento`, en streaming: el diálogo enseña las fases y las ramas según
  * llegan; el resultado es el mismo mapa validado de siempre.
  */
+export type PeticionGenerar = {
+  titulo: string
+  modo: ModoIA
+  secciones: Seccion[]
+  paginas: number
+  tablas?: true
+  unidad?: 'diapositiva'
+  /** Documento largo: cada tema como rango [desde, hasta] de `secciones`. */
+  temas?: { titulo: string; desde: number; hasta: number }[]
+}
+
+export async function iaGenerar(input: PeticionGenerar & { temas?: undefined }, signal?: AbortSignal, onEvento?: (e: EventoIA) => void): Promise<MapaGenerado>
+export async function iaGenerar(input: PeticionGenerar & { temas: NonNullable<PeticionGenerar['temas']> }, signal?: AbortSignal, onEvento?: (e: EventoIA) => void): Promise<LibroGenerado>
 export async function iaGenerar(
-  input: { titulo: string; modo: ModoIA; secciones: Seccion[]; paginas: number; tablas?: true; unidad?: 'diapositiva' },
+  input: PeticionGenerar,
   signal?: AbortSignal,
   onEvento?: (e: EventoIA) => void,
-): Promise<MapaGenerado> {
+): Promise<MapaGenerado | LibroGenerado> {
   const init: RequestInit = { method: 'POST', body: JSON.stringify(input), signal }
   if (!onEvento) return (await llamar('', init)) as MapaGenerado
   const res = await abrir('', init, 'application/x-ndjson')
-  return (await leerRespuesta(res, onEvento)) as unknown as MapaGenerado
+  return (await leerRespuesta(res, onEvento)) as unknown as MapaGenerado | LibroGenerado
 }
