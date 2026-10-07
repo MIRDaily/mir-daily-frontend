@@ -28,7 +28,7 @@ export type EstadoIA = {
   disponible: boolean
   modos: ModoIA[]
   /** Opciones que entiende el servidor (uno antiguo no las manda). */
-  opciones?: { tablas?: boolean; libro?: boolean }
+  opciones?: { tablas?: boolean; libro?: boolean; ramas?: boolean }
   /** `maxChars`/`maxPaginas`: un mapa. `maxCharsLibro`/`maxTemas`: documento largo tema a tema (servidor nuevo). */
   limites: { maxChars: number; maxPaginas: number; maxCharsLibro?: number; maxPaginasLibro?: number; maxTemas?: number }
   cupo: {

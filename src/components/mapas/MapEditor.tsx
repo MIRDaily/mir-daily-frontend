@@ -31,6 +31,9 @@ import ReviewBanner from '@/components/mapas/ia/ReviewBanner'
 import { StudyBar } from '@/components/mapas/proto/components/Toolbar/StudyBar'
 import { SubgroupConvertPanel } from '@/components/mapas/proto/components/Toolbar/SubgroupConvertPanel'
 import { FlashcardsFromBranch } from '@/components/mapas/flashcards/FlashcardsFromBranch'
+import { MenuRamaIA } from '@/components/mapas/ia/MenuRamaIA'
+import { RamaIADialog } from '@/components/mapas/ia/RamaIADialog'
+import { iaEstado } from '@/lib/mapas/ia/api'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
@@ -40,6 +43,9 @@ import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
 
 const AUTOSAVE_MS = 900
+
+/** Lo que dice el servidor de la IA de mapas, pedido una vez por sesión. */
+let estadoIA: ReturnType<typeof iaEstado> | null = null
 
 type Props = {
   mapId: string
@@ -97,7 +103,7 @@ function toEngine(doc: GraphDoc): { nodes: MindMapNode[]; edges: MindMapEdge[] }
 const round = (v: number) => Math.round(v * 10) / 10
 
 /** Lo que se guarda: solo datos del mapa, nada de estado de interfaz (selección, edición, animaciones). */
-type EditorSettings = Pick<ReturnType<typeof useUIStore.getState>, 'theme' | 'bgStyle' | 'categoryStyles' | 'labelStyle'>
+type EditorSettings = Pick<ReturnType<typeof useUIStore.getState>, 'theme' | 'bgStyle' | 'categoryStyles' | 'labelStyle' | 'fuente'>
 
 function fromEngine(nodes: MindMapNode[], edges: MindMapEdge[], settings?: EditorSettings): GraphDoc {
   const gNodes: GraphNode[] = nodes.map((n) => ({
@@ -133,7 +139,7 @@ function fromEngine(nodes: MindMapNode[], edges: MindMapEdge[], settings?: Edito
       },
     }
   })
-  const { theme, bgStyle, categoryStyles, labelStyle } = settings ?? useUIStore.getState()
+  const { theme, bgStyle, categoryStyles, labelStyle, fuente } = settings ?? useUIStore.getState()
   return {
     version: 2,
     nodes: gNodes,
@@ -143,6 +149,8 @@ function fromEngine(nodes: MindMapNode[], edges: MindMapEdge[], settings?: Edito
       bgStyle,
       ...(Object.keys(categoryStyles).length ? { categoryStyles } : {}),
       ...(labelStyle && Object.keys(labelStyle).length ? { labelStyle } : {}),
+      // Archivo de origen de un mapa con IA (hash y nombre, nunca el documento).
+      ...(fuente ? { fuente } : {}),
     },
   }
 }
@@ -193,6 +201,10 @@ export default function MapEditor(props: Props) {
     ui.setBgStyle(doc.settings?.bgStyle ?? 'dots-light')
     ui.setCategoryStyles(doc.settings?.categoryStyles ?? {})
     ui.setLabelStyle(doc.settings?.labelStyle ?? {})
+    ui.setFuente(doc.settings?.fuente ?? null)
+    ui.setMapaId(props.sandbox ? null : props.mapId)
+    ui.setMenuRama(null)
+    ui.setRamaIA(null)
     ui.setCategoriesPanelOpen(false)
     ui.setSearchOpen(false)
     // La física solo deshace solapes (no recoloca el mapa), así que vale también en mapas grandes.
@@ -204,7 +216,7 @@ export default function MapEditor(props: Props) {
     ui.setFlashcardsFrom(null)
     ui.setSubgroupConvertOpen(false)
     ownTick.current = useMindMapStore.getState().loadTick
-  }, [prepared])
+  }, [prepared, props.mapId, props.sandbox])
 
   if (!loaded) return null
 
@@ -258,7 +270,7 @@ function EditorInner({
       return {
         nodes: s.nodes,
         edges: s.edges,
-        settings: { theme: u.theme, bgStyle: u.bgStyle, categoryStyles: u.categoryStyles, labelStyle: u.labelStyle } as EditorSettings,
+        settings: { theme: u.theme, bgStyle: u.bgStyle, categoryStyles: u.categoryStyles, labelStyle: u.labelStyle, fuente: u.fuente } as EditorSettings,
       }
     })(),
   )
@@ -308,10 +320,10 @@ function EditorInner({
     })
     const unsubUi = useUIStore.subscribe((s, p) => {
       if (!isMine()) return
-      if (s.theme !== p.theme || s.bgStyle !== p.bgStyle || s.categoryStyles !== p.categoryStyles || s.labelStyle !== p.labelStyle) {
+      if (s.theme !== p.theme || s.bgStyle !== p.bgStyle || s.categoryStyles !== p.categoryStyles || s.labelStyle !== p.labelStyle || s.fuente !== p.fuente) {
         own.current = {
           ...own.current,
-          settings: { theme: s.theme, bgStyle: s.bgStyle, categoryStyles: s.categoryStyles, labelStyle: s.labelStyle },
+          settings: { theme: s.theme, bgStyle: s.bgStyle, categoryStyles: s.categoryStyles, labelStyle: s.labelStyle, fuente: s.fuente },
         }
         schedule()
       }
@@ -469,6 +481,19 @@ function EditorInner({
     [schedule],
   )
 
+  // ¿Está la IA de mapas para este usuario? Si sí, el clic derecho en un nodo abre el menú de
+  // rama (rehacer, ampliar, resumir). Se pregunta una vez por sesión.
+  useEffect(() => {
+    if (sandbox) return
+    let vivo = true
+    void (estadoIA ??= iaEstado()).then((e) => {
+      if (vivo) useUIStore.getState().setIaRamas(!!e?.opciones?.ramas)
+    })
+    return () => {
+      vivo = false
+    }
+  }, [sandbox])
+
   // En el editor el cursor nativo es el que sirve (agarrar el lienzo, arrastrar nodos, conectar).
   useCozyCursorOff()
 
@@ -520,6 +545,8 @@ function EditorInner({
       <ExportDialog mapTitle={title} onExportJson={onExportJson} />
       <TableEditorDialog />
       <FlashcardsFromBranch mapTitle={title} />
+      <MenuRamaIA />
+      <RamaIADialog mapTitle={title} />
     </div>
   )
 }

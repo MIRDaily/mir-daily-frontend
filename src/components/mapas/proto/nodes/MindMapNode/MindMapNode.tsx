@@ -146,17 +146,25 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
     ui.setStylePanelOpen(true)
   }, [id])
 
-  // Ctrl+Right-click → open style popup
+  // Ctrl+Right-click → open style popup. Clic derecho a secas, con la IA de mapas disponible: menú
+  // de rama (más detalle, resumir, rehacer; informe 76). Si no, el menú del navegador de siempre.
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
-      if (!e.ctrlKey || useUIStore.getState().studyMode) return
+      const ui = useUIStore.getState()
+      if (ui.studyMode) return
+      if (!e.ctrlKey) {
+        if (!ui.iaRamas || isTable) return
+        e.preventDefault()
+        e.stopPropagation()
+        ui.setMenuRama({ id, x: e.clientX, y: e.clientY })
+        return
+      }
       e.preventDefault()
       e.stopPropagation()
-      const ui = useUIStore.getState()
       ui.setSelectedNodeId(id)
       ui.setStylePanelOpen(true)
     },
-    [id],
+    [id, isTable],
   )
 
   const animateState = isEditing ? 'editing' : selected ? 'selected' : 'idle'

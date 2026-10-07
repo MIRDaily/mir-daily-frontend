@@ -1,4 +1,5 @@
-import type { CategoryStyles, LabelStyle } from '@/lib/mapas/graph'
+import type { CategoryStyles, FuenteIA, LabelStyle } from '@/lib/mapas/graph'
+import type { AccionRama } from '@/lib/mapas/ia/rama'
 import type { MapTable } from '@/lib/mapas/table'
 import type { NodeChange, EdgeChange, Connection } from '@xyflow/react'
 import type { MindMapNode, NodeData, NodeStyle } from './node.types'
@@ -74,6 +75,21 @@ export interface UIState {
   /** Panel «Convertir subgrupos en rótulos» abierto. */
   subgroupConvertOpen: boolean
   setSubgroupConvertOpen: (v: boolean) => void
+  /** Id del mapa abierto (el documento de la IA se guarda en el navegador por mapa). */
+  mapaId: string | null
+  setMapaId: (id: string | null) => void
+  /** Archivo del que salió el mapa con IA (hash y nombre). Se guarda en sus ajustes. */
+  fuente: FuenteIA | null
+  setFuente: (f: FuenteIA | null) => void
+  /** La IA de mapas está disponible para este usuario: el clic derecho abre el menú de rama. */
+  iaRamas: boolean
+  setIaRamas: (v: boolean) => void
+  /** Menú de clic derecho de un nodo (rehacer, ampliar o resumir con IA). */
+  menuRama: { id: string; x: number; y: number } | null
+  setMenuRama: (m: { id: string; x: number; y: number } | null) => void
+  /** Diálogo de rama con IA abierto. */
+  ramaIA: { id: string; accion: AccionRama } | null
+  setRamaIA: (r: { id: string; accion: AccionRama } | null) => void
   /** Nodo del que se van a crear flashcards (abre su diálogo). */
   flashcardsFrom: string | null
   setFlashcardsFrom: (id: string | null) => void

@@ -95,3 +95,33 @@ export async function iaGenerar(
   const res = await abrir('', init, 'application/x-ndjson')
   return (await leerRespuesta(res, onEvento)) as unknown as MapaGenerado | LibroGenerado
 }
+
+export type RamaGenerada = {
+  doc: StoredDoc
+  generadoPorIA: true
+  stats: { accion: string; antes: number; nodos: number; dudosos?: number }
+}
+
+/**
+ * Rehace, amplía o resume una rama. Viajan la rama (texto plano), el camino, las ramas vecinas y
+ * solo el FRAGMENTO del documento de donde sale. En streaming, como el mapa entero.
+ */
+export async function iaRama(
+  input: {
+    accion: 'detalle' | 'resumir' | 'rehacer'
+    modo: ModoIA
+    titulo: string
+    ruta: string[]
+    rama: { d: number; t: string }[]
+    vecinos: string[]
+    secciones: Seccion[]
+    unidad?: 'diapositiva'
+  },
+  signal?: AbortSignal,
+  onEvento?: (e: EventoIA) => void,
+): Promise<RamaGenerada> {
+  const init: RequestInit = { method: 'POST', body: JSON.stringify(input), signal }
+  if (!onEvento) return (await llamar('/rama', init)) as RamaGenerada
+  const res = await abrir('/rama', init, 'application/x-ndjson')
+  return (await leerRespuesta(res, onEvento)) as unknown as RamaGenerada
+}

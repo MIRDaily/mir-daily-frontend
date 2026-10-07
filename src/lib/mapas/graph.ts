@@ -103,11 +103,37 @@ export type CategoryStyles = Partial<Record<MapCategoryId, CategoryStyleOverride
  */
 export type LabelStyle = { color?: string; studyColor?: string; fontSize?: number; upper?: boolean }
 
+/**
+ * Archivo del que salió un mapa con IA (informe 76): su SHA-256 y su nombre, para comprobar que es
+ * el mismo si hay que volver a elegirlo (rehacer una rama). El documento NO se guarda aquí: solo
+ * vive en el navegador.
+ */
+export type FuenteIA = { hash: string; nombre: string; modo?: 'esquema' | 'detalle'; unidad?: 'página' | 'diapositiva' }
+
+export function sanitizeFuente(raw: unknown): FuenteIA | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  if (typeof r.hash !== 'string' || !/^[0-9a-f]{64}$/.test(r.hash)) return undefined
+  const nombre = typeof r.nombre === 'string' ? r.nombre.replace(/[\u0000-\u001f]/g, '').slice(0, 160) : ''
+  return {
+    hash: r.hash,
+    nombre,
+    ...(r.modo === 'esquema' || r.modo === 'detalle' ? { modo: r.modo } : {}),
+    ...(r.unidad === 'página' || r.unidad === 'diapositiva' ? { unidad: r.unidad } : {}),
+  }
+}
+
 export type GraphDoc = {
   version: 2
   nodes: GraphNode[]
   edges: GraphEdge[]
-  settings?: { theme?: 'light' | 'dark'; bgStyle?: GraphBgStyle; categoryStyles?: CategoryStyles; labelStyle?: LabelStyle }
+  settings?: {
+    theme?: 'light' | 'dark'
+    bgStyle?: GraphBgStyle
+    categoryStyles?: CategoryStyles
+    labelStyle?: LabelStyle
+    fuente?: FuenteIA
+  }
 }
 
 /** Lo que puede haber guardado o importado. */
@@ -391,7 +417,11 @@ export function isGraphDoc(doc: unknown): doc is GraphDoc {
 /** Cualquier documento guardado → grafo. `fromTree` avisa de que las posiciones son provisionales. */
 export function toGraphDoc(raw: unknown): { doc: GraphDoc; fromTree: boolean } {
   if (isGraphDoc(raw)) return { doc: sanitizeGraph(raw), fromTree: false }
-  return { doc: treeToGraph(sanitizeDoc(raw)), fromTree: true }
+  const doc = treeToGraph(sanitizeDoc(raw))
+  // El árbol que guarda «Crear con IA» lleva el archivo de origen: pasa a los ajustes del grafo.
+  const fuente = sanitizeFuente(raw && typeof raw === 'object' ? (raw as { fuente?: unknown }).fuente : undefined)
+  if (fuente) doc.settings = { ...(doc.settings ?? {}), fuente }
+  return { doc, fromTree: true }
 }
 
 export function docNodeCount(raw: unknown): number {
@@ -543,12 +573,14 @@ export function sanitizeGraph(raw: unknown): GraphDoc {
   const s = src.settings && typeof src.settings === 'object' ? (src.settings as Record<string, unknown>) : null
   const categoryStyles = s ? sanitizeCategoryStyles(s.categoryStyles) : undefined
   const labelStyle = s ? sanitizeLabelStyle(s.labelStyle) : undefined
+  const fuente = s ? sanitizeFuente(s.fuente) : undefined
   const settings: GraphDoc['settings'] | undefined = s
     ? {
         ...(s.theme === 'light' || s.theme === 'dark' ? { theme: s.theme as 'light' | 'dark' } : {}),
         ...(BG_STYLES.includes(s.bgStyle as GraphBgStyle) ? { bgStyle: s.bgStyle as GraphBgStyle } : {}),
         ...(categoryStyles && Object.keys(categoryStyles).length ? { categoryStyles } : {}),
         ...(labelStyle && Object.keys(labelStyle).length ? { labelStyle } : {}),
+        ...(fuente ? { fuente } : {}),
       }
     : undefined
 

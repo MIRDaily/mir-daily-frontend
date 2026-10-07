@@ -11,6 +11,9 @@ import { SelectorParte } from './SelectorParte'
 import { construirIndice, estadoEntrada, resumenSeleccion } from '@/lib/mapas/ia/indice'
 import { entradasDeTemas, nodosLibro, temasParaEnviar, unirTemas, type TemaIndice } from '@/lib/mapas/ia/libro'
 import type { MapDoc } from '@/lib/mapas/types'
+import { guardarDocumento, hashArchivo } from '@/lib/mapas/ia/docs'
+import type { Seccion } from '@/lib/mapas/ia/types'
+import type { StoredDoc } from '@/lib/mapas/graph'
 import {
   NODOS_POR_RAIZ,
   ExtractError,
@@ -93,6 +96,8 @@ export default function CrearConIA({
   const [creados, setCreados] = useState<{ id: string; titulo: string; nodos: number }[]>([])
   const [fallidos, setFallidos] = useState<{ titulo: string; motivo: string }[]>([])
   const porTemas = !!temasLibro
+  // SHA-256 del archivo: va al mapa (no el documento) para reconocerlo si hay que volver a elegirlo.
+  const hashRef = useRef<Promise<string | null>>(Promise.resolve(null))
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const montado = useRef(true)
@@ -136,6 +141,7 @@ export default function CrearConIA({
     setArchivo(file)
     setFase('leyendo')
     setProgreso(null)
+    hashRef.current = hashArchivo(file).catch(() => null)
     try {
       const r = await extraerDocumento(file, {
         maxChars: topeLectura,
@@ -265,6 +271,15 @@ export default function CrearConIA({
       else if (e.tipo === 'temas') setProgresoTemas(e.temas.map((t) => ({ titulo: t.titulo, estado: 'espera' })))
       else if (e.tipo === 'tema') setProgresoTemas((ps) => ps.map((p, i) => (i === e.i ? { ...p, estado: e.estado } : p)))
     }
+    // Tras crear cada mapa: su texto, SOLO en este navegador (rehacer o ampliar ramas después), y
+    // en el mapa el hash y el nombre del archivo. Si el navegador no puede guardarlo, no pasa nada.
+    const hash = await hashRef.current
+    const fuente = hash && archivo ? { hash, nombre: archivo.name.slice(0, 160), modo, ...(extraido.unidad ? { unidad: extraido.unidad } : {}) } : null
+    const conFuente = (doc: StoredDoc): StoredDoc => (fuente ? ({ ...doc, fuente } as unknown as StoredDoc) : doc)
+    const recordar = async (id: string, secciones: Seccion[]) => {
+      if (!fuente) return
+      await guardarDocumento(id, { hash: fuente.hash, nombre: fuente.nombre, secciones, ...(extraido.unidad ? { unidad: extraido.unidad } : {}) }).catch(() => {})
+    }
     const comun = {
       titulo: titulo.trim(),
       modo,
@@ -279,10 +294,16 @@ export default function CrearConIA({
         const hechos: { id: string; titulo: string; nodos: number }[] = []
         if (guardarComo === 'uno') {
           const doc = unirTemas(r.titulo, r.temas.map((t) => ({ titulo: t.titulo, doc: t.doc as MapDoc })))
-          const id = await createMap(r.titulo, doc)
+          const id = await createMap(r.titulo, conFuente(doc))
+          await recordar(id, envioLibro.secciones)
           hechos.push({ id, titulo: r.titulo, nodos: r.temas.reduce((n, t) => n + t.stats.nodos, 0) })
         } else {
-          for (const t of r.temas) hechos.push({ id: await createMap(t.titulo, t.doc), titulo: t.titulo, nodos: t.stats.nodos })
+          for (const t of r.temas) {
+            const id = await createMap(t.titulo, conFuente(t.doc))
+            const rango = envioLibro.temas[t.i]
+            await recordar(id, rango ? envioLibro.secciones.slice(rango.desde, rango.hasta + 1) : envioLibro.secciones)
+            hechos.push({ id, titulo: t.titulo, nodos: t.stats.nodos })
+          }
         }
         if (!montado.current) return
         setCreados(hechos)
@@ -293,7 +314,8 @@ export default function CrearConIA({
       }
       const r = await iaGenerar({ ...comun, secciones: eleccion?.elegidas ?? [] }, ctl.signal, onEvento)
       // Lo que se guarda es el mapa VALIDADO del final, nunca el borrador.
-      const id = await createMap(r.titulo, r.doc)
+      const id = await createMap(r.titulo, conFuente(r.doc))
+      await recordar(id, eleccion?.elegidas ?? [])
       if (!montado.current) return
       router.push(`/mapas/${id}?ia=1`)
     } catch (e) {

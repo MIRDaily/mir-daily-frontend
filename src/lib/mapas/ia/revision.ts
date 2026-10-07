@@ -5,7 +5,8 @@ import type { MapTable } from '@/lib/mapas/table'
 // pinta en ámbar lo dudoso y lleva la cuenta de lo que queda; `revisado` lo pone el usuario.
 // Es opcional: los mapas de antes (y los hechos a mano) no lo tienen y no cambian en nada.
 
-export type MotivoDudoso = 'anclaje' | 'tratamiento' | 'celdas'
+/** `nuevo`: añadido después (otro documento sumado al mapa, informe 76): mirar dónde ha ido. */
+export type MotivoDudoso = 'anclaje' | 'tratamiento' | 'celdas' | 'nuevo'
 
 /** Celda dudosa de una tabla: fila `f` del cuerpo, columna `c`, y el texto que tenía. */
 export type CeldaDudosa = { f: number; c: number; t: string }
@@ -26,7 +27,7 @@ export type NodoIA = {
   subgrupo?: boolean
 }
 
-const MOTIVOS: MotivoDudoso[] = ['anclaje', 'tratamiento', 'celdas']
+const MOTIVOS: MotivoDudoso[] = ['anclaje', 'tratamiento', 'celdas', 'nuevo']
 const MAX_CELDAS = 60
 
 const fraccion = (v: unknown) =>
@@ -90,6 +91,8 @@ export function motivoLabel(m: MotivoDudoso): string {
       return 'Tratamiento: comprueba que es de esta entidad y no de otra'
     case 'celdas':
       return 'Hay celdas que el documento no respalda (marcadas en ámbar)'
+    case 'nuevo':
+      return 'Añadido desde otro documento: comprueba que está en su sitio y no repite nada'
   }
 }
 
