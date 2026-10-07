@@ -145,7 +145,7 @@ export function EditorTopBar({ title, onTitleChange, save, onRetry, statusText, 
             Sin guardar · reintentar
           </button>
         ) : (
-          <span className="hide-md" style={{ flexShrink: 0, fontSize: 11, fontWeight: 500, color: save === 'saved' ? t.accentGreen : t.textMuted, whiteSpace: 'nowrap' }}>
+          <span className="hide-md" title={status} style={{ flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 11, fontWeight: 500, color: save === 'saved' ? t.accentGreen : t.textMuted, whiteSpace: 'nowrap' }}>
             {status}
           </span>
         )}

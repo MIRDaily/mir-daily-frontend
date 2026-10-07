@@ -167,4 +167,21 @@ test('flashcards: «Faceta: dato» → «Ruta del padre · Faceta» / «dato», 
   assert.deepEqual(buildCards(nodes, 'nope'), [])
   // Una faceta colgada de la raíz lleva la raíz como ruta.
   assert.equal(buildCards([n('r2', 'Gota'), n('h', 'Definición: depósito de urato', 'r2')], 'r2')[0].front, 'Gota · Definición')
+
+  // Mapa hecho a mano con la enfermedad en la raíz: la ruta corta lleva la raíz, y la tarjeta del
+  // nodo «Etiología» nombra también a su hijo con rama (que luego tiene la suya).
+  const ic = [
+    n('ic', 'Insuficiencia cardiaca'),
+    n('et', 'Etiología', 'ic'),
+    n('isq', 'Cardiopatía isquémica', 'et'),
+    n('inf', 'Infarto previo', 'isq'),
+    n('hta', 'HTA', 'et'),
+  ]
+  assert.deepEqual(
+    buildCards(ic, 'ic').map((c) => [c.front, c.back]),
+    [
+      ['Insuficiencia cardiaca · Etiología', 'Cardiopatía isquémica\nHTA'],
+      ['Insuficiencia cardiaca › Etiología · Cardiopatía isquémica', 'Infarto previo'],
+    ],
+  )
 })

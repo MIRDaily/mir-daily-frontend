@@ -51,15 +51,16 @@ export function buildCards(nodes: CardSourceNode[], rootId: string): CardDraft[]
   for (const list of kids.values()) list.sort((a, b) => a.y - b.y)
 
   const text = (n: CardSourceNode) => (n.table ? n.table.title.trim() : plainText(n.label))
-  // La raíz del mapa (el tema) no entra en la ruta: es el nombre del grupo. Solo si no hay nada
-  // más (una faceta colgada directamente de la raíz) se usa.
+  // La raíz del mapa (el tema: «Tema 03 Vasculitis») no entra en una ruta larga: es el nombre del
+  // grupo. En una ruta de un solo nivel sí, porque sin ella la tarjeta pierde el contexto (en un
+  // mapa hecho a mano la raíz suele ser la enfermedad: «Etiología · Cardiopatía isquémica»).
   const ruta = (id: string | undefined): string[] => {
     const out: string[] = []
     const seen = new Set<string>()
     for (let cur = id ? byId.get(id) : undefined; cur && !seen.has(cur.id); cur = cur.parentId ? byId.get(cur.parentId) : undefined) {
       seen.add(cur.id)
       if (!cur.parentId || !byId.has(cur.parentId)) {
-        if (out.length === 0) out.unshift(text(cur))
+        if (out.length < 2) out.unshift(text(cur))
         break
       }
       out.unshift(text(cur))
@@ -109,6 +110,14 @@ export function buildCards(nodes: CardSourceNode[], rootId: string): CardDraft[]
       else if (dato) sueltas.push(dato)
     }
     if (sueltas.length) {
+      // Si además tiene hijos con rama propia («Etiología → HTA, Cardiopatía isquémica → …»), sus
+      // nombres también son respuesta de esta tarjeta (y luego tienen la suya).
+      sueltas.length = 0
+      for (const c of children) {
+        if (c.table) continue
+        const t = (kids.get(c.id) ?? []).length ? text(c) : splitFacet(text(c)).faceta ? '' : text(c)
+        if (t) sueltas.push(t)
+      }
       push({ key: `${n.id}:hojas`, front: unir(ruta(n.parentId), text(n)), back: sueltas.join('\n'), topic: text(byId.get(n.parentId ?? '') ?? n), kind: 'grupo' })
     }
     for (const c of children) if ((kids.get(c.id) ?? []).length || c.table) visit(c, guard)

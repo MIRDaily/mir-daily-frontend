@@ -203,7 +203,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
         }}
       >
         {data.table ? (
-          <TableBody id={id} table={data.table} style={data.style} selected={!!selected} ia={data.ia} covered={covered} />
+          <TableBody id={id} table={data.table} style={data.style} selected={!!selected} ia={study ? undefined : data.ia} covered={covered} />
         ) : (
         <NodeBody style={data.style} isSelected={!!selected} isDark={t.isDark}>
           {isEditing ? (
