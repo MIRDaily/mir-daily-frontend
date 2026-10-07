@@ -1,7 +1,7 @@
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { childrenMap, descendantsOf, parentMap } from '@/components/mapas/proto/utils/tree'
-import { isCoverable } from '@/lib/mapas/study'
+import { studyUnits } from '@/lib/mapas/study'
 
 // Acciones del modo estudio (informe 75): qué se puede tapar, destapar una rama, tapar todo.
 // Lo destapado es estado de la interfaz: no se guarda ni entra en deshacer.
@@ -18,38 +18,38 @@ export function setStudyMode(on: boolean) {
   ui.setStudyMode(on)
 }
 
-/** Ids de las hojas que se tapan en el modo estudio. */
-export function coverableIds(): string[] {
-  return useMindMapStore
-    .getState()
-    .nodes.filter(isCoverable)
-    .map((n) => n.id)
+/** Todo lo que se tapa en el modo estudio: hojas y, en las tablas, cada celda de datos. */
+export function coverableUnits(): string[] {
+  return useMindMapStore.getState().nodes.flatMap(studyUnits)
 }
 
-/** Hojas tapables de esas ramas (los propios nodos si son hojas). */
-export function branchLeaves(ids: string[]): string[] {
+/** Lo tapable de esas ramas (los propios nodos si son hojas; las tablas, celda a celda). */
+export function branchUnits(ids: string[]): string[] {
   const { nodes, edges } = useMindMapStore.getState()
   const children = childrenMap(parentMap(nodes, edges))
   const scope = new Set([...ids, ...descendantsOf(ids, children)])
-  return nodes.filter((n) => scope.has(n.id) && isCoverable(n)).map((n) => n.id)
+  return nodes.filter((n) => scope.has(n.id)).flatMap(studyUnits)
 }
 
-/** Destapa las hojas de esas ramas; si ya estaban todas destapadas, las vuelve a tapar. */
+/**
+ * Destapa esas ramas enteras (hojas y todas las celdas de sus tablas); si ya estaba todo
+ * destapado, lo vuelve a tapar.
+ */
 export function toggleBranchReveal(ids: string[]) {
-  const leaves = branchLeaves(ids)
-  if (leaves.length === 0) return
+  const units = branchUnits(ids)
+  if (units.length === 0) return
   const ui = useUIStore.getState()
-  const allShown = leaves.every((id) => ui.revealed.has(id))
-  ui.setRevealed(leaves, !allShown)
+  const allShown = units.every((u) => ui.revealed.has(u))
+  ui.setRevealed(units, !allShown)
 }
 
-/** Destapa o tapa una sola hoja. */
-export function toggleLeafReveal(id: string) {
+/** Destapa o tapa una sola cosa: una hoja o una celda (clave de `cellKey`). */
+export function toggleUnitReveal(key: string) {
   const ui = useUIStore.getState()
-  ui.setRevealed([id], !ui.revealed.has(id))
+  ui.setRevealed([key], !ui.revealed.has(key))
 }
 
 /** Destapa todo el mapa. */
 export function revealAll() {
-  useUIStore.getState().setRevealed(coverableIds(), true)
+  useUIStore.getState().setRevealed(coverableUnits(), true)
 }

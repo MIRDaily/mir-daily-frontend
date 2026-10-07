@@ -435,8 +435,12 @@
   to { opacity: 1; filter: none; }
 }
 .mapa-root .estudio-destapado .node-label,
-.mapa-root .estudio-destapado .node-table td {
+.mapa-root .node-table td.estudio-destapada {
   animation: estudio-ver 260ms ease-out;
+}
+/* En una tabla cada celda de datos se destapa por su cuenta. */
+.mapa-root .node-table td.estudio-celda {
+  cursor: pointer;
 }
 .mapa-root[data-study] .react-flow__handle {
   opacity: 0 !important;
@@ -444,7 +448,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .mapa-root .estudio-destapado .node-label,
-  .mapa-root .estudio-destapado .node-table td {
+  .mapa-root .node-table td.estudio-destapada {
     animation: none;
   }
 }

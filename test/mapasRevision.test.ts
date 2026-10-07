@@ -129,6 +129,19 @@ test('estudio: la faceta queda a la vista y solo se tapa el dato', async () => {
   assert.equal(isCoverable({ id: 'r', data: {} }), false)
 })
 
+test('estudio: una tabla se destapa celda a celda (solo las de datos con texto)', async () => {
+  const { studyUnits, cellKey } = await import('@/lib/mapas/study')
+  assert.deepEqual(studyUnits({ id: 'h', data: { parentId: 'p' } }), ['h'])
+  assert.deepEqual(studyUnits({ id: 'p', data: { parentId: 'r', childCount: 2 } }), [])
+  const rows = [
+    ['Pérdida visual súbita', '+3'],
+    ['Sin dato', ''],
+    ['Aortitis en PET-TC', '+2'],
+  ]
+  assert.deepEqual(studyUnits({ id: 't', data: { parentId: 'p', table: { rows } } }), [cellKey('t', 0, 1), cellKey('t', 2, 1)])
+  assert.equal(cellKey('t', 2, 1), 't#2:1')
+})
+
 // ---------- flashcards desde una rama ----------
 
 test('flashcards: «Faceta: dato» → «Ruta del padre · Faceta» / «dato», sin la raíz del mapa', async () => {

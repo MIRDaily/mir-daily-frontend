@@ -21,7 +21,7 @@ import { markReviewed } from '@/components/mapas/proto/utils/review'
 import { isPendingReview } from '@/lib/mapas/ia/revision'
 import { IAHoverChip } from './IAHoverChip'
 import { StudyLabel } from './StudyLabel'
-import { branchLeaves, toggleBranchReveal, toggleLeafReveal } from '@/components/mapas/proto/utils/study'
+import { branchUnits, toggleBranchReveal, toggleUnitReveal } from '@/components/mapas/proto/utils/study'
 import { isCoverable } from '@/lib/mapas/study'
 import { openFlashcardsFromBranch } from '@/components/mapas/proto/utils/flashcards'
 
@@ -43,12 +43,14 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   // Modo estudio: las hojas se tapan; un clic las destapa (o las vuelve a tapar).
   const study = useUIStore((s) => s.studyMode)
   const coverable = study && isCoverable({ id, data })
-  const covered = useUIStore((s) => coverable && !s.revealed.has(id))
+  // Una tabla no se destapa entera con un clic: cada celda va por su cuenta (ver TableBody).
+  const coverableLeaf = coverable && !data.table
+  const covered = useUIStore((s) => coverableLeaf && !s.revealed.has(id))
   // ¿Está toda la rama destapada? (para el botón de la barra del nodo en el modo estudio)
   const branchShown = useUIStore((s) => {
     if (!s.studyMode || !data.childCount || !selected) return false
-    const leaves = branchLeaves([id])
-    return leaves.length > 0 && leaves.every((l) => s.revealed.has(l))
+    const units = branchUnits([id])
+    return units.length > 0 && units.every((u) => s.revealed.has(u))
   })
 
   const isTable = !!data.table
@@ -70,10 +72,10 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       // Solo el primer clic: el segundo de un doble clic lo deshacía.
-      if (!coverable || e.detail > 1) return
-      toggleLeafReveal(id)
+      if (!coverableLeaf || e.detail > 1) return
+      toggleUnitReveal(id)
     },
-    [id, coverable]
+    [id, coverableLeaf]
   )
 
   const handleSave = useCallback(
@@ -160,7 +162,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   const animateState = isEditing ? 'editing' : selected ? 'selected' : 'idle'
   const t = useTheme()
   const pending = isPendingReview(data.ia) && !study
-  const rootClass = ['mindmap-node-root', pending && 'ia-dudoso', coverable && (covered ? 'estudio-tapado' : 'estudio-destapado')]
+  const rootClass = ['mindmap-node-root', pending && 'ia-dudoso', coverableLeaf && (covered ? 'estudio-tapado' : 'estudio-destapado')]
     .filter(Boolean)
     .join(' ')
 
@@ -203,7 +205,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
         }}
       >
         {data.table ? (
-          <TableBody id={id} table={data.table} style={data.style} selected={!!selected} ia={study ? undefined : data.ia} covered={covered} />
+          <TableBody id={id} table={data.table} style={data.style} selected={!!selected} ia={study ? undefined : data.ia} studyCells={coverable} />
         ) : (
         <NodeBody style={data.style} isSelected={!!selected} isDark={t.isDark}>
           {isEditing ? (

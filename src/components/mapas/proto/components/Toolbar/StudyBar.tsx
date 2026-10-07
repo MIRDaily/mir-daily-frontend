@@ -2,8 +2,8 @@ import { BookOpenCheck, Eye, EyeOff, RotateCcw, X } from 'lucide-react'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
-import { branchLeaves, revealAll, setStudyMode, toggleBranchReveal } from '@/components/mapas/proto/utils/study'
-import { isCoverable } from '@/lib/mapas/study'
+import { branchUnits, revealAll, setStudyMode, toggleBranchReveal } from '@/components/mapas/proto/utils/study'
+import { studyUnits } from '@/lib/mapas/study'
 
 /**
  * Barra del modo estudio (informe 75), arriba en el centro del lienzo: cuántas hojas van
@@ -20,12 +20,13 @@ function StudyBarInner() {
   const t = useTheme()
   const searchOpen = useUIStore((s) => s.searchOpen)
   const revealedSet = useUIStore((s) => s.revealed)
-  const coverable = useMindMapStore((s) => s.nodes.filter(isCoverable).map((n) => n.id).join('\u0000'))
+  // Hojas y celdas de tabla (cada celda de datos se destapa por su cuenta).
+  const coverable = useMindMapStore((s) => s.nodes.flatMap(studyUnits).join('\u0000'))
   const selected = useMindMapStore((s) => s.nodes.filter((n) => n.selected && !n.hidden).map((n) => n.id).join('\u0000'))
   const ids = coverable ? coverable.split('\u0000') : []
   const sel = selected ? selected.split('\u0000') : []
   const shown = ids.filter((id) => revealedSet.has(id)).length
-  const selLeaves = sel.length ? branchLeaves(sel) : []
+  const selLeaves = sel.length ? branchUnits(sel) : []
   const selAllShown = selLeaves.length > 0 && selLeaves.every((id) => revealedSet.has(id))
 
   const ink = t.isDark ? '#FAF7F4' : '#2C3E50'

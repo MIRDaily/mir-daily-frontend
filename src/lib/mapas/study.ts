@@ -20,7 +20,10 @@ export function splitFacetLabel(label: string): { faceta: string; dato: string }
   return splitFacet(plainText(label))
 }
 
-type StudyNode = { id: string; data: { parentId?: string; childCount?: number } }
+type StudyNode = {
+  id: string
+  data: { parentId?: string; childCount?: number; table?: { rows: string[][] } }
+}
 
 /**
  * ¿Se tapa en el modo estudio? Las hojas (sin hijos) que cuelgan de algo: la raíz y los nodos
@@ -28,4 +31,23 @@ type StudyNode = { id: string; data: { parentId?: string; childCount?: number } 
  */
 export function isCoverable(n: StudyNode): boolean {
   return !!n.data.parentId && !n.data.childCount
+}
+
+/** Clave de una celda de tabla en lo destapado: fila `r` del cuerpo, columna `c`. */
+export function cellKey(id: string, r: number, c: number): string {
+  return `${id}#${r}:${c}`
+}
+
+/**
+ * Lo que se destapa de un nodo tapable: la hoja entera o, en una tabla, cada celda de datos por
+ * separado (fila del cuerpo, columna ≥ 1, con texto): una tabla de criterios se estudia celda a
+ * celda, no de golpe. Un nodo no tapable no tiene nada.
+ */
+export function studyUnits(n: StudyNode): string[] {
+  if (!isCoverable(n)) return []
+  const rows = n.data.table?.rows
+  if (!rows) return [n.id]
+  const out: string[] = []
+  rows.forEach((row, r) => row.forEach((text, c) => c > 0 && text.trim() && out.push(cellKey(n.id, r, c))))
+  return out
 }

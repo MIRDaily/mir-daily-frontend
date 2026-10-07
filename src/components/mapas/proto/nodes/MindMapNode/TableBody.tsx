@@ -4,6 +4,8 @@ import { resolveFont } from '@/components/mapas/proto/utils/font'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import { openTableEditor } from '@/components/mapas/proto/utils/tables'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
+import { toggleUnitReveal } from '@/components/mapas/proto/utils/study'
+import { cellKey } from '@/lib/mapas/study'
 import { readableOn, tableAccent, withAlpha } from '@/components/mapas/proto/utils/tableColors'
 import {
   cellStyleOf,
@@ -60,12 +62,19 @@ interface TableBodyProps {
   selected: boolean
   /** Revisión guiada: las celdas dudosas de una tabla pendiente se marcan en ámbar. */
   ia?: NodoIA
-  /** Modo estudio con la tabla tapada: se ven el título, la cabecera y la primera columna. */
-  covered?: boolean
+  /**
+   * Modo estudio con la tabla tapable: se ven el título, la cabecera y la primera columna, y cada
+   * celda de datos se tapa y se destapa por separado con un clic.
+   */
+  studyCells?: boolean
 }
 
-function TableBodyInner({ id, table, style, selected, ia, covered = false }: TableBodyProps) {
+const NO_REVEALED: ReadonlySet<string> = new Set()
+
+function TableBodyInner({ id, table, style, selected, ia, studyCells = false }: TableBodyProps) {
   const study = useUIStore((s) => s.studyMode)
+  // Lo destapado (solo hace falta en el modo estudio; fuera, un conjunto vacío que no cambia).
+  const revealed = useUIStore((s) => (studyCells ? s.revealed : NO_REVEALED))
   const t = useTheme()
   const fontSize = style.fontSize ?? 14
   const family = resolveFont(style.fontFamily)
@@ -101,10 +110,24 @@ function TableBodyInner({ id, table, style, selected, ia, covered = false }: Tab
     // Estilo de su columna, encima el de su fila y encima el suyo (ver cellStyleOf).
     const st = cellStyleOf(table, r, c)
     const doubtful = r >= 0 && isDoubtfulCell(ia, table, r, c)
+    const studyCell = studyCells && r >= 0 && c > 0 && !!text.trim()
+    const hidden = studyCell && !revealed.has(cellKey(id, r, c))
+    const cls = [doubtful && 'ia-celda', studyCell && (hidden ? 'estudio-celda estudio-tapado' : 'estudio-celda estudio-destapada')]
+      .filter(Boolean)
+      .join(' ')
     return (
       <Tag
         key={c}
-        className={doubtful ? 'ia-celda' : undefined}
+        className={cls || undefined}
+        title={studyCell ? (hidden ? 'Clic para destapar esta celda' : 'Clic para volver a taparla') : undefined}
+        onClick={
+          studyCell
+            ? (e: React.MouseEvent) => {
+                // Solo el primer clic (el segundo de un doble clic lo deshacía).
+                if (e.detail === 1) toggleUnitReveal(cellKey(id, r, c))
+              }
+            : undefined
+        }
         style={{
           ...baseCell,
           fontWeight: st.bold ? 700 : 400,
@@ -117,7 +140,7 @@ function TableBodyInner({ id, table, style, selected, ia, covered = false }: Tab
         }}
         onDoubleClick={open(r, c)}
       >
-        {r >= 0 && c > 0 && covered && text ? <span className="estudio-tapa" style={{ ['--tapa' as string]: st.color ?? style.textColor }}>{text}</span> : cellText(text)}
+        {hidden ? <span className="estudio-tapa" style={{ ['--tapa' as string]: st.color ?? style.textColor }}>{text}</span> : cellText(text)}
       </Tag>
     )
   }
@@ -131,7 +154,7 @@ function TableBodyInner({ id, table, style, selected, ia, covered = false }: Tab
   return (
     <div
       className="node-body node-table"
-      title={study ? (covered ? 'Clic para destapar la tabla' : 'Clic para volver a taparla') : 'Doble clic para editar la tabla'}
+      title={study ? undefined : 'Doble clic para editar la tabla'}
       style={{
         width: g.width,
         boxSizing: 'border-box',
