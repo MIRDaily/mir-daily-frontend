@@ -65,7 +65,10 @@ export function buildCards(nodes: CardSourceNode[], rootId: string): CardDraft[]
       }
       out.unshift(text(cur))
     }
-    return out.filter(Boolean)
+    // Como mucho los dos últimos niveles (la enfermedad y su subgrupo): con el bloque delante
+    // («Vasculitis de grandes vasos › Arteritis de células gigantes › Concepto y epidemiología ·
+    // Definición») el anverso no se lee de un vistazo.
+    return out.filter(Boolean).slice(-2)
   }
   const unir = (partes: string[], cola: string) => [partes.join(SEP_RUTA), cola].filter(Boolean).join(SEP_FACETA)
 

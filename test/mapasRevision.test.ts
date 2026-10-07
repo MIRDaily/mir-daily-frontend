@@ -168,6 +168,13 @@ test('flashcards: «Faceta: dato» → «Ruta del padre · Faceta» / «dato», 
   // Una faceta colgada de la raíz lleva la raíz como ruta.
   assert.equal(buildCards([n('r2', 'Gota'), n('h', 'Definición: depósito de urato', 'r2')], 'r2')[0].front, 'Gota · Definición')
 
+  // Con un subgrupo por medio, la ruta se queda con los dos últimos niveles.
+  const sub = [...nodes, n('sg', 'Clínica y complicaciones', 'acg'), n('s1', 'Complicación: amaurosis', 'sg')]
+  assert.equal(
+    buildCards(sub, 'acg').find((c) => c.back === 'amaurosis')?.front,
+    'Arteritis de células gigantes › Clínica y complicaciones · Complicación',
+  )
+
   // Mapa hecho a mano con la enfermedad en la raíz: la ruta corta lleva la raíz, y la tarjeta del
   // nodo «Etiología» nombra también a su hijo con rama (que luego tiene la suya).
   const ic = [
