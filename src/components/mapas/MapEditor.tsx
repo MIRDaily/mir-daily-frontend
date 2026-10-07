@@ -257,10 +257,11 @@ function EditorInner({
   const inFlight = useRef(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const needsRelayout = useRef(fromTree)
-  // Entrada animada la primera vez que se abre un mapa recién generado o importado (viene de un
-  // árbol): hasta tener el orden definitivo no se enseña nada (antes los nodos saltaban de una
-  // posición provisional a la buena) y luego el mapa crece desde la raíz. No en el tutorial.
-  const [entrada, setEntrada] = useState(fromTree && !sandbox)
+  // Entrada animada al abrir cualquier mapa: no se enseña nada hasta que los nodos están medidos y
+  // en su sitio (en uno recién generado o importado, ya ordenado: antes saltaban de una posición
+  // provisional a la buena) y luego el mapa crece desde la raíz. No en el tutorial.
+  const [entrada, setEntrada] = useState(!sandbox)
+  const entradaPendiente = useRef(!sandbox)
 
   // ---- guardado -----------------------------------------------------------
 
@@ -444,13 +445,18 @@ function EditorInner({
   )
 
   // Un mapa que viene de un árbol (importado o generado) se dibuja con el tamaño
-  // real de cada nodo en cuanto el navegador lo ha medido.
+  // real de cada nodo en cuanto el navegador lo ha medido. Después (o enseguida, en un mapa ya
+  // guardado como grafo), la entrada.
   useEffect(() => {
-    if (!needsRelayout.current || !nodesInitialized) return
-    needsRelayout.current = false
-    layoutNow(false)
-    if (!entrada) return
-    // Dos fotogramas: en el primero layoutNow encuadra; en el segundo los nodos ya están en su sitio.
+    if (!nodesInitialized) return
+    if (needsRelayout.current) {
+      needsRelayout.current = false
+      layoutNow(false)
+    }
+    if (!entradaPendiente.current) return
+    entradaPendiente.current = false
+    // Dos fotogramas: en el primero se encuadra (layoutNow, o el fitView inicial de React Flow);
+    // en el segundo los nodos ya están en su sitio.
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         if (!reducedMotion()) {
@@ -469,7 +475,7 @@ function EditorInner({
         setEntrada(false)
       }),
     )
-  }, [nodesInitialized, layoutNow, entrada, getViewport, setViewport])
+  }, [nodesInitialized, layoutNow, getViewport, setViewport])
 
   // Red de seguridad: si el editor no llega a medir los nodos (pestaña en segundo plano), el mapa
   // se enseña igual.

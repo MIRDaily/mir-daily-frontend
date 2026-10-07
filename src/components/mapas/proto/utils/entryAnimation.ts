@@ -4,7 +4,7 @@ import { reducedMotion } from '@/components/mapas/proto/utils/positionTween'
 import { delaysEntrada } from '@/lib/mapas/entrada'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 
-// Entrada de un mapa recién generado (o importado): crece desde la raíz. La raíz aparece con un
+// Entrada al abrir un mapa: crece desde la raíz. La raíz aparece con un
 // pequeño rebote y cada nivel brota del centro de su padre —nodo y línea a la vez, como al
 // desplegar una rama (foldAnimation)— en oleadas por profundidad. Web Animations API sobre el
 // contenedor de cada nodo y el <g> de cada línea: no toca posiciones ni la store, y al terminar
