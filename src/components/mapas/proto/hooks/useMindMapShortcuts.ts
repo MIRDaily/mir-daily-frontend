@@ -49,6 +49,8 @@ export function useMindMapShortcuts() {
       if (isEditing) return
       // Con el popup de una tabla abierto, el teclado es suyo (Supr no borra nodos, etc.).
       if (useUIStore.getState().tableEditor) return
+      // Con el diálogo de «Crear flashcards» abierto, también.
+      if (useUIStore.getState().flashcardsFrom) return
 
       const isMod = e.metaKey || e.ctrlKey
       // Estado leído en el momento del evento: suscribirse a las stores enteras re-registraba

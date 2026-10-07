@@ -29,6 +29,7 @@ import { ShortcutsPanel } from '@/components/mapas/proto/components/Toolbar/Shor
 import { SearchBar } from '@/components/mapas/proto/components/Toolbar/SearchBar'
 import ReviewBanner from '@/components/mapas/ia/ReviewBanner'
 import { StudyBar } from '@/components/mapas/proto/components/Toolbar/StudyBar'
+import { FlashcardsFromBranch } from '@/components/mapas/flashcards/FlashcardsFromBranch'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
@@ -502,6 +503,7 @@ function EditorInner({
       </div>
       <ExportDialog mapTitle={title} onExportJson={onExportJson} />
       <TableEditorDialog />
+      <FlashcardsFromBranch mapTitle={title} />
     </div>
   )
 }

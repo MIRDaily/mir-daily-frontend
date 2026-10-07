@@ -128,3 +128,43 @@ test('estudio: la faceta queda a la vista y solo se tapa el dato', async () => {
   assert.equal(isCoverable({ id: 'a', data: { parentId: 'r', childCount: 3 } }), false)
   assert.equal(isCoverable({ id: 'r', data: {} }), false)
 })
+
+// ---------- flashcards desde una rama ----------
+
+test('flashcards: «Faceta: dato» → «Ruta del padre · Faceta» / «dato», sin la raíz del mapa', async () => {
+  const { buildCards } = await import('@/lib/mapas/flashcards')
+  let y = 0
+  const n = (id: string, label: string, parentId?: string, extra = {}) => ({ id, label, parentId, y: y++, ...extra })
+  const nodes = [
+    n('r', 'Tema 03 Vasculitis'),
+    n('g', 'Vasculitis de grandes vasos', 'r'),
+    n('acg', 'Arteritis de <b>células gigantes</b>', 'g'),
+    n('c1', 'Clínica: cefalea temporal, claudicación mandibular', 'acg'),
+    n('c2', '<b>Tratamiento</b>: corticoides&nbsp;precoces', 'acg'),
+    n('tak', 'Arteritis de Takayasu', 'g'),
+    n('t1', 'Clínica: asimetría de pulsos', 'tak'),
+    // Mapa hecho a mano: la faceta es un nodo y sus hojas no llevan prefijo.
+    n('cl', 'Exploración', 'tak'),
+    n('e1', 'Soplos', 'cl'),
+    n('e2', 'Pulsos débiles', 'cl'),
+    n('tab', '', 'tak', { table: { title: 'Criterios ACR/EULAR', columns: ['Criterio', 'Puntos'], rows: [['Sexo femenino', '+1'], ['Sin datos', '']] } }),
+  ]
+  const cards = buildCards(nodes, 'g')
+  assert.deepEqual(
+    cards.map((c) => [c.front, c.back, c.topic, c.kind]),
+    [
+      ['Vasculitis de grandes vasos › Arteritis de células gigantes · Clínica', 'cefalea temporal, claudicación mandibular', 'Arteritis de células gigantes', 'faceta'],
+      ['Vasculitis de grandes vasos › Arteritis de células gigantes · Tratamiento', 'corticoides precoces', 'Arteritis de células gigantes', 'faceta'],
+      ['Vasculitis de grandes vasos › Arteritis de Takayasu · Clínica', 'asimetría de pulsos', 'Arteritis de Takayasu', 'faceta'],
+      ['Vasculitis de grandes vasos › Arteritis de Takayasu · Exploración', 'Soplos\nPulsos débiles', 'Arteritis de Takayasu', 'grupo'],
+      ['Vasculitis de grandes vasos › Arteritis de Takayasu · Criterios ACR/EULAR · Sexo femenino', 'Puntos: +1', 'Arteritis de Takayasu', 'tabla'],
+    ],
+  )
+  assert.ok(cards.every((c) => c.include))
+  // Una hoja suelta seleccionada da su propia tarjeta; un nodo sin datos debajo, ninguna.
+  assert.deepEqual(buildCards(nodes, 'c1').map((c) => c.back), ['cefalea temporal, claudicación mandibular'])
+  assert.deepEqual(buildCards(nodes, 'e1'), [])
+  assert.deepEqual(buildCards(nodes, 'nope'), [])
+  // Una faceta colgada de la raíz lleva la raíz como ruta.
+  assert.equal(buildCards([n('r2', 'Gota'), n('h', 'Definición: depósito de urato', 'r2')], 'r2')[0].front, 'Gota · Definición')
+})
