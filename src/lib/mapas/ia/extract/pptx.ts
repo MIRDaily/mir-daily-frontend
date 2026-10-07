@@ -109,7 +109,7 @@ export async function extraerPptx(file: File, { maxChars }: Opciones): Promise<E
   let acumulado = 0
   let truncado = false
 
-  for (const ruta of rutas) {
+  for (const [indice, ruta] of rutas.entries()) {
     const doc = await leerXml(zip, ruta)
     if (!doc) continue
 
@@ -148,7 +148,7 @@ export async function extraerPptx(file: File, { maxChars }: Opciones): Promise<E
     if (ruta === rutas[0]) tituloPortada = titulo
     const texto = limpiarTexto(cuerpo.join('\n'))
     if (!titulo && texto.length < 10) continue
-    secciones.push({ titulo: titulo.slice(0, 100) || undefined, texto: texto || titulo })
+    secciones.push({ titulo: titulo.slice(0, 100) || undefined, texto: texto || titulo, pagina: indice + 1 })
     acumulado += texto.length + titulo.length
     if (acumulado > tope && ruta !== rutas[rutas.length - 1]) {
       truncado = true

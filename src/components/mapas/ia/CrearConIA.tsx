@@ -138,6 +138,7 @@ export default function CrearConIA({
           secciones: extraido.secciones,
           paginas: extraido.paginas,
           ...(conTablas ? { tablas: true as const } : {}),
+          ...(extraido.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
         },
         ctl.signal,
       )

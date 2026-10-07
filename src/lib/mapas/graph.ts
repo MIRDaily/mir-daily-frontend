@@ -1,6 +1,7 @@
 import { sanitizeLabelHtml } from '@/lib/mapas/labelHtml'
 import { computeLayout } from '@/lib/mapas/layout'
 import { sanitizeTable, tableToLabel, type MapTable } from '@/lib/mapas/table'
+import { sanitizeIA, type NodoIA } from '@/lib/mapas/ia/revision'
 
 // Margen extra entre hermanos: [hijos de la raíz = BLOQUES, hijos de los bloques, ...].
 // Separa los bloques de un mapa grande (p. ej. generado con IA) para que no se pegue todo.
@@ -53,6 +54,8 @@ export type GraphNode = {
     category?: MapCategoryId
     /** Nodo tabla: `label` es entonces una copia en texto de la tabla (ver `table.ts`). */
     table?: MapTable
+    /** Generado con IA: anclaje, página de origen y revisión (ver `ia/revision.ts`). */
+    ia?: NodoIA
   }
 }
 
@@ -275,6 +278,7 @@ export function treeToGraph(tree: MapDoc): GraphDoc {
         ...(n.parentId ? { parentId: n.parentId } : {}),
         category: n.category,
         ...(n.table ? { table: n.table } : {}),
+        ...(n.ia ? { ia: n.ia } : {}),
       },
     }
   })
@@ -396,6 +400,7 @@ export function sanitizeGraph(raw: unknown): GraphDoc {
     const h = typeof r.height === 'number' && Number.isFinite(r.height) ? num(r.height, 20, 2000, 0) : 0
     // Tabla: se sanea entera y su label se REGENERA desde ella (no se fía del guardado).
     const table = sanitizeTable(data.table)
+    const ia = sanitizeIA(data.ia)
     nodes.push({
       id,
       type: 'mindmap',
@@ -409,6 +414,7 @@ export function sanitizeGraph(raw: unknown): GraphDoc {
         ...(category ? { category } : {}),
         ...(data.collapsed === true ? { collapsed: true } : {}),
         ...(table ? { table } : {}),
+        ...(ia ? { ia } : {}),
       },
     })
   }

@@ -47,11 +47,11 @@ export type MapaGenerado = {
   titulo: string
   doc: StoredDoc
   generadoPorIA: true
-  stats: { modo: ModoIA; caracteres: number; nodos: number; tablas?: number }
+  stats: { modo: ModoIA; caracteres: number; nodos: number; tablas?: number; dudosos?: number }
 }
 
 export async function iaGenerar(
-  input: { titulo: string; modo: ModoIA; secciones: Seccion[]; paginas: number; tablas?: true },
+  input: { titulo: string; modo: ModoIA; secciones: Seccion[]; paginas: number; tablas?: true; unidad?: 'diapositiva' },
   signal?: AbortSignal,
 ): Promise<MapaGenerado> {
   return (await llamar('', { method: 'POST', body: JSON.stringify(input), signal })) as MapaGenerado

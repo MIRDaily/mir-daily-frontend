@@ -10,6 +10,8 @@ import { categoryForKey } from '@/lib/mapas/types'
 import { parentMap } from '@/components/mapas/proto/utils/tree'
 import { mirrorBranches, showUpToLevel, toggleBranch, toggleBranches } from '@/components/mapas/proto/utils/branches'
 import { addTableAndEdit, isTableNode, openTableEditor } from '@/components/mapas/proto/utils/tables'
+import { goToPending, markReviewed } from '@/components/mapas/proto/utils/review'
+import { isPendingReview } from '@/lib/mapas/ia/revision'
 import {
   addChildAndEdit,
   addSiblingAndEdit,
@@ -80,6 +82,27 @@ export function useMindMapShortcuts() {
           ui.setStylePanelOpen(true)
         }
         return
+      }
+
+      // ── Revisión guiada (mapa de IA con dudosos pendientes) ─────────────────
+      // N / Mayús+N: dudoso siguiente / anterior. R: el seleccionado, revisado, y al siguiente.
+      // Mientras quede algo por revisar, N y R hacen esto en vez de crear o editar (F2 sigue
+      // editando y Alt+N creando).
+      if (!isMod && !e.altKey && !store.editingNodeId && (e.code === 'KeyN' || e.code === 'KeyR')) {
+        const onCanvas = target === document.body || !!target.closest?.('.react-flow')
+        if (onCanvas && store.nodes.some((n) => isPendingReview(n.data.ia))) {
+          if (e.code === 'KeyN') {
+            e.preventDefault()
+            goToPending(e.shiftKey ? -1 : 1)
+            return
+          }
+          const sel = store.nodes.filter((n) => n.selected)
+          if (!e.shiftKey && sel.length === 1 && isPendingReview(sel[0].data.ia)) {
+            e.preventDefault()
+            markReviewed(sel[0].id, true)
+            return
+          }
+        }
       }
 
       // ── N: nodo nuevo sin relaciones ──────────────────────────────────────────

@@ -1,5 +1,6 @@
 import { MAP_CATEGORIES, type MapCategoryId, type MapDoc, type MapNode } from '@/lib/mapas/types'
 import { sanitizeTable } from '@/lib/mapas/table'
+import { sanitizeIA } from '@/lib/mapas/ia/revision'
 
 let counter = 0
 export function newNodeId(): string {
@@ -157,6 +158,7 @@ export function sanitizeDoc(raw: unknown): MapDoc {
     const text = typeof r.text === 'string' ? r.text.slice(0, 2000) : ''
     // Tabla: en el árbol el título va en `text` (así la escribe la IA); si la tabla trae el suyo, vale ese.
     const table = sanitizeTable(r.table, text)
+    const ia = sanitizeIA(r.ia)
     nodes.push({
       id,
       parentId: typeof r.parentId === 'string' ? r.parentId : null,
@@ -164,6 +166,7 @@ export function sanitizeDoc(raw: unknown): MapDoc {
       category,
       ...(r.collapsed === true ? { collapsed: true } : {}),
       ...(table ? { table } : {}),
+      ...(ia ? { ia } : {}),
     })
   }
   const root = nodes.find((n) => n.parentId === null) ?? nodes[0]

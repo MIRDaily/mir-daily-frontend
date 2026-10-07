@@ -75,7 +75,8 @@ export async function extraerPdf(file: File, { maxChars, onProgreso }: Opciones)
   }
 
   const limpias = quitarRepetidas(paginas)
-  const secciones = limpias.map((texto) => ({ texto })).filter((s) => s.texto.length >= 10)
+  // Cada página lleva su número: el servidor lo devuelve como página de origen de cada nodo.
+  const secciones = limpias.map((texto, i) => ({ texto, pagina: i + 1 })).filter((s) => s.texto.length >= 10)
   const avisos: string[] = []
   if (truncado) avisos.push('El documento es muy largo: solo se ha leído la primera parte.')
   return {

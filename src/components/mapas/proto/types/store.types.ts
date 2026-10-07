@@ -56,6 +56,18 @@ export type TableEditorTarget = {
 }
 
 export interface UIState {
+  /**
+   * Modo estudio: las hojas (o el dato tras «Faceta:») se tapan y se destapan con un clic. El
+   * lienzo se puede mover y plegar, pero no editar. No se guarda en el mapa.
+   */
+  studyMode: boolean
+  setStudyMode: (v: boolean) => void
+  /** Hojas destapadas en el modo estudio. */
+  revealed: ReadonlySet<string>
+  /** Destapa (`on`) o vuelve a tapar esas hojas. */
+  setRevealed: (ids: Iterable<string>, on: boolean) => void
+  /** Tapa todo otra vez. */
+  coverAll: () => void
   /** Tabla abierta en el popup de edición. */
   tableEditor: TableEditorTarget | null
   setTableEditor: (target: TableEditorTarget | null) => void

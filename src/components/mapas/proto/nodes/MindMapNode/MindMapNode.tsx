@@ -1,7 +1,7 @@
 import { memo, useCallback } from 'react'
 import { NodeToolbar, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import { motion } from 'framer-motion'
-import { Trash2, Plus, Palette, FlipHorizontal2, Table2, PenLine } from 'lucide-react'
+import { Trash2, Plus, Palette, FlipHorizontal2, Table2, PenLine, CheckCheck } from 'lucide-react'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
@@ -17,6 +17,9 @@ import { TableBody } from './TableBody'
 import { addChildAndEdit } from '@/components/mapas/proto/utils/keyboard'
 import { mirrorBranches } from '@/components/mapas/proto/utils/branches'
 import { addTableAndEdit, openTableEditor } from '@/components/mapas/proto/utils/tables'
+import { markReviewed } from '@/components/mapas/proto/utils/review'
+import { isPendingReview } from '@/lib/mapas/ia/revision'
+import { IAHoverChip } from './IAHoverChip'
 
 function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
   // Solo se lee lo que este nodo pinta; las acciones se piden a la store en el momento de
@@ -46,7 +49,12 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
 
   const handleSave = useCallback(
     (text: string) => {
-      useMindMapStore.getState().updateNodeData(id, { label: text })
+      const store = useMindMapStore.getState()
+      const ia = store.nodes.find((n) => n.id === id)?.data.ia
+      const prev = store.nodes.find((n) => n.id === id)?.data.label
+      // Corregir el texto de un nodo dudoso es haberlo revisado.
+      const reviewed = isPendingReview(ia) && text !== prev ? { ia: { ...ia, revisado: true } } : {}
+      store.updateNodeData(id, { label: text, ...reviewed })
     },
     [id]
   )
@@ -88,6 +96,10 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
     openTableEditor(id)
   }, [id])
 
+  const handleReviewed = useCallback(() => {
+    markReviewed(id, true)
+  }, [id])
+
   const handleMirror = useCallback(() => {
     mirrorBranches([id])
   }, [id])
@@ -113,10 +125,11 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
 
   const animateState = isEditing ? 'editing' : selected ? 'selected' : 'idle'
   const t = useTheme()
+  const pending = isPendingReview(data.ia)
 
   return (
     <div
-      className="mindmap-node-root"
+      className={pending ? 'mindmap-node-root ia-dudoso' : 'mindmap-node-root'}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       onMouseEnter={() => useMindMapStore.getState().setHovered(id)}
@@ -152,7 +165,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
         }}
       >
         {data.table ? (
-          <TableBody id={id} table={data.table} style={data.style} selected={!!selected} />
+          <TableBody id={id} table={data.table} style={data.style} selected={!!selected} ia={data.ia} />
         ) : (
         <NodeBody style={data.style} isSelected={!!selected} isDark={t.isDark}>
           {isEditing ? (
@@ -171,6 +184,12 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
         </NodeBody>
         )}
       </motion.div>
+      {pending && (
+        <span className="ia-badge" aria-hidden>
+          ?
+        </span>
+      )}
+      {data.ia && !isEditing && <IAHoverChip id={id} ia={data.ia} />}
 
       <NodeToolbar isVisible={!!selected && !isEditing && !multiSelect} position={Position.Top}>
         <div
@@ -184,6 +203,11 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
             boxShadow: `0 4px 16px ${t.shadow}`,
           }}
         >
+          {pending && (
+            <ToolbarBtn onClick={handleReviewed} title="Marcar como revisado y pasar al siguiente (R)" color={t.warning} hoverBg={t.hoverBg}>
+              <CheckCheck size={14} />
+            </ToolbarBtn>
+          )}
           {isTable && (
             <ToolbarBtn onClick={handleEditTable} title="Editar la tabla (doble clic o Enter)" color={t.accent} hoverBg={t.hoverBg}>
               <PenLine size={14} />
@@ -260,6 +284,7 @@ export const MindMapNodeComponent = memo(MindMapNodeInner, (prev, next) => {
     prev.data.hiddenCount === next.data.hiddenCount &&
     prev.data.childSide === next.data.childSide &&
     prev.data.table === next.data.table &&
+    prev.data.ia === next.data.ia &&
     JSON.stringify(prev.data.style) === JSON.stringify(next.data.style) &&
     (prev as { id: string }).id === (next as { id: string }).id
   )

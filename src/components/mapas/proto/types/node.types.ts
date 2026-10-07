@@ -1,5 +1,6 @@
 import type { Node } from '@xyflow/react'
 import type { MapTable } from '@/lib/mapas/table'
+import type { NodoIA } from '@/lib/mapas/ia/revision'
 
 export type NodeShape = 'rectangle' | 'pill' | 'circle' | 'diamond'
 
@@ -34,6 +35,8 @@ export interface NodeData extends Record<string, unknown> {
   category?: string
   /** Nodo tabla: `label` es una copia en texto de la tabla (la regenera `updateTable`). */
   table?: MapTable
+  /** Generado con IA: anclaje, página de origen y revisión. Se guarda en el mapa. */
+  ia?: NodoIA
 }
 
 export type MindMapNode = Node<NodeData, 'mindmap'>

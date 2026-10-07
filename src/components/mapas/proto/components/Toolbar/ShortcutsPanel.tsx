@@ -20,6 +20,8 @@ const SHORTCUTS: { keys: string[]; desc: string }[] = [
   { keys: ['Tabla: Alt', '← ↑ → ↓'], desc: 'Mover la fila o la columna de la celda' },
   { keys: ['Tabla: Ctrl', 'V'], desc: 'Pegar celdas de Excel o Word: se reparten desde la celda activa' },
   { keys: ['Tabla: ⇧ clic / arrastrar'], desc: 'Seleccionar varias celdas: Supr las vacía, Ctrl+C las copia, «Estilo» las cambia' },
+  { keys: ['N / ⇧N'], desc: 'Mapa de IA: ir al dudoso siguiente / anterior (en ámbar)' },
+  { keys: ['R'], desc: 'Mapa de IA: marcar el dudoso seleccionado como revisado y pasar al siguiente' },
   { keys: ['Ctrl', 'F'], desc: 'Buscar en el mapa' },
   { keys: ['Ctrl', 'P'], desc: 'Exportar / imprimir (PDF, imagen)' },
   { keys: ['Ctrl', 'Arrastrar'], desc: 'Soltar sobre otro nodo: cambia de rama' },

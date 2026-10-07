@@ -12,6 +12,7 @@ import {
   type CellMeasure,
   type MapTable,
 } from '@/lib/mapas/table'
+import { isDoubtfulCell, type NodoIA } from '@/lib/mapas/ia/revision'
 
 // Nodo tabla: franja de título con el color de la categoría, cabecera tintada y celdas que
 // ajustan el texto. Los anchos de columna salen de `tableGeometry` (la misma cuenta que usan el
@@ -56,9 +57,11 @@ interface TableBodyProps {
   table: MapTable
   style: NodeStyle
   selected: boolean
+  /** Revisión guiada: las celdas dudosas de una tabla pendiente se marcan en ámbar. */
+  ia?: NodoIA
 }
 
-function TableBodyInner({ id, table, style, selected }: TableBodyProps) {
+function TableBodyInner({ id, table, style, selected, ia }: TableBodyProps) {
   const t = useTheme()
   const fontSize = style.fontSize ?? 14
   const family = resolveFont(style.fontFamily)
@@ -91,9 +94,11 @@ function TableBodyInner({ id, table, style, selected }: TableBodyProps) {
     const Tag = r === -1 ? 'th' : 'td'
     // Estilo de su columna, encima el de su fila y encima el suyo (ver cellStyleOf).
     const st = cellStyleOf(table, r, c)
+    const doubtful = r >= 0 && isDoubtfulCell(ia, table, r, c)
     return (
       <Tag
         key={c}
+        className={doubtful ? 'ia-celda' : undefined}
         style={{
           ...baseCell,
           fontWeight: st.bold ? 700 : 400,

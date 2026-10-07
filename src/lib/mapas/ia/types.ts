@@ -1,7 +1,8 @@
 // Tipos de la IA de mapas (documento → mapa). El texto se extrae EN EL
 // NAVEGADOR: el archivo nunca se sube; al servidor solo viaja el texto.
 
-export type Seccion = { titulo?: string; texto: string }
+/** `pagina`: número de página o diapositiva de donde sale (revisión guiada: página de origen). */
+export type Seccion = { titulo?: string; texto: string; pagina?: number }
 
 export type Extraido = {
   /** Título propuesto (metadatos o nombre del archivo). */

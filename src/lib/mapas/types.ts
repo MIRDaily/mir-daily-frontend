@@ -1,4 +1,5 @@
 import type { MapTable } from '@/lib/mapas/table'
+import type { NodoIA } from '@/lib/mapas/ia/revision'
 
 // Modelo del mapa mental: un ÁRBOL de nodos tipados, no un grafo libre.
 //
@@ -46,6 +47,8 @@ export type MapNode = {
   collapsed?: boolean
   /** Nodo tabla (ver `table.ts`). Su título es `text`. */
   table?: MapTable
+  /** Generado con IA: anclaje, página de origen y revisión (ver `ia/revision.ts`). */
+  ia?: NodoIA
 }
 
 export type MapDoc = {

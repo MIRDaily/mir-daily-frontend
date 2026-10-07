@@ -3,9 +3,8 @@ import { ChevronDown, ChevronUp, Search, X } from 'lucide-react'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
-import { getFlow, selectOnly } from '@/components/mapas/proto/utils/keyboard'
-import { parentMap } from '@/components/mapas/proto/utils/tree'
-import { setCollapsedAnimated } from '@/components/mapas/proto/utils/foldAnimation'
+import { selectOnly } from '@/components/mapas/proto/utils/keyboard'
+import { centerOn, unfoldTo } from '@/components/mapas/proto/utils/reveal'
 
 // Buscador de nodos (Ctrl+F). Busca en el texto de todos los nodos, también los que están dentro
 // de ramas plegadas: al ir a uno de esos, despliega lo necesario para que se vea.
@@ -68,31 +67,6 @@ function rangesIn(root: Element, q: string): Range[] {
     out.push(r)
   }
   return out
-}
-
-/** Despliega las ramas plegadas que esconden al nodo. No es un paso de deshacer: solo se mira. */
-function unfoldTo(id: string) {
-  const { nodes, edges } = useMindMapStore.getState()
-  const parents = parentMap(nodes, edges)
-  const byId = new Map(nodes.map((n) => [n.id, n]))
-  const toOpen = new Set<string>()
-  const seen = new Set<string>([id])
-  for (let p = parents.get(id); p && !seen.has(p); p = parents.get(p)) {
-    seen.add(p)
-    if (byId.get(p)?.data.collapsed) toOpen.add(p)
-  }
-  if (toOpen.size === 0) return
-  setCollapsedAnimated(new Map([...toOpen].map((p) => [p, false])))
-}
-
-function centerOn(id: string) {
-  const flow = getFlow()
-  const node = useMindMapStore.getState().nodes.find((n) => n.id === id)
-  if (!flow || !node || useUIStore.getState().cameraLocked) return
-  const w = node.measured?.width ?? 160
-  const h = node.measured?.height ?? 50
-  const zoom = Math.max(flow.getViewport().zoom, 0.9)
-  void flow.setCenter(node.position.x + w / 2, node.position.y + h / 2, { zoom, duration: 400 })
 }
 
 export function SearchBar() {

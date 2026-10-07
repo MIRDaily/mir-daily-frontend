@@ -27,6 +27,7 @@ import { StylePanel } from '@/components/mapas/proto/components/Toolbar/StylePan
 import { TextFormatPopup } from '@/components/mapas/proto/components/Toolbar/TextFormatPopup'
 import { ShortcutsPanel } from '@/components/mapas/proto/components/Toolbar/ShortcutsPanel'
 import { SearchBar } from '@/components/mapas/proto/components/Toolbar/SearchBar'
+import ReviewBanner from '@/components/mapas/ia/ReviewBanner'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
@@ -71,6 +72,7 @@ function toEngine(doc: GraphDoc): { nodes: MindMapNode[]; edges: MindMapEdge[] }
       ...(n.data.category ? { category: n.data.category } : {}),
       ...(n.data.collapsed ? { collapsed: true } : {}),
       ...(n.data.table ? { table: n.data.table } : {}),
+      ...(n.data.ia ? { ia: n.data.ia } : {}),
       isEditing: false,
       isFocused: false,
       isNew: false,
@@ -108,6 +110,7 @@ function fromEngine(nodes: MindMapNode[], edges: MindMapEdge[], settings?: Edito
       ...(n.data.category ? { category: n.data.category as GraphNode['data']['category'] } : {}),
       ...(n.data.collapsed ? { collapsed: true } : {}),
       ...(n.data.table ? { table: n.data.table } : {}),
+      ...(n.data.ia ? { ia: n.data.ia } : {}),
     },
   }))
   const gEdges: GraphEdge[] = edges.map((e) => {
@@ -486,6 +489,7 @@ function EditorInner({
         <CategoryStylesPanel />
         <StylePanel />
         <SearchBar />
+        <ReviewBanner />
         <TextFormatPopup />
         <ShortcutsPanel />
         <CustomMiniMap />
