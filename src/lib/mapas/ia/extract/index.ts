@@ -1,4 +1,5 @@
 import { ExtractError, MAX_ARCHIVO_BYTES, MAX_OFFICE_BYTES, type Extraido } from '../types'
+import { mensajeFormato } from './formatos'
 
 export type OpcionesExtraccion = { maxChars: number; onProgreso?: (hecho: number, total: number) => void }
 
@@ -15,8 +16,6 @@ export async function extraerDocumento(file: File, opciones: OpcionesExtraccion)
   if (nombre.endsWith('.pdf')) return (await import('./pdf')).extraerPdf(file, opciones)
   if (nombre.endsWith('.docx')) return (await import('./docx')).extraerDocx(file, opciones)
   if (nombre.endsWith('.pptx')) return (await import('./pptx')).extraerPptx(file, opciones)
-  if (/\.(doc|ppt|odt|odp|rtf)$/.test(nombre)) {
-    throw new ExtractError('Formato antiguo. Guárdalo como .docx o .pptx (o expórtalo a PDF) y vuelve a intentarlo.')
-  }
-  throw new ExtractError('Formato no admitido. Usa un PDF, un Word (.docx) o un PowerPoint (.pptx).')
+  // .ppt, .doc, LibreOffice, Keynote…: qué es y cómo pasarlo a un formato que se lea.
+  throw new ExtractError(mensajeFormato(nombre))
 }
