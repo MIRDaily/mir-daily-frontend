@@ -15,13 +15,21 @@ import {
 import { DEFAULT_COLOR_KEY, DEFAULT_ICON } from '@/lib/flashcardTheme'
 import {
   agrupar,
+  CANTIDAD_MAS_DEFECTO,
+  CANTIDADES_MAS,
   contarNiveles,
+  insertarNuevas,
   nivelesParaEmpezar,
+  OPCIONES_MAS,
   origenTexto,
+  paginasDeTema,
   paraGuardar,
+  tarjetasDeTema,
   type Borrador,
   type FuenteGuardar,
+  type OpcionMas,
 } from '@/lib/flashcards/ia/tarjetas'
+import type { MasGeneradas } from '@/lib/flashcards/ia/api'
 import { NivelBadge } from './NivelBadge'
 
 // Vista previa de las flashcards con IA (documento o rama de un mapa): por tema (plegable) y, dentro,
@@ -30,12 +38,29 @@ import { NivelBadge } from './NivelBadge'
 // sigue fluida) y todo se hace con el teclado (↑/↓, Espacio, 1-4, E, Esc). Cada cambio se guarda
 // como borrador en este navegador (`persistir`), y al guardar las tarjetas se borra (`alGuardar`).
 // Luego, un clic para empezar a estudiarlas por lo fácil.
+//
+// «Más» en la cabecera de cada tema (paquete 2): pide a la IA tarjetas NUEVAS solo de ese tema (de
+// todos los niveles, más difíciles o más fáciles; 5, 10 o 20) y las mete en su sitio, marcadas como
+// nuevas hasta que se tocan. Quién la llama (documento o mapa) decide qué fragmento viaja (`mas`).
 
 const INK = '#2C3E50'
 const MAX_POR_GRUPO = 500
 const RETARDO_BORRADOR = 600
 
 type Destino = 'nuevo' | 'existente' | 'porTema'
+
+/** «Más de este tema»: lo pone quien abre la vista previa (sabe de dónde salen las tarjetas). */
+export type MasConfig = {
+  pedir: (
+    p: { tema: string; niveles: FlashcardLevel[]; cantidad: number; existentes: { pregunta: string; respuesta: string }[]; paginas: number[] },
+    signal: AbortSignal,
+  ) => Promise<MasGeneradas>
+  /** Si ahora no se puede (falta el texto del documento): la explicación y cómo arreglarlo. */
+  bloqueo?: React.ReactNode
+  /** Cuántas veces quedan hoy (si se sabe). */
+  restantes?: number
+}
+type EstadoMas = { tema: string; cargando: boolean; mensaje?: string; error?: string }
 type Hecho = { id: string; nombre: string; creadas: number; duplicadas: number; niveles: FlashcardLevel[] }
 
 async function token(): Promise<string> {
@@ -57,6 +82,7 @@ export function VistaPreviaFlashcards({
   alGuardar,
   onVolver,
   onCerrar,
+  mas,
 }: {
   inicial: Borrador[]
   /** Nombre propuesto para un grupo nuevo. */
@@ -70,6 +96,8 @@ export function VistaPreviaFlashcards({
   /** Volver a los ajustes (generar otra vez). */
   onVolver?: () => void
   onCerrar: () => void
+  /** «Más de este tema» (sin esto, no se ofrece). */
+  mas?: MasConfig
 }) {
   const [lista, setLista] = useState<Borrador[]>(inicial)
   const dudosasIniciales = inicial.filter((b) => b.ia?.dudoso).length
@@ -91,6 +119,14 @@ export function VistaPreviaFlashcards({
   const creados = useRef(new Map<string, FlashcardDeck>())
   const tarjetasRef = useRef(new Map<string, HTMLDivElement>())
   const contenedor = useRef<HTMLDivElement>(null)
+  // «Más de este tema»: el tema con el panel abierto, lo elegido y en qué está.
+  const [masAbierto, setMasAbierto] = useState<string | null>(null)
+  const [masOpcion, setMasOpcion] = useState<OpcionMas>('mas')
+  const [masCantidad, setMasCantidad] = useState<number>(CANTIDAD_MAS_DEFECTO)
+  const [masEstado, setMasEstado] = useState<EstadoMas | null>(null)
+  const masAbort = useRef<AbortController | null>(null)
+  const irA = useRef<string | null>(null)
+  useEffect(() => () => masAbort.current?.abort(), [])
 
   useEffect(() => {
     let vivo = true
@@ -151,7 +187,11 @@ export function VistaPreviaFlashcards({
 
   // Manejadores ESTABLES (con la clave como argumento): con FilaTarjeta en memo, una tecla solo
   // repinta las tarjetas que cambian (con 300, cada flecha repintaba las 300: ~60 ms en desarrollo).
-  const cambiar = useCallback((key: string, p: Partial<Borrador>) => setLista((l) => l.map((b) => (b.key === key ? { ...b, ...p } : b))), [])
+  // Tocar una tarjeta nueva («Más de este tema») le quita la marca.
+  const cambiar = useCallback(
+    (key: string, p: Partial<Borrador>) => setLista((l) => l.map((b) => (b.key === key ? { ...b, ...p, nueva: undefined } : b))),
+    [],
+  )
   const editarTarjeta = useCallback((key: string) => {
     setActivo(key)
     setEditando(key)
@@ -172,10 +212,57 @@ export function VistaPreviaFlashcards({
       return n
     })
 
-  // La tarjeta activa siempre a la vista.
+  // La tarjeta activa siempre a la vista (y, si era nueva, ya se ha tocado).
   useEffect(() => {
-    if (activo) tarjetasRef.current.get(activo)?.scrollIntoView({ block: 'nearest' })
+    if (!activo) return
+    tarjetasRef.current.get(activo)?.scrollIntoView({ block: 'nearest' })
+    setLista((l) => (l.some((b) => b.key === activo && b.nueva) ? l.map((b) => (b.key === activo ? { ...b, nueva: undefined } : b)) : l))
   }, [activo])
+
+  // Tras añadir las de «Más», la primera a la vista (sin activarla: seguiría siendo nueva).
+  useEffect(() => {
+    if (!irA.current) return
+    tarjetasRef.current.get(irA.current)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    irA.current = null
+  }, [lista])
+
+  const pedirMas = async (tema: string) => {
+    if (!mas || masEstado?.cargando) return
+    const opcion = OPCIONES_MAS.find((o) => o.id === masOpcion) ?? OPCIONES_MAS[0]
+    masAbort.current?.abort()
+    const ctl = new AbortController()
+    masAbort.current = ctl
+    setMasEstado({ tema, cargando: true })
+    try {
+      const r = await mas.pedir(
+        { tema, niveles: opcion.niveles, cantidad: masCantidad, existentes: tarjetasDeTema(lista, tema), paginas: paginasDeTema(lista, tema) },
+        ctl.signal,
+      )
+      if (ctl.signal.aborted) return
+      const repetidas = r.repetidas ? ` · ${r.repetidas} ${r.repetidas === 1 ? 'quitada por repetir' : 'quitadas por repetir'} una que ya tenías` : ''
+      if (!r.tarjetas.length) {
+        setMasEstado({ tema, cargando: false, error: `No han salido tarjetas nuevas de este tema${repetidas}.` })
+        return
+      }
+      setLista((l) => {
+        const nueva = insertarNuevas(l, tema, r.tarjetas)
+        irA.current = nueva.find((b) => b.nueva && b.tema === tema && !l.some((x) => x.key === b.key))?.key ?? null
+        return nueva
+      })
+      setPlegados((p) => {
+        if (!p.has(tema)) return p
+        const n = new Set(p)
+        n.delete(tema)
+        return n
+      })
+      setSoloDudosas(false)
+      setMasEstado({ tema, cargando: false, mensaje: `+${r.tarjetas.length} ${r.tarjetas.length === 1 ? 'nueva' : 'nuevas'}${repetidas}` })
+      setMasAbierto(null)
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
+      setMasEstado({ tema, cargando: false, error: e instanceof Error ? e.message : 'No se pudieron generar más tarjetas' })
+    }
+  }
 
   // Teclado. En captura y parando la propagación: dentro del editor de mapas, sus atajos (borrar
   // nodo, mover…) no deben actuar mientras se revisa.
@@ -183,6 +270,15 @@ export function VistaPreviaFlashcards({
     if (hechos || guardando) return
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return
+      // Dentro del panel «Más» manda el panel (Espacio y Enter pulsan sus botones).
+      if (e.target instanceof HTMLElement && e.target.closest('[data-mas-panel]')) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          e.stopPropagation()
+          setMasAbierto(null)
+        }
+        return
+      }
       if (esCampo(e.target)) {
         if (e.key === 'Escape' && editando) {
           e.preventDefault()
@@ -265,8 +361,9 @@ export function VistaPreviaFlashcards({
     }
   }
 
-  const estudiar = (h: Hecho) => `/flashcards/${h.id}?study=1${h.niveles.length ? `&niveles=${h.niveles.join(',')}` : ''}`
-  const textoNiveles = (ns: FlashcardLevel[]) => ns.map((n) => LEVEL_INFO[n].name.toLowerCase()).join(' y ')
+  // Con la escalera de dificultad (activada por defecto) no hace falta filtrar niveles: la sesión
+  // empieza por lo más fácil de cada tema y abre cada nivel al dominar el anterior.
+  const estudiar = (h: Hecho) => `/flashcards/${h.id}?study=1`
 
   if (hechos) {
     const creadas = hechos.reduce((n, h) => n + h.creadas, 0)
@@ -302,9 +399,10 @@ export function VistaPreviaFlashcards({
               </li>
             ))}
           </ul>
-          {hechos.length === 1 && hechos[0].niveles.length > 0 && (
+          {hechos.length === 1 && hechos[0].niveles.length > 1 && (
             <p className="mt-2 text-[0.75rem] text-[#7D8A96]">
-              Empiezas por {textoNiveles(hechos[0].niveles)}; en el grupo puedes cambiar los niveles cuando quieras.
+              Empiezas por lo más fácil de cada tema: la escalera abre cada nivel cuando dominas el 80 % de lo anterior. En el grupo puedes
+              quitarla o elegir niveles.
             </p>
           )}
         </div>
@@ -409,24 +507,65 @@ export function VistaPreviaFlashcards({
             const porNivel = contarNiveles(s.niveles.flatMap((g) => g.indices).map((i) => lista[i]))
             return (
               <section key={s.tema}>
-                <button
-                  type="button"
-                  onClick={() => alternarPlegado(s.tema)}
-                  aria-expanded={!plegado}
-                  className="mb-1.5 flex w-full items-center gap-2 text-left"
-                >
-                  <span aria-hidden className="inline-block text-[#7D8A96]">
-                    <span className="material-symbols-outlined text-[1.1rem] leading-none">{plegado ? 'chevron_right' : 'expand_more'}</span>
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-[0.8rem] font-extrabold uppercase tracking-wide text-[#2C3E50]">{s.tema}</span>
-                  <span className="flex shrink-0 gap-1">
-                    {FLASHCARD_LEVELS.filter((n) => porNivel[n]).map((n) => (
-                      <span key={n} className="rounded-full px-1.5 text-[0.65rem] font-extrabold" style={{ background: LEVEL_INFO[n].soft, color: LEVEL_INFO[n].color }}>
-                        {porNivel[n]}
+                <div className="mb-1.5 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => alternarPlegado(s.tema)}
+                    aria-expanded={!plegado}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  >
+                    <span aria-hidden className="inline-block text-[#7D8A96]">
+                      <span className="material-symbols-outlined text-[1.1rem] leading-none">{plegado ? 'chevron_right' : 'expand_more'}</span>
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[0.8rem] font-extrabold uppercase tracking-wide text-[#2C3E50]">{s.tema}</span>
+                    <span className="flex shrink-0 gap-1">
+                      {FLASHCARD_LEVELS.filter((n) => porNivel[n]).map((n) => (
+                        <span key={n} className="rounded-full px-1.5 text-[0.65rem] font-extrabold" style={{ background: LEVEL_INFO[n].soft, color: LEVEL_INFO[n].color }}>
+                          {porNivel[n]}
+                        </span>
+                      ))}
+                    </span>
+                  </button>
+                  {mas && (
+                    <button
+                      type="button"
+                      onClick={() => setMasAbierto((t) => (t === s.tema ? null : s.tema))}
+                      aria-expanded={masAbierto === s.tema}
+                      disabled={!!guardando}
+                      title="Pedir a la IA más tarjetas de este tema"
+                      className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-0.5 text-[0.7rem] font-extrabold text-[#C4655A] hover:bg-[#FCEFEC] disabled:opacity-40"
+                      style={{ border: '1.5px solid #E8A598' }}
+                    >
+                      <span aria-hidden className="inline-block">
+                        <span className="material-symbols-outlined text-[0.95rem] leading-none">add</span>
                       </span>
-                    ))}
-                  </span>
-                </button>
+                      Más
+                    </button>
+                  )}
+                </div>
+                {mas && masAbierto === s.tema && (
+                  <PanelMas
+                    tema={s.tema}
+                    mas={mas}
+                    opcion={masOpcion}
+                    setOpcion={setMasOpcion}
+                    cantidad={masCantidad}
+                    setCantidad={setMasCantidad}
+                    cargando={masEstado?.tema === s.tema && masEstado.cargando}
+                    error={masEstado?.tema === s.tema ? masEstado.error : undefined}
+                    onPedir={() => void pedirMas(s.tema)}
+                    onCerrar={() => {
+                      masAbort.current?.abort()
+                      setMasEstado(null)
+                      setMasAbierto(null)
+                    }}
+                  />
+                )}
+                {masEstado?.tema === s.tema && masEstado.mensaje && masAbierto !== s.tema && (
+                  <p role="status" className="mb-1.5 text-[0.72rem] font-bold text-[#5E8C5A]">
+                    {masEstado.mensaje}
+                  </p>
+                )}
                 {!plegado && (
                   <div className="space-y-1.5">
                     {indices.map((i) => {
@@ -541,6 +680,104 @@ export function VistaPreviaFlashcards({
   )
 }
 
+function PanelMas({
+  tema,
+  mas,
+  opcion,
+  setOpcion,
+  cantidad,
+  setCantidad,
+  cargando,
+  error,
+  onPedir,
+  onCerrar,
+}: {
+  tema: string
+  mas: MasConfig
+  opcion: OpcionMas
+  setOpcion: (o: OpcionMas) => void
+  cantidad: number
+  setCantidad: (n: number) => void
+  cargando: boolean
+  error?: string
+  onPedir: () => void
+  onCerrar: () => void
+}) {
+  const sinCupo = mas.restantes !== undefined && mas.restantes <= 0
+  return (
+    <div data-mas-panel className="mb-2 rounded-xl bg-white p-3" style={{ border: `2px solid ${INK}`, boxShadow: `3px 3px 0 0 ${INK}` }}>
+      {mas.bloqueo ? (
+        <div className="text-[0.78rem] text-[#2C3E50]">{mas.bloqueo}</div>
+      ) : (
+        <>
+          <div className="grid gap-1.5 sm:grid-cols-3" role="radiogroup" aria-label={`Qué tarjetas añadir a ${tema}`}>
+            {OPCIONES_MAS.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                role="radio"
+                aria-checked={opcion === o.id}
+                disabled={cargando}
+                onClick={() => setOpcion(o.id)}
+                className="rounded-lg px-2.5 py-1.5 text-left"
+                style={{ border: `2px solid ${opcion === o.id ? '#E8A598' : '#EDE6DE'}`, background: opcion === o.id ? '#FCEFEC' : '#FFFFFF' }}
+              >
+                <span className="block text-[0.76rem] font-extrabold text-[#2C3E50]">{o.titulo}</span>
+                <span className="block text-[0.68rem] text-[#7D8A96]">{o.descripcion}</span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-[0.72rem] font-bold text-[#7D8A96]">Cuántas</span>
+            <div className="flex gap-1" role="radiogroup" aria-label="Cuántas tarjetas">
+              {CANTIDADES_MAS.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  role="radio"
+                  aria-checked={cantidad === n}
+                  disabled={cargando}
+                  onClick={() => setCantidad(n)}
+                  className="min-w-[2.2rem] rounded-lg px-2 py-0.5 text-[0.76rem] font-extrabold"
+                  style={{ border: `2px solid ${cantidad === n ? '#E8A598' : '#EDE6DE'}`, color: cantidad === n ? '#2C3E50' : '#7D8A96' }}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <span className="ml-auto flex items-center gap-2">
+              <button type="button" onClick={onCerrar} className="rounded-lg px-2 py-1 text-[0.74rem] font-bold text-[#7D8A96] hover:text-[#2C3E50]">
+                {cargando ? 'Cancelar' : 'Cerrar'}
+              </button>
+              <button
+                type="button"
+                onClick={onPedir}
+                disabled={cargando || sinCupo}
+                className="flex items-center gap-1 rounded-lg bg-[#E8A598] px-3 py-1 text-[0.76rem] font-extrabold text-white disabled:opacity-60"
+                style={{ border: `2px solid ${INK}` }}
+              >
+                <span aria-hidden className={`inline-block ${cargando ? 'animate-spin' : ''}`}>
+                  <span className="material-symbols-outlined text-[0.95rem] leading-none">{cargando ? 'progress_activity' : 'auto_awesome'}</span>
+                </span>
+                {cargando ? 'Generando…' : 'Generar'}
+              </button>
+            </span>
+          </div>
+          <p className="mt-1.5 text-[0.68rem] text-[#7D8A96]">
+            Solo de este tema y sin repetir las que ya hay. Viaja el texto de este tema, no el documento entero.
+            {mas.restantes !== undefined ? ` Hoy te quedan ${Math.max(0, mas.restantes)}.` : ''}
+          </p>
+        </>
+      )}
+      {error && (
+        <p role="alert" className="mt-1.5 text-[0.74rem] font-bold text-[#B04A5E]">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function Kbd({ children }: { children: React.ReactNode }) {
   return <kbd className="mx-[1px] inline-block rounded border border-[#D9D0CB] bg-[#FBF8F6] px-1 text-[0.65rem] font-bold text-[#8A7F79]">{children}</kbd>
 }
@@ -570,7 +807,7 @@ const FilaTarjeta = memo(function FilaTarjeta({
   const onCambio = (p: Partial<Borrador>) => cambiar(b.key, p)
   const origen = origenTexto(b.ia)
   const campo = 'w-full resize-y rounded-lg border border-[#7D8A96]/20 bg-white px-2 py-1 text-[0.82rem] leading-snug text-[#2C3E50] outline-none focus:border-[#E8A598]'
-  const borde = activa ? '#E8A598' : b.ia?.dudoso ? '#D9A441' : b.incluir ? INK : '#E5DED6'
+  const borde = activa ? '#E8A598' : b.nueva ? '#5E8C5A' : b.ia?.dudoso ? '#D9A441' : b.incluir ? INK : '#E5DED6'
   return (
     <div
       ref={refEl}
@@ -618,6 +855,9 @@ const FilaTarjeta = memo(function FilaTarjeta({
         </>
       )}
       <div className="col-start-2 flex flex-wrap items-center gap-1.5 sm:col-span-2">
+        {b.nueva && (
+          <span className="rounded-full bg-[#E7F0E5] px-2 py-0.5 text-[0.66rem] font-extrabold uppercase tracking-wide text-[#5E8C5A]">Nueva</span>
+        )}
         <NivelBadge nivel={b.nivel} />
         <select
           value={b.nivel}

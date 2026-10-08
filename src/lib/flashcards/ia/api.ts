@@ -82,6 +82,29 @@ const statsDe = (raw: unknown): StatsIA => {
 }
 
 /**
+ * «Más de este tema»: tarjetas NUEVAS de un tema que ya tiene. Viajan el tema, los niveles, la
+ * cantidad, las tarjetas que ya hay (el servidor las acota y quita las que las repitan) y SOLO el
+ * fragmento de ese tema: `secciones` (de un documento) o `mapa` (+ `secciones`, su fragmento).
+ */
+export type PeticionMas = {
+  titulo: string
+  niveles: FlashcardLevel[]
+  ampliar: { tema: string; cantidad: number; existentes: { pregunta: string; respuesta: string }[] }
+  unidad?: 'diapositiva'
+} & ({ secciones: Seccion[]; mapa?: undefined } | { mapa: { d: number; t: string }[]; secciones?: Seccion[] })
+
+export type MasGeneradas = { tarjetas: TarjetaIA[]; repetidas: number; otroTema: number }
+
+export async function flashcardsIAMas(input: PeticionMas, signal?: AbortSignal): Promise<MasGeneradas> {
+  const datos = (await cuerpoOError(await abrir('', { method: 'POST', body: JSON.stringify(input), signal }))) as Record<string, unknown>
+  const st = datos.stats && typeof datos.stats === 'object' ? (datos.stats as Record<string, unknown>) : {}
+  const n = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : 0)
+  // El servidor ya fuerza el tema; aquí también (lo que llega no se da por bueno).
+  const tarjetas = sanitizeTarjetas(datos.tarjetas).map((t) => ({ ...t, tema: input.ampliar.tema }))
+  return { tarjetas, repetidas: n(st.repetidas), otroTema: n(st.otroTema) }
+}
+
+/**
  * Genera las tarjetas (en streaming si hay `onEvento`: fases y preguntas provisionales). Devuelve
  * las tarjetas VALIDADAS del final (o, tema a tema, las de cada tema), ya saneadas.
  */

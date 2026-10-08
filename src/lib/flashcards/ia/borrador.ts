@@ -3,14 +3,22 @@
 // pierde. Uno por usuario y origen (un documento; o cada mapa). Caduca a los 7 días y se borra al
 // guardar las tarjetas. Nunca va al servidor.
 //
+// Desde un documento se guarda también su TEXTO (paquete 2, «Más de este tema»: ampliar un tema
+// después de recargar necesita el fragmento de ese tema). Va en otro almacén, con la misma clave, la
+// misma caducidad y se borra a la vez. El borrador guarda el hash del archivo: si el texto falta (un
+// borrador antiguo, o el navegador lo ha perdido), se pide el archivo y se comprueba que es el mismo.
+//
 // Lo puro (claves, caducidad, saneado al leer, «hace …») va arriba y se prueba con `npm test`; lo de
 // IndexedDB, abajo, y nunca lanza.
 
 import { sanitizeTarjetas, type Borrador, type FuenteGuardar } from '@/lib/flashcards/ia/tarjetas'
+import type { Seccion } from '@/lib/mapas/ia/types'
 
 export const DIAS_BORRADOR = 7
 const DB = 'mirdaily-flashcards-ia'
 const STORE = 'borradores'
+const STORE_DOCS = 'documentos'
+const VERSION = 2
 const MAX_TARJETAS = 2000
 
 export type OrigenBorrador = { tipo: 'documento' } | { tipo: 'mapa'; mapId: string; nodeId?: string }
@@ -26,6 +34,8 @@ export type BorradorGuardado = {
   lista: Borrador[]
   /** Temas del libro que no salieron (se enseñan otra vez al recuperar). */
   fallidos: string[]
+  /** El archivo del que salió (documento): su SHA-256, para comprobar que es el mismo si hay que pedirlo. */
+  documento?: { hash: string; nombre: string }
   creado: number
   actualizado: number
   caduca: number
@@ -80,6 +90,8 @@ export function sanearBorrador(raw: unknown): BorradorGuardado | null {
       key: texto(x.key, 40) || `r${lista.length}`,
       incluir: x.incluir !== false,
       ...(typeof x.grupo === 'string' && x.grupo ? { grupo: x.grupo.slice(0, 200) } : {}),
+      ...(x.nueva === true ? { nueva: true } : {}),
+      ...(typeof x.nodeId === 'string' && x.nodeId ? { nodeId: x.nodeId.slice(0, 64) } : {}),
     })
   }
   if (!lista.length) return null
@@ -91,6 +103,8 @@ export function sanearBorrador(raw: unknown): BorradorGuardado | null {
     ...(typeof f.nodeId === 'string' ? { nodeId: f.nodeId.slice(0, 64) } : {}),
   }
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+  const d = (r.documento && typeof r.documento === 'object' ? r.documento : null) as Record<string, unknown> | null
+  const documento = d && typeof d.hash === 'string' && /^[0-9a-f]{64}$/.test(d.hash) ? { hash: d.hash, nombre: texto(d.nombre, 160) } : undefined
   return {
     clave: r.clave,
     usuario: r.usuario,
@@ -100,6 +114,7 @@ export function sanearBorrador(raw: unknown): BorradorGuardado | null {
     fuente,
     lista,
     fallidos: (Array.isArray(r.fallidos) ? r.fallidos : []).filter((x): x is string => typeof x === 'string').slice(0, 50),
+    ...(documento ? { documento } : {}),
     creado: num(r.creado),
     actualizado: num(r.actualizado),
     caduca: num(r.caduca),
@@ -113,20 +128,21 @@ export function sanearBorrador(raw: unknown): BorradorGuardado | null {
 function abrir(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') return reject(new Error('Sin IndexedDB'))
-    const req = indexedDB.open(DB, 1)
+    const req = indexedDB.open(DB, VERSION)
     req.onupgradeneeded = () => {
       if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE, { keyPath: 'clave' })
+      if (!req.result.objectStoreNames.contains(STORE_DOCS)) req.result.createObjectStore(STORE_DOCS, { keyPath: 'clave' })
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
   })
 }
 
-async function conStore<T>(modo: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+async function conStore<T>(modo: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>, store = STORE): Promise<T> {
   const db = await abrir()
   try {
     return await new Promise<T>((resolve, reject) => {
-      const req = fn(db.transaction(STORE, modo).objectStore(STORE))
+      const req = fn(db.transaction(store, modo).objectStore(store))
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
     })
@@ -180,10 +196,77 @@ export async function listarBorradores(usuario: string): Promise<BorradorGuardad
   }
 }
 
+/** Borra el borrador y, con él, el texto de su documento. */
 export async function borrarBorrador(clave: string): Promise<void> {
   try {
     await conStore('readwrite', (s) => s.delete(clave))
   } catch {
     /* nada que borrar */
+  }
+  try {
+    await conStore('readwrite', (s) => s.delete(clave), STORE_DOCS)
+  } catch {
+    /* nada que borrar */
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Texto del documento de un borrador (para «Más de este tema» tras recargar)
+// ---------------------------------------------------------------------------
+
+export type DocumentoBorrador = { clave: string; hash: string; nombre: string; secciones: Seccion[]; unidad?: 'página' | 'diapositiva'; caduca: number }
+
+/** Lo leído de IndexedDB tampoco se da por bueno: secciones con texto, páginas enteras, acotado. */
+export function sanearDocumentoBorrador(raw: unknown): DocumentoBorrador | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  if (typeof r.clave !== 'string' || typeof r.hash !== 'string' || !Array.isArray(r.secciones) || typeof r.caduca !== 'number') return null
+  const secciones: Seccion[] = []
+  for (const s of r.secciones.slice(0, 5000)) {
+    const x = s && typeof s === 'object' ? (s as Record<string, unknown>) : null
+    if (!x || typeof x.texto !== 'string') continue
+    secciones.push({
+      texto: x.texto.slice(0, 200_000),
+      ...(typeof x.titulo === 'string' ? { titulo: x.titulo.slice(0, 300) } : {}),
+      ...(typeof x.pagina === 'number' && Number.isInteger(x.pagina) && x.pagina >= 1 ? { pagina: x.pagina } : {}),
+    })
+  }
+  if (!secciones.length) return null
+  return {
+    clave: r.clave,
+    hash: r.hash,
+    nombre: texto(r.nombre, 160),
+    secciones,
+    ...(r.unidad === 'diapositiva' || r.unidad === 'página' ? { unidad: r.unidad } : {}),
+    caduca: r.caduca,
+  }
+}
+
+/** Guarda el texto del documento con la clave (y la caducidad) de su borrador. Nunca lanza. */
+export async function guardarDocumentoBorrador(
+  usuario: string,
+  d: { hash: string; nombre: string; secciones: Seccion[]; unidad?: 'página' | 'diapositiva' },
+): Promise<void> {
+  try {
+    const clave = claveBorrador(usuario, { tipo: 'documento' })
+    const registro: DocumentoBorrador = { clave, ...d, caduca: Date.now() + DIAS_BORRADOR * 86_400_000 }
+    await conStore('readwrite', (s) => s.put(registro), STORE_DOCS)
+  } catch {
+    /* sin IndexedDB: «Más de este tema» pedirá el archivo */
+  }
+}
+
+/** El texto del documento de un borrador, o null (no está, caducado o de otro archivo). */
+export async function leerDocumentoBorrador(clave: string, hash?: string): Promise<DocumentoBorrador | null> {
+  try {
+    const d = sanearDocumentoBorrador(await conStore('readonly', (s) => s.get(clave), STORE_DOCS))
+    if (!d) return null
+    if (caducado(d)) {
+      await conStore('readwrite', (s) => s.delete(clave), STORE_DOCS)
+      return null
+    }
+    return hash && d.hash !== hash ? null : d
+  } catch {
+    return null
   }
 }

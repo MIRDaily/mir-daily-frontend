@@ -4,7 +4,8 @@
 // de un mapa en texto plano (con las filas de sus tablas) para mandarla como fuente.
 
 import { plainText } from '@/lib/mapas/export/richtext'
-import { ramaDeNodo, type NodoMapa } from '@/lib/mapas/ia/rama'
+import { fragmentoParaRama, ramaDeNodo, type NodoMapa } from '@/lib/mapas/ia/rama'
+import type { Seccion } from '@/lib/mapas/ia/types'
 import { FLASHCARD_LEVELS, isFlashcardLevel, type FlashcardLevel, type NewFlashcard } from '@/lib/studioFlashcards'
 
 export type Densidad = 'pocas' | 'normal' | 'muchas'
@@ -53,21 +54,38 @@ export type OrigenIA = {
 /** Lo que se sabe del origen al guardar: el archivo y, si salen de un mapa, su rama. */
 export type FuenteGuardar = { nombre?: string | null; unidad?: 'pagina' | 'diapositiva'; mapId?: string | null; nodeId?: string | null }
 
-export type TarjetaIA = { tema: string; nivel: FlashcardLevel; pregunta: string; respuesta: string; ia?: OrigenIA }
+export type TarjetaIA = {
+  tema: string
+  nivel: FlashcardLevel
+  pregunta: string
+  respuesta: string
+  ia?: OrigenIA
+  /** Desde un mapa: el nodo de su tema («Abrir la rama» lleva ahí, no a la raíz de lo generado). */
+  nodeId?: string
+}
 
 /**
  * Una tarjeta de la vista previa: lo que el usuario puede tocar antes de guardar. `grupo`: en un
- * documento tema a tema, el tema del libro (cada uno puede ir a su propio grupo).
+ * documento tema a tema, el tema del libro (cada uno puede ir a su propio grupo). `nueva`: llegó con
+ * «Más de este tema» y aún no se ha tocado.
  */
-export type Borrador = TarjetaIA & { key: string; incluir: boolean; grupo?: string }
+export type Borrador = TarjetaIA & { key: string; incluir: boolean; grupo?: string; nueva?: boolean }
 
 export type EstadoFlashcardsIA = {
   disponible: boolean
   niveles: FlashcardLevel[]
   densidades: Densidad[]
-  opciones?: { libro?: boolean; mapa?: boolean }
+  opciones?: { libro?: boolean; mapa?: boolean; ampliar?: { cantidades: number[] } }
   limites: { maxChars: number; maxPaginas: number; maxCharsLibro?: number; maxPaginasLibro?: number; maxTemas?: number }
-  cupo: { generacionesHoy: number; maxGeneracionesDia: number; caracteresHoy: number; maxCaracteresDia: number }
+  cupo: {
+    generacionesHoy: number
+    maxGeneracionesDia: number
+    caracteresHoy: number
+    maxCaracteresDia: number
+    /** «Más de este tema» (tope propio). */
+    masHoy?: number
+    maxMasDia?: number
+  }
 }
 
 const MAX_TEMA = 120
@@ -155,7 +173,7 @@ export function paraGuardar(lista: Borrador[], fuente: FuenteGuardar = {}): NewF
       const source = {
         ...(fuente.nombre ? { name: fuente.nombre.slice(0, 160) } : {}),
         ...(page ? { page, unit: b.ia?.diapositiva ? ('diapositiva' as const) : (fuente.unidad ?? ('pagina' as const)) } : {}),
-        ...(fuente.mapId ? { mapId: fuente.mapId, ...(fuente.nodeId ? { nodeId: fuente.nodeId } : {}) } : {}),
+        ...(fuente.mapId ? { mapId: fuente.mapId, ...((b.nodeId ?? fuente.nodeId) ? { nodeId: (b.nodeId ?? fuente.nodeId)! } : {}) } : {}),
         ...(b.ia?.fragmento ? { snippet: b.ia.fragmento } : {}),
       }
       return {
@@ -166,6 +184,62 @@ export function paraGuardar(lista: Borrador[], fuente: FuenteGuardar = {}): NewF
         ...(Object.keys(source).length ? { source } : {}),
       }
     })
+}
+
+// ---------------------------------------------------------------------------
+// «Más de este tema»
+// ---------------------------------------------------------------------------
+
+export type OpcionMas = 'mas' | 'dificiles' | 'faciles'
+
+export const OPCIONES_MAS: { id: OpcionMas; titulo: string; descripcion: string; niveles: FlashcardLevel[] }[] = [
+  { id: 'mas', titulo: 'Más de este tema', descripcion: 'De todos los niveles.', niveles: [1, 2, 3, 4] },
+  { id: 'dificiles', titulo: 'Más difíciles', descripcion: 'Difícil y demencial.', niveles: [3, 4] },
+  { id: 'faciles', titulo: 'Más fáciles', descripcion: 'Fácil y media.', niveles: [1, 2] },
+]
+export const CANTIDADES_MAS = [5, 10, 20] as const
+export const CANTIDAD_MAS_DEFECTO = 10
+
+/**
+ * Las tarjetas que ya hay en un tema (todas, también las quitadas: tampoco se quieren repetidas), con
+ * su respuesta: con solo la pregunta, la IA colaba el mismo dato preguntado con otras palabras.
+ */
+export const tarjetasDeTema = (lista: Borrador[], tema: string) =>
+  lista.filter((b) => b.tema === tema).map((b) => ({ pregunta: b.pregunta, respuesta: b.respuesta }))
+
+/** Páginas (o diapositivas) de donde salen las tarjetas de un tema: para elegir su fragmento. */
+export function paginasDeTema(lista: Borrador[], tema: string): number[] {
+  const out: number[] = []
+  for (const b of lista) {
+    const p = b.tema === tema ? (b.ia?.pagina ?? b.ia?.diapositiva) : undefined
+    if (p) out.push(p)
+  }
+  return out
+}
+
+/**
+ * Mete las tarjetas nuevas de un tema en su sitio: justo después de la última de ese tema (la vista
+ * previa agrupa por tema y nivel, así que quedan con las suyas), marcadas como nuevas, con el mismo
+ * grupo del libro que el resto del tema y claves que no chocan con las que hay. No muta `lista`.
+ */
+export function insertarNuevas(lista: Borrador[], tema: string, nuevas: TarjetaIA[], prefijo = 'm'): Borrador[] {
+  if (!nuevas.length) return lista
+  const usadas = new Set(lista.map((b) => b.key))
+  const grupo = lista.find((b) => b.tema === tema && b.grupo)?.grupo
+  const sello = Date.now().toString(36)
+  let n = 0
+  const clave = () => {
+    let k = `${prefijo}${sello}-${n++}`
+    while (usadas.has(k)) k = `${prefijo}${sello}-${n++}`
+    usadas.add(k)
+    return k
+  }
+  const aMeter: Borrador[] = nuevas.map((t) => ({ ...t, tema, key: clave(), incluir: true, nueva: true, ...(grupo ? { grupo } : {}) }))
+  let ultima = -1
+  lista.forEach((b, i) => {
+    if (b.tema === tema) ultima = i
+  })
+  return ultima < 0 ? [...lista, ...aMeter] : [...lista.slice(0, ultima + 1), ...aMeter, ...lista.slice(ultima + 1)]
 }
 
 /** Con qué niveles se empieza a estudiar lo recién guardado: los dos más fáciles que haya. */
@@ -221,7 +295,110 @@ export function mapaParaFlashcards(nodes: NodoMapa[], id: string) {
       if (nombre && celdas.length) mapa.push({ d: linea.d + 1, t: `${nombre} — ${celdas.join('; ')}`.slice(0, 400) })
     }
   })
-  const hojas = mapa.filter((x, i) => !(mapa[i + 1] && mapa[i + 1].d > x.d)).length
   const raiz = byId.get(id)
-  return { mapa, hojas, paginas: r.paginas, titulo: raiz ? (raiz.data.table ? raiz.data.table.title : plainText(raiz.data.label)) : '' }
+  return { mapa, hojas: contarHojas(mapa), paginas: r.paginas, titulo: raiz ? (raiz.data.table ? raiz.data.table.title : plainText(raiz.data.label)) : '' }
+}
+
+/** Hojas de una rama en líneas { d, t }: las que no tienen otra más profunda justo debajo. */
+const contarHojas = (mapa: { d: number; t: string }[]) => mapa.filter((x, i) => !(mapa[i + 1] && mapa[i + 1].d > x.d)).length
+const caracteresDe = (mapa: { d: number; t: string }[], secciones: Seccion[]) =>
+  mapa.reduce((n, x) => n + x.t.length + 1, 0) + secciones.reduce((n, s) => n + s.texto.length, 0)
+
+/** La raíz del mapa: el nodo sin padre del que cuelga más (un mapa puede tener nodos sueltos). */
+export function raizDelMapa(nodes: NodoMapa[]): string | null {
+  const hijos = new Map<string, number>()
+  for (const n of nodes) if (n.data.parentId) hijos.set(n.data.parentId, (hijos.get(n.data.parentId) ?? 0) + 1)
+  let mejor: NodoMapa | null = null
+  for (const n of nodes) if (!n.data.parentId && (!mejor || (hijos.get(n.id) ?? 0) > (hijos.get(mejor.id) ?? 0))) mejor = n
+  return mejor?.id ?? null
+}
+
+export type BloqueMapa = { id: string; titulo: string; mapa: { d: number; t: string }[]; hojas: number; fragmento: Seccion[]; chars: number }
+
+/**
+ * El mapa ENTERO para hacer sus flashcards: con el documento entero si cabe en el tope de un documento
+ * (`entero`); y siempre sus bloques (los hijos de la raíz, de arriba abajo), cada uno con su rama y el
+ * fragmento de sus páginas, para «Qué parte usar» si no cabe.
+ */
+export function mapaEnteroParaFlashcards(nodes: NodoMapa[], raizId: string, secciones: Seccion[] | null, maxChars: number) {
+  const todo = mapaParaFlashcards(nodes, raizId)
+  if (!todo) return null
+  const doc = secciones ?? []
+  const charsEntero = caracteresDe(todo.mapa, doc)
+  const bloques: BloqueMapa[] = nodes
+    .filter((n) => n.data.parentId === raizId)
+    .sort((a, b) => a.position.y - b.position.y)
+    .flatMap((n) => {
+      const r = mapaParaFlashcards(nodes, n.id)
+      if (!r) return []
+      const fragmento = doc.length ? fragmentoDeBloque(doc, r.paginas, r.mapa.map((x) => x.t).join(' ')) : []
+      return [{ id: n.id, titulo: r.titulo, mapa: r.mapa, hojas: r.hojas, fragmento, chars: caracteresDe(r.mapa, fragmento) }]
+    })
+  return { titulo: todo.titulo, todo, cabeEntero: charsEntero <= maxChars, charsEntero, bloques }
+}
+
+/**
+ * El fragmento de un BLOQUE del mapa (un tema entero de un libro): todas sus páginas, de la primera a
+ * la última de sus nodos, con una de margen. La regla de las ramas (mediana ±3) se quedaba con el
+ * centro de un tema de 10-12 páginas y perdía su principio y su final. Sin páginas, la de las ramas.
+ */
+export function fragmentoDeBloque(secciones: Seccion[], paginas: number[], textoRama: string): Seccion[] {
+  if (!paginas.length || !secciones.some((s) => s.pagina)) return fragmentoParaRama(secciones, paginas, textoRama)
+  const desde = Math.max(1, Math.min(...paginas) - 1)
+  const hasta = Math.max(...paginas) + 1
+  const elegidas = secciones.filter((s) => s.pagina !== undefined && s.pagina >= desde && s.pagina <= hasta)
+  return elegidas.length ? elegidas : fragmentoParaRama(secciones, paginas, textoRama)
+}
+
+/**
+ * Lo que se manda con unos bloques elegidos: la raíz (d = 0) con cada bloque debajo, y los fragmentos
+ * unidos sin repetir secciones y en el orden del documento.
+ */
+export function envioDeBloques(raiz: string, bloques: BloqueMapa[], documento: Seccion[] | null) {
+  const mapa = [{ d: 0, t: raiz.slice(0, 400) || 'Mapa' }, ...bloques.flatMap((b) => b.mapa.map((x) => ({ d: x.d + 1, t: x.t })))]
+  const vistas = new Set<Seccion>()
+  for (const b of bloques) for (const s of b.fragmento) vistas.add(s)
+  const orden = documento ?? []
+  const secciones = [...vistas].sort((a, b) => orden.indexOf(a) - orden.indexOf(b))
+  return { mapa, secciones, hojas: contarHojas(mapa), chars: caracteresDe(mapa, secciones) }
+}
+
+const normalizar = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+
+/**
+ * El nodo del mapa que corresponde a un tema de las tarjetas (el tema desde un mapa es el nombre de
+ * un nodo): igual o, si no, el más parecido que lo contenga o esté contenido en él; dentro de la rama
+ * `dentroDe` si se da. Si es una hoja, su padre (una hoja no da para ampliar). null si no hay.
+ */
+export function nodoDeTema(nodes: NodoMapa[], tema: string, dentroDe?: string): string | null {
+  const k = normalizar(tema)
+  if (k.length < 2) return null
+  let candidatos = nodes
+  if (dentroDe && nodes.some((n) => n.id === dentroDe)) {
+    const r = ramaDeNodo(nodes, dentroDe)
+    const ids = new Set(r?.ids ?? [])
+    candidatos = nodes.filter((n) => ids.has(n.id))
+  }
+  const texto = (n: NodoMapa) => normalizar(n.data.table ? n.data.table.title : plainText(n.data.label))
+  let elegido = candidatos.find((n) => texto(n) === k) ?? null
+  if (!elegido) {
+    let distancia = Infinity
+    for (const n of candidatos) {
+      const t = texto(n)
+      if (t.length >= 4 && k.length >= 4 && (t.includes(k) || k.includes(t)) && Math.abs(t.length - k.length) < distancia) {
+        distancia = Math.abs(t.length - k.length)
+        elegido = n
+      }
+    }
+  }
+  if (!elegido) return null
+  const tieneHijos = nodes.some((n) => n.data.parentId === elegido!.id)
+  return tieneHijos ? elegido.id : (elegido.data.parentId ?? elegido.id)
+}
+
+/** Recorta un fragmento por los extremos hasta que, con la rama, quepa en `max` caracteres. */
+export function acotarFragmento(mapa: { d: number; t: string }[], fragmento: Seccion[], max: number): Seccion[] {
+  let f = fragmento
+  while (f.length > 1 && caracteresDe(mapa, f) > max) f = f.length % 2 ? f.slice(1) : f.slice(0, -1)
+  return caracteresDe(mapa, f) > max ? [] : f
 }

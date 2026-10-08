@@ -9,34 +9,66 @@ import { ExtractError, IAError, type Extraido } from '@/lib/mapas/ia/types'
 import { INK, ProgresoIA } from '@/components/mapas/ia/ProgresoIA'
 import { SelectorParte } from '@/components/mapas/ia/SelectorParte'
 import { FLASHCARD_LEVELS, LEVEL_INFO, type FlashcardLevel } from '@/lib/studioFlashcards'
-import { flashcardsIAGenerar, flashcardsIAIndice } from '@/lib/flashcards/ia/api'
+import { flashcardsIAGenerar, flashcardsIAIndice, flashcardsIAMas } from '@/lib/flashcards/ia/api'
 import { borradores, DENSIDADES, DESCRIPCION_NIVEL, tarjetasAprox, type Borrador, type Densidad, type EstadoFlashcardsIA } from '@/lib/flashcards/ia/tarjetas'
-import { VistaPreviaFlashcards } from './VistaPreviaFlashcards'
+import { VistaPreviaFlashcards, type MasConfig } from './VistaPreviaFlashcards'
 import { NivelBadge } from './NivelBadge'
 import { supabase } from '@/lib/supabaseBrowser'
-import { borrarBorrador, claveBorrador, guardarBorrador, type BorradorGuardado } from '@/lib/flashcards/ia/borrador'
+import {
+  borrarBorrador,
+  claveBorrador,
+  guardarBorrador,
+  guardarDocumentoBorrador,
+  leerDocumentoBorrador,
+  type BorradorGuardado,
+} from '@/lib/flashcards/ia/borrador'
 import type { FuenteGuardar } from '@/lib/flashcards/ia/tarjetas'
+import { hashArchivo } from '@/lib/mapas/ia/docs'
+import { fragmentoParaRama } from '@/lib/mapas/ia/rama'
+import type { Seccion } from '@/lib/mapas/ia/types'
 
 // «Crear flashcards con IA» desde un documento (PDF, Word, PowerPoint): el mismo camino que «Crear
 // con IA» de los mapas (el archivo se lee en el navegador y no se sube; «Qué parte usar»; tema a
 // tema con el índice), con niveles y densidad, y al final una VISTA PREVIA editable. Nada se guarda
 // hasta aprobarla.
+//
+// Paquete 2: el texto del documento se guarda con el borrador (solo en este navegador) para poder
+// pedir «Más de este tema» incluso tras recargar; al servidor viaja solo el fragmento del tema. Y se
+// puede abrir con un documento YA leído (`inicial`): «Hacer también las flashcards de estos temas»
+// desde «Crear con IA» de mapas en modo libro.
 
 type Fase = 'elegir' | 'leyendo' | 'ajustes' | 'generando' | 'vista'
 type ProgresoTema = { titulo: string; estado: EstadoTema | 'espera' }
 
 const fmt = (n: number) => n.toLocaleString('es-ES')
 
-type Resultado = { titulo: string; lista: Borrador[]; fallidos: string[]; fuente: FuenteGuardar; creado?: number }
+type Resultado = {
+  titulo: string
+  lista: Borrador[]
+  fallidos: string[]
+  fuente: FuenteGuardar
+  creado?: number
+  /** Hash y nombre del archivo: con ellos se comprueba el archivo si hay que volver a pedirlo. */
+  documento?: { hash: string; nombre: string }
+}
+
+/** El texto del documento para «Más de este tema» (el leído ahora o el guardado con el borrador). */
+type TextoDocumento = { secciones: Seccion[]; unidad?: 'página' | 'diapositiva' }
+
+/** Un documento ya leído (desde «Crear con IA» de mapas): se empieza en los ajustes, con lo marcado. */
+export type DocumentoLeido = { archivo: File; extraido: Extraido; titulo: string; temasLibro: TemaIndice[] | null; sel: Set<number> }
 
 export default function CrearFlashcardsIA({
   estado: estadoDado,
   borrador,
+  inicial,
   onClose,
 }: {
   estado: EstadoFlashcardsIA | null
   /** Retomar la revisión de un borrador guardado en este navegador (no hace falta la IA). */
   borrador?: BorradorGuardado
+  /** Empezar con un documento ya leído, con sus temas y partes marcados. */
+  inicial?: DocumentoLeido
   onClose: () => void
 }) {
   // Sin la IA (solo se retoma un borrador) los ajustes no se enseñan: estos valores no se usan.
@@ -45,10 +77,10 @@ export default function CrearFlashcardsIA({
     limites: { maxChars: 0, maxPaginas: 0 },
     cupo: { generacionesHoy: 0, maxGeneracionesDia: 0, caracteresHoy: 0, maxCaracteresDia: 0 },
   }
-  const [fase, setFase] = useState<Fase>(borrador ? 'vista' : 'elegir')
-  const [archivo, setArchivo] = useState<File | null>(null)
-  const [extraido, setExtraido] = useState<Extraido | null>(null)
-  const [titulo, setTitulo] = useState('')
+  const [fase, setFase] = useState<Fase>(borrador ? 'vista' : inicial ? 'ajustes' : 'elegir')
+  const [archivo, setArchivo] = useState<File | null>(inicial?.archivo ?? null)
+  const [extraido, setExtraido] = useState<Extraido | null>(inicial?.extraido ?? null)
+  const [titulo, setTitulo] = useState(inicial?.titulo ?? '')
   const [niveles, setNiveles] = useState<FlashcardLevel[]>([...FLASHCARD_LEVELS])
   const [densidad, setDensidad] = useState<Densidad>('normal')
   const [error, setError] = useState<string | null>(null)
@@ -57,14 +89,30 @@ export default function CrearFlashcardsIA({
   const [faseIA, setFaseIA] = useState<FaseIA>('leyendo')
   const [lineas, setLineas] = useState<LineaProvisional[]>([])
   const [arrastrando, setArrastrando] = useState(false)
-  const [sel, setSel] = useState<Set<number>>(new Set())
-  const [selectorAbierto, setSelectorAbierto] = useState(false)
-  const [temasLibro, setTemasLibro] = useState<TemaIndice[] | null>(null)
+  const [sel, setSel] = useState<Set<number>>(() => new Set(inicial?.sel ?? []))
+  const [selectorAbierto, setSelectorAbierto] = useState(!!inicial?.temasLibro)
+  const [temasLibro, setTemasLibro] = useState<TemaIndice[] | null>(inicial?.temasLibro ?? null)
   const [cargandoIndice, setCargandoIndice] = useState(false)
   const [progresoTemas, setProgresoTemas] = useState<ProgresoTema[]>([])
   const [resultado, setResultado] = useState<Resultado | null>(
-    borrador ? { titulo: borrador.titulo, lista: borrador.lista, fallidos: borrador.fallidos, fuente: borrador.fuente, creado: borrador.creado } : null,
+    borrador
+      ? {
+          titulo: borrador.titulo,
+          lista: borrador.lista,
+          fallidos: borrador.fallidos,
+          fuente: borrador.fuente,
+          creado: borrador.creado,
+          ...(borrador.documento ? { documento: borrador.documento } : {}),
+        }
+      : null,
   )
+  // «Más de este tema»: el texto del documento (el leído ahora o, al retomar, el guardado con el
+  // borrador; undefined mientras se busca, null si no está y hay que pedir el archivo).
+  const [textoDoc, setTextoDoc] = useState<TextoDocumento | null | undefined>(borrador ? undefined : null)
+  const [masUsadas, setMasUsadas] = useState(0)
+  const [errorArchivo, setErrorArchivo] = useState<string | null>(null)
+  const [comprobando, setComprobando] = useState(false)
+  const inputMasRef = useRef<HTMLInputElement>(null)
   // Borrador en este navegador: del usuario de la sesión (lo de otra cuenta en el mismo navegador no se mezcla).
   const [usuario, setUsuario] = useState<string | null>(borrador?.usuario ?? null)
   useEffect(() => {
@@ -84,10 +132,23 @@ export default function CrearFlashcardsIA({
         lista,
         fallidos: base.fallidos,
         ...(base.creado ? { creado: base.creado } : {}),
+        ...(base.documento ? { documento: base.documento } : {}),
       })
     },
     [usuario, resultado, borrador],
   )
+
+  // Al retomar un borrador: su documento, si este navegador lo guarda (y es el mismo archivo).
+  useEffect(() => {
+    if (!borrador) return
+    let vivo = true
+    void leerDocumentoBorrador(borrador.clave, borrador.documento?.hash).then((d) => {
+      if (vivo) setTextoDoc(d ? { secciones: d.secciones, ...(d.unidad ? { unidad: d.unidad } : {}) } : null)
+    })
+    return () => {
+      vivo = false
+    }
+  }, [borrador])
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const montado = useRef(true)
@@ -239,6 +300,10 @@ export default function CrearFlashcardsIA({
           ? r.temas.flatMap((t) => borradores(t.tarjetas, `t${t.i}-`, t.titulo))
           : borradores(r.tarjetas)
       if (lista.length === 0) throw new IAError('La IA no devolvió tarjetas válidas. Prueba con otra parte del documento.')
+      // El texto del documento, con el borrador (solo en este navegador): «Más de este tema» lo
+      // necesita también tras recargar. Si el navegador no puede guardarlo, se pedirá el archivo.
+      const hash = archivo ? await hashArchivo(archivo).catch(() => null) : null
+      if (!montado.current) return
       const nuevo: Resultado = {
         titulo: r.titulo,
         lista,
@@ -247,6 +312,16 @@ export default function CrearFlashcardsIA({
           ...(archivo ? { nombre: archivo.name.slice(0, 160) } : {}),
           ...(extraido.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
         },
+        ...(hash && archivo ? { documento: { hash, nombre: archivo.name.slice(0, 160) } } : {}),
+      }
+      setTextoDoc({ secciones: extraido.secciones, ...(extraido.unidad ? { unidad: extraido.unidad } : {}) })
+      if (usuario && hash && archivo) {
+        void guardarDocumentoBorrador(usuario, {
+          hash,
+          nombre: archivo.name.slice(0, 160),
+          secciones: extraido.secciones,
+          ...(extraido.unidad ? { unidad: extraido.unidad } : {}),
+        })
       }
       setResultado(nuevo)
       // Guardado ya (antes de tocar nada): una recarga a mitad de revisión no lo pierde.
@@ -269,6 +344,93 @@ export default function CrearFlashcardsIA({
         : sel.size === 0
           ? 'Nada marcado'
           : `${fmt(eleccion?.elegidas.length ?? 0)} de ${fmt(extraido.secciones.length)} ${extraido.unidad === 'diapositiva' ? 'diapositivas' : 'secciones'} · ${fmt(caracteres)} caracteres`
+
+  // Sin el texto del documento (un borrador antiguo, o el navegador lo perdió): se pide el archivo y
+  // se comprueba con el hash que es el mismo (si el borrador no lo tiene, que se llame igual).
+  const volverAElegir = async (file: File | undefined) => {
+    if (!file || !resultado) return
+    setErrorArchivo(null)
+    setComprobando(true)
+    try {
+      const hash = await hashArchivo(file)
+      const esperado = resultado.documento
+      const mismo = esperado ? hash === esperado.hash : !resultado.fuente.nombre || file.name === resultado.fuente.nombre
+      if (!mismo) throw new Error(`Ese no es el archivo de estas tarjetas${resultado.documento?.nombre || resultado.fuente.nombre ? ` («${resultado.documento?.nombre ?? resultado.fuente.nombre}»)` : ''}.`)
+      const r = await extraerDocumento(file, { maxChars: topeLectura })
+      if (!montado.current) return
+      setTextoDoc({ secciones: r.secciones, ...(r.unidad ? { unidad: r.unidad } : {}) })
+      const documento = { hash, nombre: file.name.slice(0, 160) }
+      setResultado((x) => (x ? { ...x, documento } : x))
+      if (usuario) void guardarDocumentoBorrador(usuario, { ...documento, secciones: r.secciones, ...(r.unidad ? { unidad: r.unidad } : {}) })
+    } catch (e) {
+      if (montado.current) setErrorArchivo(e instanceof ExtractError || e instanceof Error ? e.message : 'No se pudo leer el archivo.')
+    } finally {
+      if (montado.current) setComprobando(false)
+    }
+  }
+
+  const masRestantes = estadoDado?.cupo.maxMasDia !== undefined ? estadoDado.cupo.maxMasDia - (estadoDado.cupo.masHoy ?? 0) - masUsadas : undefined
+  const mas: MasConfig | undefined =
+    estadoDado?.disponible && estadoDado.opciones?.ampliar && resultado
+      ? {
+          restantes: masRestantes,
+          pedir: async ({ tema, niveles: nv, cantidad, existentes, paginas }, signal) => {
+            if (!textoDoc) throw new Error('Falta el texto del documento.')
+            // Solo el fragmento de ese tema: las páginas de sus tarjetas (con margen) o, sin páginas, las
+            // secciones que más se le parecen.
+            const fragmento = fragmentoParaRama(textoDoc.secciones, paginas, `${tema} ${existentes.map((x) => x.pregunta).join(' ')}`)
+            const r = await flashcardsIAMas(
+              {
+                titulo: resultado.titulo,
+                niveles: nv,
+                ampliar: { tema, cantidad, existentes },
+                secciones: fragmento,
+                ...(textoDoc.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
+              },
+              signal,
+            )
+            setMasUsadas((n) => n + 1)
+            return r
+          },
+          ...(textoDoc
+            ? {}
+            : {
+                bloqueo:
+                  textoDoc === undefined ? (
+                    <p className="text-[#7D8A96]">Buscando el documento en este navegador…</p>
+                  ) : (
+                    <div>
+                      <p>
+                        Para pedir más tarjetas hace falta el texto del documento, y este navegador no lo tiene guardado (un borrador anterior, o se ha
+                        borrado). Vuelve a elegir el archivo
+                        {resultado.documento?.nombre || resultado.fuente.nombre ? <b> «{resultado.documento?.nombre ?? resultado.fuente.nombre}»</b> : null}: se comprueba
+                        que es el mismo y no se sube.
+                      </p>
+                      <input
+                        ref={inputMasRef}
+                        type="file"
+                        accept={FORMATOS_ACEPTADOS}
+                        className="hidden"
+                        onChange={(e) => {
+                          void volverAElegir(e.target.files?.[0])
+                          e.target.value = ''
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={comprobando}
+                        onClick={() => inputMasRef.current?.click()}
+                        className="mt-2 rounded-lg bg-[#E8A598] px-3 py-1 text-[0.76rem] font-extrabold text-white disabled:opacity-60"
+                        style={{ border: `2px solid ${INK}` }}
+                      >
+                        {comprobando ? 'Comprobando…' : 'Elegir el archivo'}
+                      </button>
+                      {errorArchivo && <p className="mt-1 text-[0.74rem] font-bold text-[#B04A5E]">{errorArchivo}</p>}
+                    </div>
+                  ),
+              }),
+        }
+      : undefined
 
   const ancho = fase === 'vista' ? 'max-w-3xl' : 'max-w-xl'
 
@@ -324,6 +486,7 @@ export default function CrearFlashcardsIA({
               nombreGrupo={(borrador?.nombreGrupo ?? resultado.titulo).slice(0, 80)}
               fuente={resultado.fuente}
               persistir={persistir}
+              mas={mas}
               alGuardar={() => usuario && void borrarBorrador(claveBorrador(usuario, borrador?.origen ?? { tipo: 'documento' }))}
               {...(extraido
                 ? {
