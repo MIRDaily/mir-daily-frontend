@@ -695,7 +695,12 @@ function FlashcardsMindMap() {
                   </StickerButton>
                   <GhostButton
                     icon="play_arrow"
-                    onClick={() => router.push(`/flashcards/${currentSubject.id}?study=1`)}
+                    // Desde un tema, los ajustes de la sesión llegan con ese tema elegido ('' = sin tema).
+                    onClick={() =>
+                      router.push(
+                        `/flashcards/${currentSubject.id}?study=1${level === 2 ? `&tema=${encodeURIComponent(path[1] === NO_TOPIC ? '' : path[1])}` : ''}`,
+                      )
+                    }
                   >
                     Estudiar
                   </GhostButton>

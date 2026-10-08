@@ -44,6 +44,14 @@ import { FuenteTarjeta } from '@/components/flashcards/ia/FuenteTarjeta'
 import { leerNivelesURL } from '@/lib/flashcards/ia/tarjetas'
 import { desbloqueados, hayEscalera, textoDesbloqueo, type Escalera } from '@/lib/flashcards/escalera'
 import { EscaleraNiveles } from '@/components/flashcards/EscaleraNiveles'
+import { AjustesSesionDialogo } from '@/components/flashcards/AjustesSesion'
+import {
+  AJUSTES_POR_DEFECTO,
+  guardarAjustes,
+  leerAjustesGuardados,
+  paraEmpezar,
+  type AjustesSesion,
+} from '@/lib/flashcards/sesion'
 import GradeButtons from '@/components/flashcards/GradeButtons'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
 
@@ -80,18 +88,20 @@ export default function FlashcardDeckPage() {
   const [busy, setBusy] = useState(false)
   const [studied, setStudied] = useState(0)
   const [finishState, setFinishState] = useState<null | 'done' | 'limit' | 'expired'>(null)
-  // true mientras se prepara el estudio automático (llegada con ?study=1)
+  // Llegada con ?study=1 («Estudiar» desde la lista, «Empezar a estudiar» tras la IA): al cargar, los
+  // ajustes de la sesión.
   const [autoStudy, setAutoStudy] = useState(false)
   // Reparto de respuestas de la sesión, para el resumen del final.
   const [byGrade, setByGrade] = useState<Record<number, number>>({})
   const [undoStack, setUndoStack] = useState<{ card: StudyFlashcard; grade: Grade }[]>([])
   const [undoing, setUndoing] = useState(false)
   const [sessionLimit, setSessionLimit] = useState(0)
-  // Estudiar solo unos niveles de dificultad (las tarjetas de la IA los traen). Todos = sin filtro.
-  const [studyLevels, setStudyLevels] = useState<FlashcardLevel[]>([...FLASHCARD_LEVELS])
+  // Ajustes de la sesión («Estudiar» → cuántas, qué tarjetas, temas, dificultad y escalera). Los últimos
+  // de este grupo se recuerdan en el navegador; ?niveles= y ?tema= los cambian al llegar.
+  const [ajustes, setAjustes] = useState<AjustesSesion>(AJUSTES_POR_DEFECTO)
+  const [ajustesAbierto, setAjustesAbierto] = useState(false)
   // Escalera de dificultad: lo nuevo de un nivel sale cuando se domina lo de abajo de su tema. La
-  // regla y los números son del servidor (fetchFlashcardLadder). Activada por defecto.
-  const [ladderOn, setLadderOn] = useState(true)
+  // regla y los números son del servidor (fetchFlashcardLadder). Se activa o no en los ajustes.
   const [ladder, setLadder] = useState<Escalera | null>(null)
   // Foto de la escalera al empezar la sesión, para decir al final qué se ha desbloqueado.
   const ladderAntes = useRef<Escalera | null>(null)
@@ -257,13 +267,13 @@ export default function FlashcardDeckPage() {
     [token, deckId],
   )
 
-  // Tarjetas con nivel y cuántas entran con el filtro (las que no tienen nivel solo entran sin filtro).
   const conNivel = cards.some((c) => c.level)
-  const filtrando = conNivel && studyLevels.length < FLASHCARD_LEVELS.length
-  const aEstudiar = filtrando ? cards.filter((c) => c.level && studyLevels.includes(c.level)).length : cards.length
 
-  const handleStartStudy = async () => {
-    if (busy || cards.length === 0 || aEstudiar === 0) return
+  const handleStartStudy = async (a: AjustesSesion = ajustes) => {
+    if (busy || cards.length === 0) return
+    setAjustesAbierto(false)
+    setAjustes(a)
+    guardarAjustes(deckId, a)
     setBusy(true)
     setError(null)
     setStudied(0)
@@ -277,11 +287,11 @@ export default function FlashcardDeckPage() {
       // Con la escalera vieja el tope daba igual, porque una tarjeta acertada no
       // volvía en 3 días. Con FSRS y las repeticiones dentro de la sesión, un
       // tope real evita sesiones que no se acaban nunca.
-      const limit = Math.min(200, Math.max(20, aEstudiar * 2))
-      const conEscalera = conNivel && ladderOn
+      // Los ajustes van en la sesión y los aplica la cola (cuántas, temas, qué tarjetas, niveles, escalera).
+      const { limit, opciones } = paraEmpezar(a, cards, conNivel, ladder)
       // Foto de antes (la de ahora mismo: puede haber cambiado desde que se cargó la página).
-      ladderAntes.current = conEscalera ? await fetchFlashcardLadder(token, deckId).catch(() => null) : null
-      const sid = await startFlashcardSession(token, deckId, limit, filtrando ? studyLevels : null, conEscalera)
+      ladderAntes.current = opciones.ladder ? await fetchFlashcardLadder(token, deckId).catch(() => null) : null
+      const sid = await startFlashcardSession(token, deckId, limit, opciones)
       setSessionLimit(limit)
       setSessionId(sid)
       setMode('study')
@@ -290,24 +300,21 @@ export default function FlashcardDeckPage() {
       setError(err instanceof Error ? err.message : 'No se pudo iniciar el estudio.')
     } finally {
       setBusy(false)
-      // Deja de "preparar": si fue bien ya estamos en modo estudio; si falló,
-      // se muestra el workspace con el error.
-      setAutoStudy(false)
     }
   }
 
-  // Auto-iniciar el estudio si se llega con ?study=1 (botón "Estudiar" del mapa).
-  // Leemos el query desde window para evitar el requisito de Suspense de
-  // useSearchParams en el build. Mientras se prepara NO se pinta el workspace,
-  // para que no parpadee la lista antes del test.
+  // Los ajustes de partida: los últimos de este grupo y, encima, lo que diga la dirección: ?niveles=1,2
+  // y ?tema=… («Estudiar» desde un tema de /flashcards). Con ?study=1 se abren al cargar. Leemos el
+  // query desde window para evitar el requisito de Suspense de useSearchParams en el build.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const qs = new URLSearchParams(window.location.search)
-    // ?niveles=1,2 (p. ej. «Empezar a estudiar» tras guardar las de la IA): el filtro, ya puesto.
+    const base = leerAjustesGuardados(deckId) ?? AJUSTES_POR_DEFECTO
     const niveles = leerNivelesURL(qs.get('niveles'))
-    if (niveles) setStudyLevels(niveles)
+    const tema = qs.get('tema')
+    setAjustes({ ...base, ...(niveles ? { niveles } : {}), ...(tema !== null ? { temas: [tema.slice(0, 120)] } : {}) })
     if (qs.get('study') === '1') setAutoStudy(true)
-  }, [])
+  }, [deckId])
 
   // Al terminar una sesión con escalera: la foto de después, y qué niveles se han abierto.
   useEffect(() => {
@@ -336,8 +343,8 @@ export default function FlashcardDeckPage() {
       return
     }
     autoStudyRef.current = true
-    void handleStartStudy()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setAutoStudy(false)
+    setAjustesAbierto(true)
   }, [autoStudy, loading, mode, cards.length])
 
   const handleRate = useCallback(
@@ -526,28 +533,6 @@ export default function FlashcardDeckPage() {
 
   // ---- Render --------------------------------------------------------------
 
-  // Llegada desde "Estudiar": mostramos la preparación en vez del workspace,
-  // así no parpadea la lista de tarjetas antes de arrancar el test.
-  if (autoStudy && mode === 'manage') {
-    const c = resolveColor(deckColor)
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-[#FAF7F4] px-6 text-center">
-        <CardStackArt accent={c.bg} />
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#7D8A96]/60">Flashcards</p>
-          <h1 className="text-2xl font-black text-[#2C3E50]">{deckName || 'Preparando…'}</h1>
-        </div>
-        <div className="flex items-center gap-2 text-sm font-bold text-[#7D8A96]">
-          <span
-            className="h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
-            style={{ borderColor: c.bg, borderTopColor: 'transparent' }}
-          />
-          Preparando tu sesión de estudio…
-        </div>
-      </div>
-    )
-  }
-
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center bg-[#FAF7F4] text-[#7D8A96]">
@@ -701,6 +686,15 @@ export default function FlashcardDeckPage() {
                 <StickerButton icon="replay" color="#8BA888" onClick={() => void handleStartStudy()}>
                   Repasar de nuevo
                 </StickerButton>
+                <GhostButton
+                  icon="tune"
+                  onClick={() => {
+                    void exitStudy()
+                    setAjustesAbierto(true)
+                  }}
+                >
+                  Otros ajustes
+                </GhostButton>
                 {undoStack.length > 0 ? (
                   <GhostButton icon="undo" onClick={() => void handleUndo()}>
                     Deshacer la última
@@ -1036,12 +1030,8 @@ export default function FlashcardDeckPage() {
               <StickerButton icon="bolt" color={deckHue.bg} onClick={() => setShowCreate(true)}>
                 Crear tarjetas
               </StickerButton>
-              <GhostButton
-                icon="play_arrow"
-                onClick={() => void handleStartStudy()}
-                disabled={cards.length === 0 || aEstudiar === 0 || busy}
-              >
-                {filtrando ? `Estudiar ${aEstudiar}` : 'Estudiar'}
+              <GhostButton icon="play_arrow" onClick={() => setAjustesAbierto(true)} disabled={cards.length === 0 || busy}>
+                Estudiar
               </GhostButton>
             </>
           }
@@ -1062,64 +1052,9 @@ export default function FlashcardDeckPage() {
             </div>
           ) : null}
 
-          {conNivel ? (
-            <div className="mt-4" role="group" aria-label="Estudiar solo estos niveles">
-              <p className="mb-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-[#7D8A96]/70">Estudiar los niveles</p>
-              <div className="flex flex-wrap gap-1.5">
-                {FLASHCARD_LEVELS.map((n) => {
-                  const total = cards.filter((c) => c.level === n).length
-                  const on = studyLevels.includes(n)
-                  return (
-                    <button
-                      key={n}
-                      type="button"
-                      aria-pressed={on}
-                      disabled={total === 0}
-                      onClick={() =>
-                        setStudyLevels((ls) => (ls.includes(n) ? ls.filter((x) => x !== n) : [...ls, n].sort()))
-                      }
-                      className="rounded-full px-3 py-1 text-xs font-extrabold disabled:opacity-40"
-                      style={{
-                        border: `2px solid ${on ? LEVEL_INFO[n].color : '#E4DCD8'}`,
-                        background: on ? LEVEL_INFO[n].soft : '#FFFFFF',
-                        color: on ? LEVEL_INFO[n].color : '#7D8A96',
-                      }}
-                    >
-                      {LEVEL_INFO[n].name} · {total}
-                    </button>
-                  )
-                })}
-                {studyLevels.length < FLASHCARD_LEVELS.length ? (
-                  <button
-                    type="button"
-                    onClick={() => setStudyLevels([...FLASHCARD_LEVELS])}
-                    className="rounded-full px-3 py-1 text-xs font-bold text-[#7D8A96] underline"
-                  >
-                    Todos
-                  </button>
-                ) : null}
-              </div>
-              {filtrando && aEstudiar === 0 ? (
-                <p className="mt-1 text-xs font-bold text-[#C4655A]">No hay tarjetas de esos niveles.</p>
-              ) : null}
-              <label className="mt-2.5 flex w-fit cursor-pointer items-center gap-2 text-xs font-bold text-[#2C3E50]">
-                <input
-                  type="checkbox"
-                  role="switch"
-                  checked={ladderOn}
-                  onChange={(e) => setLadderOn(e.target.checked)}
-                  style={{ accentColor: '#E8A598', width: 16, height: 16 }}
-                />
-                Escalera de dificultad
-                <span className="font-semibold text-[#7D8A96]">
-                  {ladderOn ? '· lo nuevo, de nivel en nivel' : '· quitada: salen las nuevas de todos los niveles'}
-                </span>
-              </label>
-            </div>
-          ) : null}
         </Hero>
 
-        {conNivel && ladder && hayEscalera(ladder) ? <EscaleraNiveles escalera={ladder} activa={ladderOn} /> : null}
+        {conNivel && ladder && hayEscalera(ladder) ? <EscaleraNiveles escalera={ladder} activa={ajustes.escalera} /> : null}
 
         {error ? (
           <p className="rounded-2xl border-2 border-[#E8A598]/40 bg-[#FFF8F6] px-4 py-3 text-sm font-semibold text-[#C4655A]">
@@ -1282,6 +1217,17 @@ export default function FlashcardDeckPage() {
           initialCount={cards.length}
           onCreated={(card) => setCards((prev) => [card, ...prev])}
           onClose={() => setShowCreate(false)}
+        />
+      ) : null}
+
+      {ajustesAbierto && cards.length > 0 ? (
+        <AjustesSesionDialogo
+          deckName={deckName}
+          cards={cards}
+          inicial={ajustes}
+          escalera={ladder}
+          onEmpezar={(a) => void handleStartStudy(a)}
+          onCerrar={() => setAjustesAbierto(false)}
         />
       ) : null}
 

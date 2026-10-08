@@ -422,16 +422,25 @@ export async function startFlashcardSession(
   token: string,
   deckId: string,
   limit: number,
-  /** Estudiar solo estos niveles (null o los cuatro = todos). Va en la sesión: lo aplica la cola. */
-  levels?: FlashcardLevel[] | null,
-  /** Escalera de dificultad: lo nuevo solo de los niveles abiertos de cada tema (por defecto, sí). */
-  ladder = true,
+  /**
+   * Ajustes de la sesión (todos opcionales; van en la sesión y los aplica la cola): niveles (null o los
+   * cuatro = todos), escalera (por defecto, sí), temas ('' = sin tema), solo falladas / pendientes /
+   * nuevas, y como mucho N tarjetas distintas.
+   */
+  opciones: {
+    levels?: FlashcardLevel[] | null
+    ladder?: boolean
+    topics?: string[]
+    onlyStatus?: 'failed' | 'due' | 'new'
+    cardLimit?: number
+  } = {},
 ): Promise<string> {
+  const { levels, ladder = true, ...resto } = opciones
   const filtro = levels && levels.length > 0 && levels.length < FLASHCARD_LEVELS.length ? levels : null
   const res = await fetch(`${apiBase()}/api/studio/decks/${deckId}/start-session`, {
     method: 'POST',
     headers: authHeaders(token, true),
-    body: JSON.stringify({ limit, ladder, ...(filtro ? { levels: filtro } : {}) }),
+    body: JSON.stringify({ limit, ladder, ...(filtro ? { levels: filtro } : {}), ...resto }),
   })
   if (!res.ok) throw new Error(await readError(res, 'No se pudo iniciar la sesion'))
   const payload = (await res.json().catch(() => null)) as { sessionId?: string } | null
