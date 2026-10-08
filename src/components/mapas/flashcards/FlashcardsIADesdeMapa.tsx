@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { INK, ProgresoIA } from '@/components/mapas/ia/ProgresoIA'
@@ -21,6 +21,9 @@ import {
   type EstadoFlashcardsIA,
 } from '@/lib/flashcards/ia/tarjetas'
 import { FLASHCARD_LEVELS, LEVEL_INFO, type FlashcardLevel } from '@/lib/studioFlashcards'
+import { supabase } from '@/lib/supabaseBrowser'
+import { borrarBorrador, claveBorrador, guardarBorrador, haceCuanto, leerBorrador, type BorradorGuardado } from '@/lib/flashcards/ia/borrador'
+import type { FuenteGuardar } from '@/lib/flashcards/ia/tarjetas'
 
 // «Flashcards con IA» desde una rama del mapa (clic derecho en un nodo): al servidor viaja la rama
 // en texto plano (con las filas de sus tablas) y, si este navegador guarda el documento del que
@@ -54,6 +57,42 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
   const [lista, setLista] = useState<Borrador[] | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const montado = useRef(true)
+  // Borrador de este mapa en este navegador (uno por mapa): se guarda al generar y en cada cambio.
+  const [usuario, setUsuario] = useState<string | null>(null)
+  const [pendiente, setPendiente] = useState<BorradorGuardado | null>(null)
+  const [revisando, setRevisando] = useState<{ fuente: FuenteGuardar; nombre: string; titulo: string; creado?: number } | null>(null)
+  const origen = useMemo(() => (mapaId ? ({ tipo: 'mapa', mapId: mapaId, nodeId } as const) : null), [mapaId, nodeId])
+
+  useEffect(() => {
+    let vivo = true
+    void supabase.auth.getSession().then(({ data }) => {
+      const uid = data.session?.user.id ?? null
+      if (!vivo) return
+      setUsuario(uid)
+      if (uid && mapaId) void leerBorrador(claveBorrador(uid, { tipo: 'mapa', mapId: mapaId })).then((b) => vivo && setPendiente(b))
+    })
+    return () => {
+      vivo = false
+    }
+  }, [mapaId])
+
+  const persistir = useCallback(
+    (l: Borrador[], r?: { fuente: FuenteGuardar; nombre: string; titulo: string; creado?: number }) => {
+      const base = r ?? revisando
+      if (!usuario || !origen || !base) return
+      void guardarBorrador({
+        usuario,
+        origen: pendiente?.origen ?? origen,
+        titulo: base.titulo,
+        nombreGrupo: base.nombre,
+        fuente: base.fuente,
+        lista: l,
+        fallidos: [],
+        ...(base.creado ? { creado: base.creado } : {}),
+      })
+    },
+    [usuario, origen, revisando, pendiente],
+  )
 
   useEffect(() => {
     montado.current = true
@@ -124,7 +163,21 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
       if (!montado.current) return
       const tarjetas = 'tarjetas' in r ? r.tarjetas : r.temas.flatMap((t) => t.tarjetas)
       if (!tarjetas.length) throw new Error('La IA no devolvió tarjetas válidas para esta rama.')
-      setLista(borradores(tarjetas))
+      const nuevas = borradores(tarjetas)
+      const base = {
+        titulo: rama.titulo || mapTitle,
+        nombre,
+        fuente: {
+          ...((doc?.nombre ?? fuente?.nombre) ? { nombre: (doc?.nombre ?? fuente?.nombre ?? '').slice(0, 160) } : {}),
+          ...((doc?.unidad ?? fuente?.unidad) === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
+          ...(mapaId ? { mapId: mapaId, nodeId } : {}),
+        },
+      }
+      setRevisando(base)
+      setPendiente(null)
+      setLista(nuevas)
+      // Guardado ya: una recarga a mitad de revisión no lo pierde.
+      persistir(nuevas, base)
       setFase('vista')
     } catch (e) {
       if (!montado.current) return
@@ -170,13 +223,52 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
         </header>
 
         {fase === 'vista' && lista ? (
-          <VistaPreviaFlashcards inicial={lista} nombreGrupo={nombre} onVolver={() => setFase('ajustes')} onCerrar={cerrarDialogo} />
+          <VistaPreviaFlashcards
+            inicial={lista}
+            nombreGrupo={revisando?.nombre ?? nombre}
+            fuente={revisando?.fuente ?? {}}
+            persistir={persistir}
+            alGuardar={() => usuario && mapaId && void borrarBorrador(claveBorrador(usuario, { tipo: 'mapa', mapId: mapaId }))}
+            onVolver={() => setFase('ajustes')}
+            onCerrar={cerrarDialogo}
+          />
         ) : (
           <>
             <div className="overflow-y-auto px-6 pb-5">
               {error && (
                 <div role="alert" className="mb-3 rounded-2xl border border-[#D4667A]/30 bg-[#FAEAED] px-4 py-3 text-sm font-medium text-[#B04A5E]">
                   {error}
+                </div>
+              )}
+              {pendiente && fase === 'ajustes' && (
+                <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl bg-[#FBF3E1] px-4 py-3" style={{ border: `2px solid ${INK}` }}>
+                  <p className="min-w-0 flex-1 text-sm font-semibold text-[#2C3E50]">
+                    Tienes <b>{pendiente.lista.filter((b) => b.incluir).length} tarjetas sin revisar</b> de «{pendiente.titulo}»{' '}
+                    <span className="text-[#7D8A96]">({haceCuanto(pendiente.actualizado)})</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRevisando({ fuente: pendiente.fuente, nombre: pendiente.nombreGrupo, titulo: pendiente.titulo, creado: pendiente.creado })
+                      setLista(pendiente.lista)
+                      setFase('vista')
+                    }}
+                    className="rounded-xl bg-[#E8A598] px-3 py-1.5 text-xs font-extrabold text-white"
+                    style={{ border: `2px solid ${INK}` }}
+                  >
+                    Revisar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!window.confirm('¿Descartar esas tarjetas sin revisar? No se pueden recuperar.')) return
+                      void borrarBorrador(pendiente.clave)
+                      setPendiente(null)
+                    }}
+                    className="rounded-xl px-3 py-1.5 text-xs font-bold text-[#7D8A96] hover:text-[#B04A5E]"
+                  >
+                    Descartar
+                  </button>
                 </div>
               )}
               {!rama || rama.hojas === 0 || rama.mapa.length < 2 ? (

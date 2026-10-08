@@ -13,6 +13,9 @@ import { flashcardsIAGenerar, flashcardsIAIndice } from '@/lib/flashcards/ia/api
 import { borradores, DENSIDADES, DESCRIPCION_NIVEL, tarjetasAprox, type Borrador, type Densidad, type EstadoFlashcardsIA } from '@/lib/flashcards/ia/tarjetas'
 import { VistaPreviaFlashcards } from './VistaPreviaFlashcards'
 import { NivelBadge } from './NivelBadge'
+import { supabase } from '@/lib/supabaseBrowser'
+import { borrarBorrador, claveBorrador, guardarBorrador, type BorradorGuardado } from '@/lib/flashcards/ia/borrador'
+import type { FuenteGuardar } from '@/lib/flashcards/ia/tarjetas'
 
 // «Crear flashcards con IA» desde un documento (PDF, Word, PowerPoint): el mismo camino que «Crear
 // con IA» de los mapas (el archivo se lee en el navegador y no se sube; «Qué parte usar»; tema a
@@ -24,8 +27,25 @@ type ProgresoTema = { titulo: string; estado: EstadoTema | 'espera' }
 
 const fmt = (n: number) => n.toLocaleString('es-ES')
 
-export default function CrearFlashcardsIA({ estado, onClose }: { estado: EstadoFlashcardsIA; onClose: () => void }) {
-  const [fase, setFase] = useState<Fase>('elegir')
+type Resultado = { titulo: string; lista: Borrador[]; fallidos: string[]; fuente: FuenteGuardar; creado?: number }
+
+export default function CrearFlashcardsIA({
+  estado: estadoDado,
+  borrador,
+  onClose,
+}: {
+  estado: EstadoFlashcardsIA | null
+  /** Retomar la revisión de un borrador guardado en este navegador (no hace falta la IA). */
+  borrador?: BorradorGuardado
+  onClose: () => void
+}) {
+  // Sin la IA (solo se retoma un borrador) los ajustes no se enseñan: estos valores no se usan.
+  const estado: EstadoFlashcardsIA = estadoDado ?? {
+    disponible: false, niveles: [], densidades: [],
+    limites: { maxChars: 0, maxPaginas: 0 },
+    cupo: { generacionesHoy: 0, maxGeneracionesDia: 0, caracteresHoy: 0, maxCaracteresDia: 0 },
+  }
+  const [fase, setFase] = useState<Fase>(borrador ? 'vista' : 'elegir')
   const [archivo, setArchivo] = useState<File | null>(null)
   const [extraido, setExtraido] = useState<Extraido | null>(null)
   const [titulo, setTitulo] = useState('')
@@ -42,7 +62,32 @@ export default function CrearFlashcardsIA({ estado, onClose }: { estado: EstadoF
   const [temasLibro, setTemasLibro] = useState<TemaIndice[] | null>(null)
   const [cargandoIndice, setCargandoIndice] = useState(false)
   const [progresoTemas, setProgresoTemas] = useState<ProgresoTema[]>([])
-  const [resultado, setResultado] = useState<{ titulo: string; lista: Borrador[]; fallidos: string[] } | null>(null)
+  const [resultado, setResultado] = useState<Resultado | null>(
+    borrador ? { titulo: borrador.titulo, lista: borrador.lista, fallidos: borrador.fallidos, fuente: borrador.fuente, creado: borrador.creado } : null,
+  )
+  // Borrador en este navegador: del usuario de la sesión (lo de otra cuenta en el mismo navegador no se mezcla).
+  const [usuario, setUsuario] = useState<string | null>(borrador?.usuario ?? null)
+  useEffect(() => {
+    if (usuario) return
+    void supabase.auth.getSession().then(({ data }) => setUsuario(data.session?.user.id ?? null))
+  }, [usuario])
+  const persistir = useCallback(
+    (lista: Borrador[], r?: Resultado) => {
+      const base = r ?? resultado
+      if (!usuario || !base) return
+      void guardarBorrador({
+        usuario,
+        origen: borrador?.origen ?? { tipo: 'documento' },
+        titulo: base.titulo,
+        nombreGrupo: borrador?.nombreGrupo ?? base.titulo.slice(0, 80),
+        fuente: base.fuente,
+        lista,
+        fallidos: base.fallidos,
+        ...(base.creado ? { creado: base.creado } : {}),
+      })
+    },
+    [usuario, resultado, borrador],
+  )
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const montado = useRef(true)
@@ -194,7 +239,18 @@ export default function CrearFlashcardsIA({ estado, onClose }: { estado: EstadoF
           ? r.temas.flatMap((t) => borradores(t.tarjetas, `t${t.i}-`, t.titulo))
           : borradores(r.tarjetas)
       if (lista.length === 0) throw new IAError('La IA no devolvió tarjetas válidas. Prueba con otra parte del documento.')
-      setResultado({ titulo: r.titulo, lista, fallidos: 'temas' in r ? r.fallidos.map((f) => `${f.titulo}: ${f.motivo}`) : [] })
+      const nuevo: Resultado = {
+        titulo: r.titulo,
+        lista,
+        fallidos: 'temas' in r ? r.fallidos.map((f) => `${f.titulo}: ${f.motivo}`) : [],
+        fuente: {
+          ...(archivo ? { nombre: archivo.name.slice(0, 160) } : {}),
+          ...(extraido.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
+        },
+      }
+      setResultado(nuevo)
+      // Guardado ya (antes de tocar nada): una recarga a mitad de revisión no lo pierde.
+      persistir(lista, nuevo)
       setFase('vista')
     } catch (e) {
       if (!montado.current) return
@@ -265,11 +321,18 @@ export default function CrearFlashcardsIA({ estado, onClose }: { estado: EstadoF
             )}
             <VistaPreviaFlashcards
               inicial={resultado.lista}
-              nombreGrupo={`${resultado.titulo}`.slice(0, 80)}
-              onVolver={() => {
-                setResultado(null)
-                setFase('ajustes')
-              }}
+              nombreGrupo={(borrador?.nombreGrupo ?? resultado.titulo).slice(0, 80)}
+              fuente={resultado.fuente}
+              persistir={persistir}
+              alGuardar={() => usuario && void borrarBorrador(claveBorrador(usuario, borrador?.origen ?? { tipo: 'documento' }))}
+              {...(extraido
+                ? {
+                    onVolver: () => {
+                      setResultado(null)
+                      setFase('ajustes')
+                    },
+                  }
+                : {})}
               onCerrar={onClose}
             />
           </>

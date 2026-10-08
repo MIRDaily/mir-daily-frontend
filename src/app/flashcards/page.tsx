@@ -19,6 +19,7 @@ import FlashcardCreateModal from '@/components/studio/FlashcardCreateModal'
 import CrearFlashcardsIA from '@/components/flashcards/ia/CrearFlashcardsIA'
 import { flashcardsIAEstado } from '@/lib/flashcards/ia/api'
 import type { EstadoFlashcardsIA } from '@/lib/flashcards/ia/tarjetas'
+import { borrarBorrador, haceCuanto, listarBorradores, type BorradorGuardado } from '@/lib/flashcards/ia/borrador'
 import { DEFAULT_COLOR_KEY, MAX_FLASHCARD_CHARS, SUBJECT_COLORS, resolveColor, resolveIcon } from '@/lib/flashcardTheme'
 import CharCounter from '@/components/studio/CharCounter'
 import {
@@ -115,6 +116,13 @@ function FlashcardsMindMap() {
   // Flashcards con IA: solo se ofrece si el backend dice que está disponible para esta cuenta.
   const [ia, setIa] = useState<EstadoFlashcardsIA | null>(null)
   const [iaAbierto, setIaAbierto] = useState(false)
+  // Borradores de flashcards con IA sin revisar (en este navegador): se avisa y se retoman.
+  const [usuarioId, setUsuarioId] = useState<string | null>(null)
+  const [borradores, setBorradores] = useState<BorradorGuardado[]>([])
+  const [borradorAbierto, setBorradorAbierto] = useState<BorradorGuardado | null>(null)
+  const cargarBorradores = useCallback((uid: string | null) => {
+    if (uid) void listarBorradores(uid).then(setBorradores)
+  }, [])
   const [createCtx, setCreateCtx] = useState<null | { deckId: string; topic?: string }>(null)
   const [detailCard, setDetailCard] = useState<Flashcard | null>(null)
 
@@ -175,11 +183,14 @@ function FlashcardsMindMap() {
       if (mounted) setStatus('ready')
       void loadPanel(accessToken)
       void flashcardsIAEstado().then((e) => mounted && setIa(e))
+      const uid = session?.user.id ?? null
+      setUsuarioId(uid)
+      cargarBorradores(uid)
     })()
     return () => {
       mounted = false
     }
-  }, [loadSubjects, loadPanel])
+  }, [loadSubjects, loadPanel, cargarBorradores])
 
   // Preferencias de la lista. Se leen una vez y solo entonces se empiezan a
   // guardar, para no sobrescribirlas con los valores por defecto del montaje.
@@ -708,6 +719,48 @@ function FlashcardsMindMap() {
           </p>
         ) : null}
 
+        {level === 0 && borradores.length > 0 ? (
+          <section aria-label="Flashcards con IA sin revisar" className="space-y-2">
+            {borradores.map((b) => {
+              const n = b.lista.filter((t) => t.incluir).length
+              return (
+                <div
+                  key={b.clave}
+                  className="flex flex-wrap items-center gap-3 rounded-2xl border-2 border-[#2c3e50] bg-[#FBF3E1] px-4 py-3"
+                  style={{ boxShadow: '4px 4px 0 0 #2c3e50' }}
+                >
+                  <span aria-hidden className="inline-block text-[#B07A1E]">
+                    <span className="material-symbols-outlined text-[1.4rem] leading-none">auto_awesome</span>
+                  </span>
+                  <p className="min-w-0 flex-1 text-sm font-semibold text-[#2C3E50]">
+                    Tienes <b>{n} {n === 1 ? 'tarjeta' : 'tarjetas'} sin revisar</b> de «{b.titulo}»
+                    {b.origen.tipo === 'mapa' ? ' (de un mapa)' : ''} <span className="text-[#7D8A96]">({haceCuanto(b.actualizado)})</span>
+                  </p>
+                  <span className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBorradorAbierto(b)}
+                      className="rounded-xl border-2 border-[#2c3e50] bg-[#E8A598] px-3 py-1.5 text-xs font-extrabold text-white"
+                    >
+                      Revisar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!window.confirm(`¿Descartar las ${n} tarjetas sin revisar de «${b.titulo}»? No se pueden recuperar.`)) return
+                        void borrarBorrador(b.clave).then(() => cargarBorradores(usuarioId))
+                      }}
+                      className="rounded-xl px-3 py-1.5 text-xs font-bold text-[#7D8A96] hover:text-[#B04A5E]"
+                    >
+                      Descartar
+                    </button>
+                  </span>
+                </div>
+              )
+            })}
+          </section>
+        ) : null}
+
         {status === 'loading' ? (
           <div className="flex h-[60vh] items-center justify-center gap-3 text-[#7D8A96]">
             <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#E8A598] border-t-transparent" />
@@ -925,11 +978,14 @@ function FlashcardsMindMap() {
       </main>
 
       {/* Modales */}
-      {iaAbierto && ia ? (
+      {(iaAbierto && ia) || borradorAbierto ? (
         <CrearFlashcardsIA
           estado={ia}
+          {...(borradorAbierto ? { borrador: borradorAbierto } : {})}
           onClose={() => {
             setIaAbierto(false)
+            setBorradorAbierto(null)
+            cargarBorradores(usuarioId)
             // Lo guardado (grupos nuevos o tarjetas en uno que ya había) aparece en la lista.
             if (token) {
               void loadSubjects(token)

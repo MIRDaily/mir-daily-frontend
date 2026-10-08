@@ -33,6 +33,19 @@ export const LEVEL_INFO: Record<FlashcardLevel, { name: string; color: string; s
 }
 export const isFlashcardLevel = (v: unknown): v is FlashcardLevel => v === 1 || v === 2 || v === 3 || v === 4
 
+/**
+ * De dónde sale una tarjeta de la IA: archivo, página o diapositiva, rama del mapa y un fragmento
+ * corto del texto (≤280 caracteres, por copyright). Todo opcional; null en las hechas a mano.
+ */
+export type FlashcardSource = {
+  name?: string | null
+  page?: number | null
+  unit?: 'pagina' | 'diapositiva' | null
+  mapId?: string | null
+  nodeId?: string | null
+  snippet?: string | null
+}
+
 export type FlashcardDeck = {
   id: string
   name: string
@@ -59,6 +72,7 @@ export type Flashcard = {
   level?: FlashcardLevel | null
   /** La tarjeta salió de la IA (flashcards con IA). */
   aiGenerated?: boolean
+  source?: FlashcardSource | null
   subject_id?: number | null
   topic_id?: number | null
   added_at?: string | null
@@ -108,6 +122,7 @@ export type StudyFlashcard = {
     topic_id?: number | null
     topic?: string | null
     level?: FlashcardLevel | null
+    source?: FlashcardSource | null
   }
   srs?: FlashcardSrs | null
   preview?: Record<string, GradePreview>
@@ -308,7 +323,7 @@ export async function updateFlashcard(
 /** Tarjetas por petición en el alta en bloque (el backend admite 250 y el cuerpo, 100 kB). */
 const BULK_CHUNK = 150
 
-export type NewFlashcard = { front: string; back: string; topic?: string | null; level?: FlashcardLevel | null }
+export type NewFlashcard = { front: string; back: string; topic?: string | null; level?: FlashcardLevel | null; source?: FlashcardSource | null }
 
 /**
  * Alta en bloque (flashcards con IA): en tandas, una detrás de otra. El backend omite las que ya

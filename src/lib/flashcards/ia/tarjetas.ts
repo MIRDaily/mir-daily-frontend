@@ -46,7 +46,12 @@ export type OrigenIA = {
   diapositiva?: number
   seccion?: string
   dudoso?: 'anclaje' | 'tratamiento'
+  /** Trozo del texto de donde sale (≤280 caracteres): se guarda con la tarjeta («Ver de dónde sale»). */
+  fragmento?: string
 }
+
+/** Lo que se sabe del origen al guardar: el archivo y, si salen de un mapa, su rama. */
+export type FuenteGuardar = { nombre?: string | null; unidad?: 'pagina' | 'diapositiva'; mapId?: string | null; nodeId?: string | null }
 
 export type TarjetaIA = { tema: string; nivel: FlashcardLevel; pregunta: string; respuesta: string; ia?: OrigenIA }
 
@@ -69,6 +74,8 @@ const MAX_TEMA = 120
 const MAX_PREGUNTA = 300
 const MAX_RESPUESTA = 200
 const MAX_TARJETAS = 2000
+/** 280 del servidor más los «…». */
+const MAX_FRAGMENTO = 282
 
 const texto = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '')
 const fraccion = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1 ? Math.round(v * 100) / 100 : undefined)
@@ -89,6 +96,8 @@ function sanitizeOrigen(raw: unknown): OrigenIA | undefined {
   const s = texto(r.seccion, 80)
   if (s) out.seccion = s
   if (r.dudoso === 'anclaje' || r.dudoso === 'tratamiento') out.dudoso = r.dudoso
+  const f = texto(r.fragmento, MAX_FRAGMENTO)
+  if (f) out.fragmento = f
   return Object.keys(out).length ? out : undefined
 }
 
@@ -134,11 +143,42 @@ export function contarNiveles(lista: Pick<Borrador, 'nivel' | 'incluir'>[], solo
   return out
 }
 
-/** Lo que se manda a guardar: las marcadas y con texto, en el orden de la vista previa. */
-export function paraGuardar(lista: Borrador[]): NewFlashcard[] {
+/**
+ * Lo que se manda a guardar: las marcadas y con texto, en el orden de la vista previa, cada una con
+ * su origen (archivo, página o diapositiva, rama del mapa y fragmento) si se sabe.
+ */
+export function paraGuardar(lista: Borrador[], fuente: FuenteGuardar = {}): NewFlashcard[] {
   return lista
     .filter((b) => b.incluir && b.pregunta.trim() && b.respuesta.trim())
-    .map((b) => ({ front: b.pregunta.trim(), back: b.respuesta.trim(), topic: b.tema.trim().slice(0, MAX_TEMA) || null, level: b.nivel }))
+    .map((b) => {
+      const page = b.ia?.pagina ?? b.ia?.diapositiva ?? null
+      const source = {
+        ...(fuente.nombre ? { name: fuente.nombre.slice(0, 160) } : {}),
+        ...(page ? { page, unit: b.ia?.diapositiva ? ('diapositiva' as const) : (fuente.unidad ?? ('pagina' as const)) } : {}),
+        ...(fuente.mapId ? { mapId: fuente.mapId, ...(fuente.nodeId ? { nodeId: fuente.nodeId } : {}) } : {}),
+        ...(b.ia?.fragmento ? { snippet: b.ia.fragmento } : {}),
+      }
+      return {
+        front: b.pregunta.trim(),
+        back: b.respuesta.trim(),
+        topic: b.tema.trim().slice(0, MAX_TEMA) || null,
+        level: b.nivel,
+        ...(Object.keys(source).length ? { source } : {}),
+      }
+    })
+}
+
+/** Con qué niveles se empieza a estudiar lo recién guardado: los dos más fáciles que haya. */
+export function nivelesParaEmpezar(lista: Pick<Borrador, 'nivel' | 'incluir'>[]): FlashcardLevel[] {
+  const hay = FLASHCARD_LEVELS.filter((n) => lista.some((b) => b.incluir && b.nivel === n))
+  return hay.slice(0, 2)
+}
+
+/** `?niveles=1,2` → niveles válidos sin repetir y en orden (null si no hay ninguno). */
+export function leerNivelesURL(v: string | null | undefined): FlashcardLevel[] | null {
+  if (!v) return null
+  const out = FLASHCARD_LEVELS.filter((n) => v.split(',').map((x) => x.trim()).includes(String(n)))
+  return out.length ? out : null
 }
 
 /** «pág. 12» / «diapositiva 4» / la sección, o '' si no se sabe. */
