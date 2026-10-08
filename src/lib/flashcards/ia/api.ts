@@ -89,7 +89,7 @@ const statsDe = (raw: unknown): StatsIA => {
 export type PeticionMas = {
   titulo: string
   niveles: FlashcardLevel[]
-  ampliar: { tema: string; cantidad: number; existentes: { pregunta: string; respuesta: string }[] }
+  ampliar: { tema: string; cantidad: number; existentes: { pregunta: string; respuesta: string }[]; vecinos?: string[] }
   unidad?: 'diapositiva'
 } & ({ secciones: Seccion[]; mapa?: undefined } | { mapa: { d: number; t: string }[]; secciones?: Seccion[] })
 

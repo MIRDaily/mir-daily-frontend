@@ -374,7 +374,7 @@ export default function CrearFlashcardsIA({
     estadoDado?.disponible && estadoDado.opciones?.ampliar && resultado
       ? {
           restantes: masRestantes,
-          pedir: async ({ tema, niveles: nv, cantidad, existentes, paginas }, signal) => {
+          pedir: async ({ tema, niveles: nv, cantidad, existentes, paginas, vecinos }, signal) => {
             if (!textoDoc) throw new Error('Falta el texto del documento.')
             // Solo el fragmento de ese tema: las páginas de sus tarjetas (con margen) o, sin páginas, las
             // secciones que más se le parecen.
@@ -383,7 +383,7 @@ export default function CrearFlashcardsIA({
               {
                 titulo: resultado.titulo,
                 niveles: nv,
-                ampliar: { tema, cantidad, existentes },
+                ampliar: { tema, cantidad, existentes, vecinos },
                 secciones: fragmento,
                 ...(textoDoc.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
               },

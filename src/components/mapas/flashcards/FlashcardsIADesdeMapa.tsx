@@ -7,7 +7,7 @@ import { INK, ProgresoIA } from '@/components/mapas/ia/ProgresoIA'
 import { VistaPreviaFlashcards, type MasConfig } from '@/components/flashcards/ia/VistaPreviaFlashcards'
 import { NivelBadge } from '@/components/flashcards/ia/NivelBadge'
 import { leerDocumento, type DocumentoGuardado } from '@/lib/mapas/ia/docs'
-import { fragmentoParaRama } from '@/lib/mapas/ia/rama'
+import { fragmentoParaRama, ramaDeNodo } from '@/lib/mapas/ia/rama'
 import { aplicarEvento, type FaseIA, type LineaProvisional } from '@/lib/mapas/ia/stream'
 import { flashcardsIAEstado, flashcardsIAGenerar, flashcardsIAMas } from '@/lib/flashcards/ia/api'
 import {
@@ -264,7 +264,7 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
     estado?.disponible && estado.opciones?.ampliar
       ? {
           restantes: masRestantes,
-          pedir: async ({ tema, niveles: nv, cantidad, existentes, paginas }, signal) => {
+          pedir: async ({ tema, niveles: nv, cantidad, existentes, paginas, vecinos }, signal) => {
             const nodes = useMindMapStore.getState().nodes
             const id = nodoDeTema(nodes, tema, ramaOrigen) ?? (nodes.some((n) => n.id === ramaOrigen) ? ramaOrigen : null)
             const sub = id ? mapaParaFlashcards(nodes, id) : null
@@ -276,7 +276,8 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
               {
                 titulo: (revisando?.titulo ?? nombre) || mapTitle,
                 niveles: nv,
-                ampliar: { tema, cantidad, existentes },
+                // Vecinos: los otros temas de la vista previa y las ramas hermanas del nodo en el mapa.
+                ampliar: { tema, cantidad, existentes, vecinos: [...new Set([...vecinos, ...(id ? (ramaDeNodo(nodes, id)?.vecinos ?? []) : [])])].slice(0, 60) },
                 mapa: sub.mapa,
                 ...(frag.length ? { secciones: frag } : {}),
                 ...((doc?.unidad ?? fuente?.unidad) === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),

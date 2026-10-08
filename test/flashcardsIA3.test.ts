@@ -15,6 +15,7 @@ import {
   nodoDeTema,
   paginasDeTema,
   tarjetasDeTema,
+  vecinosDeTema,
   paraGuardar,
   raizDelMapa,
 } from '@/lib/flashcards/ia/tarjetas'
@@ -104,6 +105,17 @@ test('tarjetasDeTema y paginasDeTema: lo del tema (también lo quitado), con su 
   assert.deepEqual(tarjetasDeTema(l, 'ACG'), [{ pregunta: '¿Edad?', respuesta: '>50' }, { pregunta: '¿Dosis?', respuesta: '1 mg/kg' }])
   assert.deepEqual(paginasDeTema(l, 'ACG'), [4, 5])
   assert.deepEqual(paginasDeTema(l, 'Takayasu'), [9])
+})
+
+test('vecinosDeTema: los demás temas, primero los del mismo tema del libro, sin repetir', () => {
+  const l = [
+    ...LISTA,
+    ...borradores([{ tema: 'Behçet', nivel: 1, pregunta: '¿p?', respuesta: 'r' }], 'c', 'Tema 9'),
+    ...borradores([{ tema: 'Takayasu', nivel: 2, pregunta: '¿q?', respuesta: 's' }], 'd', 'Tema 3'),
+  ]
+  assert.deepEqual(vecinosDeTema(l, 'ACG'), ['Takayasu', 'Behçet'])
+  assert.deepEqual(vecinosDeTema(l, 'Behçet'), ['ACG', 'Takayasu'])
+  assert.deepEqual(vecinosDeTema(l, 'ACG', 1), ['Takayasu'])
 })
 
 test('insertarNuevas: tras la última del tema, marcadas como nuevas, con su grupo y claves únicas', () => {

@@ -207,6 +207,22 @@ export const CANTIDAD_MAS_DEFECTO = 10
 export const tarjetasDeTema = (lista: Borrador[], tema: string) =>
   lista.filter((b) => b.tema === tema).map((b) => ({ pregunta: b.pregunta, respuesta: b.respuesta }))
 
+/**
+ * Los temas de alrededor de uno (los demás de la vista previa; primero los del mismo tema del libro):
+ * al ampliar, la IA no hace tarjetas de ellos y el servidor quita las que los nombran sin nombrar el
+ * tema pedido. El fragmento del tema trae también sus páginas, y de ahí se colaban.
+ */
+export function vecinosDeTema(lista: Borrador[], tema: string, max = 60): string[] {
+  const grupo = lista.find((b) => b.tema === tema)?.grupo
+  const mismos: string[] = []
+  const otros: string[] = []
+  for (const b of lista) {
+    if (b.tema === tema || mismos.includes(b.tema) || otros.includes(b.tema)) continue
+    ;(grupo && b.grupo === grupo ? mismos : otros).push(b.tema)
+  }
+  return [...mismos, ...otros].slice(0, max)
+}
+
 /** Páginas (o diapositivas) de donde salen las tarjetas de un tema: para elegir su fragmento. */
 export function paginasDeTema(lista: Borrador[], tema: string): number[] {
   const out: number[] = []

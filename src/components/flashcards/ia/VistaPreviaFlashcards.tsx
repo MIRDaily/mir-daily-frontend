@@ -25,6 +25,7 @@ import {
   paginasDeTema,
   paraGuardar,
   tarjetasDeTema,
+  vecinosDeTema,
   type Borrador,
   type FuenteGuardar,
   type OpcionMas,
@@ -52,7 +53,15 @@ type Destino = 'nuevo' | 'existente' | 'porTema'
 /** «Más de este tema»: lo pone quien abre la vista previa (sabe de dónde salen las tarjetas). */
 export type MasConfig = {
   pedir: (
-    p: { tema: string; niveles: FlashcardLevel[]; cantidad: number; existentes: { pregunta: string; respuesta: string }[]; paginas: number[] },
+    p: {
+      tema: string
+      niveles: FlashcardLevel[]
+      cantidad: number
+      existentes: { pregunta: string; respuesta: string }[]
+      paginas: number[]
+      /** Los otros temas: de ellos, nada (ver vecinosDeTema). */
+      vecinos: string[]
+    },
     signal: AbortSignal,
   ) => Promise<MasGeneradas>
   /** Si ahora no se puede (falta el texto del documento): la explicación y cómo arreglarlo. */
@@ -235,7 +244,7 @@ export function VistaPreviaFlashcards({
     setMasEstado({ tema, cargando: true })
     try {
       const r = await mas.pedir(
-        { tema, niveles: opcion.niveles, cantidad: masCantidad, existentes: tarjetasDeTema(lista, tema), paginas: paginasDeTema(lista, tema) },
+        { tema, niveles: opcion.niveles, cantidad: masCantidad, existentes: tarjetasDeTema(lista, tema), paginas: paginasDeTema(lista, tema), vecinos: vecinosDeTema(lista, tema) },
         ctl.signal,
       )
       if (ctl.signal.aborted) return
