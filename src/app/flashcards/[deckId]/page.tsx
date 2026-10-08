@@ -31,10 +31,14 @@ import {
   startFlashcardSession,
   undoFlashcardReview,
   updateFlashcard,
+  FLASHCARD_LEVELS,
+  LEVEL_INFO,
   type Flashcard,
+  type FlashcardLevel,
   type Grade,
   type StudyFlashcard,
 } from '@/lib/studioFlashcards'
+import { NivelBadge } from '@/components/flashcards/ia/NivelBadge'
 import GradeButtons from '@/components/flashcards/GradeButtons'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
 
@@ -60,6 +64,7 @@ export default function FlashcardDeckPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editFront, setEditFront] = useState('')
   const [editBack, setEditBack] = useState('')
+  const [editLevel, setEditLevel] = useState<FlashcardLevel | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
@@ -77,6 +82,8 @@ export default function FlashcardDeckPage() {
   const [undoStack, setUndoStack] = useState<{ card: StudyFlashcard; grade: Grade }[]>([])
   const [undoing, setUndoing] = useState(false)
   const [sessionLimit, setSessionLimit] = useState(0)
+  // Estudiar solo unos niveles de dificultad (las tarjetas de la IA los traen). Todos = sin filtro.
+  const [studyLevels, setStudyLevels] = useState<FlashcardLevel[]>([...FLASHCARD_LEVELS])
   // Cuándo se mostró la tarjeta actual: cronómetro de la respuesta y origen
   // desde el que se leen los intervalos previstos.
   const [shownAt, setShownAt] = useState(() => new Date())
@@ -153,6 +160,7 @@ export default function FlashcardDeckPage() {
     setEditingId(card.flashcardId)
     setEditFront(card.front)
     setEditBack(card.back)
+    setEditLevel(card.level ?? null)
   }
 
   const editFrontOver = editFront.length > MAX_FLASHCARD_CHARS
@@ -164,11 +172,16 @@ export default function FlashcardDeckPage() {
     setSavingEdit(true)
     setError(null)
     try {
-      await updateFlashcard(token, card.flashcardId, { front: editFront, back: editBack })
+      const levelChanged = (card.level ?? null) !== editLevel
+      await updateFlashcard(token, card.flashcardId, {
+        front: editFront,
+        back: editBack,
+        ...(levelChanged ? { level: editLevel } : {}),
+      })
       setCards((prev) =>
         prev.map((c) =>
           c.flashcardId === card.flashcardId
-            ? { ...c, front: editFront.trim(), back: editBack.trim() }
+            ? { ...c, front: editFront.trim(), back: editBack.trim(), level: editLevel }
             : c,
         ),
       )
@@ -226,8 +239,13 @@ export default function FlashcardDeckPage() {
     [token, deckId],
   )
 
+  // Tarjetas con nivel y cuántas entran con el filtro (las que no tienen nivel solo entran sin filtro).
+  const conNivel = cards.some((c) => c.level)
+  const filtrando = conNivel && studyLevels.length < FLASHCARD_LEVELS.length
+  const aEstudiar = filtrando ? cards.filter((c) => c.level && studyLevels.includes(c.level)).length : cards.length
+
   const handleStartStudy = async () => {
-    if (busy || cards.length === 0) return
+    if (busy || cards.length === 0 || aEstudiar === 0) return
     setBusy(true)
     setError(null)
     setStudied(0)
@@ -240,8 +258,8 @@ export default function FlashcardDeckPage() {
       // Con la escalera vieja el tope daba igual, porque una tarjeta acertada no
       // volvía en 3 días. Con FSRS y las repeticiones dentro de la sesión, un
       // tope real evita sesiones que no se acaban nunca.
-      const limit = Math.min(200, Math.max(20, cards.length * 2))
-      const sid = await startFlashcardSession(token, deckId, limit)
+      const limit = Math.min(200, Math.max(20, aEstudiar * 2))
+      const sid = await startFlashcardSession(token, deckId, limit, filtrando ? studyLevels : null)
       setSessionLimit(limit)
       setSessionId(sid)
       setMode('study')
@@ -596,8 +614,9 @@ export default function FlashcardDeckPage() {
                       onScroll={() => checkOverflow(frontScrollRef.current, setFrontHasMore)}
                       className="flip-scroll"
                     >
-                      <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#C99A8D]">
-                        Anverso
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#C99A8D]">Anverso</span>
+                        {current.flashcard.level ? <NivelBadge nivel={current.flashcard.level} /> : null}
                       </span>
                       <div className="flex flex-1 items-center justify-center">
                         <p className="whitespace-pre-wrap text-center text-2xl font-bold leading-relaxed text-[#2C3E50]">
@@ -801,9 +820,9 @@ export default function FlashcardDeckPage() {
               <GhostButton
                 icon="play_arrow"
                 onClick={() => void handleStartStudy()}
-                disabled={cards.length === 0 || busy}
+                disabled={cards.length === 0 || aEstudiar === 0 || busy}
               >
-                Estudiar
+                {filtrando ? `Estudiar ${aEstudiar}` : 'Estudiar'}
               </GhostButton>
             </>
           }
@@ -821,6 +840,49 @@ export default function FlashcardDeckPage() {
           {cards.length > 0 ? (
             <div className="mt-5 flex flex-wrap gap-2">
               <StatChip value={cards.length} label={cards.length === 1 ? 'tarjeta' : 'tarjetas'} color={deckHue.bg} />
+            </div>
+          ) : null}
+
+          {conNivel ? (
+            <div className="mt-4" role="group" aria-label="Estudiar solo estos niveles">
+              <p className="mb-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-[#7D8A96]/70">Estudiar los niveles</p>
+              <div className="flex flex-wrap gap-1.5">
+                {FLASHCARD_LEVELS.map((n) => {
+                  const total = cards.filter((c) => c.level === n).length
+                  const on = studyLevels.includes(n)
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      aria-pressed={on}
+                      disabled={total === 0}
+                      onClick={() =>
+                        setStudyLevels((ls) => (ls.includes(n) ? ls.filter((x) => x !== n) : [...ls, n].sort()))
+                      }
+                      className="rounded-full px-3 py-1 text-xs font-extrabold disabled:opacity-40"
+                      style={{
+                        border: `2px solid ${on ? LEVEL_INFO[n].color : '#E4DCD8'}`,
+                        background: on ? LEVEL_INFO[n].soft : '#FFFFFF',
+                        color: on ? LEVEL_INFO[n].color : '#7D8A96',
+                      }}
+                    >
+                      {LEVEL_INFO[n].name} · {total}
+                    </button>
+                  )
+                })}
+                {studyLevels.length < FLASHCARD_LEVELS.length ? (
+                  <button
+                    type="button"
+                    onClick={() => setStudyLevels([...FLASHCARD_LEVELS])}
+                    className="rounded-full px-3 py-1 text-xs font-bold text-[#7D8A96] underline"
+                  >
+                    Todos
+                  </button>
+                ) : null}
+              </div>
+              {filtrando && aEstudiar === 0 ? (
+                <p className="mt-1 text-xs font-bold text-[#C4655A]">No hay tarjetas de esos niveles.</p>
+              ) : null}
             </div>
           ) : null}
         </Hero>
@@ -886,7 +948,22 @@ export default function FlashcardDeckPage() {
                           />
                         </div>
                       </div>
-                      <div className="flex justify-end gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <label className="mr-auto flex items-center gap-2 text-xs font-semibold text-[#7D8A96]/80">
+                          Dificultad
+                          <select
+                            value={editLevel ?? ''}
+                            onChange={(e) => setEditLevel(e.target.value ? (Number(e.target.value) as FlashcardLevel) : null)}
+                            className="rounded-lg border border-[#EAE4E2] bg-[#FAF7F4] px-2 py-1 text-xs font-bold text-[#2C3E50] outline-none focus:border-[#8BA888]"
+                          >
+                            <option value="">Sin nivel</option>
+                            {FLASHCARD_LEVELS.map((n) => (
+                              <option key={n} value={n}>
+                                {LEVEL_INFO[n].name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         <button
                           type="button"
                           onClick={() => void handleSaveEdit(card)}
@@ -907,10 +984,20 @@ export default function FlashcardDeckPage() {
                   ) : (
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
-                        {card.topic ? (
-                          <span className="mb-2 inline-block rounded-full bg-[#8BA888]/12 px-2 py-0.5 text-[10px] font-bold text-[#5C7A59]">
-                            {card.topic}
-                          </span>
+                        {card.topic || card.level || card.aiGenerated ? (
+                          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                            {card.topic ? (
+                              <span className="inline-block rounded-full bg-[#8BA888]/12 px-2 py-0.5 text-[10px] font-bold text-[#5C7A59]">
+                                {card.topic}
+                              </span>
+                            ) : null}
+                            {card.level ? <NivelBadge nivel={card.level} /> : null}
+                            {card.aiGenerated ? (
+                              <span className="rounded-full bg-[#2C3E50] px-1.5 py-0.5 text-[9px] font-extrabold tracking-wide text-white" title="Generada con IA">
+                                IA
+                              </span>
+                            ) : null}
+                          </div>
                         ) : null}
                         <div className="grid gap-3 md:grid-cols-2">
                           <div className="min-w-0">

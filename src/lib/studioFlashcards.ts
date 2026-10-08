@@ -18,6 +18,21 @@ export type FlashcardSummary = {
 
 export type FlashcardStatus = keyof FlashcardSummary
 
+/**
+ * Dificultad del CONTENIDO de una tarjeta (columna flashcards.level): la ponen las flashcards con
+ * IA y se puede cambiar a mano. No es la «difficulty» de FSRS (FlashcardSrs), que la calcula el
+ * repaso.
+ */
+export type FlashcardLevel = 1 | 2 | 3 | 4
+export const FLASHCARD_LEVELS: FlashcardLevel[] = [1, 2, 3, 4]
+export const LEVEL_INFO: Record<FlashcardLevel, { name: string; color: string; soft: string }> = {
+  1: { name: 'Fácil', color: '#5E8C5A', soft: '#E7F0E5' },
+  2: { name: 'Media', color: '#3F7EA6', soft: '#E3EEF5' },
+  3: { name: 'Difícil', color: '#B07A1E', soft: '#FBF0DA' },
+  4: { name: 'Demencial', color: '#B04A5E', soft: '#FAE3E8' },
+}
+export const isFlashcardLevel = (v: unknown): v is FlashcardLevel => v === 1 || v === 2 || v === 3 || v === 4
+
 export type FlashcardDeck = {
   id: string
   name: string
@@ -40,6 +55,10 @@ export type Flashcard = {
   front: string
   back: string
   topic?: string | null
+  /** Dificultad del contenido (1 fácil … 4 demencial); null en las tarjetas sin nivel. */
+  level?: FlashcardLevel | null
+  /** La tarjeta salió de la IA (flashcards con IA). */
+  aiGenerated?: boolean
   subject_id?: number | null
   topic_id?: number | null
   added_at?: string | null
@@ -87,6 +106,8 @@ export type StudyFlashcard = {
     back: string
     subject_id?: number | null
     topic_id?: number | null
+    topic?: string | null
+    level?: FlashcardLevel | null
   }
   srs?: FlashcardSrs | null
   preview?: Record<string, GradePreview>
@@ -258,7 +279,7 @@ export async function fetchFlashcards(
 export async function createFlashcard(
   token: string,
   deckId: string,
-  input: { front: string; back: string; topic?: string; subjectId?: number | null; topicId?: number | null },
+  input: { front: string; back: string; topic?: string; level?: FlashcardLevel | null; subjectId?: number | null; topicId?: number | null },
 ): Promise<Flashcard> {
   const res = await fetch(`${apiBase()}/api/studio/flashcard-decks/${deckId}/cards`, {
     method: 'POST',
@@ -274,7 +295,7 @@ export async function createFlashcard(
 export async function updateFlashcard(
   token: string,
   flashcardId: string,
-  patch: { front?: string; back?: string; topic?: string; subjectId?: number | null; topicId?: number | null },
+  patch: { front?: string; back?: string; topic?: string; level?: FlashcardLevel | null; subjectId?: number | null; topicId?: number | null },
 ): Promise<void> {
   const res = await fetch(`${apiBase()}/api/studio/flashcards/${flashcardId}`, {
     method: 'PATCH',
@@ -282,6 +303,43 @@ export async function updateFlashcard(
     body: JSON.stringify(patch),
   })
   if (!res.ok) throw new Error(await readError(res, 'No se pudo actualizar la tarjeta'))
+}
+
+/** Tarjetas por petición en el alta en bloque (el backend admite 250 y el cuerpo, 100 kB). */
+const BULK_CHUNK = 150
+
+export type NewFlashcard = { front: string; back: string; topic?: string | null; level?: FlashcardLevel | null }
+
+/**
+ * Alta en bloque (flashcards con IA): en tandas, una detrás de otra. El backend omite las que ya
+ * estén en el grupo (mismo anverso y reverso) y no crea ninguna de una tanda que no quepa en el
+ * tope del grupo. `onProgress` recibe las procesadas hasta ahora.
+ */
+export async function createFlashcardsBulk(
+  token: string,
+  deckId: string,
+  cards: NewFlashcard[],
+  opts: { aiGenerated?: boolean; onProgress?: (done: number, total: number) => void } = {},
+): Promise<{ created: number; duplicates: number }> {
+  let created = 0
+  let duplicates = 0
+  for (let i = 0; i < cards.length; i += BULK_CHUNK) {
+    const chunk = cards.slice(i, i + BULK_CHUNK)
+    const res = await fetch(`${apiBase()}/api/studio/flashcard-decks/${deckId}/cards/bulk`, {
+      method: 'POST',
+      headers: authHeaders(token, true),
+      body: JSON.stringify({ cards: chunk, ...(opts.aiGenerated ? { aiGenerated: true } : {}) }),
+    })
+    if (!res.ok) {
+      const msg = await readError(res, 'No se pudieron guardar las tarjetas')
+      throw new Error(created ? `${msg}. Se guardaron ${created} antes del error.` : msg)
+    }
+    const payload = (await res.json().catch(() => null)) as { created?: number; duplicates?: number } | null
+    created += payload?.created ?? 0
+    duplicates += payload?.duplicates ?? 0
+    opts.onProgress?.(Math.min(cards.length, i + chunk.length), cards.length)
+  }
+  return { created, duplicates }
 }
 
 export type BulkResult = { done: number; alreadyThere: number }
@@ -347,11 +405,14 @@ export async function startFlashcardSession(
   token: string,
   deckId: string,
   limit: number,
+  /** Estudiar solo estos niveles (null o los cuatro = todos). Va en la sesión: lo aplica la cola. */
+  levels?: FlashcardLevel[] | null,
 ): Promise<string> {
+  const filtro = levels && levels.length > 0 && levels.length < FLASHCARD_LEVELS.length ? levels : null
   const res = await fetch(`${apiBase()}/api/studio/decks/${deckId}/start-session`, {
     method: 'POST',
     headers: authHeaders(token, true),
-    body: JSON.stringify({ limit }),
+    body: JSON.stringify({ limit, ...(filtro ? { levels: filtro } : {}) }),
   })
   if (!res.ok) throw new Error(await readError(res, 'No se pudo iniciar la sesion'))
   const payload = (await res.json().catch(() => null)) as { sessionId?: string } | null
