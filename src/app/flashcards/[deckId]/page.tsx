@@ -39,6 +39,8 @@ import {
   type StudyFlashcard,
 } from '@/lib/studioFlashcards'
 import { NivelBadge } from '@/components/flashcards/ia/NivelBadge'
+import { FuenteTarjeta } from '@/components/flashcards/ia/FuenteTarjeta'
+import { leerNivelesURL } from '@/lib/flashcards/ia/tarjetas'
 import GradeButtons from '@/components/flashcards/GradeButtons'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
 
@@ -280,7 +282,11 @@ export default function FlashcardDeckPage() {
   // para que no parpadee la lista antes del test.
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (new URLSearchParams(window.location.search).get('study') === '1') setAutoStudy(true)
+    const qs = new URLSearchParams(window.location.search)
+    // ?niveles=1,2 (p. ej. «Empezar a estudiar» tras guardar las de la IA): el filtro, ya puesto.
+    const niveles = leerNivelesURL(qs.get('niveles'))
+    if (niveles) setStudyLevels(niveles)
+    if (qs.get('study') === '1') setAutoStudy(true)
   }, [])
 
   const autoStudyRef = useRef(false)
@@ -357,6 +363,59 @@ export default function FlashcardDeckPage() {
     }
   }, [busy, undoing, sessionId, undoStack, token, deckId])
 
+  // ---- Corregir desde el estudio ---------------------------------------------
+  // Editar (anverso, reverso, nivel) o borrar la tarjeta que se está estudiando, sin salir de la
+  // sesión. Al borrarla, la cola ya no la vuelve a servir (sql/2026-10-flashcards-ia-2.sql).
+  const [editStudy, setEditStudy] = useState<null | { front: string; back: string; level: FlashcardLevel | null }>(null)
+  const [savingStudy, setSavingStudy] = useState(false)
+  const [showSource, setShowSource] = useState(false)
+
+  useEffect(() => {
+    setEditStudy(null)
+    setShowSource(false)
+  }, [current?.id])
+
+  const startEditStudy = useCallback(() => {
+    if (!current) return
+    setEditStudy({ front: current.flashcard.front, back: current.flashcard.back, level: current.flashcard.level ?? null })
+  }, [current])
+
+  const saveEditStudy = async () => {
+    if (!current || !editStudy || savingStudy) return
+    const front = editStudy.front.trim()
+    const back = editStudy.back.trim()
+    if (!front || !back || front.length > MAX_FLASHCARD_CHARS || back.length > MAX_FLASHCARD_CHARS) return
+    setSavingStudy(true)
+    setError(null)
+    try {
+      const levelChanged = (current.flashcard.level ?? null) !== editStudy.level
+      await updateFlashcard(token, current.flashcard.id, { front, back, ...(levelChanged ? { level: editStudy.level } : {}) })
+      setCurrent({ ...current, flashcard: { ...current.flashcard, front, back, level: editStudy.level } })
+      setCards((prev) => prev.map((c) => (c.flashcardId === current.flashcard.id ? { ...c, front, back, level: editStudy.level } : c)))
+      setEditStudy(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar la tarjeta.')
+    } finally {
+      setSavingStudy(false)
+    }
+  }
+
+  const deleteCurrent = async () => {
+    if (!current || !sessionId || busy) return
+    if (!window.confirm('¿Borrar esta tarjeta? (recuperable 24h desde el grupo)')) return
+    setBusy(true)
+    setError(null)
+    try {
+      await deleteFlashcard(token, deckId, current.id)
+      setCards((prev) => prev.filter((c) => c.itemId !== current.id))
+      setEditStudy(null)
+      await advance(sessionId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo borrar la tarjeta.')
+      setBusy(false)
+    }
+  }
+
   const exitStudy = async () => {
     if (sessionId) void endFlashcardSession(token, sessionId)
     setSessionId(null)
@@ -372,7 +431,8 @@ export default function FlashcardDeckPage() {
     if (mode !== 'study') return
     const onKey = (e: KeyboardEvent) => {
       const tag = document.activeElement?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (editStudy) return
       // Deshacer funciona también con la sesión terminada: es justo cuando uno
       // se da cuenta de que la última respuesta no era la que quería.
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -381,17 +441,24 @@ export default function FlashcardDeckPage() {
         return
       }
       if (finishState || !current) return
+      if (e.ctrlKey || e.metaKey || e.altKey) return
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault()
         setRevealed((v) => !v)
       } else if (revealed && ['1', '2', '3', '4'].includes(e.key)) {
         e.preventDefault()
         void handleRate(Number(e.key) as Grade)
+      } else if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault()
+        startEditStudy()
+      } else if ((e.key === 'f' || e.key === 'F') && revealed && current.flashcard.source) {
+        e.preventDefault()
+        setShowSource((v) => !v)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [mode, finishState, current, revealed, handleRate, handleUndo])
+  }, [mode, finishState, current, revealed, handleRate, handleUndo, editStudy, startEditStudy])
 
   // Indicador de scroll: muestra un degradado al pie de la tarjeta 3D cuando
   // el texto no cabe entero, para avisar de que hay más contenido debajo.
@@ -592,8 +659,105 @@ export default function FlashcardDeckPage() {
                 <GhostButton onClick={() => void exitStudy()}>Volver al grupo</GhostButton>
               </div>
             </div>
+          ) : current && editStudy ? (
+            <div
+              className="flex flex-col gap-3 rounded-3xl border-2 border-[#2c3e50] bg-white p-5"
+              style={{ boxShadow: '6px 6px 0 0 #2c3e50' }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setEditStudy(null)
+                } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault()
+                  void saveEditStudy()
+                }
+              }}
+            >
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7D8A96]">Editar la tarjeta</p>
+              <label className="block">
+                <span className="mb-1 flex items-center justify-between text-xs font-semibold text-[#C99A8D]">
+                  Anverso <CharCounter length={editStudy.front.length} />
+                </span>
+                <textarea
+                  autoFocus
+                  value={editStudy.front}
+                  onChange={(e) => setEditStudy({ ...editStudy, front: e.target.value })}
+                  rows={3}
+                  className="w-full resize-y rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2 text-sm font-semibold text-[#2C3E50] outline-none focus:border-[#8BA888] focus:bg-white"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 flex items-center justify-between text-xs font-semibold text-[#7FA07B]">
+                  Reverso <CharCounter length={editStudy.back.length} />
+                </span>
+                <textarea
+                  value={editStudy.back}
+                  onChange={(e) => setEditStudy({ ...editStudy, back: e.target.value })}
+                  rows={3}
+                  className="w-full resize-y rounded-xl border border-[#EAE4E2] bg-[#FAF7F4] px-3 py-2 text-sm text-[#2C3E50] outline-none focus:border-[#8BA888] focus:bg-white"
+                />
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="mr-auto flex items-center gap-2 text-xs font-semibold text-[#7D8A96]">
+                  Dificultad
+                  <select
+                    value={editStudy.level ?? ''}
+                    onChange={(e) => setEditStudy({ ...editStudy, level: e.target.value ? (Number(e.target.value) as FlashcardLevel) : null })}
+                    className="rounded-lg border border-[#EAE4E2] bg-[#FAF7F4] px-2 py-1 text-xs font-bold text-[#2C3E50] outline-none focus:border-[#8BA888]"
+                  >
+                    <option value="">Sin nivel</option>
+                    {FLASHCARD_LEVELS.map((n) => (
+                      <option key={n} value={n}>
+                        {LEVEL_INFO[n].name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <span className="text-[11px] text-[#7D8A96]/80">
+                  <kbd className="kbd">Ctrl</kbd>+<kbd className="kbd">Enter</kbd> guardar · <kbd className="kbd">Esc</kbd> cancelar
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setEditStudy(null)}
+                  className="rounded-lg border border-[#EAE4E2] px-4 py-2 text-sm font-semibold text-[#7D8A96] hover:border-slate-300"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveEditStudy()}
+                  disabled={savingStudy || !editStudy.front.trim() || !editStudy.back.trim()}
+                  className="rounded-lg bg-[#8BA888] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  {savingStudy ? 'Guardando…' : 'Guardar y seguir'}
+                </button>
+              </div>
+            </div>
           ) : current ? (
             <div className="flex flex-col gap-6">
+              {/* Corregir sin salir de la sesión: la IA se equivoca y es aquí donde se ve. */}
+              <div className="-mb-3 flex items-center justify-end gap-1">
+                <button
+                  type="button"
+                  onClick={startEditStudy}
+                  disabled={busy}
+                  title="Editar esta tarjeta (E)"
+                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-[#7D8A96] hover:bg-white hover:text-[#2C3E50] disabled:opacity-40"
+                >
+                  <span className="material-symbols-outlined text-base">edit</span>
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deleteCurrent()}
+                  disabled={busy}
+                  title="Borrar esta tarjeta"
+                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-[#7D8A96] hover:bg-white hover:text-[#C4655A] disabled:opacity-40"
+                >
+                  <span className="material-symbols-outlined text-base">delete</span>
+                  Borrar
+                </button>
+              </div>
               <div className="flip-scene" key={current.id}>
                 <div
                   role="button"
@@ -676,6 +840,11 @@ export default function FlashcardDeckPage() {
                   onGrade={(g) => void handleRate(g)}
                 />
               )}
+
+              {/* De dónde sale: el archivo y la página, un trozo del texto y, si salió de un mapa, su rama. */}
+              {revealed && current.flashcard.source ? (
+                <FuenteTarjeta source={current.flashcard.source} abierta={showSource} onAlternar={() => setShowSource((v) => !v)} />
+              ) : null}
             </div>
           ) : (
             <div className="py-16 text-center text-[#7D8A96]">Cargando tarjeta...</div>

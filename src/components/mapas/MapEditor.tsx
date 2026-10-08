@@ -38,6 +38,7 @@ import { iaEstado } from '@/lib/mapas/ia/api'
 import { FlashcardsIADesdeMapa } from '@/components/mapas/flashcards/FlashcardsIADesdeMapa'
 import { flashcardsIAEstado } from '@/lib/flashcards/ia/api'
 import { animarEntrada } from '@/components/mapas/proto/utils/entryAnimation'
+import { goToNode } from '@/components/mapas/proto/utils/reveal'
 import { reducedMotion } from '@/components/mapas/proto/utils/positionTween'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useHistoryStore } from '@/components/mapas/proto/store/history.store'
@@ -481,6 +482,20 @@ function EditorInner({
       }),
     )
   }, [nodesInitialized, layoutNow, getViewport, setViewport])
+
+  // ?nodo=<id> (desde una flashcard: «Abrir la rama»): se despliega el camino, se selecciona el nodo
+  // y se centra, cuando ya ha terminado la entrada animada (~1 s). Una vez por apertura.
+  const focoHecho = useRef(false)
+  useEffect(() => {
+    if (!nodesInitialized || focoHecho.current || sandbox || typeof window === 'undefined') return
+    const id = new URLSearchParams(window.location.search).get('nodo')
+    if (!id) return
+    focoHecho.current = true
+    const t = setTimeout(() => {
+      if (useMindMapStore.getState().nodes.some((n) => n.id === id)) goToNode(id)
+    }, reducedMotion() ? 150 : 1300)
+    return () => clearTimeout(t)
+  }, [nodesInitialized, sandbox])
 
   // Red de seguridad: si el editor no llega a medir los nodos (pestaña en segundo plano), el mapa
   // se enseña igual.
