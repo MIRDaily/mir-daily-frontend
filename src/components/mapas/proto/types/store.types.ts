@@ -96,6 +96,12 @@ export interface UIState {
   /** Nodo del que se van a crear flashcards (abre su diálogo). */
   flashcardsFrom: string | null
   setFlashcardsFrom: (id: string | null) => void
+  /** Las flashcards con IA están disponibles para este usuario (otra opción del clic derecho). */
+  iaFlashcards: boolean
+  setIaFlashcards: (v: boolean) => void
+  /** Nodo del que se van a hacer flashcards con IA (abre su diálogo). */
+  flashcardsIA: string | null
+  setFlashcardsIA: (id: string | null) => void
   /** Tabla abierta en el popup de edición. */
   tableEditor: TableEditorTarget | null
   setTableEditor: (target: TableEditorTarget | null) => void

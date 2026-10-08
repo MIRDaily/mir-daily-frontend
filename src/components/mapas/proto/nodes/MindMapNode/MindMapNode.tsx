@@ -153,7 +153,7 @@ function MindMapNodeInner({ id, data, selected }: NodeProps<MindMapNode>) {
       const ui = useUIStore.getState()
       if (ui.studyMode) return
       if (!e.ctrlKey) {
-        if (!ui.iaRamas || isTable) return
+        if ((!ui.iaRamas && !ui.iaFlashcards) || isTable) return
         e.preventDefault()
         e.stopPropagation()
         ui.setMenuRama({ id, x: e.clientX, y: e.clientY })

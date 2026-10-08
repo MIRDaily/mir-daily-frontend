@@ -35,6 +35,8 @@ import { MenuRamaIA } from '@/components/mapas/ia/MenuRamaIA'
 import { RamaIADialog } from '@/components/mapas/ia/RamaIADialog'
 import { AnadirDocumentoIA } from '@/components/mapas/ia/AnadirDocumentoIA'
 import { iaEstado } from '@/lib/mapas/ia/api'
+import { FlashcardsIADesdeMapa } from '@/components/mapas/flashcards/FlashcardsIADesdeMapa'
+import { flashcardsIAEstado } from '@/lib/flashcards/ia/api'
 import { animarEntrada } from '@/components/mapas/proto/utils/entryAnimation'
 import { reducedMotion } from '@/components/mapas/proto/utils/positionTween'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
@@ -49,6 +51,8 @@ const AUTOSAVE_MS = 900
 
 /** Lo que dice el servidor de la IA de mapas, pedido una vez por sesión. */
 let estadoIA: ReturnType<typeof iaEstado> | null = null
+/** Y el de las flashcards con IA (otra función, con su propio interruptor). */
+let estadoFlashcardsIA: ReturnType<typeof flashcardsIAEstado> | null = null
 
 type Props = {
   mapId: string
@@ -218,6 +222,7 @@ export default function MapEditor(props: Props) {
     ui.setFocusBlur(true) // el desenfoque al pasar el ratón empieza siempre activado
     ui.setStudyMode(false) // cada mapa se abre para editar, con todo tapado si se entra a estudiar
     ui.setFlashcardsFrom(null)
+    ui.setFlashcardsIA(null)
     ui.setSubgroupConvertOpen(false)
     ownTick.current = useMindMapStore.getState().loadTick
   }, [prepared, props.mapId, props.sandbox])
@@ -531,6 +536,9 @@ function EditorInner({
     void (estadoIA ??= iaEstado()).then((e) => {
       if (vivo) useUIStore.getState().setIaRamas(!!e?.opciones?.ramas)
     })
+    void (estadoFlashcardsIA ??= flashcardsIAEstado()).then((e) => {
+      if (vivo) useUIStore.getState().setIaFlashcards(!!e?.opciones?.mapa)
+    })
     return () => {
       vivo = false
     }
@@ -587,6 +595,7 @@ function EditorInner({
       <ExportDialog mapTitle={title} onExportJson={onExportJson} />
       <TableEditorDialog />
       <FlashcardsFromBranch mapTitle={title} />
+      <FlashcardsIADesdeMapa mapTitle={title} />
       <MenuRamaIA />
       <RamaIADialog mapTitle={title} />
       <AnadirDocumentoIA mapTitle={title} />
