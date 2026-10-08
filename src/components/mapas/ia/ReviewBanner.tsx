@@ -1,12 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCheck, ChevronLeft, ChevronRight, PartyPopper, Sparkles, X } from 'lucide-react'
+import { CheckCheck, ChevronLeft, ChevronRight, Layers, PartyPopper, Sparkles, X } from 'lucide-react'
 import { useMindMapStore } from '@/components/mapas/proto/store/mindmap.store'
 import { useUIStore } from '@/components/mapas/proto/store/ui.store'
 import { useTheme } from '@/components/mapas/proto/hooks/useTheme'
 import { goToPending, markReviewed, useReviewCounts } from '@/components/mapas/proto/utils/review'
 import { isPendingReview } from '@/lib/mapas/ia/revision'
+import { abrirFlashcardsIA } from '@/components/mapas/flashcards/FlashcardsIADesdeMapa'
 
 /**
  * Banner de la revisión guiada (informe 75), dentro del editor y debajo de su cabecera. Sustituye
@@ -20,6 +21,7 @@ export default function ReviewBanner() {
   const { pending, total } = useReviewCounts()
   const searchOpen = useUIStore((s) => s.searchOpen)
   const studyMode = useUIStore((s) => s.studyMode)
+  const iaFlashcards = useUIStore((s) => s.iaFlashcards)
   const selectedPending = useMindMapStore((s) => {
     let found: string | null = null
     for (const n of s.nodes) {
@@ -132,6 +134,13 @@ export default function ReviewBanner() {
             </button>
           )}
         </span>
+      )}
+      {/* Mapa recién generado: sus flashcards en un clic (el mapa entero, con su documento si cabe). */}
+      {fresh && iaFlashcards && (
+        <button type="button" style={btn} onClick={() => abrirFlashcardsIA(true)} title="Flashcards con IA del mapa entero">
+          <Layers size={15} />
+          Hacer también las flashcards
+        </button>
       )}
       <button
         type="button"

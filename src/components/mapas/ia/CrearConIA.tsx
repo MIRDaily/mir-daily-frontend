@@ -14,6 +14,9 @@ import type { MapDoc } from '@/lib/mapas/types'
 import { guardarDocumento, hashArchivo } from '@/lib/mapas/ia/docs'
 import type { Seccion } from '@/lib/mapas/ia/types'
 import type { StoredDoc } from '@/lib/mapas/graph'
+import CrearFlashcardsIA from '@/components/flashcards/ia/CrearFlashcardsIA'
+import { flashcardsIAEstado } from '@/lib/flashcards/ia/api'
+import type { EstadoFlashcardsIA } from '@/lib/flashcards/ia/tarjetas'
 import {
   NODOS_POR_RAIZ,
   ExtractError,
@@ -26,7 +29,10 @@ import {
 // Diálogo «Crear con IA»: elegir archivo → leerlo en el navegador → ajustes
 // (título y estilo de los nodos) → generar → abrir el mapa en el editor.
 // El archivo no se sube: solo viaja su texto, y nada se guarda hasta que el
-// mapa se ha generado bien.
+// mapa se ha generado bien. Tema a tema, al final se ofrece «Hacer también las
+// flashcards de estos temas»: el diálogo de flashcards con el MISMO documento ya
+// leído y los mismos temas y partes marcados (sin elegir el archivo ni sacar el
+// índice otra vez).
 
 type Fase = 'elegir' | 'leyendo' | 'ajustes' | 'generando' | 'hecho'
 
@@ -95,7 +101,18 @@ export default function CrearConIA({
   const [progresoTemas, setProgresoTemas] = useState<ProgresoTema[]>([])
   const [creados, setCreados] = useState<{ id: string; titulo: string; nodos: number }[]>([])
   const [fallidos, setFallidos] = useState<{ titulo: string; motivo: string }[]>([])
+  // Flashcards de los mismos temas (si la IA de flashcards está para este usuario).
+  const [fcEstado, setFcEstado] = useState<EstadoFlashcardsIA | null>(null)
+  const [aFlashcards, setAFlashcards] = useState(false)
   const porTemas = !!temasLibro
+  useEffect(() => {
+    if (fase !== 'hecho' || !porTemas) return
+    let vivo = true
+    void flashcardsIAEstado().then((e) => vivo && setFcEstado(e))
+    return () => {
+      vivo = false
+    }
+  }, [fase, porTemas])
   // SHA-256 del archivo: va al mapa (no el documento) para reconocerlo si hay que volver a elegirlo.
   const hashRef = useRef<Promise<string | null>>(Promise.resolve(null))
   const inputRef = useRef<HTMLInputElement>(null)
@@ -351,6 +368,11 @@ export default function CrearConIA({
       : sel.size === 0
         ? 'Nada marcado'
         : `${fmt(eleccion?.elegidas.length ?? 0)} de ${fmt(extraido.secciones.length)} ${extraido.unidad === 'diapositiva' ? 'diapositivas' : 'secciones'} · ${fmt(caracteres)} caracteres`
+
+  // Mismo documento, mismos temas y partes marcados: el diálogo de flashcards empieza en sus ajustes.
+  if (aFlashcards && fcEstado && extraido && archivo && temasLibro) {
+    return <CrearFlashcardsIA estado={fcEstado} inicial={{ archivo, extraido, titulo, temasLibro, sel }} onClose={onClose} />
+  }
 
   return (
     <div
@@ -743,7 +765,20 @@ export default function CrearConIA({
         </div>
 
         {fase === 'hecho' && (
-          <footer className="flex justify-end gap-3 border-t border-[#7D8A96]/15 bg-white px-6 py-4">
+          <footer className="flex flex-wrap justify-end gap-3 border-t border-[#7D8A96]/15 bg-white px-6 py-4">
+            {porTemas && fcEstado && extraido && archivo && temasLibro && (
+              <button
+                type="button"
+                onClick={() => setAFlashcards(true)}
+                className="mr-auto flex items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-bold text-[#2C3E50]"
+                style={{ border: `2px solid ${INK}`, boxShadow: `3px 3px 0 0 ${INK}` }}
+              >
+                <span aria-hidden className="inline-block text-[#E8A598]">
+                  <span className="material-symbols-outlined text-[1.1rem] leading-none">style</span>
+                </span>
+                Hacer también las flashcards de estos temas
+              </button>
+            )}
             {creados.length === 1 ? (
               <button
                 type="button"

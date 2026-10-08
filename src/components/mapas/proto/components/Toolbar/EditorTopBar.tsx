@@ -15,6 +15,7 @@ import {
   Search,
   Shapes,
   SlidersHorizontal,
+  Sparkles,
   Sun,
   Table2,
   Tags,
@@ -28,6 +29,7 @@ import { showUpToLevel } from '@/components/mapas/proto/utils/branches'
 import { addTableAndEdit } from '@/components/mapas/proto/utils/tables'
 import { setStudyMode } from '@/components/mapas/proto/utils/study'
 import type { BgStyle } from '@/components/mapas/proto/types/store.types'
+import { abrirFlashcardsIA } from '@/components/mapas/flashcards/FlashcardsIADesdeMapa'
 
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'error'
 
@@ -57,6 +59,7 @@ export function EditorTopBar({ title, onTitleChange, save, onRetry, statusText, 
   const setCategoriesOpen = useUIStore((s) => s.setCategoriesPanelOpen)
   const exportOpen = useUIStore((s) => s.exportOpen)
   const study = useUIStore((s) => s.studyMode)
+  const iaFlashcards = useUIStore((s) => s.iaFlashcards)
 
   const addNode = () => {
     const store = useMindMapStore.getState()
@@ -163,6 +166,20 @@ export function EditorTopBar({ title, onTitleChange, save, onRetry, statusText, 
         >
           <BookOpenCheck size={16} />
         </Btn>
+        {/* Flashcards con IA: de la rama seleccionada o, sin selección, del mapa entero. La etiqueta
+            solo con ventana ancha (la barra va justa): si no, el icono con su título. */}
+        {iaFlashcards && !study && (
+          <Btn
+            t={t}
+            onClick={() => abrirFlashcardsIA()}
+            title="Flashcards con IA: de la rama del nodo seleccionado o, sin nada seleccionado, del mapa entero"
+            label="Flashcards con IA"
+            labelClass="lbl lbl-xl"
+            tone="accent"
+          >
+            <Sparkles size={16} />
+          </Btn>
+        )}
         {/* En el modo estudio no se edita: fuera añadir, tabla, deshacer y ordenar. */}
         {!study && (
           <>
@@ -250,6 +267,7 @@ function Btn({
   label,
   active,
   tone,
+  labelClass = 'lbl',
   children,
 }: {
   t: Theme
@@ -258,6 +276,8 @@ function Btn({
   label?: string
   active?: boolean
   tone?: 'accent'
+  /** Clase de la etiqueta (cuándo se oculta: ver .lbl y .lbl-xl en mapas.css). */
+  labelClass?: string
   children: React.ReactNode
 }) {
   const color = active || tone === 'accent' ? t.accent : t.textSecondary
@@ -295,7 +315,7 @@ function Btn({
       }}
     >
       {children}
-      {label && <span className="lbl">{label}</span>}
+      {label && <span className={labelClass}>{label}</span>}
     </button>
   )
 }

@@ -212,8 +212,15 @@
 .mapa-root .mapa-topbar-title:hover {
   border-color: var(--mapa-border, rgba(125, 138, 150, 0.35)) !important;
 }
-@media (max-width: 1180px) {
+/* 1240 y no 1180 desde que la barra tiene «Flashcards con IA» (un icono más en el centro; medido sin solapes). */
+@media (max-width: 1240px) {
   .mapa-root .mapa-topbar .lbl {
+    display: none;
+  }
+}
+/* Etiquetas que solo caben con la ventana muy ancha. */
+@media (max-width: 1519px) {
+  .mapa-root .mapa-topbar .lbl-xl {
     display: none;
   }
 }
