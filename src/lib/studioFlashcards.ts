@@ -7,6 +7,8 @@
 // propia (`/flashcard-decks/:id/next`). Nada de esto cuenta para las
 // estadisticas globales del usuario.
 
+import { sanearEscalera, type Escalera } from '@/lib/flashcards/escalera'
+
 // Los cuatro cubos del motor SRS, con los mismos nombres que usan los mazos de
 // preguntas (STATUS_TONE en components/studio/deckUi.tsx).
 export type FlashcardSummary = {
@@ -422,17 +424,26 @@ export async function startFlashcardSession(
   limit: number,
   /** Estudiar solo estos niveles (null o los cuatro = todos). Va en la sesión: lo aplica la cola. */
   levels?: FlashcardLevel[] | null,
+  /** Escalera de dificultad: lo nuevo solo de los niveles abiertos de cada tema (por defecto, sí). */
+  ladder = true,
 ): Promise<string> {
   const filtro = levels && levels.length > 0 && levels.length < FLASHCARD_LEVELS.length ? levels : null
   const res = await fetch(`${apiBase()}/api/studio/decks/${deckId}/start-session`, {
     method: 'POST',
     headers: authHeaders(token, true),
-    body: JSON.stringify({ limit, ...(filtro ? { levels: filtro } : {}) }),
+    body: JSON.stringify({ limit, ladder, ...(filtro ? { levels: filtro } : {}) }),
   })
   if (!res.ok) throw new Error(await readError(res, 'No se pudo iniciar la sesion'))
   const payload = (await res.json().catch(() => null)) as { sessionId?: string } | null
   if (!payload?.sessionId) throw new Error('Respuesta invalida al iniciar la sesion')
   return payload.sessionId
+}
+
+/** Escalera de dificultad del grupo (la calcula el servidor; ver lib/flashcards/escalera.ts). */
+export async function fetchFlashcardLadder(token: string, deckId: string): Promise<Escalera> {
+  const res = await fetch(`${apiBase()}/api/studio/flashcard-decks/${deckId}/ladder`, { headers: authHeaders(token) })
+  if (!res.ok) throw new Error(await readError(res, 'No se pudo cargar la escalera de niveles'))
+  return sanearEscalera(await res.json().catch(() => null))
 }
 
 export async function nextFlashcard(

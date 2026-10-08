@@ -25,6 +25,7 @@ import {
 import {
   deleteFlashcard,
   endFlashcardSession,
+  fetchFlashcardLadder,
   fetchFlashcards,
   logFlashcard,
   nextFlashcard,
@@ -41,6 +42,8 @@ import {
 import { NivelBadge } from '@/components/flashcards/ia/NivelBadge'
 import { FuenteTarjeta } from '@/components/flashcards/ia/FuenteTarjeta'
 import { leerNivelesURL } from '@/lib/flashcards/ia/tarjetas'
+import { desbloqueados, hayEscalera, textoDesbloqueo, type Escalera } from '@/lib/flashcards/escalera'
+import { EscaleraNiveles } from '@/components/flashcards/EscaleraNiveles'
 import GradeButtons from '@/components/flashcards/GradeButtons'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
 
@@ -86,6 +89,13 @@ export default function FlashcardDeckPage() {
   const [sessionLimit, setSessionLimit] = useState(0)
   // Estudiar solo unos niveles de dificultad (las tarjetas de la IA los traen). Todos = sin filtro.
   const [studyLevels, setStudyLevels] = useState<FlashcardLevel[]>([...FLASHCARD_LEVELS])
+  // Escalera de dificultad: lo nuevo de un nivel sale cuando se domina lo de abajo de su tema. La
+  // regla y los números son del servidor (fetchFlashcardLadder). Activada por defecto.
+  const [ladderOn, setLadderOn] = useState(true)
+  const [ladder, setLadder] = useState<Escalera | null>(null)
+  // Foto de la escalera al empezar la sesión, para decir al final qué se ha desbloqueado.
+  const ladderAntes = useRef<Escalera | null>(null)
+  const [unlockedMsg, setUnlockedMsg] = useState('')
   // Cuándo se mostró la tarjeta actual: cronómetro de la respuesta y origen
   // desde el que se leen los intervalos previstos.
   const [shownAt, setShownAt] = useState(() => new Date())
@@ -126,6 +136,12 @@ export default function FlashcardDeckPage() {
         setDeckColor(deck.color ?? null)
         setDeckIcon(deck.icon ?? null)
         setCards(list)
+        // La escalera no es imprescindible: si falla, el grupo se usa igual (sin el panel).
+        if (list.some((c) => c.level)) {
+          void fetchFlashcardLadder(authToken, deckId)
+            .then(setLadder)
+            .catch(() => setLadder(null))
+        } else setLadder(null)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'No se pudo cargar el grupo.')
       } finally {
@@ -253,6 +269,7 @@ export default function FlashcardDeckPage() {
     setStudied(0)
     setFinishState(null)
     setByGrade({})
+    setUnlockedMsg('')
     // La pila de deshacer es de la sesión: el servidor solo deshace repasos de
     // la sesión en curso, así que arrastrarla sería prometer algo que no puede.
     setUndoStack([])
@@ -261,7 +278,10 @@ export default function FlashcardDeckPage() {
       // volvía en 3 días. Con FSRS y las repeticiones dentro de la sesión, un
       // tope real evita sesiones que no se acaban nunca.
       const limit = Math.min(200, Math.max(20, aEstudiar * 2))
-      const sid = await startFlashcardSession(token, deckId, limit, filtrando ? studyLevels : null)
+      const conEscalera = conNivel && ladderOn
+      // Foto de antes (la de ahora mismo: puede haber cambiado desde que se cargó la página).
+      ladderAntes.current = conEscalera ? await fetchFlashcardLadder(token, deckId).catch(() => null) : null
+      const sid = await startFlashcardSession(token, deckId, limit, filtrando ? studyLevels : null, conEscalera)
       setSessionLimit(limit)
       setSessionId(sid)
       setMode('study')
@@ -288,6 +308,24 @@ export default function FlashcardDeckPage() {
     if (niveles) setStudyLevels(niveles)
     if (qs.get('study') === '1') setAutoStudy(true)
   }, [])
+
+  // Al terminar una sesión con escalera: la foto de después, y qué niveles se han abierto.
+  useEffect(() => {
+    if (!finishState || !ladderAntes.current || !token) return
+    const antes = ladderAntes.current
+    ladderAntes.current = null
+    let vivo = true
+    void fetchFlashcardLadder(token, deckId)
+      .then((despues) => {
+        if (!vivo) return
+        setLadder(despues)
+        setUnlockedMsg(textoDesbloqueo(desbloqueados(antes, despues)))
+      })
+      .catch(() => {})
+    return () => {
+      vivo = false
+    }
+  }, [finishState, token, deckId])
 
   const autoStudyRef = useRef(false)
   useEffect(() => {
@@ -621,6 +659,18 @@ export default function FlashcardDeckPage() {
               <p>
                 Has repasado <span className="font-black text-[#2C3E50]">{studied}</span> tarjetas.
               </p>
+              {unlockedMsg ? (
+                <p
+                  role="status"
+                  className="flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-extrabold text-[#2C3E50]"
+                  style={{ background: '#FBF0DA', border: '2px solid #2c3e50', boxShadow: '3px 3px 0 0 #2c3e50' }}
+                >
+                  <span aria-hidden className="inline-block text-[#B07A1E]">
+                    <span className="material-symbols-outlined text-[1.3rem] leading-none">lock_open</span>
+                  </span>
+                  {unlockedMsg}
+                </p>
+              ) : null}
 
               {studied > 0 ? (
                 <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1052,9 +1102,24 @@ export default function FlashcardDeckPage() {
               {filtrando && aEstudiar === 0 ? (
                 <p className="mt-1 text-xs font-bold text-[#C4655A]">No hay tarjetas de esos niveles.</p>
               ) : null}
+              <label className="mt-2.5 flex w-fit cursor-pointer items-center gap-2 text-xs font-bold text-[#2C3E50]">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={ladderOn}
+                  onChange={(e) => setLadderOn(e.target.checked)}
+                  style={{ accentColor: '#E8A598', width: 16, height: 16 }}
+                />
+                Escalera de dificultad
+                <span className="font-semibold text-[#7D8A96]">
+                  {ladderOn ? '· lo nuevo, de nivel en nivel' : '· quitada: salen las nuevas de todos los niveles'}
+                </span>
+              </label>
             </div>
           ) : null}
         </Hero>
+
+        {conNivel && ladder && hayEscalera(ladder) ? <EscaleraNiveles escalera={ladder} activa={ladderOn} /> : null}
 
         {error ? (
           <p className="rounded-2xl border-2 border-[#E8A598]/40 bg-[#FFF8F6] px-4 py-3 text-sm font-semibold text-[#C4655A]">
