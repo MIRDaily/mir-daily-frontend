@@ -16,6 +16,9 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { supabase } from '@/lib/supabaseBrowser'
 import SubjectModal from '@/components/studio/SubjectModal'
 import FlashcardCreateModal from '@/components/studio/FlashcardCreateModal'
+import CrearFlashcardsIA from '@/components/flashcards/ia/CrearFlashcardsIA'
+import { flashcardsIAEstado } from '@/lib/flashcards/ia/api'
+import type { EstadoFlashcardsIA } from '@/lib/flashcards/ia/tarjetas'
 import { DEFAULT_COLOR_KEY, MAX_FLASHCARD_CHARS, SUBJECT_COLORS, resolveColor, resolveIcon } from '@/lib/flashcardTheme'
 import CharCounter from '@/components/studio/CharCounter'
 import {
@@ -109,6 +112,9 @@ function FlashcardsMindMap() {
   )
 
   const [subjectModal, setSubjectModal] = useState<null | { existing?: FlashcardDeck }>(null)
+  // Flashcards con IA: solo se ofrece si el backend dice que está disponible para esta cuenta.
+  const [ia, setIa] = useState<EstadoFlashcardsIA | null>(null)
+  const [iaAbierto, setIaAbierto] = useState(false)
   const [createCtx, setCreateCtx] = useState<null | { deckId: string; topic?: string }>(null)
   const [detailCard, setDetailCard] = useState<Flashcard | null>(null)
 
@@ -168,6 +174,7 @@ function FlashcardsMindMap() {
       await loadSubjects(accessToken)
       if (mounted) setStatus('ready')
       void loadPanel(accessToken)
+      void flashcardsIAEstado().then((e) => mounted && setIa(e))
     })()
     return () => {
       mounted = false
@@ -651,9 +658,16 @@ function FlashcardsMindMap() {
           actions={
             <>
               {level === 0 ? (
-                <StickerButton icon="add" onClick={() => setSubjectModal({})}>
-                  Nueva asignatura
-                </StickerButton>
+                <>
+                  <StickerButton icon="add" onClick={() => setSubjectModal({})}>
+                    Nueva asignatura
+                  </StickerButton>
+                  {ia ? (
+                    <GhostButton icon="auto_awesome" onClick={() => setIaAbierto(true)}>
+                      Crear con IA
+                    </GhostButton>
+                  ) : null}
+                </>
               ) : currentSubject ? (
                 <>
                   <StickerButton
@@ -911,6 +925,20 @@ function FlashcardsMindMap() {
       </main>
 
       {/* Modales */}
+      {iaAbierto && ia ? (
+        <CrearFlashcardsIA
+          estado={ia}
+          onClose={() => {
+            setIaAbierto(false)
+            // Lo guardado (grupos nuevos o tarjetas en uno que ya había) aparece en la lista.
+            if (token) {
+              void loadSubjects(token)
+              void loadPanel(token)
+            }
+            void flashcardsIAEstado().then(setIa)
+          }}
+        />
+      ) : null}
       <AnimatePresence>
         {subjectModal ? (
           <SubjectModal

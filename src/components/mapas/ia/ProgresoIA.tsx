@@ -14,6 +14,7 @@ const NOMBRE: Record<FaseIA, string> = {
   leyendo: 'Leyendo',
   estructura: 'Estructura',
   tablas: 'Tablas',
+  tarjetas: 'Tarjetas',
   ordenando: 'Ordenando',
 }
 
@@ -30,6 +31,8 @@ export function ProgresoIA({
   detalle,
   arbol: arbolDado,
   temas,
+  contador,
+  vacio = 'La IA está leyendo el documento…',
 }: {
   /** Las fases que tiene esta generación (sin «Incluir tablas», no hay fase de tablas). */
   fases: FaseIA[]
@@ -42,6 +45,10 @@ export function ProgresoIA({
   arbol?: RamaProvisional[]
   /** Documento largo: cómo va cada tema. */
   temas?: { titulo: string; estado: 'espera' | 'empieza' | 'listo' | 'fallo' }[]
+  /** Texto del contador del borrador (flashcards: «N preguntas…»); por defecto, las ramas. */
+  contador?: (lineas: LineaProvisional[]) => string
+  /** Lo que se lee mientras aún no ha llegado nada. */
+  vacio?: string
 }) {
   const propio = useMemo(() => arbolProvisional(lineas), [lineas])
   const arbol = arbolDado ?? propio
@@ -111,7 +118,7 @@ export function ProgresoIA({
       <div className="mt-3 flex items-baseline justify-between gap-2">
         <p className="text-[0.7rem] font-extrabold uppercase tracking-wide text-[#7D8A96]">Borrador</p>
         <p className="text-[0.7rem] text-[#7D8A96]">
-          {lineas.length ? `${lineas.length} ramas · se revisa y se ordena al terminar` : 'La IA está leyendo el documento…'}
+          {lineas.length ? (contador ? contador(lineas) : `${lineas.length} ramas · se revisa y se ordena al terminar`) : vacio}
         </p>
       </div>
       <div

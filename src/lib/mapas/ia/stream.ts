@@ -7,8 +7,9 @@
 import { IAError } from '@/lib/mapas/ia/types'
 
 /** Fases del diálogo, en orden. */
-export type FaseIA = 'leyendo' | 'estructura' | 'tablas' | 'ordenando'
-export const FASES_IA: FaseIA[] = ['leyendo', 'estructura', 'tablas', 'ordenando']
+export type FaseIA = 'leyendo' | 'estructura' | 'tablas' | 'tarjetas' | 'ordenando'
+// «tarjetas»: las flashcards con IA usan este mismo streaming (fases leyendo → tarjetas → ordenando).
+export const FASES_IA: FaseIA[] = ['leyendo', 'estructura', 'tablas', 'tarjetas', 'ordenando']
 
 /** `tema`: en un documento largo tema a tema, el tema al que pertenece la rama. */
 export type LineaProvisional = { parte: number; tema?: number; d: number; t: string }
