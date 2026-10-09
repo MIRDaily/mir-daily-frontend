@@ -181,7 +181,7 @@ test('sesión: «Vas a estudiar N» con las definiciones de la cola, y la petici
   assert.equal(cuantosSeEstudian(ps, { ...a, cuantos: 3 }), 3)
   assert.equal(entra(ps[2], { ...a, solo: 'due' }), false)
   assert.deepEqual(aPeticion(a, ['ACG', 'Takayasu', '']), {})
-  assert.deepEqual(aPeticion({ niveles: [3, 4], temas: ['ACG'], solo: 'due', cuantos: 10 }, ['ACG', 'Takayasu']), {
+  assert.deepEqual(aPeticion({ ...a, niveles: [3, 4], temas: ['ACG'], solo: 'due', cuantos: 10 }, ['ACG', 'Takayasu']), {
     levels: [3, 4], topics: ['ACG'], onlyStatus: 'due', cardLimit: 10,
   })
   assert.deepEqual(aPeticion({ ...a, temas: ['ACG', 'Takayasu'] }, ['ACG', 'Takayasu']), {}, 'todos los temas = sin filtro')
@@ -189,5 +189,5 @@ test('sesión: «Vas a estudiar N» con las definiciones de la cola, y la petici
 
 test('sesión: lo guardado en el navegador se sanea', () => {
   assert.deepEqual(sanearAjustes(null), AJUSTES_POR_DEFECTO)
-  assert.deepEqual(sanearAjustes({ niveles: [4, 9, 4, 1], temas: ['ACG', 3], solo: 'raro', cuantos: 9999 }), { niveles: [1, 4], temas: ['ACG'], solo: 'todos', cuantos: null })
+  assert.deepEqual(sanearAjustes({ niveles: [4, 9, 4, 1], temas: ['ACG', 3], solo: 'raro', cuantos: 9999 }), { niveles: [1, 4], temas: ['ACG'], solo: 'todos', cuantos: null, escribir: false, anchoFijo: false })
 })

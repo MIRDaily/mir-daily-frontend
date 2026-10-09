@@ -122,6 +122,7 @@ export default function GrupoResumenPage() {
           <EstudioResumen
             grupoId={id}
             ajustes={aPeticion(estudio, temas)}
+            vista={{ escribir: estudio.escribir, anchoFijo: estudio.anchoFijo }}
             temas={temas.filter(Boolean)}
             onCambio={() => setCambiado(true)}
             onSalir={() => {

@@ -185,11 +185,21 @@ export function huecosTapados(huecos: Hueco[], niveles: Nivel[] | null): number[
 
 export type Respuesta = 'sabia' | 'no'
 
-/** Estado del estudio de un párrafo: qué huecos están tapados y qué se ha respondido en cada uno. */
-export type EstadoParrafo = { tapados: number[]; respuestas: Record<number, Respuesta> }
+/**
+ * Estado del estudio de un párrafo: qué huecos están tapados, qué se ha respondido en cada uno y en qué
+ * orden (para volver a abrir el último).
+ */
+export type EstadoParrafo = { tapados: number[]; respuestas: Record<number, Respuesta>; orden?: number[] }
 
-export function empezarParrafo(huecos: Hueco[], niveles: Nivel[] | null): EstadoParrafo {
-  return { tapados: huecosTapados(huecos, niveles), respuestas: {} }
+/**
+ * `fallados`: en una sesión de «solo huecos fallados», los huecos fallados ahora del párrafo: se tapan
+ * solo esos (de los niveles elegidos). Si no queda ninguno (se recuperaron al repetirlo en la sesión),
+ * se tapan los de los niveles, como siempre.
+ */
+export function empezarParrafo(huecos: Hueco[], niveles: Nivel[] | null, fallados: number[] | null = null): EstadoParrafo {
+  const deNivel = huecosTapados(huecos, niveles)
+  const soloFallados = fallados ? deNivel.filter((k) => fallados.includes(k)) : []
+  return { tapados: soloFallados.length ? soloFallados : deNivel, respuestas: {}, orden: [] }
 }
 
 /** El siguiente hueco tapado aún sin destapar (en orden de lectura), o null si ya están todos. */
@@ -197,10 +207,46 @@ export function siguienteTapado(e: EstadoParrafo): number | null {
   return e.tapados.find((k) => !(k in e.respuestas)) ?? null
 }
 
+/** Responder un hueco tapado (o cambiar su respuesta: corregir antes de pasar). */
 export function responder(e: EstadoParrafo, k: number, r: Respuesta): EstadoParrafo {
   if (!e.tapados.includes(k)) return e
-  return { ...e, respuestas: { ...e.respuestas, [k]: r } }
+  return { ...e, respuestas: { ...e.respuestas, [k]: r }, orden: [...(e.orden ?? []).filter((x) => x !== k), k] }
+}
+
+/** Corregir un hueco ya contestado: «Lo sabía» ↔ «No lo sabía». */
+export function cambiarRespuesta(e: EstadoParrafo, k: number): EstadoParrafo {
+  const r = e.respuestas[k]
+  if (!r) return e
+  return { ...e, respuestas: { ...e.respuestas, [k]: r === 'sabia' ? 'no' : 'sabia' } }
+}
+
+/** Volver a abrir un hueco contestado (queda destapado y sin respuesta). */
+export function reabrir(e: EstadoParrafo, k: number): EstadoParrafo {
+  if (!(k in e.respuestas)) return e
+  const respuestas = { ...e.respuestas }
+  delete respuestas[k]
+  return { ...e, respuestas, orden: (e.orden ?? []).filter((x) => x !== k) }
+}
+
+/** El último hueco contestado (para reabrirlo con Retroceso), o null. */
+export function ultimoRespondido(e: EstadoParrafo): number | null {
+  const orden = (e.orden ?? []).filter((k) => k in e.respuestas)
+  return orden.length ? orden[orden.length - 1] : null
 }
 
 export const terminado = (e: EstadoParrafo) => e.tapados.every((k) => k in e.respuestas)
-export const fallos = (e: EstadoParrafo) => Object.values(e.respuestas).filter((r) => r === 'no').length
+export const fallos = (e: EstadoParrafo) => e.tapados.filter((k) => e.respuestas[k] === 'no').length
+
+/** Lo que se manda al registrar el repaso: cada hueco tapado por su posición en el texto, y si se sabía. */
+export function resultados(e: EstadoParrafo, huecos: Hueco[]): { i: number; f: number; sabia: boolean }[] {
+  return e.tapados.flatMap((k) => (huecos[k] && k in e.respuestas ? [{ i: huecos[k].i, f: huecos[k].f, sabia: e.respuestas[k] === 'sabia' }] : []))
+}
+
+/** Huecos fallados que llegan del servidor: posiciones válidas (0-7), sin repetir y ordenadas. */
+export function sanearFallados(raw: unknown): number[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  return [...new Set(raw.filter((k): k is number => Number.isInteger(k) && (k as number) >= 0 && (k as number) < MAX_HUECOS))].sort((a, b) => a - b)
+}
+
+/** Fragmento de origen que llega del servidor: texto (como mucho 300) o null. */
+export const sanearFragmento = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.slice(0, 300) : null)

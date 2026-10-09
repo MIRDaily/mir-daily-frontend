@@ -3,7 +3,7 @@
 // estadísticas del MIR.
 
 import { supabase } from '@/lib/supabaseBrowser'
-import { sanearHuecos, type Hueco, type Nivel, type Nota } from '@/lib/resumenes/huecos'
+import { sanearFallados, sanearFragmento, sanearHuecos, type Hueco, type Nivel, type Nota } from '@/lib/resumenes/huecos'
 import type { FuenteFirmada, ModoResumen } from '@/lib/resumenes/borrador'
 
 export type ResumenEstados = { new: number; failed: number; learning: number; mastered: number }
@@ -20,7 +20,8 @@ export type GrupoResumen = {
   resumen: ResumenEstados
 }
 
-export type OrigenGuardado = { name: string | null; page: number | null; unit: 'pagina' | 'diapositiva' | null }
+/** De dónde sale un párrafo. `fragmento`: un trozo corto del documento alrededor (≤300; solo en «Resumen»). */
+export type OrigenGuardado = { name: string | null; page: number | null; unit: 'pagina' | 'diapositiva' | null; fragmento?: string | null }
 
 export type Parrafo = {
   itemId: number
@@ -34,6 +35,8 @@ export type Parrafo = {
   status?: keyof ResumenEstados
   due?: boolean
   nextDueAt?: string | null
+  /** Posiciones de los huecos cuyo último resultado fue «No lo sabía». */
+  huecosFallados?: number[]
 }
 
 export type ParrafoNuevo = {
@@ -49,6 +52,10 @@ export type AjustesEstudio = {
   topics?: string[]
   onlyStatus?: 'failed' | 'due' | 'new'
   cardLimit?: number
+  /** Solo los párrafos con algún hueco fallado (y al estudiar se tapan solo esos). */
+  soloHuecosFallados?: boolean
+  /** Solo estos párrafos (deck_items): «Repasar ahora» los fallados de una sesión. */
+  itemIds?: number[]
 }
 
 const base = () => process.env.NEXT_PUBLIC_API_URL ?? ''
@@ -118,11 +125,13 @@ export function sanearParrafoGuardado(raw: unknown): Parrafo | null {
           name: typeof o.name === 'string' ? o.name : null,
           page: typeof o.page === 'number' && Number.isInteger(o.page) ? o.page : null,
           unit: o.unit === 'diapositiva' ? 'diapositiva' : o.unit === 'pagina' ? 'pagina' : null,
+          fragmento: sanearFragmento(o.fragmento),
         }
       : null,
     ...(typeof p.status === 'string' && estados.includes(p.status) ? { status: p.status as keyof ResumenEstados } : {}),
     ...(typeof p.due === 'boolean' ? { due: p.due } : {}),
     ...(typeof p.nextDueAt === 'string' ? { nextDueAt: p.nextDueAt } : {}),
+    ...(Array.isArray(p.huecosFallados) ? { huecosFallados: sanearFallados(p.huecosFallados) } : {}),
   }
 }
 
@@ -286,7 +295,7 @@ export async function siguiente(id: string, sessionId: string): Promise<Siguient
 
 export async function registrarRepaso(
   id: string,
-  d: { sessionId: string; deckItemId: number; tapados: number; fallos: number; grade?: Nota; timeSpent?: number },
+  d: { sessionId: string; deckItemId: number; huecos: { i: number; f: number; sabia: boolean }[]; grade?: Nota; timeSpent?: number },
 ): Promise<{ grade: Nota; sugerida: Nota }> {
   const r = await pedir<{ grade?: number; sugerida?: number }>(`/${id}/repaso`, { method: 'POST', body: JSON.stringify(d) }, 'No se pudo registrar el repaso')
   const n = (v: unknown): Nota => (v === 1 || v === 2 || v === 3 || v === 4 ? v : 3)
@@ -307,11 +316,25 @@ export async function deshacerRepaso(id: string, sessionId: string): Promise<{ d
   return { deckItemId: numero(r.deckItemId), parrafo: sanearParrafoGuardado(r.parrafo) }
 }
 
-/** Cerrar la sesión: si falla, no rompe nada (el servidor la cierra sola a los 30 min). */
-export async function terminarSesion(id: string, sessionId: string): Promise<void> {
+/** Un párrafo fallado en la sesión (pantalla de fin): los huecos que se fallaron en ella. */
+export type ParrafoFallado = Parrafo & { huecosFalladosSesion: number[] }
+
+/**
+ * Cerrar la sesión y traer los párrafos con algún hueco fallado en ella (con cuáles siguen fallados
+ * ahora y cuándo vuelven). Si falla, no rompe nada (el servidor la cierra sola a los 30 min): lista vacía.
+ */
+export async function terminarSesion(id: string, sessionId: string): Promise<{ fallados: ParrafoFallado[] }> {
   try {
-    await pedir(`/${id}/fin`, { method: 'POST', body: JSON.stringify({ sessionId }) })
+    const r = await pedir<{ fallados?: unknown[] }>(`/${id}/fin`, { method: 'POST', body: JSON.stringify({ sessionId }) })
+    const fallados = (Array.isArray(r.fallados) ? r.fallados : []).flatMap((x) => {
+      const p = sanearParrafoGuardado(x)
+      if (!p) return []
+      const raw = (x as Record<string, unknown>).huecosFalladosSesion
+      const enSesion = Array.isArray(raw) ? raw.filter((k): k is number => Number.isInteger(k) && (k as number) >= 0 && (k as number) < p.huecos.length) : []
+      return [{ ...p, huecosFalladosSesion: [...new Set(enSesion)].sort((a, b) => a - b) }]
+    })
+    return { fallados }
   } catch {
-    /* sin importancia */
+    return { fallados: [] }
   }
 }

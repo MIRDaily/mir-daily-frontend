@@ -8,13 +8,15 @@ import type { Parrafo } from '@/lib/resumenes/api'
 import { INK } from './ParrafoHuecos'
 
 // «Estudiar» → ajustes de la sesión: qué niveles se TAPAN (los demás se ven), qué temas, qué párrafos
-// (todos, pendientes, solo fallados, solo nuevos, con su número) y cuántos; y «Vas a estudiar N».
+// (todos, pendientes, solo fallados, solo nuevos, solo los huecos fallados, con su número) y cuántos;
+// cómo se estudia (escribir la respuesta, caja de ancho fijo); y «Vas a estudiar N».
 
 const SOLO: { id: Solo; nombre: string }[] = [
   { id: 'todos', nombre: 'Todos' },
   { id: 'due', nombre: 'Pendientes' },
   { id: 'failed', nombre: 'Solo fallados' },
   { id: 'new', nombre: 'Solo nuevos' },
+  { id: 'huecos', nombre: 'Solo huecos fallados' },
 ]
 
 export function AjustesEstudio({
@@ -84,12 +86,40 @@ export function AjustesEstudio({
             ))}
           </div>
 
+          {a.solo === 'huecos' && (
+            <p className="mt-1 text-[0.72rem] text-[#7D8A96]">Salen los párrafos con algún hueco que la última vez no sabías, y se tapan solo esos.</p>
+          )}
+
           <p className="mt-4 text-xs font-bold uppercase tracking-wide text-[#7D8A96]">Cuántos</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {[...CUANTOS, null].map((c) => (
               <button key={c ?? 'todos'} type="button" aria-pressed={a.cuantos === c} onClick={() => setA((x) => ({ ...x, cuantos: c }))} className="rounded-xl px-3 py-1.5 text-sm font-bold" style={chip(a.cuantos === c)}>
                 {c ?? 'Todos'}
               </button>
+            ))}
+          </div>
+
+          <p className="mt-4 text-xs font-bold uppercase tracking-wide text-[#7D8A96]">Al estudiar</p>
+          <div className="mt-2 flex flex-col gap-2">
+            {(
+              [
+                ['escribir', 'Escribir la respuesta', 'Escribe lo que va en cada hueco antes de destaparlo; se compara y se propone «Lo sabía» o «No lo sabía».'],
+                ['anchoFijo', 'Cajas del mismo ancho', 'Todas las cajas tapadas iguales: no delatan lo larga que es la respuesta.'],
+              ] as const
+            ).map(([k, nombre, ayuda]) => (
+              <label key={k} className="flex cursor-pointer items-start gap-2.5 rounded-xl bg-white px-3 py-2" style={{ border: `2px solid ${a[k] ? INK : 'rgba(44,62,80,0.18)'}` }}>
+                <input
+                  type="checkbox"
+                  checked={a[k]}
+                  onChange={(e) => setA((x) => ({ ...x, [k]: e.target.checked }))}
+                  className="mt-1 h-4 w-4 accent-[#E8A598]"
+                  data-ajuste={k}
+                />
+                <span>
+                  <span className="block text-sm font-bold text-[#2C3E50]">{nombre}</span>
+                  <span className="block text-[0.72rem] text-[#7D8A96]">{ayuda}</span>
+                </span>
+              </label>
             ))}
           </div>
 
