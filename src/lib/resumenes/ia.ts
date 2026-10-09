@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabaseBrowser'
 import { IAError, type Seccion } from '@/lib/mapas/ia/types'
 import { cuerpoOError, leerRespuesta, type EventoIA } from '@/lib/mapas/ia/stream'
 import { resumenParaIndice, sanitizeTemas, type TemaIndice } from '@/lib/mapas/ia/libro'
-import { sanearParrafo, type ModoResumen, type ParrafoBorrador } from '@/lib/resumenes/borrador'
+import { sanearFuente, sanearParrafo, type FuenteFirmada, type ModoResumen, type ParrafoBorrador } from '@/lib/resumenes/borrador'
 import type { Nivel } from '@/lib/resumenes/huecos'
 
 // Llamadas a /api/admin/resumenes-ia. El permiso (rol admin, interruptor y cupos) lo valida SIEMPRE el
@@ -88,15 +88,20 @@ export type PeticionResumen = {
   temas?: { titulo: string; desde: number; hasta: number }[]
 }
 
+/**
+ * Lo generado. `fuentes`: de qué documento (o tema del libro) sale cada párrafo, firmado por el
+ * servidor; cada párrafo lleva en `doc` el hash de la suya (lo necesita el guardado: tope de «texto
+ * original» por documento).
+ */
 export type ResumenesGenerados =
-  | { titulo: string; parrafos: ParrafoBorrador[] }
-  | { titulo: string; temas: { i: number; titulo: string; parrafos: ParrafoBorrador[] }[]; fallidos: { i: number; titulo: string; motivo: string }[] }
+  | { titulo: string; parrafos: ParrafoBorrador[]; fuentes: FuenteFirmada[] }
+  | { titulo: string; temas: { i: number; titulo: string; parrafos: ParrafoBorrador[] }[]; fallidos: { i: number; titulo: string; motivo: string }[]; fuentes: FuenteFirmada[] }
 
 const texto = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '')
-const parrafos = (raw: unknown, prefijo: string): ParrafoBorrador[] =>
+const parrafos = (raw: unknown, prefijo: string, fuente: FuenteFirmada | null): ParrafoBorrador[] =>
   (Array.isArray(raw) ? raw : []).flatMap((x, k) => {
-    const p = sanearParrafo(x && typeof x === 'object' ? { ...(x as object), incluir: true, key: undefined } : x, `${prefijo}${k}`)
-    return p ? [p] : []
+    const p = sanearParrafo(x && typeof x === 'object' ? { ...(x as object), incluir: true, key: undefined, doc: undefined, incluirParecido: undefined } : x, `${prefijo}${k}`)
+    return p ? [fuente ? { ...p, doc: fuente.hash } : p] : []
   })
 
 /**
@@ -110,19 +115,25 @@ export async function resumenesIAGenerar(input: PeticionResumen, signal?: AbortS
     : ((await cuerpoOError(await abrir('', init))) as Record<string, unknown>)
   const titulo = texto(datos.titulo, 200) || input.titulo
   if (Array.isArray(datos.temas)) {
+    const fuentes: FuenteFirmada[] = []
+    const temas = datos.temas.flatMap((t) => {
+      const x = t && typeof t === 'object' ? (t as Record<string, unknown>) : null
+      if (!x || typeof x.i !== 'number') return []
+      const nombre = texto(x.titulo, 200) || `Tema ${x.i + 1}`
+      const fuente = sanearFuente(x.fuente)
+      if (fuente && !fuentes.some((f) => f.hash === fuente.hash)) fuentes.push(fuente)
+      return [{ i: x.i, titulo: nombre, parrafos: parrafos(x.parrafos, `t${x.i}-`, fuente).map((p) => ({ ...p, grupo: nombre })) }]
+    })
     return {
       titulo,
-      temas: datos.temas.flatMap((t) => {
-        const x = t && typeof t === 'object' ? (t as Record<string, unknown>) : null
-        if (!x || typeof x.i !== 'number') return []
-        const nombre = texto(x.titulo, 200) || `Tema ${x.i + 1}`
-        return [{ i: x.i, titulo: nombre, parrafos: parrafos(x.parrafos, `t${x.i}-`).map((p) => ({ ...p, grupo: nombre })) }]
-      }),
+      temas,
       fallidos: (Array.isArray(datos.fallidos) ? datos.fallidos : []).flatMap((f) => {
         const x = f && typeof f === 'object' ? (f as Record<string, unknown>) : null
         return x && typeof x.i === 'number' ? [{ i: x.i, titulo: texto(x.titulo, 200), motivo: texto(x.motivo, 300) }] : []
       }),
+      fuentes,
     }
   }
-  return { titulo, parrafos: parrafos(datos.parrafos, 'p') }
+  const fuente = sanearFuente(datos.fuente)
+  return { titulo, parrafos: parrafos(datos.parrafos, 'p', fuente), fuentes: fuente ? [fuente] : [] }
 }

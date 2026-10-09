@@ -4,7 +4,7 @@
 
 import { supabase } from '@/lib/supabaseBrowser'
 import { sanearHuecos, type Hueco, type Nivel, type Nota } from '@/lib/resumenes/huecos'
-import type { ModoResumen } from '@/lib/resumenes/borrador'
+import type { FuenteFirmada, ModoResumen } from '@/lib/resumenes/borrador'
 
 export type ResumenEstados = { new: number; failed: number; learning: number; mastered: number }
 
@@ -180,6 +180,71 @@ export async function anadirParrafos(
     onProgreso?.(Math.min(lista.length, k + 40))
   }
   return { creados, duplicados }
+}
+
+/** Una tanda de párrafos de la IA de un mismo documento (ver guardado.ts → tandasDeGuardado). */
+export type TandaIA = { fuente: FuenteFirmada | null; parrafos: ParrafoNuevo[]; incluirParecidos: number[] }
+
+/**
+ * Guarda lo de la IA con su documento de origen (POST /:id/parrafos-ia): el servidor comprueba el tope
+ * de «texto original» del documento y no guarda los casi iguales a uno del grupo salvo los de
+ * `incluirParecidos`. Lanza con el mensaje del servidor (p. ej. el del 30 %).
+ */
+export async function anadirParrafosIA(
+  id: string,
+  tandas: TandaIA[],
+  onProgreso?: (hechos: number) => void,
+): Promise<{ creados: number; duplicados: number; parecidos: number }> {
+  let creados = 0
+  let duplicados = 0
+  let parecidos = 0
+  let hechos = 0
+  for (const t of tandas) {
+    const r = await pedir<{ creados?: number; duplicados?: number; parecidos?: number }>(
+      `/${id}/parrafos-ia`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ parrafos: t.parrafos, ...(t.fuente ? { fuente: t.fuente } : {}), ...(t.incluirParecidos.length ? { incluirParecidos: t.incluirParecidos } : {}) }),
+      },
+      'No se pudieron guardar los párrafos',
+    )
+    creados += numero(r.creados)
+    duplicados += numero(r.duplicados)
+    parecidos += numero(r.parecidos)
+    hechos += t.parrafos.length
+    onProgreso?.(hechos)
+  }
+  return { creados, duplicados, parecidos }
+}
+
+/** Uno del grupo que se parece a uno de la vista previa (`igual`: el mismo texto). */
+export type Parecido = { igual: boolean; tema: string | null; texto: string }
+/** Cuánto texto literal de un documento hay ya en el grupo, y cuánto cabe en total. */
+export type UsoLiteral = { hash: string; usado: number; tope: number }
+
+/** Antes de guardar en un grupo: qué textos se parecen a uno suyo (tandas de 60) y el literal de cada documento. */
+export async function buscarParecidos(id: string, textos: string[], fuentes: FuenteFirmada[]): Promise<{ parecidos: (Parecido | null)[]; literal: UsoLiteral[] }> {
+  const parecidos: (Parecido | null)[] = []
+  let literal: UsoLiteral[] = []
+  for (let k = 0; k === 0 || k < textos.length; k += 60) {
+    const r = await pedir<{ parecidos?: unknown[]; literal?: unknown[] }>(
+      `/${id}/parecidos`,
+      { method: 'POST', body: JSON.stringify({ textos: textos.slice(k, k + 60), ...(k === 0 && fuentes.length ? { fuentes: fuentes.slice(0, 20) } : {}) }) },
+      'No se pudo comprobar el grupo',
+    )
+    const lote = Array.isArray(r.parecidos) ? r.parecidos : []
+    for (let j = 0; j < Math.min(60, textos.length - k); j++) {
+      const x = lote[j] && typeof lote[j] === 'object' ? (lote[j] as Record<string, unknown>) : null
+      parecidos.push(x && typeof x.texto === 'string' ? { igual: x.igual === true, tema: typeof x.tema === 'string' ? x.tema : null, texto: x.texto.slice(0, 220) } : null)
+    }
+    if (k === 0) {
+      literal = (Array.isArray(r.literal) ? r.literal : []).flatMap((u) => {
+        const x = u && typeof u === 'object' ? (u as Record<string, unknown>) : null
+        return x && typeof x.hash === 'string' ? [{ hash: x.hash, usado: numero(x.usado), tope: numero(x.tope) }] : []
+      })
+    }
+  }
+  return { parecidos, literal }
 }
 
 export async function editarParrafo(pid: string, cambio: { texto?: string; huecos?: Hueco[]; tema?: string | null }): Promise<Parrafo> {

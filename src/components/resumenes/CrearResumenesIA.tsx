@@ -11,7 +11,8 @@ import { SelectorParte } from '@/components/mapas/ia/SelectorParte'
 import { LEVEL_INFO } from '@/lib/studioFlashcards'
 import { supabase } from '@/lib/supabaseBrowser'
 import { NIVELES, type Nivel } from '@/lib/resumenes/huecos'
-import { borrarBorrador, guardarBorrador, type BorradorResumen, type ModoResumen, type ParrafoBorrador } from '@/lib/resumenes/borrador'
+import { hashArchivo } from '@/lib/mapas/ia/docs'
+import { borrarBorrador, guardarBorrador, leerBorrador, type BorradorResumen, type FuenteFirmada, type ModoResumen, type ParrafoBorrador } from '@/lib/resumenes/borrador'
 import { DENSIDADES, MODOS, parrafosAprox, resumenesIAGenerar, resumenesIAIndice, type Densidad, type EstadoResumenesIA } from '@/lib/resumenes/ia'
 import { INK } from './ParrafoHuecos'
 import { VistaPreviaResumenes } from './VistaPreviaResumenes'
@@ -20,11 +21,30 @@ import { VistaPreviaResumenes } from './VistaPreviaResumenes'
 // flashcards (el archivo se lee en el navegador y no se sube; «Qué parte usar»; tema a tema con el
 // índice; niveles; cantidad; progreso en directo) más el MODO: «Resumen» (la IA condensa) o «Texto
 // original» (la IA elige párrafos del documento tal cual). Al final, la VISTA PREVIA editable, con
-// borrador en este navegador. Nada se guarda hasta aprobarla.
+// borrador en este navegador (uno por archivo: si ya hay uno de este archivo, se avisa antes de
+// sustituirlo). Nada se guarda hasta aprobarla.
 
 type Fase = 'elegir' | 'leyendo' | 'ajustes' | 'generando' | 'vista'
 type ProgresoTema = { titulo: string; estado: EstadoTema | 'espera' }
-type Resultado = { titulo: string; modo: ModoResumen; lista: ParrafoBorrador[]; fallidos: string[]; fuente: BorradorResumen['fuente']; creado?: number }
+type Resultado = {
+  titulo: string
+  modo: ModoResumen
+  lista: ParrafoBorrador[]
+  fallidos: string[]
+  fuente: BorradorResumen['fuente']
+  fuentes: FuenteFirmada[]
+  creado?: number
+}
+
+const deBorrador = (b: BorradorResumen): Resultado => ({ titulo: b.titulo, modo: b.modo, lista: b.lista, fallidos: b.fallidos, fuente: b.fuente, fuentes: b.fuentes, creado: b.creado })
+
+function haceCuanto(ms: number): string {
+  const min = Math.round(Math.max(0, Date.now() - ms) / 60000)
+  if (min < 1) return 'hace un momento'
+  if (min < 60) return `hace ${min} min`
+  const h = Math.round(min / 60)
+  return h < 24 ? `hace ${h} h` : `hace ${Math.round(h / 24)} días`
+}
 
 const fmt = (n: number) => n.toLocaleString('es-ES')
 
@@ -69,9 +89,11 @@ export default function CrearResumenesIA({
   const [temasLibro, setTemasLibro] = useState<TemaIndice[] | null>(null)
   const [cargandoIndice, setCargandoIndice] = useState(false)
   const [progresoTemas, setProgresoTemas] = useState<ProgresoTema[]>([])
-  const [resultado, setResultado] = useState<Resultado | null>(
-    borrador ? { titulo: borrador.titulo, modo: borrador.modo, lista: borrador.lista, fallidos: borrador.fallidos, fuente: borrador.fuente, creado: borrador.creado } : null,
-  )
+  const [resultado, setResultado] = useState<Resultado | null>(borrador ? deBorrador(borrador) : null)
+  // El archivo elegido (su SHA-256): la clave de su borrador. Y el borrador que ya tenga, si lo hay.
+  const [documento, setDocumento] = useState<string | null>(borrador?.documento ?? null)
+  const [previo, setPrevio] = useState<BorradorResumen | null>(null)
+  const [retomado, setRetomado] = useState<BorradorResumen | null>(borrador ?? null)
   const [usuario, setUsuario] = useState<string | null>(borrador?.usuario ?? null)
   useEffect(() => {
     if (usuario) return
@@ -81,19 +103,21 @@ export default function CrearResumenesIA({
   const persistir = useCallback(
     (lista: ParrafoBorrador[], r?: Resultado) => {
       const base = r ?? resultado
-      if (!usuario || !base) return
+      if (!usuario || !base || !documento) return
       void guardarBorrador({
         usuario,
+        documento,
         titulo: base.titulo,
-        nombreGrupo: borrador?.nombreGrupo ?? base.titulo.slice(0, 80),
+        nombreGrupo: retomado?.nombreGrupo ?? base.titulo.slice(0, 80),
         modo: base.modo,
         fuente: base.fuente,
+        fuentes: base.fuentes,
         lista,
         fallidos: base.fallidos,
         ...(base.creado ? { creado: base.creado } : {}),
       })
     },
-    [usuario, resultado, borrador],
+    [usuario, resultado, retomado, documento],
   )
 
   const inputRef = useRef<HTMLInputElement>(null)
@@ -138,9 +162,20 @@ export default function CrearResumenesIA({
     setArchivo(file)
     setFase('leyendo')
     setProgreso(null)
+    setDocumento(null)
+    setPrevio(null)
     try {
-      const r = await extraerDocumento(file, { maxChars: topeLectura, onProgreso: (hecho, total) => montado.current && setProgreso({ hecho, total }) })
+      const [r, hash] = await Promise.all([
+        extraerDocumento(file, { maxChars: topeLectura, onProgreso: (hecho, total) => montado.current && setProgreso({ hecho, total }) }),
+        hashArchivo(file),
+      ])
       if (!montado.current) return
+      setDocumento(hash)
+      const { data } = await supabase.auth.getSession()
+      const uid = data.session?.user.id
+      const ya = uid ? await leerBorrador(uid, hash) : null
+      if (!montado.current) return
+      setPrevio(ya)
       setExtraido(r)
       setTitulo(r.titulo)
       setTemasLibro(null)
@@ -208,8 +243,22 @@ export default function CrearResumenesIA({
 
   const alternarNivel = (n: Nivel) => setNiveles((ns) => (ns.includes(n) ? ns.filter((x) => x !== n) : [...ns, n].sort()))
 
+  /** Seguir con el borrador que ya había de este archivo (sin gastar IA). */
+  const retomarPrevio = () => {
+    if (!previo) return
+    setRetomado(previo)
+    setResultado(deBorrador(previo))
+    setFase('vista')
+  }
+
   const generar = async () => {
     if (!extraido || !puedeGenerar) return
+    if (
+      previo &&
+      !window.confirm(`Ya tienes un borrador de este documento sin guardar (${previo.lista.length} párrafos, ${haceCuanto(previo.actualizado)}). Si generas de nuevo, se sustituirá. ¿Seguir?`)
+    ) {
+      return
+    }
     setError(null)
     setSegundos(0)
     setFaseIA('leyendo')
@@ -249,7 +298,10 @@ export default function CrearResumenesIA({
           ...(archivo ? { nombre: archivo.name.slice(0, 160) } : {}),
           ...(extraido.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
         },
+        fuentes: r.fuentes,
       }
+      setRetomado(null)
+      setPrevio(null)
       setResultado(nuevo)
       // Guardado ya (antes de tocar nada): una recarga a mitad de revisión no lo pierde.
       persistir(lista, nuevo)
@@ -325,11 +377,12 @@ export default function CrearResumenesIA({
             )}
             <VistaPreviaResumenes
               inicial={resultado.lista}
-              nombreGrupo={(borrador?.nombreGrupo ?? resultado.titulo).slice(0, 80)}
+              nombreGrupo={(retomado?.nombreGrupo ?? resultado.titulo).slice(0, 80)}
               modo={resultado.modo}
               fuente={resultado.fuente}
+              fuentes={resultado.fuentes}
               persistir={persistir}
-              alGuardar={() => usuario && void borrarBorrador(usuario)}
+              alGuardar={() => usuario && documento && void borrarBorrador(usuario, documento)}
               {...(extraido
                 ? {
                     onVolver: () => {
@@ -425,6 +478,8 @@ export default function CrearResumenesIA({
                     onClick={() => {
                       setExtraido(null)
                       setArchivo(null)
+                      setDocumento(null)
+                      setPrevio(null)
                       setError(null)
                       setFase('elegir')
                     }}
@@ -433,6 +488,23 @@ export default function CrearResumenesIA({
                     Cambiar
                   </button>
                 </div>
+                {previo && (
+                  <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl bg-[#FBF3E1] px-4 py-3" data-aviso-borrador>
+                    <span className="material-symbols-outlined text-[22px] text-[#B07A1E]">draft</span>
+                    <p className="min-w-0 flex-1 text-[0.8rem] text-[#2C3E50]">
+                      Ya tienes un borrador de este documento: <b>{previo.lista.length} párrafos</b> ({previo.modo === 'literal' ? 'texto original' : 'resumen'},{' '}
+                      {haceCuanto(previo.actualizado)}). Si generas de nuevo, se sustituirá.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={retomarPrevio}
+                      className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-extrabold text-white"
+                      style={{ background: '#E8A598', border: `2px solid ${INK}`, boxShadow: `2px 2px 0 0 ${INK}` }}
+                    >
+                      Retomar ese borrador
+                    </button>
+                  </div>
+                )}
                 {extraido.avisos.map((a) => (
                   <p key={a} className="mt-2 text-xs font-medium text-[#B07A1E]">
                     {a}

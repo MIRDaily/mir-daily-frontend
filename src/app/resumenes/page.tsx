@@ -13,7 +13,7 @@ import { GhostButton, Hero, INK, SectionLabel, StatChip, StickerButton, StickerC
 import CrearResumenesIA from '@/components/resumenes/CrearResumenesIA'
 import { crearGrupo, listarGrupos, type GrupoResumen } from '@/lib/resumenes/api'
 import { resumenesIAEstado, type EstadoResumenesIA } from '@/lib/resumenes/ia'
-import { borrarBorrador, leerBorrador, type BorradorResumen } from '@/lib/resumenes/borrador'
+import { borrarBorrador, leerBorradores, type BorradorResumen } from '@/lib/resumenes/borrador'
 
 const ESTADOS: { k: keyof GrupoResumen['resumen']; nombre: string; color: string }[] = [
   { k: 'new', nombre: 'nuevos', color: '#7D8A96' },
@@ -56,7 +56,8 @@ export default function ResumenesPage() {
   const [error, setError] = useState<string | null>(null)
   const [ia, setIa] = useState<EstadoResumenesIA | null>(null)
   const [iaAbierto, setIaAbierto] = useState<{ borrador?: BorradorResumen } | null>(null)
-  const [borrador, setBorrador] = useState<BorradorResumen | null>(null)
+  // Borradores de la IA en este navegador: uno por documento, del más reciente al más viejo.
+  const [borradores, setBorradores] = useState<BorradorResumen[]>([])
   const [usuario, setUsuario] = useState<string | null>(null)
   const [nuevo, setNuevo] = useState<string | null>(null)
   const [creando, setCreando] = useState(false)
@@ -91,7 +92,7 @@ export default function ResumenesPage() {
       setEstado('listo')
       setUsuario(session.user.id)
       void resumenesIAEstado().then((e) => vivo && setIa(e))
-      void leerBorrador(session.user.id).then((b) => vivo && setBorrador(b))
+      void leerBorradores(session.user.id).then((bs) => vivo && setBorradores(bs))
     })()
     return () => {
       vivo = false
@@ -177,26 +178,36 @@ export default function ResumenesPage() {
           </StickerCard>
         )}
 
-        {borrador && (
-          <StickerCard className="flex flex-wrap items-center gap-3 p-4" style={{ background: '#FBF3E1' }}>
-            <span className="material-symbols-outlined text-[26px] text-[#B07A1E]">draft</span>
-            <p className="min-w-0 flex-1 text-sm text-[#2C3E50]">
-              Tienes <b>{borrador.lista.length} párrafos sin revisar</b> de «{borrador.titulo}» ({borrador.modo === 'literal' ? 'texto original' : 'resumen'},{' '}
-              {haceCuanto(borrador.actualizado)}). Se guardan solo en este navegador 7 días.
+        {borradores.length > 0 && (
+          <section className="flex flex-col gap-2" aria-label="Borradores sin guardar" data-borradores>
+            <p className="text-xs font-bold uppercase tracking-wide text-[#B07A1E]">
+              {borradores.length === 1 ? 'Un borrador sin guardar' : `${borradores.length} borradores sin guardar`} · solo en este navegador, 7 días
             </p>
-            <GhostButton
-              icon="delete"
-              onClick={() => {
-                if (!usuario || !window.confirm('¿Descartar el borrador? No se puede recuperar.')) return
-                void borrarBorrador(usuario).then(() => setBorrador(null))
-              }}
-            >
-              Descartar
-            </GhostButton>
-            <StickerButton icon="edit_note" onClick={() => setIaAbierto({ borrador })}>
-              Retomar la revisión
-            </StickerButton>
-          </StickerCard>
+            {borradores.map((b) => (
+              <div key={b.clave} data-borrador={b.documento}>
+              <StickerCard className="flex flex-wrap items-center gap-3 p-4" style={{ background: '#FBF3E1' }}>
+                <span className="material-symbols-outlined text-[26px] text-[#B07A1E]">draft</span>
+                <p className="min-w-0 flex-1 text-sm text-[#2C3E50]">
+                  <b>{b.lista.length} párrafos sin revisar</b> de «{b.titulo}»
+                  {b.fuente.nombre && b.fuente.nombre !== b.titulo ? <span className="text-[#7D8A96]"> ({b.fuente.nombre})</span> : null} ·{' '}
+                  {b.modo === 'literal' ? 'texto original' : 'resumen'} · {haceCuanto(b.actualizado)}
+                </p>
+                <GhostButton
+                  icon="delete"
+                  onClick={() => {
+                    if (!usuario || !window.confirm(`¿Descartar el borrador de «${b.titulo}»? No se puede recuperar.`)) return
+                    void borrarBorrador(usuario, b.documento).then(() => setBorradores((xs) => xs.filter((x) => x.clave !== b.clave)))
+                  }}
+                >
+                  Descartar
+                </GhostButton>
+                <StickerButton icon="edit_note" onClick={() => setIaAbierto({ borrador: b })}>
+                  Retomar
+                </StickerButton>
+              </StickerCard>
+              </div>
+            ))}
+          </section>
         )}
 
         {error && <p className="rounded-2xl bg-[#FAEAED] px-4 py-3 text-sm font-bold text-[#B04A5E]">{error}</p>}
@@ -258,7 +269,7 @@ export default function ResumenesPage() {
           onClose={() => {
             setIaAbierto(null)
             void cargar()
-            if (usuario) void leerBorrador(usuario).then(setBorrador)
+            if (usuario) void leerBorradores(usuario).then(setBorradores)
           }}
         />
       )}
