@@ -958,7 +958,7 @@ export default function StudioPage() {
             <Reveal once reduceMotion={reduceMotion}>
               <h3 className="mb-4 text-xs font-bold uppercase tracking-wider">Acceso Rápido</h3>
             </Reveal>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Reveal once reduceMotion={reduceMotion}>
                 <Link
                   href="/library"
@@ -998,6 +998,20 @@ export default function StudioPage() {
                   <div>
                     <h4 className="font-bold text-[#2c3e50]">Mapas mentales</h4>
                     <p className="text-xs">Organiza un tema en un mapa</p>
+                  </div>
+                </Link>
+              </Reveal>
+              <Reveal once reduceMotion={reduceMotion}>
+                <Link
+                  href="/resumenes"
+                  className="group flex cursor-pointer items-center gap-4 rounded-xl border border-[#EAE4E2] bg-white p-4 transition-colors hover:border-[#E8A598]/50"
+                >
+                  <div className="rounded-lg bg-[#F2EFED] p-2 text-[#7D8A96] transition-colors group-hover:bg-[#E8A598] group-hover:text-white">
+                    <span className="material-symbols-outlined">text_snippet</span>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-[#2c3e50]">Resúmenes activos</h4>
+                    <p className="text-xs">Párrafos con huecos para repasar</p>
                   </div>
                 </Link>
               </Reveal>

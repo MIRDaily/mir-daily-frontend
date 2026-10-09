@@ -15,6 +15,7 @@ const NOMBRE: Record<FaseIA, string> = {
   estructura: 'Estructura',
   tablas: 'Tablas',
   tarjetas: 'Tarjetas',
+  parrafos: 'Párrafos',
   ordenando: 'Ordenando',
 }
 
