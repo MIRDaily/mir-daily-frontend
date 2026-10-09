@@ -1,0 +1,206 @@
+// Resúmenes activos: lo que es puro (sin React ni red) y se prueba con `npm test`. Un párrafo es texto
+// plano + huecos [{ i, f, n }]: el trozo texto[i, f) se tapa al estudiar y n (1-4) es su nivel. Las
+// mismas reglas que valida el servidor (src/services/resumenesIA/huecos.js) y el CHECK de la base de
+// datos: dentro del texto, sin solaparse, con texto, de 1 a 8.
+//
+// Aquí van además las operaciones de la vista previa (tocar una palabra, seleccionar un trozo, cambiar
+// el nivel, recolocar los huecos tras editar el texto) y las del estudio (qué huecos se tapan con el
+// filtro de niveles, el siguiente que se destapa y la nota que se propone).
+
+export type Nivel = 1 | 2 | 3 | 4
+export type Hueco = { i: number; f: number; n: Nivel }
+export type Nota = 1 | 2 | 3 | 4
+
+export const NIVELES: Nivel[] = [1, 2, 3, 4]
+export const MAX_HUECOS = 8
+export const MIN_TEXTO = 20
+export const MAX_TEXTO = 800
+export const MAX_TEMA = 120
+
+export const esNivel = (v: unknown): v is Nivel => v === 1 || v === 2 || v === 3 || v === 4
+
+/** Nombre de cada nota de repaso (FSRS). */
+export const NOMBRE_NOTA: Record<Nota, string> = { 1: 'Otra vez', 2: 'Difícil', 3: 'Bien', 4: 'Fácil' }
+
+/** La nota que se propone al acabar un párrafo: todos bien = Bien; uno mal = Difícil; más = Otra vez. */
+export function notaDeRepaso(fallos: number): Nota {
+  if (fallos <= 0) return 3
+  if (fallos === 1) return 2
+  return 1
+}
+
+/** El mismo texto, para no guardar dos veces el mismo párrafo (como el servidor). */
+export function claveParrafo(texto: string): string {
+  return texto.normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+/** null si los huecos valen para el texto; si no, el motivo (para enseñarlo). */
+export function errorHuecos(texto: string, huecos: Hueco[]): string | null {
+  if (huecos.length < 1) return 'Marca al menos un hueco'
+  if (huecos.length > MAX_HUECOS) return `Como mucho ${MAX_HUECOS} huecos por párrafo`
+  const orden = [...huecos].sort((a, b) => a.i - b.i)
+  for (let k = 0; k < orden.length; k++) {
+    const h = orden[k]
+    if (!Number.isInteger(h.i) || !Number.isInteger(h.f) || !esNivel(h.n)) return 'Huecos no válidos'
+    if (h.i < 0 || h.f <= h.i || h.f > texto.length) return 'Un hueco se sale del texto'
+    if (!texto.slice(h.i, h.f).trim()) return 'Un hueco no tiene texto'
+    if (k > 0 && h.i < orden[k - 1].f) return 'Dos huecos se solapan'
+  }
+  return null
+}
+
+/**
+ * Huecos que llegan de fuera (el servidor, IndexedDB): solo los que valen, ordenados, sin solaparse y
+ * como mucho 8. Nunca se confía en lo que llega.
+ */
+export function sanearHuecos(raw: unknown, texto: string): Hueco[] {
+  if (!Array.isArray(raw)) return []
+  const out: Hueco[] = []
+  const lista = raw
+    .map((h) => (h && typeof h === 'object' ? (h as Record<string, unknown>) : null))
+    .filter((h): h is Record<string, unknown> => !!h)
+    .map((h) => ({ i: h.i, f: h.f, n: h.n }))
+    .filter((h): h is Hueco => Number.isInteger(h.i) && Number.isInteger(h.f) && esNivel(h.n))
+    .sort((a, b) => a.i - b.i)
+  for (const h of lista) {
+    if (h.i < 0 || h.f <= h.i || h.f > texto.length || !texto.slice(h.i, h.f).trim()) continue
+    if (out.length && h.i < out[out.length - 1].f) continue
+    out.push({ i: h.i, f: h.f, n: h.n })
+    if (out.length >= MAX_HUECOS) break
+  }
+  return out
+}
+
+export type Segmento = { t: string; k?: number }
+
+/** Texto partido en trozos: los de fuera de los huecos y cada hueco (con su índice `k`). */
+export function segmentos(texto: string, huecos: Hueco[]): Segmento[] {
+  const out: Segmento[] = []
+  let pos = 0
+  huecos.forEach((h, k) => {
+    if (h.i > pos) out.push({ t: texto.slice(pos, h.i) })
+    out.push({ t: texto.slice(h.i, h.f), k })
+    pos = h.f
+  })
+  if (pos < texto.length) out.push({ t: texto.slice(pos) })
+  return out
+}
+
+// Lo que no es parte de un dato en los bordes de una palabra: «(anti-TPO).» → «anti-TPO».
+const BORDE_IZQ = /^[\s¿¡([{«"'“‘]+/
+const BORDE_DER = /[\s.,;:)\]}»"'”’!?]+$/
+
+/** Ajusta un trozo [i, f) a palabras enteras y le quita espacios y puntuación de los bordes. */
+export function ajustarSeleccion(texto: string, i: number, f: number): { i: number; f: number } | null {
+  let a = Math.max(0, Math.min(i, f))
+  let b = Math.min(texto.length, Math.max(i, f))
+  // Hasta el principio y el final de la palabra (si se ha empezado o acabado a mitad).
+  while (a > 0 && !/\s/.test(texto[a - 1]) && !/\s/.test(texto[a] ?? ' ')) a -= 1
+  while (b < texto.length && !/\s/.test(texto[b]) && b > 0 && !/\s/.test(texto[b - 1])) b += 1
+  const trozo = texto.slice(a, b)
+  const izq = (BORDE_IZQ.exec(trozo) ?? [''])[0].length
+  const der = (BORDE_DER.exec(trozo.slice(izq)) ?? [''])[0].length
+  a += izq
+  b -= der
+  return b > a && texto.slice(a, b).trim() ? { i: a, f: b } : null
+}
+
+/** La palabra en la posición `pos` (sin la puntuación de sus bordes), o null si ahí hay un espacio. */
+export function palabraEn(texto: string, pos: number): { i: number; f: number } | null {
+  if (pos < 0 || pos >= texto.length || /\s/.test(texto[pos])) return null
+  return ajustarSeleccion(texto, pos, pos + 1)
+}
+
+export type Cambio = { huecos: Hueco[]; error?: string }
+
+/**
+ * Crear un hueco sobre [i, f) (ajustado a palabras). Los huecos que toca se funden en él (con el nivel
+ * más alto). Error si pasaría de 8.
+ */
+export function crearHueco(texto: string, huecos: Hueco[], i: number, f: number, nivel: Nivel): Cambio {
+  const sel = ajustarSeleccion(texto, i, f)
+  if (!sel) return { huecos, error: 'Selecciona alguna palabra' }
+  const tocados = huecos.filter((h) => h.i < sel.f && h.f > sel.i)
+  const nuevo: Hueco = {
+    i: Math.min(sel.i, ...tocados.map((h) => h.i)),
+    f: Math.max(sel.f, ...tocados.map((h) => h.f)),
+    n: tocados.length ? (Math.max(nivel, ...tocados.map((h) => h.n)) as Nivel) : nivel,
+  }
+  const resto = huecos.filter((h) => !tocados.includes(h))
+  if (resto.length + 1 > MAX_HUECOS) return { huecos, error: `Como mucho ${MAX_HUECOS} huecos por párrafo` }
+  return { huecos: [...resto, nuevo].sort((a, b) => a.i - b.i) }
+}
+
+/** Tocar una palabra: si está en un hueco, se quita el hueco; si no, la palabra pasa a ser un hueco. */
+export function alternarPalabra(texto: string, huecos: Hueco[], pos: number, nivel: Nivel): Cambio {
+  const dentro = huecos.findIndex((h) => pos >= h.i && pos < h.f)
+  if (dentro >= 0) return { huecos: huecos.filter((_, k) => k !== dentro) }
+  const p = palabraEn(texto, pos)
+  if (!p) return { huecos }
+  return crearHueco(texto, huecos, p.i, p.f, nivel)
+}
+
+export const quitarHueco = (huecos: Hueco[], k: number): Hueco[] => huecos.filter((_, j) => j !== k)
+export const cambiarNivel = (huecos: Hueco[], k: number, n: Nivel): Hueco[] => huecos.map((h, j) => (j === k ? { ...h, n } : h))
+
+/**
+ * El texto ha cambiado: los huecos de lo que no ha cambiado se quedan (y se mueven si hace falta); los
+ * de la parte cambiada se buscan por su texto (si sale una sola vez, sin solaparse, se recoloca) y si
+ * no, se pierden. Devuelve también cuántos se han perdido, para avisar.
+ */
+export function ajustarTrasEditar(viejo: string, nuevo: string, huecos: Hueco[]): { huecos: Hueco[]; perdidos: number } {
+  let pre = 0
+  while (pre < viejo.length && pre < nuevo.length && viejo[pre] === nuevo[pre]) pre += 1
+  let suf = 0
+  while (suf < viejo.length - pre && suf < nuevo.length - pre && viejo[viejo.length - 1 - suf] === nuevo[nuevo.length - 1 - suf]) suf += 1
+  const finViejo = viejo.length - suf
+  const delta = nuevo.length - viejo.length
+  const quedan: Hueco[] = []
+  const sueltos: Hueco[] = []
+  for (const h of huecos) {
+    if (h.f <= pre) quedan.push(h)
+    else if (h.i >= finViejo) quedan.push({ ...h, i: h.i + delta, f: h.f + delta })
+    else sueltos.push(h)
+  }
+  let perdidos = 0
+  for (const h of sueltos) {
+    const t = viejo.slice(h.i, h.f)
+    const a = nuevo.indexOf(t)
+    const unico = a >= 0 && nuevo.indexOf(t, a + 1) < 0
+    if (unico && !quedan.some((q) => q.i < a + t.length && q.f > a)) quedan.push({ i: a, f: a + t.length, n: h.n })
+    else perdidos += 1
+  }
+  quedan.sort((a, b) => a.i - b.i)
+  return { huecos: sanearHuecos(quedan, nuevo), perdidos }
+}
+
+// ---------------------------------------------------------------------------
+// Estudio
+// ---------------------------------------------------------------------------
+
+/** Los huecos que se tapan con el filtro de niveles (los demás se ven). null = todos los niveles. */
+export function huecosTapados(huecos: Hueco[], niveles: Nivel[] | null): number[] {
+  return huecos.flatMap((h, k) => (!niveles || niveles.length === 0 || niveles.includes(h.n) ? [k] : []))
+}
+
+export type Respuesta = 'sabia' | 'no'
+
+/** Estado del estudio de un párrafo: qué huecos están tapados y qué se ha respondido en cada uno. */
+export type EstadoParrafo = { tapados: number[]; respuestas: Record<number, Respuesta> }
+
+export function empezarParrafo(huecos: Hueco[], niveles: Nivel[] | null): EstadoParrafo {
+  return { tapados: huecosTapados(huecos, niveles), respuestas: {} }
+}
+
+/** El siguiente hueco tapado aún sin destapar (en orden de lectura), o null si ya están todos. */
+export function siguienteTapado(e: EstadoParrafo): number | null {
+  return e.tapados.find((k) => !(k in e.respuestas)) ?? null
+}
+
+export function responder(e: EstadoParrafo, k: number, r: Respuesta): EstadoParrafo {
+  if (!e.tapados.includes(k)) return e
+  return { ...e, respuestas: { ...e.respuestas, [k]: r } }
+}
+
+export const terminado = (e: EstadoParrafo) => e.tapados.every((k) => k in e.respuestas)
+export const fallos = (e: EstadoParrafo) => Object.values(e.respuestas).filter((r) => r === 'no').length
