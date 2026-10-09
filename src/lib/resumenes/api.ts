@@ -228,6 +228,20 @@ export async function registrarRepaso(
   return { grade: n(r.grade ?? d.grade), sugerida: n(r.sugerida) }
 }
 
+/**
+ * Deshace el último repaso de la sesión (el servidor restaura el progreso y reabre la sesión si estaba
+ * cerrada). `parrafo`: el párrafo para enseñarlo otra vez (null si se borró después de repasarlo).
+ * Lanza con el mensaje del servidor si no hay nada que deshacer (409).
+ */
+export async function deshacerRepaso(id: string, sessionId: string): Promise<{ deckItemId: number; parrafo: Parrafo | null }> {
+  const r = await pedir<{ deckItemId?: number; parrafo?: unknown }>(
+    `/${id}/deshacer`,
+    { method: 'POST', body: JSON.stringify({ sessionId }) },
+    'No se pudo deshacer el repaso',
+  )
+  return { deckItemId: numero(r.deckItemId), parrafo: sanearParrafoGuardado(r.parrafo) }
+}
+
 /** Cerrar la sesión: si falla, no rompe nada (el servidor la cierra sola a los 30 min). */
 export async function terminarSesion(id: string, sessionId: string): Promise<void> {
   try {

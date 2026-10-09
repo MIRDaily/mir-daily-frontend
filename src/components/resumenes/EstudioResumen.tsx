@@ -17,6 +17,7 @@ import {
   type Respuesta,
 } from '@/lib/resumenes/huecos'
 import {
+  deshacerRepaso,
   editarParrafo,
   empezarSesion,
   quitarParrafo,
@@ -33,10 +34,13 @@ import { EditorParrafo } from './EditorParrafo'
 // niveles elegidos; los demás se ven). Espacio o tocar destapa el siguiente; en cada hueco, «Lo sabía» o
 // «No lo sabía» (teclas 2 y 1). Al acabar el párrafo se propone la nota de repaso (todos bien = Bien; uno
 // mal = Difícil; más = Otra vez) y se puede cambiar (1-4) antes de pasar al siguiente (Enter). «Ver de
-// dónde sale» (F), editar (E) y borrar el párrafo sin salir de la sesión.
+// dónde sale» (F), editar (E) y borrar el párrafo sin salir de la sesión. «Deshacer» (Ctrl+Z) vuelve
+// atrás el último repaso (también desde la pantalla de fin: la sesión se reabre) y enseña otra vez el párrafo.
 
 const COLOR_NOTA: Record<Nota, string> = { 1: '#B04A5E', 2: '#B07A1E', 3: '#5E8C5A', 4: '#3F7EA6' }
 type Resumen = { parrafos: number; sabidos: number; fallados: number; notas: Record<Nota, number> }
+/** Un repaso registrado en esta sesión (para descontarlo del resumen al deshacerlo). */
+type Hecho = { tapados: number; fallos: number; grade: Nota }
 const resumenVacio = (): Resumen => ({ parrafos: 0, sabidos: 0, fallados: 0, notas: { 1: 0, 2: 0, 3: 0, 4: 0 } })
 
 export function EstudioResumen({
@@ -66,6 +70,7 @@ export function EstudioResumen({
   const [editando, setEditando] = useState(false)
   const [resumen, setResumen] = useState<Resumen>(resumenVacio)
   const [vuelta, setVuelta] = useState(0)
+  const [pila, setPila] = useState<Hecho[]>([])
   const desde = useRef(Date.now())
 
   const mostrar = useCallback((p: Parrafo) => {
@@ -107,6 +112,7 @@ export function EstudioResumen({
     let vivo = true
     setFin(null)
     setResumen(resumenVacio())
+    setPila([])
     if (!arranque.current || arranque.current.vuelta !== vuelta) arranque.current = { vuelta, sesion: empezarSesion(grupoId, ajustes) }
     void arranque.current.sesion
       .then((s) => {
@@ -162,6 +168,7 @@ export function EstudioResumen({
           fallados: x.fallados + fallos,
           notas: { ...x.notas, [r.grade]: x.notas[r.grade] + 1 },
         }))
+        setPila((x) => [...x, { tapados: estado.tapados.length, fallos, grade: r.grade }])
         onCambio?.()
       }
       setOcupado(false)
@@ -171,6 +178,39 @@ export function EstudioResumen({
       setOcupado(false)
     }
   }, [parrafo, estado, sesion, listo, ocupado, grupoId, fallos, nota, propuesta, cargarSiguiente, onCambio])
+
+  // Deshacer el último repaso: el servidor restaura el progreso (y reabre la sesión si estaba cerrada);
+  // aquí se descuenta del resumen y se enseña otra vez el párrafo, sin responder.
+  const deshacer = useCallback(async () => {
+    if (!sesion || ocupado || pila.length === 0) return
+    setOcupado(true)
+    setError(null)
+    try {
+      const r = await deshacerRepaso(grupoId, sesion)
+      const u = pila[pila.length - 1]
+      setPila((x) => x.slice(0, -1))
+      setResumen((x) => ({
+        parrafos: Math.max(0, x.parrafos - 1),
+        sabidos: Math.max(0, x.sabidos - (u.tapados - u.fallos)),
+        fallados: Math.max(0, x.fallados - u.fallos),
+        notas: { ...x.notas, [u.grade]: Math.max(0, x.notas[u.grade] - 1) },
+      }))
+      setFin(null)
+      onCambio?.()
+      if (r.parrafo) mostrar(r.parrafo)
+      else {
+        // Se borró después de repasarlo: el repaso se deshace igual y se sigue con el siguiente.
+        setOcupado(false)
+        await cargarSiguiente(sesion)
+      }
+    } catch (e) {
+      // Nada que deshacer en el servidor: la pila de aquí ya no vale.
+      if ((e as { status?: number }).status === 409) setPila([])
+      setError(e instanceof Error ? e.message : 'No se pudo deshacer el repaso')
+    } finally {
+      setOcupado(false)
+    }
+  }, [sesion, ocupado, pila, grupoId, onCambio, mostrar, cargarSiguiente])
 
   const borrar = async () => {
     if (!parrafo || !sesion) return
@@ -191,9 +231,16 @@ export function EstudioResumen({
   // Enter (o Espacio) pasa al siguiente; F, el origen; E, editar.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (editando || fin) return
+      if (editando) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      // Ctrl+Z: deshacer el último repaso (también en la pantalla de fin).
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        void deshacer()
+        return
+      }
+      if (fin) return
       if (e.ctrlKey || e.metaKey || e.altKey) return
       if (destapado !== null) {
         if (e.key === '2') { e.preventDefault(); contestar('sabia') }
@@ -212,7 +259,7 @@ export function EstudioResumen({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [editando, fin, destapado, listo, contestar, pasar, destaparSiguiente])
+  }, [editando, fin, destapado, listo, contestar, pasar, destaparSiguiente, deshacer])
 
   const segs = useMemo(() => (parrafo ? segmentos(parrafo.texto, parrafo.huecos) : []), [parrafo])
 
@@ -246,7 +293,20 @@ export function EstudioResumen({
             ) : null,
           )}
         </div>
+        {error && <p className="mt-3 text-sm font-bold text-[#B04A5E]">{error}</p>}
         <div className="mt-5 flex flex-wrap justify-center gap-2">
+          {pila.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void deshacer()}
+              disabled={ocupado}
+              title="Deshacer el último repaso (Ctrl+Z)"
+              className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-[#2C3E50] disabled:opacity-50"
+              style={{ border: `2px solid ${INK}` }}
+            >
+              <span className="material-symbols-outlined align-middle text-[18px]">undo</span> Deshacer el último
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setVuelta((v) => v + 1)}
@@ -279,6 +339,15 @@ export function EstudioResumen({
           {niveles ? ` (${niveles.map((n) => LEVEL_INFO[n].name.toLowerCase()).join(', ')})` : ''}
         </span>
         <span className="ml-auto flex gap-1">
+          <button
+            type="button"
+            onClick={() => void deshacer()}
+            disabled={pila.length === 0 || ocupado}
+            className="rounded-lg px-2 py-1 font-bold hover:bg-white hover:text-[#2C3E50] disabled:opacity-40 disabled:hover:bg-transparent"
+            title="Deshacer el último repaso (Ctrl+Z)"
+          >
+            <span className="material-symbols-outlined align-middle text-[16px]">undo</span> Deshacer
+          </button>
           <button type="button" onClick={() => setVerOrigen((v) => !v)} className="rounded-lg px-2 py-1 font-bold hover:bg-white hover:text-[#2C3E50]" title="Ver de dónde sale (F)">
             <span className="material-symbols-outlined align-middle text-[16px]">source</span> De dónde sale
           </button>
@@ -471,7 +540,7 @@ export function EstudioResumen({
         </div>
       )}
       {error && <p className="text-center text-sm font-bold text-[#B04A5E]">{error}</p>}
-      <p className="text-center text-[0.7rem] text-[#7D8A96]">Espacio destapa · 2 lo sabía · 1 no lo sabía · al terminar, 1-4 cambian la nota y Enter sigue · F origen · E editar</p>
+      <p className="text-center text-[0.7rem] text-[#7D8A96]">Espacio destapa · 2 lo sabía · 1 no lo sabía · al terminar, 1-4 cambian la nota y Enter sigue · F origen · E editar · Ctrl+Z deshacer</p>
       <style>{`@keyframes ra-latido{0%,100%{filter:none}50%{filter:brightness(1.12)}}`}</style>
     </div>
   )
