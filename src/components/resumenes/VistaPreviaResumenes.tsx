@@ -304,13 +304,21 @@ export function VistaPreviaResumenes({
 
   const aNuevo = (p: ParrafoBorrador): ParrafoNuevo => {
     const pagina = p.ia?.pagina ?? p.ia?.diapositiva
+    // El fragmento del documento («Ver de dónde sale»), solo en «Resumen»: en «Texto original» el párrafo ya es el texto.
+    const fragmento = modo !== 'literal' ? p.ia?.fragmento : undefined
     return {
       tema: p.tema,
       modo,
       texto: p.texto,
       huecos: p.huecos,
-      ...(fuente.nombre || pagina
-        ? { origen: { ...(fuente.nombre ? { name: fuente.nombre } : {}), ...(pagina ? { page: pagina, unit: p.ia?.diapositiva ? 'diapositiva' : 'pagina' } : {}) } }
+      ...(fuente.nombre || pagina || fragmento
+        ? {
+            origen: {
+              ...(fuente.nombre ? { name: fuente.nombre } : {}),
+              ...(pagina ? { page: pagina, unit: p.ia?.diapositiva ? 'diapositiva' : 'pagina' } : {}),
+              ...(fragmento ? { fragmento } : {}),
+            },
+          }
         : {}),
     }
   }

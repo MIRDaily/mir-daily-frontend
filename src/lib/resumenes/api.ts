@@ -44,7 +44,7 @@ export type ParrafoNuevo = {
   modo?: ModoResumen
   texto: string
   huecos: Hueco[]
-  origen?: { name?: string; page?: number; unit?: 'pagina' | 'diapositiva' }
+  origen?: { name?: string; page?: number; unit?: 'pagina' | 'diapositiva'; fragmento?: string }
 }
 
 export type AjustesEstudio = {

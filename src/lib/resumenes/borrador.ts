@@ -31,8 +31,11 @@ export const DOCUMENTO_V1 = 'documento'
 
 export type ModoResumen = 'resumen' | 'literal'
 
-/** Lo que dice la revisión de la IA de un párrafo: página de origen y si es dudoso. */
-export type OrigenParrafo = { pagina?: number; diapositiva?: number; seccion?: string; dudoso?: string }
+/**
+ * Lo que dice la revisión de la IA de un párrafo: página de origen, si es dudoso y, en «Resumen», el
+ * fragmento corto del documento (≤300) para «Ver de dónde sale».
+ */
+export type OrigenParrafo = { pagina?: number; diapositiva?: number; seccion?: string; dudoso?: string; fragmento?: string }
 
 /** De qué documento salen unos párrafos, firmado por el servidor al generar (no se puede cambiar). */
 export type FuenteFirmada = { hash: string; caracteres: number; firma: string }
@@ -94,6 +97,8 @@ export function sanearOrigen(raw: unknown): OrigenParrafo | undefined {
     ...(entero(r.diapositiva) ? { diapositiva: entero(r.diapositiva) } : {}),
     ...(typeof r.seccion === 'string' && r.seccion ? { seccion: r.seccion.slice(0, 80) } : {}),
     ...(typeof r.dudoso === 'string' && r.dudoso ? { dudoso: r.dudoso.slice(0, 20) } : {}),
+    // Nunca se recorta (sería otro texto del documento): si pasa de 300, fuera; el servidor lo rechazaría.
+    ...(typeof r.fragmento === 'string' && r.fragmento.trim() && r.fragmento.length <= 300 ? { fragmento: r.fragmento } : {}),
   }
   return Object.keys(o).length ? o : undefined
 }

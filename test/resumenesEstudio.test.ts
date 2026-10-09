@@ -157,3 +157,11 @@ test('lo que llega del servidor: fragmento de origen y huecos fallados saneados'
   assert.equal(sanearFragmento('   '), null)
   assert.equal(sanearFragmento('x'.repeat(400))?.length, 300)
 })
+
+test('borrador: conserva el fragmento de la IA (≤300) y nunca lo recorta', async () => {
+  const { sanearOrigen } = await import('@/lib/resumenes/borrador')
+  assert.deepEqual(sanearOrigen({ pagina: 2, fragmento: '…en mayores de 50 años…', otro: 1 }), { pagina: 2, fragmento: '…en mayores de 50 años…' })
+  assert.deepEqual(sanearOrigen({ pagina: 2, fragmento: 'x'.repeat(301) }), { pagina: 2 }, 'más largo: fuera, no recortado')
+  assert.deepEqual(sanearOrigen({ pagina: 2, fragmento: 7 }), { pagina: 2 })
+  assert.equal(sanearOrigen({ fragmento: '   ' }), undefined)
+})
