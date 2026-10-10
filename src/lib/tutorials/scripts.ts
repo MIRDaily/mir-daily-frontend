@@ -149,10 +149,44 @@ export const TUTORIAL_MAPAS: Tutorial = {
   ],
 }
 
+export const TUTORIAL_RESUMENES: Tutorial = {
+  /* La primera vez en /resumenes. Cuatro paradas, una por idea que no se
+     adivina desde fuera: qué es un resumen activo, cómo se estudia (destapar
+     y decir si lo sabías; en el móvil, deslizando), cómo se crean los huecos
+     y por qué vuelven. Las anclas existen siempre: `resumenes-zona` es el
+     ejemplo interactivo si aún no hay grupos o la lista de grupos si los hay,
+     y `resumenes-nuevo` es el botón de crear grupo. Sin cierre: la despedida
+     ya la dio el Daily. */
+  id: 'resumenes.v1',
+  steps: [
+    {
+      pose: 'saludo',
+      placement: 'centro',
+      text: 'Esto son los resúmenes activos: tus apuntes, con los datos clave tapados.',
+    },
+    {
+      anchor: 'resumenes-zona',
+      pose: 'senalando',
+      text: 'Lees, intentas recordar lo tapado y lo destapas. Luego dices si lo sabías: en el móvil, deslizando.',
+    },
+    {
+      anchor: 'resumenes-nuevo',
+      pose: 'confiado',
+      text: 'Para hacer los tuyos, crea un grupo y escribe: tocando una palabra, la tapas.',
+    },
+    {
+      pose: 'hablando-variante2',
+      placement: 'centro',
+      text: 'Cada repaso los reprograma, y vuelven justo antes de que se te olviden. Lo que toque hoy te lo aviso en el Studio.',
+    },
+  ],
+}
+
 export const TUTORIALS: Record<TutorialId, Tutorial> = {
   [TUTORIAL_DAILY.id]: TUTORIAL_DAILY,
   [TUTORIAL_STUDIO.id]: TUTORIAL_STUDIO,
   [TUTORIAL_MAPAS.id]: TUTORIAL_MAPAS,
+  [TUTORIAL_RESUMENES.id]: TUTORIAL_RESUMENES,
 }
 
 /* ── Mensajes de una sola vez ────────────────────────────────────────────

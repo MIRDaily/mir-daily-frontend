@@ -95,7 +95,11 @@ export function EditorParrafo({
         {largo} / {MAX_TEXTO}
       </p>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[0.68rem] font-extrabold uppercase tracking-wide text-[#7D8A96]">Huecos · toca una palabra o selecciona un trozo</p>
+        <p className="text-[0.68rem] font-extrabold uppercase tracking-wide text-[#5F6B76]">
+          Huecos · toca una palabra
+          <span className="[@media(pointer:coarse)]:hidden"> o selecciona un trozo</span>
+          <span className="hidden [@media(pointer:coarse)]:inline">; para un trozo, mantén el dedo y arrastra (o mantén la primera y toca la última)</span>
+        </p>
         <NivelNuevo nivel={nivel} onChange={setNivel} />
       </div>
       <div className="mt-1 rounded-xl bg-[#FAF7F4] px-3 py-2">
@@ -108,14 +112,14 @@ export function EditorParrafo({
       )}
       {(error || aviso) && <p className="mt-2 text-xs font-bold text-[#B04A5E]">{error ?? aviso}</p>}
       <div className="mt-3 flex justify-end gap-2">
-        <button type="button" onClick={onCancelar} className="rounded-xl px-3 py-1.5 text-sm font-bold text-[#7D8A96] hover:text-[#2C3E50]">
+        <button type="button" onClick={onCancelar} className="min-h-[40px] rounded-xl px-3 py-1.5 text-sm font-bold text-[#5F6B76] hover:text-[#2C3E50] [@media(pointer:coarse)]:min-h-[44px]">
           Cancelar
         </button>
         <button
           type="button"
           onClick={guardar}
           disabled={!!error || guardando}
-          className="rounded-xl bg-[#E8A598] px-4 py-1.5 text-sm font-extrabold text-white disabled:opacity-50"
+          className="min-h-[40px] rounded-xl bg-[#E8A598] px-4 py-1.5 text-sm font-extrabold text-[#2C3E50] disabled:opacity-50 [@media(pointer:coarse)]:min-h-[44px]"
           style={{ border: `2px solid ${INK}`, boxShadow: `2px 2px 0 0 ${INK}` }}
         >
           {guardando ? 'Guardando…' : textoBoton}

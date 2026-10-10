@@ -17,6 +17,8 @@ import { Resaltado, TarjetaParrafoGrupo } from '@/components/resumenes/TarjetaPa
 import { BarraBloque } from '@/components/resumenes/BarraBloque'
 import { DialogoDestino, type Destino, type FalloDestino } from '@/components/resumenes/DialogoDestino'
 import { BaldosaGrupo, ColorIconoGrupo } from '@/components/resumenes/ColorIconoGrupo'
+import { PanelPrevision } from '@/components/resumenes/PanelPrevision'
+import { EjemploResumen } from '@/components/resumenes/EjemploResumen'
 import {
   accionBloque,
   anadirParrafos,
@@ -30,7 +32,7 @@ import {
   type GrupoResumen,
   type Parrafo,
 } from '@/lib/resumenes/api'
-import { AJUSTES_POR_DEFECTO, aPeticion, sanearAjustes, type Ajustes } from '@/lib/resumenes/sesion'
+import { AJUSTES_POR_DEFECTO, aPeticion, cuantosSeEstudian, sanearAjustes, type Ajustes } from '@/lib/resumenes/sesion'
 import {
   FILTROS_VACIOS,
   agruparPorTema,
@@ -108,6 +110,8 @@ export default function GrupoResumenPage() {
   const [dialogo, setDialogo] = useState<'mover' | 'copiar' | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
+  // Previsión y estadísticas del grupo: se vuelven a pedir al salir del estudio.
+  const [recargaPrevision, setRecargaPrevision] = useState(0)
 
   const cargar = useCallback(async () => {
     try {
@@ -301,10 +305,11 @@ export default function GrupoResumenPage() {
     return (
       <div className="relative min-h-screen bg-[#FAF7F4]">
         <main className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-5 py-8">
-          <h1 className="text-2xl font-black text-[#2C3E50]">{grupo?.name}</h1>
+          <h1 className="line-clamp-2 break-words text-2xl font-black text-[#2C3E50]">{grupo?.name}</h1>
           <EstudioResumen
             grupoId={id}
             ajustes={aPeticion(estudio, temas)}
+            total={cuantosSeEstudian(parrafos, estudio)}
             vista={{ escribir: estudio.escribir, anchoFijo: estudio.anchoFijo }}
             temas={temas.filter(Boolean)}
             onCambio={() => setCambiado(true)}
@@ -312,6 +317,7 @@ export default function GrupoResumenPage() {
               setEstudio(null)
               if (cambiado) void cargar()
               setCambiado(false)
+              setRecargaPrevision((n) => n + 1)
             }}
           />
         </main>
@@ -354,7 +360,10 @@ export default function GrupoResumenPage() {
                   >
                     <BaldosaGrupo color={grupo.color} icon={grupo.icon} tam="lg" />
                   </button>
-                  <span className="min-w-0 truncate">{grupo.name}</span>
+                  {/* A dos líneas (antes se cortaba en una): el h1 del Hero lleva `truncate` (nowrap), de ahí el whitespace-normal. */}
+                  <span className="line-clamp-2 min-w-0 whitespace-normal break-words pb-[0.08em]" title={grupo.name} data-titulo-grupo>
+                    {grupo.name}
+                  </span>
                 </span>
               }
               actions={
@@ -391,6 +400,8 @@ export default function GrupoResumenPage() {
                 <StatChip value={pendientes} label="por repasar" color="#B07A1E" />
               </div>
             </Hero>
+
+            {parrafos.length > 0 && <PanelPrevision grupoId={id} recarga={recargaPrevision} />}
 
             {renombrando !== null && (
               <StickerCard className="flex flex-col gap-4 p-4">
@@ -465,9 +476,10 @@ export default function GrupoResumenPage() {
             )}
 
             {parrafos.length === 0 && !escribiendo ? (
-              <StickerCard className="p-8 text-center">
+              <StickerCard className="p-5 text-center sm:p-8">
                 <p className="text-lg font-extrabold text-[#2C3E50]">Este grupo está vacío</p>
-                <p className="mt-1 text-sm">Escribe un párrafo y toca las palabras que quieres tapar al estudiar.</p>
+                <p className="mt-1 text-sm">Escribe un párrafo y toca las palabras que quieres tapar al estudiar. Pruébalo aquí:</p>
+                <EjemploResumen className="mt-4 text-left" />
               </StickerCard>
             ) : null}
 

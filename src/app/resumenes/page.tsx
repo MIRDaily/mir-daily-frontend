@@ -17,6 +17,10 @@ import { ICONO_RESUMEN_POR_DEFECTO } from '@/lib/resumenes/grupo'
 import { crearGrupo, listarGrupos, type GrupoResumen } from '@/lib/resumenes/api'
 import { resumenesIAEstado, type EstadoResumenesIA } from '@/lib/resumenes/ia'
 import { borrarBorrador, leerBorradores, type BorradorResumen } from '@/lib/resumenes/borrador'
+import { PanelPrevision } from '@/components/resumenes/PanelPrevision'
+import { EjemploResumen } from '@/components/resumenes/EjemploResumen'
+import { useTutorialReady } from '@/providers/TutorialProvider'
+import { TUTORIAL_RESUMENES } from '@/lib/tutorials/scripts'
 
 const ESTADOS: { k: keyof GrupoResumen['resumen']; nombre: string; color: string }[] = [
   { k: 'new', nombre: 'nuevos', color: '#7D8A96' },
@@ -65,6 +69,9 @@ export default function ResumenesPage() {
   const [nuevo, setNuevo] = useState<string | null>(null)
   const [aspectoNuevo, setAspectoNuevo] = useState<{ color: string; icon: string }>({ color: resolveColor(null).key, icon: ICONO_RESUMEN_POR_DEFECTO })
   const [creando, setCreando] = useState(false)
+
+  // La primera vez, la mascota (TUTORIAL_RESUMENES) en cuanto la lista está pintada.
+  useTutorialReady(TUTORIAL_RESUMENES.id, estado === 'listo')
 
   useEffect(() => {
     setBackAction({ label: 'Estudio', href: '/studio', current: 'Resúmenes activos' })
@@ -136,15 +143,17 @@ export default function ResumenesPage() {
           aside={<ParrafoArte />}
           actions={
             <>
-              <StickerButton
-                icon="add"
-                onClick={() => {
-                  setNuevo('')
-                  setAspectoNuevo({ color: resolveColor(null).key, icon: ICONO_RESUMEN_POR_DEFECTO })
-                }}
-              >
-                Nuevo grupo
-              </StickerButton>
+              <span className="inline-flex" data-tutorial="resumenes-nuevo">
+                <StickerButton
+                  icon="add"
+                  onClick={() => {
+                    setNuevo('')
+                    setAspectoNuevo({ color: resolveColor(null).key, icon: ICONO_RESUMEN_POR_DEFECTO })
+                  }}
+                >
+                  Nuevo grupo
+                </StickerButton>
+              </span>
               {ia ? (
                 <GhostButton icon="auto_awesome" onClick={() => setIaAbierto({})}>
                   Crear con IA
@@ -231,16 +240,20 @@ export default function ResumenesPage() {
         ) : estado === 'cargando' ? (
           <p className="py-10 text-center text-sm">Cargando…</p>
         ) : grupos.length === 0 ? (
-          <StickerCard className="p-8 text-center">
+          <StickerCard className="p-5 text-center sm:p-8">
             <p className="text-lg font-extrabold text-[#2C3E50]">Aún no tienes resúmenes activos</p>
             <p className="mx-auto mt-2 max-w-xl text-sm">
-              Crea un grupo y escribe tus párrafos marcando los datos que quieres tapar{ia ? ', o hazlos con IA desde un PDF, Word o PowerPoint' : ''}.
+              Crea un grupo y escribe tus párrafos marcando los datos que quieres tapar{ia ? ', o hazlos con IA desde un PDF, Word o PowerPoint' : ''}. Antes, pruébalo con este:
             </p>
+            <div className="mx-auto mt-4 max-w-2xl text-left" data-tutorial="resumenes-zona">
+              <EjemploResumen />
+            </div>
           </StickerCard>
         ) : (
           <>
+            <PanelPrevision />
             <SectionLabel>Tus grupos</SectionLabel>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-tutorial="resumenes-zona">
               {grupos.map((g) => (
                 <StickerCard key={g.id} className="flex flex-col gap-3 overflow-hidden p-5" as="article">
                   {/* Cabecera con el toque del color del grupo. */}
@@ -251,7 +264,9 @@ export default function ResumenesPage() {
                   >
                     <BaldosaGrupo color={g.color} icon={g.icon} />
                     <div className="min-w-0">
-                      <h3 className="truncate text-lg font-black text-[#2C3E50] group-hover:underline">{g.name}</h3>
+                      <h3 className="line-clamp-2 break-words text-lg font-black leading-tight text-[#2C3E50] group-hover:underline" title={g.name}>
+                        {g.name}
+                      </h3>
                       <p className="text-xs">
                         {g.total} {g.total === 1 ? 'párrafo' : 'párrafos'} · <b className="text-[#B07A1E]">{g.pendientes}</b> por repasar
                       </p>
