@@ -8,6 +8,7 @@ import { useTimeSeries } from '@/hooks/useTimeSeries'
 import EffortSection from '@/components/panel/EffortSection'
 import SubjectHeatmapSection from '@/components/panel/SubjectHeatmapSection'
 import WeakPointsSection from '@/components/panel/WeakPointsSection'
+import { AvisoResumenes } from '@/components/resumenes/AvisoResumenes'
 import { debugRender } from '@/lib/debugRSC'
 
 function formatQuestions(value: number | null): string {
@@ -179,6 +180,9 @@ export default function PanelPage() {
               </p>
             </div>
           </div>
+
+          {/* Resúmenes activos: «Tienes N párrafos para repasar» (no sale si no hay nada). */}
+          <AvisoResumenes />
 
           <div className="rounded-2xl border border-[#EAE0D5] bg-white p-6 shadow-sm md:p-8">
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">

@@ -13,6 +13,7 @@ import { TUTORIAL_STUDIO } from '@/lib/tutorials/scripts'
 import StudioCountdown from '@/components/studio/StudioCountdown'
 import StudioSearchButton from '@/components/studio/StudioSearchButton'
 import StudioCalendarButton from '@/components/studio/StudioCalendarButton'
+import { AvisoResumenes } from '@/components/resumenes/AvisoResumenes'
 import type { MonthlyProgressResponse } from '@/services/analyticsService'
 
 // El popup y la decoración de las tarjetas (SVG animados que solo se ven al
@@ -619,6 +620,9 @@ export default function StudioPage() {
               <StudioCountdown />
             </motion.div>
           </motion.section>
+
+          {/* Resúmenes activos: «Tienes N párrafos para repasar» (no sale si no hay nada). */}
+          <AvisoResumenes className="-mt-6 sm:-mt-10" />
 
           <section>
             <Reveal once reduceMotion={reduceMotion} className="mb-4 flex items-center gap-2">
