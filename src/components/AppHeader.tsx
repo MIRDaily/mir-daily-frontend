@@ -259,7 +259,7 @@ export default function AppHeader({
                 setIsNotificationOpen(false)
                 setIsProfileMenuOpen((prev) => !prev)
               }}
-              className="flex w-[176px] items-center gap-2 rounded-full border-2 border-white shadow-[0_12px_26px_rgba(125,138,150,0.2),inset_0_1px_0_rgba(255,255,255,0.9)] cursor-pointer hover:ring-2 hover:ring-[#E8A598]/20 transition-all duration-150 active:scale-[0.98] active:translate-y-0 pl-1 pr-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#E8A598]/30 bg-white/90 hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(125,138,150,0.24),inset_0_1px_0_rgba(255,255,255,0.95)]"
+              className="flex w-auto items-center gap-2 rounded-full border-2 border-white sm:w-[176px] shadow-[0_12px_26px_rgba(125,138,150,0.2),inset_0_1px_0_rgba(255,255,255,0.9)] cursor-pointer hover:ring-2 hover:ring-[#E8A598]/20 transition-all duration-150 active:scale-[0.98] active:translate-y-0 pl-1 pr-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#E8A598]/30 bg-white/90 hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(125,138,150,0.24),inset_0_1px_0_rgba(255,255,255,0.95)]"
             >
               {profileLoading ? (
                 <div className="size-10 shrink-0 animate-pulse rounded-full bg-gray-200" />

@@ -14,6 +14,8 @@ function shouldShowHeader(pathname: string): boolean {
     pathname.startsWith('/studio') ||
     pathname.startsWith('/decks') ||
     pathname.startsWith('/flashcards') ||
+    // Resúmenes activos: la lista y cada grupo (antes no estaban y salían sin cabecera ni pestañas).
+    pathname.startsWith('/resumenes') ||
     pathname.startsWith('/session') ||
     pathname.startsWith('/profile') ||
     pathname.startsWith('/configuracion') ||
@@ -40,8 +42,9 @@ function resolveActiveTab(pathname: string): HeaderTab {
     // Las flashcards se entran desde Studio, así que mantienen esa pestaña.
     pathname.startsWith('/flashcards') ||
     pathname.startsWith('/session') ||
-    // Los mapas mentales se entran desde Studio.
+    // Los mapas mentales y los resúmenes activos se entran desde Studio.
     pathname.startsWith('/mapas') ||
+    pathname.startsWith('/resumenes') ||
     pathname.startsWith('/zen')
   ) return 'studio'
   if (pathname.startsWith('/library')) return 'library'
