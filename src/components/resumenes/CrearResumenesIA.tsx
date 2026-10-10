@@ -12,10 +12,32 @@ import { LEVEL_INFO } from '@/lib/studioFlashcards'
 import { supabase } from '@/lib/supabaseBrowser'
 import { NIVELES, type Nivel } from '@/lib/resumenes/huecos'
 import { hashArchivo } from '@/lib/mapas/ia/docs'
-import { borrarBorrador, guardarBorrador, leerBorrador, type BorradorResumen, type FuenteFirmada, type ModoResumen, type ParrafoBorrador } from '@/lib/resumenes/borrador'
-import { DENSIDADES, MODOS, parrafosAprox, resumenesIAGenerar, resumenesIAIndice, type Densidad, type EstadoResumenesIA } from '@/lib/resumenes/ia'
+import {
+  borrarBorrador,
+  guardarBorrador,
+  guardarDocumento,
+  leerBorrador,
+  leerDocumento,
+  type BorradorResumen,
+  type DocumentoResumen,
+  type FuenteFirmada,
+  type ModoResumen,
+  type ParrafoBorrador,
+} from '@/lib/resumenes/borrador'
+import {
+  DENSIDADES,
+  MODOS,
+  parrafosAprox,
+  resumenesIAGenerar,
+  resumenesIAIndice,
+  resumenesIAMas,
+  resumenesIARehacer,
+  type Densidad,
+  type EstadoResumenesIA,
+} from '@/lib/resumenes/ia'
+import { fragmentoDeParrafo, fragmentoDeTema, nivelesDeLista, paginasDeFragmento, rangosDeTemas, temasMarcados } from '@/lib/resumenes/ampliar'
 import { INK } from './ParrafoHuecos'
-import { VistaPreviaResumenes } from './VistaPreviaResumenes'
+import { VistaPreviaResumenes, type MasConfig, type RehacerConfig } from './VistaPreviaResumenes'
 
 // «Resúmenes activos con IA» desde un documento (PDF, Word, PowerPoint): el mismo camino que las
 // flashcards (el archivo se lee en el navegador y no se sube; «Qué parte usar»; tema a tema con el
@@ -23,6 +45,11 @@ import { VistaPreviaResumenes } from './VistaPreviaResumenes'
 // original» (la IA elige párrafos del documento tal cual). Al final, la VISTA PREVIA editable, con
 // borrador en este navegador (uno por archivo: si ya hay uno de este archivo, se avisa antes de
 // sustituirlo). Nada se guarda hasta aprobarla.
+//
+// Con la IA de admin, la vista previa ofrece «Más de este tema» y «Rehacer este párrafo»: para eso el
+// TEXTO del documento se guarda con el borrador (solo en este navegador) y, de ahí, viaja solo el
+// fragmento del tema o del párrafo. Si no está (un borrador anterior), se pide el archivo otra vez y se
+// comprueba con su SHA-256 que es el mismo.
 
 type Fase = 'elegir' | 'leyendo' | 'ajustes' | 'generando' | 'vista'
 type ProgresoTema = { titulo: string; estado: EstadoTema | 'espera' }
@@ -34,6 +61,67 @@ type Resultado = {
   fuente: BorradorResumen['fuente']
   fuentes: FuenteFirmada[]
   creado?: number
+  /** Los niveles con que se generó (al retomar un borrador no se saben: los de sus huecos). */
+  niveles?: Nivel[]
+}
+/** El texto del documento para «Más» y «Rehacer». */
+type TextoDocumento = Pick<DocumentoResumen, 'secciones' | 'paginas' | 'unidad' | 'temas'>
+const textoDe = (d: DocumentoResumen): TextoDocumento => ({
+  secciones: d.secciones,
+  paginas: d.paginas,
+  ...(d.unidad ? { unidad: d.unidad } : {}),
+  ...(d.temas ? { temas: d.temas } : {}),
+})
+const textoDeExtraido = (x: Extraido): TextoDocumento => ({
+  secciones: x.secciones,
+  paginas: Math.max(1, x.paginas),
+  ...(x.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
+})
+const HEX64 = /^[0-9a-f]{64}$/
+
+/** Sin el texto del documento: elegir otra vez el archivo (se comprueba que es el mismo y no se sube). */
+function AvisoArchivo({
+  para,
+  nombre,
+  comprobando,
+  error,
+  onArchivo,
+}: {
+  para: string
+  nombre?: string
+  comprobando: boolean
+  error: string | null
+  onArchivo: (f: File | undefined) => void
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  return (
+    <div>
+      <p>
+        Para {para}, vuelve a elegir el archivo{nombre ? <b> «{nombre}»</b> : null}: hace falta el texto del documento y este navegador no lo tiene guardado (un
+        borrador anterior, o se ha borrado). Se comprueba que es el mismo y no se sube.
+      </p>
+      <input
+        ref={ref}
+        type="file"
+        accept={FORMATOS_ACEPTADOS}
+        className="hidden"
+        onChange={(e) => {
+          onArchivo(e.target.files?.[0])
+          e.target.value = ''
+        }}
+      />
+      <button
+        type="button"
+        disabled={comprobando}
+        onClick={() => ref.current?.click()}
+        className="mt-2 rounded-lg bg-[#E8A598] px-3 py-1 text-[0.76rem] font-extrabold text-white disabled:opacity-60"
+        style={{ border: `2px solid ${INK}` }}
+      >
+        {comprobando ? 'Comprobando…' : 'Elegir el archivo'}
+      </button>
+      {error && <p className="mt-1 text-[0.74rem] font-bold text-[#B04A5E]">{error}</p>}
+    </div>
+  )
 }
 
 const deBorrador = (b: BorradorResumen): Resultado => ({ titulo: b.titulo, modo: b.modo, lista: b.lista, fallidos: b.fallidos, fuente: b.fuente, fuentes: b.fuentes, creado: b.creado })
@@ -99,6 +187,25 @@ export default function CrearResumenesIA({
     if (usuario) return
     void supabase.auth.getSession().then(({ data }) => setUsuario(data.session?.user.id ?? null))
   }, [usuario])
+  // «Más» y «Rehacer»: el texto del documento (el leído ahora o, al retomar, el guardado con el
+  // borrador; undefined mientras se busca, null si no está y hay que pedir el archivo).
+  const [textoDoc, setTextoDoc] = useState<TextoDocumento | null | undefined>(borrador ? undefined : null)
+  const [masUsadas, setMasUsadas] = useState(0)
+  const [rehacerUsadas, setRehacerUsadas] = useState(0)
+  const [errorArchivo, setErrorArchivo] = useState<string | null>(null)
+  const [comprobando, setComprobando] = useState(false)
+
+  // Al retomar un borrador: su documento, si este navegador lo guarda.
+  useEffect(() => {
+    if (!borrador) return
+    let vivo = true
+    void leerDocumento(borrador.usuario, borrador.documento).then((d) => {
+      if (vivo) setTextoDoc(d ? textoDe(d) : null)
+    })
+    return () => {
+      vivo = false
+    }
+  }, [borrador])
 
   const persistir = useCallback(
     (lista: ParrafoBorrador[], r?: Resultado) => {
@@ -249,6 +356,17 @@ export default function CrearResumenesIA({
     setRetomado(previo)
     setResultado(deBorrador(previo))
     setFase('vista')
+    // Su texto: el guardado (con los temas del libro, si los hubo) o, si no está, el del archivo recién leído.
+    const leido = extraido
+    setTextoDoc(undefined)
+    void leerDocumento(previo.usuario, previo.documento).then((d) => {
+      if (!montado.current) return
+      if (d) return setTextoDoc(textoDe(d))
+      if (!leido) return setTextoDoc(null)
+      const t = textoDeExtraido(leido)
+      setTextoDoc(t)
+      void guardarDocumento(previo.usuario, previo.documento, t)
+    })
   }
 
   const generar = async () => {
@@ -299,7 +417,14 @@ export default function CrearResumenesIA({
           ...(extraido.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
         },
         fuentes: r.fuentes,
+        niveles,
       }
+      // El texto del documento, con el borrador (solo en este navegador): «Más» y «Rehacer» lo
+      // necesitan también tras recargar. Tema a tema, con el rango de cada tema del libro que salió.
+      const temasDoc = 'temas' in r && temasLibro ? rangosDeTemas(temasMarcados(temasLibro, sel), r.temas) : []
+      const texto: TextoDocumento = { ...textoDeExtraido(extraido), ...(temasDoc.length ? { temas: temasDoc } : {}) }
+      setTextoDoc(texto)
+      if (usuario && documento) void guardarDocumento(usuario, documento, texto)
       setRetomado(null)
       setPrevio(null)
       setResultado(nuevo)
@@ -323,6 +448,93 @@ export default function CrearResumenesIA({
         : sel.size === 0
           ? 'Nada marcado'
           : `${fmt(eleccion?.elegidas.length ?? 0)} de ${fmt(extraido.secciones.length)} ${extraido.unidad === 'diapositiva' ? 'diapositivas' : 'secciones'} · ${fmt(caracteres)} caracteres`
+
+  // Sin el texto del documento (un borrador anterior, o el navegador lo perdió): se pide el archivo y se
+  // comprueba con su SHA-256 que es el del borrador (en uno de la versión 1, sin hash, que se llame igual).
+  const volverAElegir = async (file: File | undefined) => {
+    if (!file || !resultado || !documento) return
+    setErrorArchivo(null)
+    setComprobando(true)
+    try {
+      const nombre = resultado.fuente.nombre
+      const mismo = HEX64.test(documento) ? (await hashArchivo(file)) === documento : !nombre || file.name === nombre
+      if (!mismo) throw new Error(`No es el mismo archivo${nombre ? `: elige «${nombre}»` : ''}.`)
+      const r = await extraerDocumento(file, { maxChars: topeLectura })
+      if (!montado.current) return
+      const texto = textoDeExtraido(r)
+      setTextoDoc(texto)
+      if (usuario) void guardarDocumento(usuario, documento, texto)
+    } catch (e) {
+      if (montado.current) setErrorArchivo(e instanceof ExtractError || e instanceof Error ? e.message : 'No se pudo leer el archivo.')
+    } finally {
+      if (montado.current) setComprobando(false)
+    }
+  }
+
+  const opcionesIA = estadoDado?.disponible ? estadoDado.opciones : undefined
+  const cupoIA = estadoDado?.cupo
+  const unidadDoc = textoDoc?.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}
+  const bloqueo = (para: string) =>
+    textoDoc ? undefined : textoDoc === undefined ? (
+      <p className="text-[#7D8A96]">Buscando el documento en este navegador…</p>
+    ) : (
+      <AvisoArchivo para={para} nombre={resultado?.fuente.nombre} comprobando={comprobando} error={errorArchivo} onArchivo={(f) => void volverAElegir(f)} />
+    )
+  const bloqueoMas = bloqueo('pedir más')
+  const bloqueoRehacer = bloqueo('rehacer un párrafo')
+  const mas: MasConfig | undefined =
+    opcionesIA?.ampliar && resultado
+      ? {
+          niveles: resultado.niveles ?? nivelesDeLista(resultado.lista),
+          cantidades: opcionesIA.ampliar.cantidades,
+          ...(cupoIA?.maxMasDia !== undefined ? { restantes: cupoIA.maxMasDia - (cupoIA.masHoy ?? 0) - masUsadas } : {}),
+          ...(bloqueoMas ? { bloqueo: bloqueoMas } : {}),
+          pedir: async ({ grupo, tema, niveles: nv, cantidad, parrafos, vecinos }, signal) => {
+            if (!textoDoc) throw new Error('Falta el texto del documento.')
+            // Solo el fragmento de ese tema: las páginas de sus párrafos (con margen), dentro de su tema del libro.
+            const secciones = fragmentoDeTema(textoDoc, grupo, tema, parrafos)
+            const r = await resumenesIAMas(
+              {
+                titulo: resultado.titulo,
+                modo: resultado.modo,
+                niveles: nv,
+                secciones,
+                paginas: paginasDeFragmento(secciones),
+                ...unidadDoc,
+                ampliar: { tema, cantidad, existentes: parrafos.map((p) => p.texto), vecinos },
+              },
+              signal,
+            )
+            setMasUsadas((n) => n + 1)
+            return r
+          },
+        }
+      : undefined
+  const rehacer: RehacerConfig | undefined =
+    opcionesIA?.rehacer && resultado
+      ? {
+          ...(cupoIA?.maxRehacerDia !== undefined ? { restantes: cupoIA.maxRehacerDia - (cupoIA.rehacerHoy ?? 0) - rehacerUsadas } : {}),
+          ...(bloqueoRehacer ? { bloqueo: bloqueoRehacer } : {}),
+          pedir: async ({ parrafo, delTema }, signal) => {
+            if (!textoDoc) throw new Error('Falta el texto del documento.')
+            // Su página ±1 (o, sin página, el fragmento de su tema).
+            const secciones = fragmentoDeParrafo(textoDoc, parrafo, delTema)
+            const p = await resumenesIARehacer(
+              {
+                titulo: resultado.titulo,
+                modo: resultado.modo,
+                secciones,
+                paginas: paginasDeFragmento(secciones),
+                ...unidadDoc,
+                rehacer: { tema: parrafo.tema, texto: parrafo.texto, huecos: parrafo.huecos },
+              },
+              signal,
+            )
+            setRehacerUsadas((n) => n + 1)
+            return p
+          },
+        }
+      : undefined
 
   const ancho = fase === 'vista' ? 'max-w-4xl' : 'max-w-xl'
 
@@ -392,6 +604,8 @@ export default function CrearResumenesIA({
                   }
                 : {})}
               onCerrar={onClose}
+              {...(mas ? { mas } : {})}
+              {...(rehacer ? { rehacer } : {})}
             />
           </>
         ) : (

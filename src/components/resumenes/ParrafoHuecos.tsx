@@ -43,6 +43,7 @@ export const ParrafoHuecos = memo(function ParrafoHuecos({
   editable = false,
   className = '',
   onAviso,
+  seleccionado,
 }: {
   texto: string
   huecos: Hueco[]
@@ -53,6 +54,8 @@ export const ParrafoHuecos = memo(function ParrafoHuecos({
   className?: string
   /** Para avisar de algo que no se ha podido hacer (más de 8 huecos…). */
   onAviso?: (msg: string) => void
+  /** Índice del hueco seleccionado con el teclado (vista previa): solo se le pinta un anillo. */
+  seleccionado?: number
 }) {
   const [abierto, setAbierto] = useState<number | null>(null)
   // El menú se abre hacia la izquierda si el hueco está en la mitad derecha (si no, se sale de la caja).
@@ -165,6 +168,7 @@ export const ParrafoHuecos = memo(function ParrafoHuecos({
         return (
           <span key={`h${k}`} className="relative">
             <span
+              data-hueco={k}
               role={editable ? 'button' : undefined}
               tabIndex={editable ? 0 : undefined}
               aria-label={editable ? `Hueco de nivel ${info.name}: ${s.t}` : undefined}
@@ -177,7 +181,14 @@ export const ParrafoHuecos = memo(function ParrafoHuecos({
               }}
               onKeyDown={(e) => tecla(e, k)}
               className={`rounded-md px-[3px] py-[1px] font-semibold ${editable ? 'cursor-pointer outline-none focus-visible:ring-2' : ''}`}
-              style={{ background: info.soft, color: info.color, boxShadow: `inset 0 -2px 0 ${info.color}`, ['--tw-ring-color' as string]: info.color }}
+              style={{
+                background: info.soft,
+                color: info.color,
+                boxShadow: `inset 0 -2px 0 ${info.color}`,
+                ['--tw-ring-color' as string]: info.color,
+                ...(seleccionado === k ? { outline: `2px solid ${info.color}`, outlineOffset: 2 } : {}),
+              }}
+              {...(seleccionado === k ? { 'data-seleccionado': true } : {})}
             >
               {tokens(s.t, pos0[j]).map((tk) => (
                 <span key={tk.pos} data-pos={tk.pos}>

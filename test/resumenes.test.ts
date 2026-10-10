@@ -11,6 +11,8 @@ import {
   cambiarNivel,
   claveParrafo,
   crearHueco,
+  desplazarNiveles,
+  desplazarNivelesDe,
   empezarParrafo,
   errorHuecos,
   fallos,
@@ -23,6 +25,7 @@ import {
   segmentos,
   siguienteTapado,
   terminado,
+  textoCambioNiveles,
   type Hueco,
 } from '@/lib/resumenes/huecos'
 import { caducado, claveBorrador, sanearBorrador, sanearParrafo } from '@/lib/resumenes/borrador'
@@ -89,6 +92,44 @@ test('cambiarNivel y quitarHueco', () => {
   const base = [h('tiroiditis', 1), h('Hashimoto', 3)]
   assert.deepEqual(cambiarNivel(base, 1, 4).map((x) => x.n), [1, 4])
   assert.deepEqual(tapado(T, quitarHueco(base, 0)), ['Hashimoto'])
+})
+
+test('desplazarNiveles: sube o baja un nivel sin salir de 1-4; sin cambios, la misma lista', () => {
+  const base = [h('tiroiditis', 1), h('Hashimoto', 3), h('anti-TPO', 4)]
+  const sube = desplazarNiveles(base, 1)
+  assert.deepEqual(sube.huecos.map((x) => x.n), [2, 4, 4])
+  assert.deepEqual([sube.cambiados, sube.enTope], [2, 1])
+  assert.equal(sube.huecos[2], base[2], 'el que no cambia es el mismo objeto')
+  const baja = desplazarNiveles(base, -1)
+  assert.deepEqual(baja.huecos.map((x) => x.n), [1, 2, 3])
+  assert.deepEqual([baja.cambiados, baja.enTope], [2, 1])
+  const topes = [h('tiroiditis', 4)]
+  assert.equal(desplazarNiveles(topes, 1).huecos, topes)
+  assert.deepEqual(base.map((x) => x.n), [1, 3, 4], 'no toca la lista de entrada')
+})
+
+test('desplazarNivelesDe: solo los párrafos de esas claves; los demás, los mismos objetos', () => {
+  const a = { key: 'a', huecos: [h('tiroiditis', 1), h('Hashimoto', 4)] }
+  const b = { key: 'b', huecos: [h('anti-TPO', 2)] }
+  const c = { key: 'c', huecos: [h('Dosis', 4)] }
+  const lista = [a, b, c]
+  const r = desplazarNivelesDe(lista, new Set(['a', 'c']), 1)
+  assert.deepEqual([r.huecos, r.parrafos, r.enTope], [1, 1, 2])
+  assert.deepEqual(r.lista[0].huecos.map((x) => x.n), [2, 4])
+  assert.equal(r.lista[1], b)
+  assert.equal(r.lista[2], c, 'todo en el tope: el mismo párrafo')
+  const nada = desplazarNivelesDe(lista, new Set(['c']), 1)
+  assert.equal(nada.lista, lista, 'sin cambios, la misma lista')
+  const baja = desplazarNivelesDe(lista, new Set(['a', 'b', 'c']), -1)
+  assert.deepEqual([baja.huecos, baja.parrafos, baja.enTope], [3, 3, 1])
+})
+
+test('textoCambioNiveles: el aviso tras un cambio masivo', () => {
+  assert.equal(textoCambioNiveles({ huecos: 12, parrafos: 5, enTope: 0 }, 1), '12 huecos subidos de nivel en 5 párrafos')
+  assert.equal(textoCambioNiveles({ huecos: 1, parrafos: 1, enTope: 3 }, -1), '1 hueco bajado de nivel en 1 párrafo (3 ya estaban en el nivel más bajo)')
+  assert.equal(textoCambioNiveles({ huecos: 2, parrafos: 2, enTope: 1 }, 1), '2 huecos subidos de nivel en 2 párrafos (1 ya estaba en el nivel más alto)')
+  assert.match(textoCambioNiveles({ huecos: 0, parrafos: 0, enTope: 4 }, 1), /ya estaban todos en el nivel más alto/)
+  assert.equal(textoCambioNiveles({ huecos: 0, parrafos: 0, enTope: 0 }, 1), 'No hay huecos que cambiar')
 })
 
 test('ajustarTrasEditar: los huecos de lo que no cambia se mueven; los de lo cambiado se buscan o se pierden', () => {

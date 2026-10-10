@@ -3,7 +3,7 @@ import { IAError, type Seccion } from '@/lib/mapas/ia/types'
 import { cuerpoOError, leerRespuesta, type EventoIA } from '@/lib/mapas/ia/stream'
 import { resumenParaIndice, sanitizeTemas, type TemaIndice } from '@/lib/mapas/ia/libro'
 import { sanearFuente, sanearParrafo, type FuenteFirmada, type ModoResumen, type ParrafoBorrador } from '@/lib/resumenes/borrador'
-import type { Nivel } from '@/lib/resumenes/huecos'
+import type { Hueco, Nivel } from '@/lib/resumenes/huecos'
 
 // Llamadas a /api/admin/resumenes-ia. El permiso (rol admin, interruptor y cupos) lo valida SIEMPRE el
 // backend; aquí solo se pinta lo que devuelva. Los párrafos NO se guardan aquí: se guardan después, con
@@ -37,9 +37,19 @@ export type EstadoResumenesIA = {
   niveles: Nivel[]
   densidades: Densidad[]
   modos: ModoResumen[]
-  opciones?: { libro?: boolean }
+  /** `ampliar`: «Más de este tema» (con las cantidades que admite); `rehacer`: «Rehacer este párrafo». */
+  opciones?: { libro?: boolean; ampliar?: { cantidades: number[] }; rehacer?: boolean }
   limites: { maxChars: number; maxPaginas: number; maxCharsLibro?: number; maxPaginasLibro?: number; maxTemas?: number }
-  cupo: { generacionesHoy: number; maxGeneracionesDia: number; caracteresHoy: number; maxCaracteresDia: number }
+  cupo: {
+    generacionesHoy: number
+    maxGeneracionesDia: number
+    caracteresHoy: number
+    maxCaracteresDia: number
+    masHoy?: number
+    maxMasDia?: number
+    rehacerHoy?: number
+    maxRehacerDia?: number
+  }
 }
 
 async function abrir(path: string, init: RequestInit = {}, accept = 'application/json'): Promise<Response> {
@@ -100,7 +110,10 @@ export type ResumenesGenerados =
 const texto = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '')
 const parrafos = (raw: unknown, prefijo: string, fuente: FuenteFirmada | null): ParrafoBorrador[] =>
   (Array.isArray(raw) ? raw : []).flatMap((x, k) => {
-    const p = sanearParrafo(x && typeof x === 'object' ? { ...(x as object), incluir: true, key: undefined, doc: undefined, incluirParecido: undefined } : x, `${prefijo}${k}`)
+    const p = sanearParrafo(
+      x && typeof x === 'object' ? { ...(x as object), incluir: true, key: undefined, doc: undefined, incluirParecido: undefined, nuevo: undefined } : x,
+      `${prefijo}${k}`,
+    )
     return p ? [fuente ? { ...p, doc: fuente.hash } : p] : []
   })
 
@@ -136,4 +149,53 @@ export async function resumenesIAGenerar(input: PeticionResumen, signal?: AbortS
   }
   const fuente = sanearFuente(datos.fuente)
   return { titulo, parrafos: parrafos(datos.parrafos, 'p', fuente), fuentes: fuente ? [fuente] : [] }
+}
+
+// ---------------------------------------------------------------------------
+// «Más de este tema» y «Rehacer este párrafo» (mismo endpoint; sin `fuente`: los párrafos se quedan
+// con el `doc` de los del tema, que ya tiene la vista previa)
+// ---------------------------------------------------------------------------
+
+type ComunAmpliar = {
+  titulo: string
+  modo: ModoResumen
+  /** SOLO el fragmento del tema (o del párrafo). */
+  secciones: Seccion[]
+  paginas: number
+  unidad?: 'diapositiva'
+}
+
+export type PeticionMas = ComunAmpliar & {
+  niveles: Nivel[]
+  /** `existentes`: los textos de los párrafos del tema; `vecinos`: los otros temas (de ellos, nada). */
+  ampliar: { tema: string; cantidad: number; existentes: string[]; vecinos: string[] }
+}
+
+/** Lo nuevo de un tema y lo que el servidor quitó (por repetir uno que ya había, casi igual, de otro tema…). */
+export type MasResumenes = { parrafos: ParrafoBorrador[]; repetidos: number; casiDuplicados: number; otroTema: number; vecino: number }
+
+const cuenta = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : 0)
+
+/** Párrafos NUEVOS de un tema. 422 `sin_nuevos` (IAError con ese código) si todo repetía lo que ya hay. */
+export async function resumenesIAMas(input: PeticionMas, signal?: AbortSignal): Promise<MasResumenes> {
+  const datos = (await cuerpoOError(await abrir('', { method: 'POST', body: JSON.stringify(input), signal }))) as Record<string, unknown>
+  const st = datos.stats && typeof datos.stats === 'object' ? (datos.stats as Record<string, unknown>) : {}
+  // El servidor ya fuerza el tema; aquí también (lo que llega no se da por bueno).
+  return {
+    parrafos: parrafos(datos.parrafos, 'm', null).map((p) => ({ ...p, tema: input.ampliar.tema })),
+    repetidos: cuenta(st.repetidos),
+    casiDuplicados: cuenta(st.casiDuplicados),
+    otroTema: cuenta(st.otroTema),
+    vecino: cuenta(st.vecino),
+  }
+}
+
+export type PeticionRehacer = ComunAmpliar & { rehacer: { tema: string; texto: string; huecos: Hueco[] } }
+
+/** Otra versión del MISMO párrafo (mismos datos en los huecos, mismo nivel). 422 si no sale ninguna válida. */
+export async function resumenesIARehacer(input: PeticionRehacer, signal?: AbortSignal): Promise<ParrafoBorrador> {
+  const datos = (await cuerpoOError(await abrir('', { method: 'POST', body: JSON.stringify(input), signal }))) as Record<string, unknown>
+  const [p] = parrafos([datos.parrafo], 'r', null)
+  if (!p) throw new IAError('La IA devolvió un resultado no válido. Inténtalo de nuevo.')
+  return { ...p, tema: input.rehacer.tema }
 }

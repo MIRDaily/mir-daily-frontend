@@ -144,6 +144,59 @@ export const quitarHueco = (huecos: Hueco[], k: number): Hueco[] => huecos.filte
 export const cambiarNivel = (huecos: Hueco[], k: number, n: Nivel): Hueco[] => huecos.map((h, j) => (j === k ? { ...h, n } : h))
 
 /**
+ * Subir (+1) o bajar (-1) un nivel todos los huecos, sin salir de 1-4. `enTope`: los que ya estaban en
+ * el nivel más alto (o el más bajo) y se quedan igual. Si no cambia ninguno, la MISMA lista (para no
+ * repintar el párrafo).
+ */
+export function desplazarNiveles(huecos: Hueco[], d: 1 | -1): { huecos: Hueco[]; cambiados: number; enTope: number } {
+  let cambiados = 0
+  let enTope = 0
+  const out = huecos.map((h) => {
+    const n = Math.min(4, Math.max(1, h.n + d)) as Nivel
+    if (n === h.n) {
+      enTope += 1
+      return h
+    }
+    cambiados += 1
+    return { ...h, n }
+  })
+  return { huecos: cambiados ? out : huecos, cambiados, enTope }
+}
+
+export type CambioNiveles = { huecos: number; parrafos: number; enTope: number }
+
+/**
+ * Lo mismo para los párrafos con esas claves (un tema, lo marcado). Los párrafos que no cambian son
+ * los MISMOS objetos (y si no cambia nada, la misma lista). `huecos`: cuántos han cambiado; `parrafos`:
+ * en cuántos párrafos; `enTope`: cuántos ya estaban en el tope.
+ */
+export function desplazarNivelesDe<T extends { key: string; huecos: Hueco[] }>(
+  lista: T[],
+  claves: ReadonlySet<string>,
+  d: 1 | -1,
+): CambioNiveles & { lista: T[] } {
+  const r: CambioNiveles = { huecos: 0, parrafos: 0, enTope: 0 }
+  const out = lista.map((p) => {
+    if (!claves.has(p.key)) return p
+    const x = desplazarNiveles(p.huecos, d)
+    r.enTope += x.enTope
+    if (!x.cambiados) return p
+    r.huecos += x.cambiados
+    r.parrafos += 1
+    return { ...p, huecos: x.huecos }
+  })
+  return { ...r, lista: r.huecos ? out : lista }
+}
+
+/** El aviso tras un cambio de nivel masivo: «12 huecos subidos de nivel en 5 párrafos (3 ya estaban…)». */
+export function textoCambioNiveles(r: CambioNiveles, d: 1 | -1): string {
+  const tope = d > 0 ? 'el nivel más alto' : 'el nivel más bajo'
+  if (!r.huecos) return r.enTope ? `Ningún hueco cambia: ya estaban todos en ${tope}` : 'No hay huecos que cambiar'
+  const base = `${r.huecos} ${r.huecos === 1 ? 'hueco' : 'huecos'} ${d > 0 ? 'subido' : 'bajado'}${r.huecos === 1 ? '' : 's'} de nivel en ${r.parrafos} ${r.parrafos === 1 ? 'párrafo' : 'párrafos'}`
+  return r.enTope ? `${base} (${r.enTope} ya ${r.enTope === 1 ? 'estaba' : 'estaban'} en ${tope})` : base
+}
+
+/**
  * El texto ha cambiado: los huecos de lo que no ha cambiado se quedan (y se mueven si hace falta); los
  * de la parte cambiada se buscan por su texto (si sale una sola vez, sin solaparse, se recoloca) y si
  * no, se pierden. Devuelve también cuántos se han perdido, para avisar.
