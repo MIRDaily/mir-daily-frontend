@@ -11,6 +11,9 @@ import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import { supabase } from '@/lib/supabaseBrowser'
 import { GhostButton, Hero, INK, SectionLabel, StatChip, StickerButton, StickerCard } from '@/components/ui/sticker'
 import CrearResumenesIA from '@/components/resumenes/CrearResumenesIA'
+import { BaldosaGrupo, ColorIconoGrupo } from '@/components/resumenes/ColorIconoGrupo'
+import { resolveColor } from '@/lib/flashcardTheme'
+import { ICONO_RESUMEN_POR_DEFECTO } from '@/lib/resumenes/grupo'
 import { crearGrupo, listarGrupos, type GrupoResumen } from '@/lib/resumenes/api'
 import { resumenesIAEstado, type EstadoResumenesIA } from '@/lib/resumenes/ia'
 import { borrarBorrador, leerBorradores, type BorradorResumen } from '@/lib/resumenes/borrador'
@@ -60,6 +63,7 @@ export default function ResumenesPage() {
   const [borradores, setBorradores] = useState<BorradorResumen[]>([])
   const [usuario, setUsuario] = useState<string | null>(null)
   const [nuevo, setNuevo] = useState<string | null>(null)
+  const [aspectoNuevo, setAspectoNuevo] = useState<{ color: string; icon: string }>({ color: resolveColor(null).key, icon: ICONO_RESUMEN_POR_DEFECTO })
   const [creando, setCreando] = useState(false)
 
   useEffect(() => {
@@ -103,7 +107,7 @@ export default function ResumenesPage() {
     if (!nuevo || nuevo.trim().length < 3) return
     setCreando(true)
     try {
-      const g = await crearGrupo(nuevo.trim())
+      const g = await crearGrupo(nuevo.trim(), aspectoNuevo)
       router.push(`/resumenes/${g.id}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo crear el grupo')
@@ -132,7 +136,13 @@ export default function ResumenesPage() {
           aside={<ParrafoArte />}
           actions={
             <>
-              <StickerButton icon="add" onClick={() => setNuevo('')}>
+              <StickerButton
+                icon="add"
+                onClick={() => {
+                  setNuevo('')
+                  setAspectoNuevo({ color: resolveColor(null).key, icon: ICONO_RESUMEN_POR_DEFECTO })
+                }}
+              >
                 Nuevo grupo
               </StickerButton>
               {ia ? (
@@ -153,7 +163,9 @@ export default function ResumenesPage() {
         </Hero>
 
         {nuevo !== null && (
-          <StickerCard className="flex flex-wrap items-center gap-3 p-4">
+          <StickerCard className="flex flex-col gap-4 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <BaldosaGrupo color={aspectoNuevo.color} icon={aspectoNuevo.icon} />
             <label htmlFor="ra-nuevo" className="text-sm font-extrabold text-[#2C3E50]">
               Nombre del grupo
             </label>
@@ -175,6 +187,8 @@ export default function ResumenesPage() {
             <StickerButton icon="check" onClick={() => void crear()} disabled={creando || nuevo.trim().length < 3}>
               Crear
             </StickerButton>
+          </div>
+          <ColorIconoGrupo color={aspectoNuevo.color} icon={aspectoNuevo.icon} onChange={setAspectoNuevo} />
           </StickerCard>
         )}
 
@@ -228,12 +242,20 @@ export default function ResumenesPage() {
             <SectionLabel>Tus grupos</SectionLabel>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {grupos.map((g) => (
-                <StickerCard key={g.id} className="flex flex-col gap-3 p-5" as="article">
-                  <Link href={`/resumenes/${g.id}`} className="group block min-w-0">
-                    <h3 className="truncate text-lg font-black text-[#2C3E50] group-hover:underline">{g.name}</h3>
-                    <p className="text-xs">
-                      {g.total} {g.total === 1 ? 'párrafo' : 'párrafos'} · <b className="text-[#B07A1E]">{g.pendientes}</b> por repasar
-                    </p>
+                <StickerCard key={g.id} className="flex flex-col gap-3 overflow-hidden p-5" as="article">
+                  {/* Cabecera con el toque del color del grupo. */}
+                  <Link
+                    href={`/resumenes/${g.id}`}
+                    className="group -mx-5 -mt-5 flex min-w-0 items-center gap-3 px-5 pt-4 pb-3"
+                    style={{ background: resolveColor(g.color).soft, borderBottom: '2px solid rgba(44,62,80,0.12)' }}
+                  >
+                    <BaldosaGrupo color={g.color} icon={g.icon} />
+                    <div className="min-w-0">
+                      <h3 className="truncate text-lg font-black text-[#2C3E50] group-hover:underline">{g.name}</h3>
+                      <p className="text-xs">
+                        {g.total} {g.total === 1 ? 'párrafo' : 'párrafos'} · <b className="text-[#B07A1E]">{g.pendientes}</b> por repasar
+                      </p>
+                    </div>
                   </Link>
                   <div className="flex h-2 overflow-hidden rounded-full bg-[#F2EFED]" aria-hidden>
                     {ESTADOS.map((s) =>

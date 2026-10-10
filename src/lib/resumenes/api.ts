@@ -37,6 +37,8 @@ export type Parrafo = {
   nextDueAt?: string | null
   /** Posiciones de los huecos cuyo último resultado fue «No lo sabía». */
   huecosFallados?: number[]
+  /** Veces que se ha respondido mal en total (0 si el servidor no lo manda). */
+  fallos: number
 }
 
 export type ParrafoNuevo = {
@@ -60,6 +62,9 @@ export type AjustesEstudio = {
 
 const base = () => process.env.NEXT_PUBLIC_API_URL ?? ''
 
+/** Error de la API: el mensaje del servidor y, si los trae, `caben` / `limite` (tope del destino) y `literal` (tope del 30 %). */
+export type ErrorApi = Error & { status?: number; caben?: number; limite?: boolean; literal?: boolean }
+
 async function pedir<T>(ruta: string, init: RequestInit = {}, mensaje = 'No se pudo completar la operación'): Promise<T> {
   const {
     data: { session },
@@ -77,9 +82,11 @@ async function pedir<T>(ruta: string, init: RequestInit = {}, mensaje = 'No se p
   }
   const cuerpo = await res.json().catch(() => null)
   if (!res.ok) {
-    const e = new Error(typeof cuerpo?.error === 'string' ? cuerpo.error : mensaje) as Error & { status?: number; caben?: number }
+    const e = new Error(typeof cuerpo?.error === 'string' ? cuerpo.error : mensaje) as ErrorApi
     e.status = res.status
     if (typeof cuerpo?.caben === 'number') e.caben = cuerpo.caben
+    if (cuerpo?.limite === true) e.limite = true
+    if (cuerpo?.literal === true) e.literal = true
     throw e
   }
   return cuerpo as T
@@ -132,6 +139,7 @@ export function sanearParrafoGuardado(raw: unknown): Parrafo | null {
     ...(typeof p.due === 'boolean' ? { due: p.due } : {}),
     ...(typeof p.nextDueAt === 'string' ? { nextDueAt: p.nextDueAt } : {}),
     ...(Array.isArray(p.huecosFallados) ? { huecosFallados: sanearFallados(p.huecosFallados) } : {}),
+    fallos: typeof p.fallos === 'number' && Number.isFinite(p.fallos) && p.fallos > 0 ? Math.floor(p.fallos) : 0,
   }
 }
 
@@ -143,15 +151,53 @@ export async function listarGrupos(): Promise<GrupoResumen[]> {
   })
 }
 
-export async function crearGrupo(name: string): Promise<GrupoResumen> {
-  const r = await pedir<{ grupo?: unknown }>('', { method: 'POST', body: JSON.stringify({ name }) }, 'No se pudo crear el grupo')
+/** Color (clave de SUBJECT_COLORS) e icono (uno de SUBJECT_ICONS) de un grupo; null = el de por defecto. */
+export type AspectoGrupo = { color?: string | null; icon?: string | null }
+
+export async function crearGrupo(name: string, aspecto: AspectoGrupo = {}): Promise<GrupoResumen> {
+  const cuerpo = { name, ...('color' in aspecto ? { color: aspecto.color ?? null } : {}), ...('icon' in aspecto ? { icon: aspecto.icon ?? null } : {}) }
+  const r = await pedir<{ grupo?: unknown }>('', { method: 'POST', body: JSON.stringify(cuerpo) }, 'No se pudo crear el grupo')
   const g = sanearGrupo(r.grupo)
   if (!g) throw new Error('Respuesta no válida')
   return g
 }
 
+/** Cambia el nombre, el color o el icono (solo lo que venga). */
+export async function editarGrupo(id: string, cambio: { name?: string } & AspectoGrupo): Promise<void> {
+  await pedir(`/${id}`, { method: 'PATCH', body: JSON.stringify(cambio) }, 'No se pudo guardar el grupo')
+}
+
 export async function renombrarGrupo(id: string, name: string): Promise<void> {
-  await pedir(`/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }, 'No se pudo renombrar el grupo')
+  await editarGrupo(id, { name })
+}
+
+/** Una acción sobre varios párrafos del grupo a la vez (POST /:id/bloque). Si falla, no se hace nada. */
+export type CuerpoBloque =
+  | { accion: 'borrar'; itemIds: number[] }
+  | { accion: 'tema'; itemIds: number[]; tema: string | null }
+  | { accion: 'mover' | 'copiar'; itemIds: number[]; destino: string }
+
+export type RespuestaBloque =
+  | { accion: 'borrar'; borrados: number }
+  | { accion: 'tema'; cambiados: number }
+  | { accion: 'copiar'; copiados: number; duplicados: number; destino: { id: string; name: string } }
+  | { accion: 'mover'; movidos: number; duplicados: number; destino: { id: string; name: string } }
+
+/** Lanza un ErrorApi con el mensaje del servidor (`limite` + `caben` si no cabe en el destino; `literal` si lo impide el 30 %). */
+export async function accionBloque(id: string, cuerpo: CuerpoBloque): Promise<RespuestaBloque> {
+  const r = await pedir<Record<string, unknown>>(`/${id}/bloque`, { method: 'POST', body: JSON.stringify(cuerpo) }, 'No se pudo completar la acción')
+  const d = r.destino && typeof r.destino === 'object' ? (r.destino as Record<string, unknown>) : {}
+  const destino = { id: typeof d.id === 'string' ? d.id : cuerpo.accion === 'mover' || cuerpo.accion === 'copiar' ? cuerpo.destino : '', name: typeof d.name === 'string' ? d.name : '' }
+  switch (cuerpo.accion) {
+    case 'borrar':
+      return { accion: 'borrar', borrados: numero(r.borrados) }
+    case 'tema':
+      return { accion: 'tema', cambiados: numero(r.cambiados) }
+    case 'copiar':
+      return { accion: 'copiar', copiados: numero(r.copiados), duplicados: numero(r.duplicados), destino }
+    case 'mover':
+      return { accion: 'mover', movidos: numero(r.movidos), duplicados: numero(r.duplicados), destino }
+  }
 }
 
 export async function borrarGrupo(id: string): Promise<void> {
