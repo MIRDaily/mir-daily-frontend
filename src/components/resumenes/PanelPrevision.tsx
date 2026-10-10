@@ -142,7 +142,7 @@ export function PanelPrevision({
         <div className="mt-3 flex h-3 overflow-hidden rounded-full" style={{ border: `1.5px solid ${INK}` }} aria-hidden>
           {ESTADOS.map((e) => (p.estados[e.k] ? <span key={e.k} style={{ width: `${(p.estados[e.k] / Math.max(1, totalEstados)) * 100}%`, background: e.color }} /> : null))}
         </div>
-        <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-4" data-estados>
+        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1" data-estados>
           {ESTADOS.map((e) => (
             <li key={e.k} className="flex items-center gap-1.5 text-xs">
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: e.color }} aria-hidden />
