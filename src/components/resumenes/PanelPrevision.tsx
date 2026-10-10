@@ -48,7 +48,11 @@ export function PanelPrevision({
         setError(null)
         onDatos?.(x)
       })
-      .catch((e) => vivo && setError(e instanceof Error ? e.message : 'No se pudo cargar la previsión'))
+      .catch((e) => {
+        if (!vivo) return
+        console.warn('Previsión de resúmenes:', e instanceof Error ? e.message : e)
+        setError(e instanceof Error ? e.message : 'No se pudo cargar la previsión')
+      })
     return () => {
       vivo = false
     }
@@ -58,7 +62,8 @@ export function PanelPrevision({
 
   const maxDia = useMemo(() => Math.max(1, ...(p?.prevision.dias ?? []).map((d) => d.n)), [p])
 
-  if (error) return <p className="text-xs font-bold text-[#8E3346]">{error}</p>
+  // Si falla (p. ej. un backend anterior al informe 85, sin la ruta), el panel no sale: es un extra.
+  if (error) return null
   if (!p) return <div className="h-40 animate-pulse rounded-3xl bg-white/60" aria-hidden />
   if (p.parrafos === 0) return null
 
