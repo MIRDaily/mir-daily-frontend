@@ -368,6 +368,9 @@ export default function GrupoResumenPage() {
                   <GhostButton icon="edit" onClick={abrirEdicionGrupo}>
                     Renombrar
                   </GhostButton>
+                  <GhostButton icon="delete_sweep" onClick={() => router.push(`/resumenes/${id}/papelera`)}>
+                    Papelera
+                  </GhostButton>
                   <GhostButton
                     icon="delete"
                     onClick={async () => {

@@ -112,6 +112,33 @@ function sanearGrupo(raw: unknown): GrupoResumen | null {
   }
 }
 
+/** Un grupo de la papelera (lo que ve la página). El servidor lo manda en snake_case. */
+export type GrupoPapelera = {
+  id: string
+  name: string
+  color: string | null
+  icon: string | null
+  /** Cuándo se borró. */
+  deletedAt: string | null
+  /** Cuándo se pierde para siempre (24 h después). */
+  purgeAt: string | null
+}
+
+/** Grupo de la papelera del servidor → grupo limpio (deleted_at/purge_at → deletedAt/purgeAt), o null. */
+function sanearGrupoPapelera(raw: unknown): GrupoPapelera | null {
+  if (!raw || typeof raw !== 'object') return null
+  const g = raw as Record<string, unknown>
+  if (typeof g.id !== 'string' || typeof g.name !== 'string') return null
+  return {
+    id: g.id,
+    name: g.name.slice(0, 80),
+    color: typeof g.color === 'string' ? g.color : null,
+    icon: typeof g.icon === 'string' ? g.icon : null,
+    deletedAt: typeof g.deleted_at === 'string' ? g.deleted_at : null,
+    purgeAt: typeof g.purge_at === 'string' ? g.purge_at : null,
+  }
+}
+
 /** Un párrafo del servidor → párrafo limpio (huecos saneados), o null. */
 export function sanearParrafoGuardado(raw: unknown): Parrafo | null {
   if (!raw || typeof raw !== 'object') return null
@@ -311,6 +338,41 @@ export async function editarParrafo(pid: string, cambio: { texto?: string; hueco
 
 export async function quitarParrafo(id: string, itemId: number): Promise<void> {
   await pedir(`/${id}/parrafos/${itemId}`, { method: 'DELETE' }, 'No se pudo borrar el párrafo')
+}
+
+// ── Papelera (24 h, como la de mazos y mapas) ─────────────────────────────
+// Los grupos y los párrafos borrados se recuperan con «Restaurar». El servidor manda los grupos en
+// snake_case (deleted_at/purge_at, tal cual Postgres) y los párrafos en camelCase (deletedAt/purgeAt).
+
+/** Los grupos borrados del usuario (GET /papelera). */
+export async function listarGruposPapelera(): Promise<GrupoPapelera[]> {
+  const r = await pedir<{ grupos?: unknown[] }>('/papelera', {}, 'No se pudo cargar la papelera')
+  return (r.grupos ?? []).flatMap((g) => {
+    const x = sanearGrupoPapelera(g)
+    return x ? [x] : []
+  })
+}
+
+export async function restaurarGrupo(id: string): Promise<void> {
+  await pedir(`/${id}/restaurar`, { method: 'POST' }, 'No se pudo restaurar el grupo')
+}
+
+/** Un párrafo borrado de un grupo: el párrafo y cuándo se pierde. */
+export type ParrafoPapelera = { parrafo: Parrafo; deletedAt: string | null; purgeAt: string | null }
+
+/** Los párrafos borrados de un grupo (GET /:id/parrafos/papelera). Solo los de ESE grupo. */
+export async function listarParrafosPapelera(id: string): Promise<ParrafoPapelera[]> {
+  const r = await pedir<{ parrafos?: unknown[] }>(`/${id}/parrafos/papelera`, {}, 'No se pudieron cargar los párrafos borrados')
+  return (r.parrafos ?? []).flatMap((raw) => {
+    const parrafo = sanearParrafoGuardado(raw)
+    if (!parrafo) return []
+    const x = raw as Record<string, unknown>
+    return [{ parrafo, deletedAt: typeof x.deletedAt === 'string' ? x.deletedAt : null, purgeAt: typeof x.purgeAt === 'string' ? x.purgeAt : null }]
+  })
+}
+
+export async function restaurarParrafo(id: string, itemId: number): Promise<void> {
+  await pedir(`/${id}/parrafos/${itemId}/restaurar`, { method: 'POST' }, 'No se pudo restaurar el párrafo')
 }
 
 export async function empezarSesion(id: string, ajustes: AjustesEstudio, limit = 200): Promise<string> {

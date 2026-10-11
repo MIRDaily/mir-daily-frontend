@@ -150,6 +150,9 @@ export default function ResumenesPage() {
                   Crear con IA
                 </GhostButton>
               ) : null}
+              <GhostButton icon="delete" onClick={() => router.push('/resumenes/papelera')}>
+                Papelera
+              </GhostButton>
             </>
           }
         >
