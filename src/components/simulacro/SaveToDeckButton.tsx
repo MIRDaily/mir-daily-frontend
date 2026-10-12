@@ -270,21 +270,30 @@ export default function SaveToDeckButton({
     }
     try {
       setCreating(true)
-      await createStudioDeck(token, trimmed)
-      const deckList = (await fetchStudioDecks(token)).filter(
+      const created = (await createStudioDeck(token, trimmed)) as { deck?: StudioDeck } | null
+      const deckList = (await fetchStudioDecks(token, { questionId: qid })).filter(
         (deck) => deck.deleted_at == null && !isAutoFailedDeck(deck),
       )
       setDecks(deckList)
       setNewDeckName('')
       setShowCreateForm(false)
-      showFeedback('success', 'Mazo creado')
+      // Se crea para guardar esta pregunta: sin añadirla, el aviso decía
+      // "Mazo creado" y la pregunta no quedaba en ningún mazo.
+      if (created?.deck) {
+        const deckId = String(created.deck.id)
+        const savedItemId = await addQuestionToDeck(token, deckId, qid)
+        markQuestionInDeck(qid, deckId, savedItemId ?? null)
+        showFeedback('success', `Añadida a ${created.deck.name || trimmed}`)
+      } else {
+        showFeedback('success', 'Mazo creado')
+      }
     } catch (err) {
       console.error(err)
       showFeedback('error', 'Error al crear el mazo')
     } finally {
       setCreating(false)
     }
-  }, [getToken, newDeckName, showFeedback])
+  }, [getToken, newDeckName, qid, showFeedback])
 
   return (
     <div ref={containerRef} className={`relative ${className ?? ''}`}>

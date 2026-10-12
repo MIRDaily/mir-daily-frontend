@@ -784,19 +784,31 @@ export default function DashboardPage() {
         return
       }
 
-      await createStudioDeck(session.access_token, trimmedName)
+      const created = (await createStudioDeck(session.access_token, trimmedName)) as
+        | { deck?: { id: string | number; name?: string } }
+        | null
       const loadedDecks = await fetchStudioDecks(session.access_token)
       setDecks(loadedDecks.filter((deck) => deck.deleted_at == null))
       setNewDeckNameFromPopup('')
       setShowCreateDeckForm(false)
-      showSaveQuestionFeedback('success', 'Mazo creado')
+      // Se crea para guardar la pregunta que se está viendo: sin añadirla aquí,
+      // el aviso decía "Mazo creado" y la pregunta no quedaba en ningún sitio.
+      if (created?.deck && showSelectorFor) {
+        await handleToggleQuestionInDeck(
+          String(created.deck.id),
+          showSelectorFor,
+          created.deck.name || trimmedName,
+        )
+      } else {
+        showSaveQuestionFeedback('success', 'Mazo creado')
+      }
     } catch (err) {
       console.error(err)
       showSaveQuestionFeedback('error', 'Error al crear el mazo')
     } finally {
       setCreatingDeckFromPopup(false)
     }
-  }, [newDeckNameFromPopup, showSaveQuestionFeedback])
+  }, [newDeckNameFromPopup, showSaveQuestionFeedback, showSelectorFor, handleToggleQuestionInDeck])
 
   const scrollToReview = useCallback(() => {
     reviewSectionRef.current?.scrollIntoView({
