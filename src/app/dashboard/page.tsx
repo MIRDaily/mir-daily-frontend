@@ -2996,6 +2996,14 @@ export default function DashboardPage() {
                         {mostFailedStatementExpanded ? 'Leer menos' : 'Leer más'}
                       </button>
                     )}
+                    {mostFailedWeek.hasImage && mostFailedWeek.imageUrl ? (
+                      <div className="mt-4">
+                        <ZoomableImage
+                          url={mostFailedWeek.imageUrl}
+                          className="mx-auto max-h-72 w-auto max-w-full rounded-2xl border border-[#E9E4E1] bg-white object-contain"
+                        />
+                      </div>
+                    ) : null}
                     {!isMostFailedRevealed && (
                       <p className="text-[#7D8A96] text-sm mt-4">
                         ¿La volverías a acertar hoy?
