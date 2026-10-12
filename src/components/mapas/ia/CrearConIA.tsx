@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createMap } from '@/lib/mapas/api'
 import { extraerDocumento, FORMATOS_ACEPTADOS } from '@/lib/mapas/ia/extract'
@@ -17,6 +17,7 @@ import type { StoredDoc } from '@/lib/mapas/graph'
 import CrearFlashcardsIA from '@/components/flashcards/ia/CrearFlashcardsIA'
 import { flashcardsIAEstado } from '@/lib/flashcards/ia/api'
 import type { EstadoFlashcardsIA } from '@/lib/flashcards/ia/tarjetas'
+import { seleccionInicial, type PropsEmbebido, type ResultadoGenerar } from '@/lib/ia/embebido'
 import {
   NODOS_POR_RAIZ,
   ExtractError,
@@ -65,17 +66,23 @@ export default function CrearConIA({
   estado,
   onClose,
   onCreados,
-}: {
+  compartido,
+  visible = true,
+  controlRef,
+  onEstado,
+}: PropsEmbebido & {
   estado: EstadoIA
   onClose: () => void
   /** Se han creado mapas sin abrir el editor (un mapa por tema): la lista debe recargarse. */
   onCreados?: () => void
 }) {
   const router = useRouter()
-  const [fase, setFase] = useState<Fase>('elegir')
-  const [archivo, setArchivo] = useState<File | null>(null)
-  const [extraido, setExtraido] = useState<Extraido | null>(null)
-  const [titulo, setTitulo] = useState('')
+  // Como pestaña del popup unificado (con el documento ya leído y compartido) se empieza en los ajustes.
+  const embebido = !!compartido
+  const [fase, setFase] = useState<Fase>(compartido ? 'ajustes' : 'elegir')
+  const [archivo, setArchivo] = useState<File | null>(compartido?.archivo ?? null)
+  const [extraido, setExtraido] = useState<Extraido | null>(compartido?.extraido ?? null)
+  const [titulo, setTitulo] = useState(compartido?.extraido.titulo ?? '')
   const [modo, setModo] = useState<ModoIA>('esquema')
   // Opción «Incluir tablas»: solo si el servidor la ofrece.
   const [tablas, setTablas] = useState(false)
@@ -88,11 +95,11 @@ export default function CrearConIA({
   const [lineas, setLineas] = useState<LineaProvisional[]>([])
   const [arrastrando, setArrastrando] = useState(false)
   // Qué parte del documento se usa: índices de sección marcados (al servidor solo viaja eso).
-  const [sel, setSel] = useState<Set<number>>(new Set())
-  const [selectorAbierto, setSelectorAbierto] = useState(false)
+  const [sel, setSel] = useState<Set<number>>(() => (compartido ? seleccionInicial(compartido.extraido, estado.limites).sel : new Set()))
+  const [selectorAbierto, setSelectorAbierto] = useState(() => (compartido ? seleccionInicial(compartido.extraido, estado.limites).abierto : false))
   // Último título puesto solo (el del archivo o el del tema marcado): si el usuario no lo ha
   // cambiado, marcar un único tema le pone su nombre al mapa.
-  const tituloAuto = useRef('')
+  const tituloAuto = useRef(compartido?.extraido.titulo ?? '')
   // Documento largo TEMA A TEMA: el índice lo saca el servidor (una llamada barata) y cada tema
   // se genera aparte; al final, un mapa por tema o uno grande con cada tema plegado.
   const [temasLibro, setTemasLibro] = useState<TemaIndice[] | null>(null)
@@ -139,12 +146,18 @@ export default function CrearConIA({
   }, [fase, onClose])
 
   useEffect(() => {
+    if (embebido) return // el popup unificado gestiona el cierre
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') cerrar()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [cerrar])
+  }, [cerrar, embebido])
+
+  // Con el documento compartido no pasa por `leer`: su SHA-256 se calcula aquí.
+  useEffect(() => {
+    if (compartido) hashRef.current = hashArchivo(compartido.archivo).catch(() => null)
+  }, [compartido])
 
   useEffect(() => {
     if (fase !== 'generando') return
@@ -271,8 +284,8 @@ export default function CrearConIA({
     setSel(cabe ? new Set(extraido.secciones.map((_, i) => i)) : new Set())
   }
 
-  const generar = async () => {
-    if (!extraido || !puedeGenerar) return
+  const generar = async (): Promise<ResultadoGenerar> => {
+    if (!extraido || !puedeGenerar) return 'no'
     setError(null)
     setSegundos(0)
     setFaseIA('leyendo')
@@ -322,26 +335,54 @@ export default function CrearConIA({
             hechos.push({ id, titulo: t.titulo, nodos: t.stats.nodos })
           }
         }
-        if (!montado.current) return
+        if (!montado.current) return 'cancelado'
         setCreados(hechos)
         setFallidos(r.fallidos.map((f) => ({ titulo: f.titulo, motivo: f.motivo })))
         onCreados?.()
         setFase('hecho')
-        return
+        return 'ok'
       }
       const r = await iaGenerar({ ...comun, secciones: eleccion?.elegidas ?? [] }, ctl.signal, onEvento)
       // Lo que se guarda es el mapa VALIDADO del final, nunca el borrador.
       const id = await createMap(r.titulo, conFuente(r.doc))
       await recordar(id, eleccion?.elegidas ?? [])
-      if (!montado.current) return
+      if (!montado.current) return 'cancelado'
+      if (embebido) {
+        // Dentro del popup unificado no se sale a la página del mapa (se perdería lo demás): se avisa y se enlaza.
+        setCreados([{ id, titulo: r.titulo, nodos: r.stats.nodos }])
+        setFallidos([])
+        onCreados?.()
+        setFase('hecho')
+        return 'ok'
+      }
       router.push(`/mapas/${id}?ia=1`)
+      return 'ok'
     } catch (e) {
-      if (!montado.current) return
-      if (e instanceof DOMException && e.name === 'AbortError') return
+      if (!montado.current) return 'cancelado'
+      if (e instanceof DOMException && e.name === 'AbortError') return 'cancelado'
       setError(e instanceof IAError || e instanceof Error ? e.message : 'No se pudo generar el mapa')
       setFase('ajustes')
+      return 'fallo'
     }
   }
+
+  // Como pestaña del popup unificado: el popup lanza la generación (en cola) y pinta el estado.
+  useImperativeHandle(controlRef, () => ({ generar }))
+  const falta = !extraido
+    ? undefined
+    : nadaElegido
+      ? 'Marca al menos una parte del documento.'
+      : excedeTexto || excedePaginas || excedeTemas
+        ? 'Lo marcado es demasiado grande: desmarca alguna parte.'
+        : excedeCupoChars || sinCupo
+          ? 'No te queda cupo de IA hoy para esto.'
+          : titulo.trim().length === 0
+            ? 'Falta el título.'
+            : undefined
+  const listo = fase === 'ajustes' && puedeGenerar
+  useEffect(() => {
+    onEstado?.({ fase, listo, ...(falta && fase === 'ajustes' ? { falta } : {}) })
+  }, [onEstado, fase, listo, falta])
 
   // Tema a tema: cada tema crece con la raíz de su texto y van de 3 en 3 (vasculitis sola, 84.000
   // caracteres, 10-20 s; el libro de reumatología, 16 temas y 421.000 caracteres, 41 s).
@@ -374,18 +415,9 @@ export default function CrearConIA({
     return <CrearFlashcardsIA estado={fcEstado} inicial={{ archivo, extraido, titulo, temasLibro, sel }} onClose={onClose} />
   }
 
-  return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#2C3E50]/40 p-4 backdrop-blur-[2px]"
-      onMouseDown={(e) => e.target === e.currentTarget && cerrar()}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="crear-ia-titulo"
-        className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-[#FAF7F4]"
-        style={{ border: `2px solid ${INK}`, boxShadow: `6px 6px 0 0 ${INK}` }}
-      >
+  const cuerpo = (
+    <>
+      {!embebido && (
         <header className="flex items-start justify-between gap-4 px-6 pb-3 pt-6">
           <div>
             <h2 id="crear-ia-titulo" className="flex items-center gap-2 text-xl font-extrabold text-[#2C3E50]">
@@ -404,6 +436,7 @@ export default function CrearConIA({
             <span className="material-symbols-outlined text-[22px]">close</span>
           </button>
         </header>
+      )}
 
         <div className="overflow-y-auto px-6 pb-6">
           {error && (
@@ -481,18 +514,20 @@ export default function CrearConIA({
                     {extraido.tablas ? ` · ${extraido.tablas} ${extraido.tablas === 1 ? 'tabla' : 'tablas'}` : ''}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExtraido(null)
-                    setArchivo(null)
-                    setError(null)
-                    setFase('elegir')
-                  }}
-                  className="text-xs font-bold text-[#7D8A96] hover:text-[#E8A598]"
-                >
-                  Cambiar
-                </button>
+                {!embebido && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExtraido(null)
+                      setArchivo(null)
+                      setError(null)
+                      setFase('elegir')
+                    }}
+                    className="text-xs font-bold text-[#7D8A96] hover:text-[#E8A598]"
+                  >
+                    Cambiar
+                  </button>
+                )}
               </div>
 
               {extraido.avisos.map((a) => (
@@ -724,9 +759,11 @@ export default function CrearConIA({
                 <span aria-hidden className="inline-block text-[#8BA888]">
                   <span className="material-symbols-outlined text-[1.4rem] leading-none">task_alt</span>
                 </span>
-                {creados.length === 1 && guardarComo === 'uno'
+                {creados.length === 1 && porTemas && guardarComo === 'uno'
                   ? `Mapa creado con ${fmt(progresoTemas.length - fallidos.length)} temas`
-                  : `${fmt(creados.length)} mapas creados`}
+                  : creados.length === 1
+                    ? 'Mapa creado'
+                    : `${fmt(creados.length)} mapas creados`}
                 <span className="text-sm font-semibold text-[#7D8A96]">
                   · {fmt(creados.reduce((n, c) => n + c.nodos, 0))} nodos
                 </span>
@@ -736,6 +773,7 @@ export default function CrearConIA({
                   <li key={c.id}>
                     <a
                       href={`/mapas/${c.id}?ia=1`}
+                      {...(embebido ? { target: '_blank', rel: 'noopener' } : {})}
                       className="flex items-center justify-between gap-3 rounded-lg px-2 py-1 text-[0.82rem] font-bold text-[#2C3E50] hover:bg-[#FAF7F4]"
                     >
                       <span className="min-w-0 truncate">{c.titulo}</span>
@@ -766,7 +804,7 @@ export default function CrearConIA({
 
         {fase === 'hecho' && (
           <footer className="flex flex-wrap justify-end gap-3 border-t border-[#7D8A96]/15 bg-white px-6 py-4">
-            {porTemas && fcEstado && extraido && archivo && temasLibro && (
+            {!embebido && porTemas && fcEstado && extraido && archivo && temasLibro && (
               <button
                 type="button"
                 onClick={() => setAFlashcards(true)}
@@ -782,7 +820,7 @@ export default function CrearConIA({
             {creados.length === 1 ? (
               <button
                 type="button"
-                onClick={() => router.push(`/mapas/${creados[0].id}?ia=1`)}
+                onClick={() => (embebido ? window.open(`/mapas/${creados[0].id}?ia=1`, '_blank', 'noopener') : router.push(`/mapas/${creados[0].id}?ia=1`))}
                 className="flex items-center gap-2 rounded-2xl bg-[#E8A598] px-5 py-2.5 text-sm font-bold text-white"
                 style={{ border: `2px solid ${INK}`, boxShadow: `3px 3px 0 0 ${INK}` }}
               >
@@ -800,7 +838,7 @@ export default function CrearConIA({
           </footer>
         )}
 
-        {(fase === 'ajustes' || fase === 'generando') && (
+        {(fase === 'ajustes' || fase === 'generando') && !embebido && (
           <footer className="border-t border-[#7D8A96]/15 bg-white px-6 py-4">
             <p className="mb-3 text-[11px] leading-relaxed text-[#7D8A96]">
               El archivo no se guarda. Su texto se envía a un servicio de IA externo (DeepSeek) solo para generar el mapa. La IA
@@ -827,8 +865,33 @@ export default function CrearConIA({
             </div>
           </footer>
         )}
+    </>
+  )
+  const estilos = <style>{`@keyframes ia-barra{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}@keyframes ia-entra{from{opacity:0;transform:translateX(-0.25rem)}to{opacity:1;transform:none}}.ia-prov-entra{animation:ia-entra .25s ease-out}`}</style>
+  if (embebido) {
+    return (
+      <div className={visible ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+        {cuerpo}
+        {estilos}
       </div>
-      <style>{`@keyframes ia-barra{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}@keyframes ia-entra{from{opacity:0;transform:translateX(-0.25rem)}to{opacity:1;transform:none}}.ia-prov-entra{animation:ia-entra .25s ease-out}`}</style>
+    )
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#2C3E50]/40 p-4 backdrop-blur-[2px]"
+      onMouseDown={(e) => e.target === e.currentTarget && cerrar()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="crear-ia-titulo"
+        className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-[#FAF7F4]"
+        style={{ border: `2px solid ${INK}`, boxShadow: `6px 6px 0 0 ${INK}` }}
+      >
+        {cuerpo}
+      </div>
+      {estilos}
     </div>
   )
 }

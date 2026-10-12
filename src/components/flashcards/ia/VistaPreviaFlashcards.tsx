@@ -92,6 +92,7 @@ export function VistaPreviaFlashcards({
   onVolver,
   onCerrar,
   mas,
+  teclado = true,
 }: {
   inicial: Borrador[]
   /** Nombre propuesto para un grupo nuevo. */
@@ -107,6 +108,8 @@ export function VistaPreviaFlashcards({
   onCerrar: () => void
   /** «Más de este tema» (sin esto, no se ofrece). */
   mas?: MasConfig
+  /** Con false (pestaña oculta del popup unificado) las teclas de la revisión no actúan. */
+  teclado?: boolean
 }) {
   const [lista, setLista] = useState<Borrador[]>(inicial)
   const dudosasIniciales = inicial.filter((b) => b.ia?.dudoso).length
@@ -276,7 +279,7 @@ export function VistaPreviaFlashcards({
   // Teclado. En captura y parando la propagación: dentro del editor de mapas, sus atajos (borrar
   // nodo, mover…) no deben actuar mientras se revisa.
   useEffect(() => {
-    if (hechos || guardando) return
+    if (hechos || guardando || !teclado) return
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return
       // Dentro del panel «Más» manda el panel (Espacio y Enter pulsan sus botones).
@@ -326,7 +329,7 @@ export function VistaPreviaFlashcards({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [hechos, guardando, visibles, activo, editando, lista, indiceDe, cambiar])
+  }, [hechos, guardando, teclado, visibles, activo, editando, lista, indiceDe, cambiar])
 
   const guardar = async () => {
     if (!puede) return

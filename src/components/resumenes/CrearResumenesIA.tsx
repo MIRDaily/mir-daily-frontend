@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { extraerDocumento, FORMATOS_ACEPTADOS } from '@/lib/mapas/ia/extract'
 import { aplicarEvento, arbolLibro, type EstadoTema, type FaseIA, type LineaProvisional } from '@/lib/mapas/ia/stream'
 import { construirIndice, resumenSeleccion } from '@/lib/mapas/ia/indice'
@@ -36,6 +36,7 @@ import {
   type EstadoResumenesIA,
 } from '@/lib/resumenes/ia'
 import { fragmentoDeParrafo, fragmentoDeTema, nivelesDeLista, paginasDeFragmento, rangosDeTemas, temasMarcados } from '@/lib/resumenes/ampliar'
+import { seleccionInicial, type PropsEmbebido, type ResultadoGenerar } from '@/lib/ia/embebido'
 import { INK } from './ParrafoHuecos'
 import { VistaPreviaResumenes, type MasConfig, type RehacerConfig } from './VistaPreviaResumenes'
 
@@ -147,21 +148,27 @@ export default function CrearResumenesIA({
   estado: estadoDado,
   borrador,
   onClose,
-}: {
+  compartido,
+  visible = true,
+  controlRef,
+  onEstado,
+}: PropsEmbebido & {
   estado: EstadoResumenesIA | null
   /** Retomar la revisión de un borrador guardado en este navegador (no hace falta la IA). */
   borrador?: BorradorResumen
   onClose: () => void
 }) {
+  const embebido = !!compartido
   const estado: EstadoResumenesIA = estadoDado ?? {
     disponible: false, niveles: [], densidades: [], modos: [],
     limites: { maxChars: 0, maxPaginas: 0 },
     cupo: { generacionesHoy: 0, maxGeneracionesDia: 0, caracteresHoy: 0, maxCaracteresDia: 0 },
   }
-  const [fase, setFase] = useState<Fase>(borrador ? 'vista' : 'elegir')
-  const [archivo, setArchivo] = useState<File | null>(null)
-  const [extraido, setExtraido] = useState<Extraido | null>(null)
-  const [titulo, setTitulo] = useState('')
+  // Con el documento compartido del popup unificado, se empieza en los ajustes con lo que cabe marcado.
+  const [fase, setFase] = useState<Fase>(borrador ? 'vista' : compartido ? 'ajustes' : 'elegir')
+  const [archivo, setArchivo] = useState<File | null>(compartido?.archivo ?? null)
+  const [extraido, setExtraido] = useState<Extraido | null>(compartido?.extraido ?? null)
+  const [titulo, setTitulo] = useState(compartido?.extraido.titulo ?? '')
   const [modo, setModo] = useState<ModoResumen>('resumen')
   const [niveles, setNiveles] = useState<Nivel[]>([...NIVELES])
   const [densidad, setDensidad] = useState<Densidad>('normal')
@@ -172,8 +179,8 @@ export default function CrearResumenesIA({
   const [faseIA, setFaseIA] = useState<FaseIA>('leyendo')
   const [lineas, setLineas] = useState<LineaProvisional[]>([])
   const [arrastrando, setArrastrando] = useState(false)
-  const [sel, setSel] = useState<Set<number>>(new Set())
-  const [selectorAbierto, setSelectorAbierto] = useState(false)
+  const [sel, setSel] = useState<Set<number>>(() => (compartido ? seleccionInicial(compartido.extraido, estado.limites).sel : new Set()))
+  const [selectorAbierto, setSelectorAbierto] = useState(() => (compartido ? seleccionInicial(compartido.extraido, estado.limites).abierto : false))
   const [temasLibro, setTemasLibro] = useState<TemaIndice[] | null>(null)
   const [cargandoIndice, setCargandoIndice] = useState(false)
   const [progresoTemas, setProgresoTemas] = useState<ProgresoTema[]>([])
@@ -194,6 +201,25 @@ export default function CrearResumenesIA({
   const [rehacerUsadas, setRehacerUsadas] = useState(0)
   const [errorArchivo, setErrorArchivo] = useState<string | null>(null)
   const [comprobando, setComprobando] = useState(false)
+
+  // Con el documento compartido no pasa por `leer`: su SHA-256 (la clave de su borrador) y el borrador
+  // que ya tenga, si lo hay, se buscan aquí.
+  useEffect(() => {
+    if (!compartido) return
+    let vivo = true
+    void (async () => {
+      const hash = await hashArchivo(compartido.archivo).catch(() => null)
+      if (!vivo || !hash) return
+      setDocumento(hash)
+      const { data } = await supabase.auth.getSession()
+      const uid = data.session?.user.id
+      const ya = uid ? await leerBorrador(uid, hash) : null
+      if (vivo) setPrevio(ya)
+    })()
+    return () => {
+      vivo = false
+    }
+  }, [compartido])
 
   // Al retomar un borrador: su documento, si este navegador lo guarda.
   useEffect(() => {
@@ -252,10 +278,11 @@ export default function CrearResumenesIA({
   }, [fase, onClose])
 
   useEffect(() => {
+    if (embebido) return // el popup unificado gestiona el cierre
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && cerrar()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [cerrar])
+  }, [cerrar, embebido])
 
   useEffect(() => {
     if (fase !== 'generando') return
@@ -322,7 +349,7 @@ export default function CrearResumenesIA({
   const excedeCupoChars = caracteres > charsRestantesHoy
   const sinCupo = restantes === 0
   const puedeGenerar =
-    !!extraido && !nadaElegido && !excedeTexto && !excedePaginas && !excedeTemas && !excedeCupoChars && !sinCupo && !cargandoIndice && niveles.length > 0 && titulo.trim().length > 0 && derechos
+    !!extraido && !nadaElegido && !excedeTexto && !excedePaginas && !excedeTemas && !excedeCupoChars && !sinCupo && !cargandoIndice && niveles.length > 0 && titulo.trim().length > 0 && derechos && (!compartido || !!documento)
 
   const aprox = envioLibro
     ? envioLibro.temas.reduce((n, t) => n + parrafosAprox(envioLibro.secciones.slice(t.desde, t.hasta + 1).reduce((c, s) => c + s.texto.length, 0), densidad, modo), 0)
@@ -369,13 +396,13 @@ export default function CrearResumenesIA({
     })
   }
 
-  const generar = async () => {
-    if (!extraido || !puedeGenerar) return
+  const generar = async (): Promise<ResultadoGenerar> => {
+    if (!extraido || !puedeGenerar) return 'no'
     if (
       previo &&
       !window.confirm(`Ya tienes un borrador de este documento sin guardar (${previo.lista.length} párrafos, ${haceCuanto(previo.actualizado)}). Si generas de nuevo, se sustituirá. ¿Seguir?`)
     ) {
-      return
+      return 'no'
     }
     setError(null)
     setSegundos(0)
@@ -404,7 +431,7 @@ export default function CrearResumenesIA({
       const r = envioLibro
         ? await resumenesIAGenerar({ ...comun, secciones: envioLibro.secciones, temas: envioLibro.temas }, ctl.signal, onEvento)
         : await resumenesIAGenerar({ ...comun, secciones: eleccion?.elegidas ?? [] }, ctl.signal, onEvento)
-      if (!montado.current) return
+      if (!montado.current) return 'cancelado'
       const lista = 'temas' in r ? r.temas.flatMap((t) => t.parrafos) : r.parrafos
       if (lista.length === 0) throw new IAError('La IA no devolvió párrafos válidos. Prueba con otra parte del documento.')
       const nuevo: Resultado = {
@@ -431,13 +458,37 @@ export default function CrearResumenesIA({
       // Guardado ya (antes de tocar nada): una recarga a mitad de revisión no lo pierde.
       persistir(lista, nuevo)
       setFase('vista')
+      return 'ok'
     } catch (e) {
-      if (!montado.current) return
-      if (e instanceof DOMException && e.name === 'AbortError') return
+      if (!montado.current) return 'cancelado'
+      if (e instanceof DOMException && e.name === 'AbortError') return 'cancelado'
       setError(e instanceof Error ? e.message : 'No se pudieron generar los resúmenes')
       setFase('ajustes')
+      return 'fallo'
     }
   }
+
+  // Como pestaña del popup unificado: el popup lanza la generación (en cola) y pinta el estado.
+  useImperativeHandle(controlRef, () => ({ generar }))
+  const falta = !extraido
+    ? undefined
+    : !derechos
+      ? 'Marca que tienes derecho a usar el documento.'
+      : niveles.length === 0
+        ? 'Marca al menos un nivel de los huecos.'
+        : nadaElegido
+          ? 'Marca al menos una parte del documento.'
+          : excedeTexto || excedePaginas || excedeTemas
+            ? 'Lo marcado es demasiado grande: desmarca alguna parte.'
+            : excedeCupoChars || sinCupo
+              ? 'No te queda cupo de IA hoy para esto.'
+              : titulo.trim().length === 0
+                ? 'Falta el nombre.'
+                : undefined
+  const listo = fase === 'ajustes' && puedeGenerar
+  useEffect(() => {
+    onEstado?.({ fase, listo, ...(falta && fase === 'ajustes' ? { falta } : {}) })
+  }, [onEstado, fase, listo, falta])
 
   const resumenParte = !extraido
     ? ''
@@ -538,18 +589,9 @@ export default function CrearResumenesIA({
 
   const ancho = fase === 'vista' ? 'max-w-4xl' : 'max-w-xl'
 
-  return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#2C3E50]/40 p-4 backdrop-blur-[2px]"
-      onMouseDown={(e) => e.target === e.currentTarget && cerrar()}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="ra-ia-titulo"
-        className={`flex max-h-[92dvh] w-full ${ancho} flex-col overflow-hidden rounded-3xl bg-[#FAF7F4]`}
-        style={{ border: `2px solid ${INK}`, boxShadow: `6px 6px 0 0 ${INK}` }}
-      >
+  const cuerpo = (
+    <>
+      {!embebido && (
         <header className="flex items-start justify-between gap-4 px-6 pb-3 pt-6">
           <div className="min-w-0">
             <h2 id="ra-ia-titulo" className="flex items-center gap-2 text-xl font-extrabold text-[#2C3E50]">
@@ -574,6 +616,7 @@ export default function CrearResumenesIA({
             <span className="material-symbols-outlined text-[22px]">close</span>
           </button>
         </header>
+      )}
 
         {fase === 'vista' && resultado ? (
           <>
@@ -594,6 +637,7 @@ export default function CrearResumenesIA({
               fuente={resultado.fuente}
               fuentes={resultado.fuentes}
               persistir={persistir}
+              teclado={visible}
               alGuardar={() => usuario && documento && void borrarBorrador(usuario, documento)}
               {...(extraido
                 ? {
@@ -687,20 +731,22 @@ export default function CrearResumenesIA({
                       {extraido.paginas === 1 ? '' : 's'} · {fmt(extraido.caracteres)} caracteres
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExtraido(null)
-                      setArchivo(null)
-                      setDocumento(null)
-                      setPrevio(null)
-                      setError(null)
-                      setFase('elegir')
-                    }}
-                    className="text-xs font-bold text-[#7D8A96] hover:text-[#E8A598]"
-                  >
-                    Cambiar
-                  </button>
+                  {!embebido && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExtraido(null)
+                        setArchivo(null)
+                        setDocumento(null)
+                        setPrevio(null)
+                        setError(null)
+                        setFase('elegir')
+                      }}
+                      className="text-xs font-bold text-[#7D8A96] hover:text-[#E8A598]"
+                    >
+                      Cambiar
+                    </button>
+                  )}
                 </div>
                 {previo && (
                   <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl bg-[#FBF3E1] px-4 py-3" data-aviso-borrador>
@@ -932,7 +978,7 @@ export default function CrearResumenesIA({
           </div>
         )}
 
-        {fase === 'ajustes' && (
+        {fase === 'ajustes' && !embebido && (
           <footer className="border-t border-[#7D8A96]/15 bg-white px-6 py-4">
             <p className="mb-3 text-[11px] leading-relaxed text-[#7D8A96]">
               El archivo no se guarda ni se sube: se lee en tu navegador y su texto se envía a un servicio de IA externo (DeepSeek) solo para hacer los párrafos. En
@@ -955,8 +1001,33 @@ export default function CrearResumenesIA({
             </div>
           </footer>
         )}
+    </>
+  )
+  const estilos = <style>{`@keyframes ia-barra{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}@keyframes ia-entra{from{opacity:0;transform:translateX(-0.25rem)}to{opacity:1;transform:none}}.ia-prov-entra{animation:ia-entra .25s ease-out}`}</style>
+  if (embebido) {
+    return (
+      <div className={visible ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+        {cuerpo}
+        {estilos}
       </div>
-      <style>{`@keyframes ia-barra{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}@keyframes ia-entra{from{opacity:0;transform:translateX(-0.25rem)}to{opacity:1;transform:none}}.ia-prov-entra{animation:ia-entra .25s ease-out}`}</style>
+    )
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#2C3E50]/40 p-4 backdrop-blur-[2px]"
+      onMouseDown={(e) => e.target === e.currentTarget && cerrar()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ra-ia-titulo"
+        className={`flex max-h-[92dvh] w-full ${ancho} flex-col overflow-hidden rounded-3xl bg-[#FAF7F4]`}
+        style={{ border: `2px solid ${INK}`, boxShadow: `6px 6px 0 0 ${INK}` }}
+      >
+        {cuerpo}
+      </div>
+      {estilos}
     </div>
   )
 }

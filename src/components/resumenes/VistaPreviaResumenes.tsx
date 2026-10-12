@@ -475,6 +475,7 @@ export function VistaPreviaResumenes({
   onCerrar,
   mas,
   rehacer,
+  teclado = true,
 }: {
   inicial: ParrafoBorrador[]
   nombreGrupo: string
@@ -490,6 +491,8 @@ export function VistaPreviaResumenes({
   mas?: MasConfig
   /** «Rehacer este párrafo» (sin esto, no se ofrece). */
   rehacer?: RehacerConfig
+  /** Con false (pestaña oculta del popup unificado) las teclas de la revisión no actúan. */
+  teclado?: boolean
 }) {
   const [lista, setLista] = useState(inicial)
   const [nivel, setNivel] = useState<Nivel>(2)
@@ -877,7 +880,7 @@ export function VistaPreviaResumenes({
   // Teclado. En captura y parando la propagación (como en las flashcards): mientras se revisa, las
   // teclas son de la vista previa. Dentro de un campo, del editor o del panel «Más», solo Esc.
   useEffect(() => {
-    if (hecho || guardando) return
+    if (hecho || guardando || !teclado) return
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return
       const t = e.target instanceof HTMLElement ? e.target : null
@@ -942,7 +945,7 @@ export function VistaPreviaResumenes({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [hecho, guardando, editando, activo, pActivo, selActivo, visibles, posVisible, activar, editar, cerrarEditor, cambiar, rehacerParrafo])
+  }, [hecho, guardando, teclado, editando, activo, pActivo, selActivo, visibles, posVisible, activar, editar, cerrarEditor, cambiar, rehacerParrafo])
 
   // «Texto original»: lo que se pasaría del 30 % de su documento en cada grupo de destino.
   const excesos = useMemo(() => {

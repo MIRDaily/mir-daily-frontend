@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { extraerDocumento, FORMATOS_ACEPTADOS } from '@/lib/mapas/ia/extract'
 import { aplicarEvento, arbolLibro, type EstadoTema, type FaseIA, type LineaProvisional } from '@/lib/mapas/ia/stream'
 import { construirIndice, resumenSeleccion } from '@/lib/mapas/ia/indice'
@@ -26,6 +26,7 @@ import type { FuenteGuardar } from '@/lib/flashcards/ia/tarjetas'
 import { hashArchivo } from '@/lib/mapas/ia/docs'
 import { fragmentoParaRama } from '@/lib/mapas/ia/rama'
 import type { Seccion } from '@/lib/mapas/ia/types'
+import { seleccionInicial, type PropsEmbebido, type ResultadoGenerar } from '@/lib/ia/embebido'
 
 // «Crear flashcards con IA» desde un documento (PDF, Word, PowerPoint): el mismo camino que «Crear
 // con IA» de los mapas (el archivo se lee en el navegador y no se sube; «Qué parte usar»; tema a
@@ -61,9 +62,13 @@ export type DocumentoLeido = { archivo: File; extraido: Extraido; titulo: string
 export default function CrearFlashcardsIA({
   estado: estadoDado,
   borrador,
-  inicial,
+  inicial: inicialDado,
   onClose,
-}: {
+  compartido,
+  visible = true,
+  controlRef,
+  onEstado,
+}: PropsEmbebido & {
   estado: EstadoFlashcardsIA | null
   /** Retomar la revisión de un borrador guardado en este navegador (no hace falta la IA). */
   borrador?: BorradorGuardado
@@ -71,12 +76,20 @@ export default function CrearFlashcardsIA({
   inicial?: DocumentoLeido
   onClose: () => void
 }) {
+  const embebido = !!compartido
   // Sin la IA (solo se retoma un borrador) los ajustes no se enseñan: estos valores no se usan.
   const estado: EstadoFlashcardsIA = estadoDado ?? {
     disponible: false, niveles: [], densidades: [],
     limites: { maxChars: 0, maxPaginas: 0 },
     cupo: { generacionesHoy: 0, maxGeneracionesDia: 0, caracteresHoy: 0, maxCaracteresDia: 0 },
   }
+  // Con el documento compartido del popup unificado, se empieza en los ajustes con lo que cabe marcado.
+  const [inicial] = useState<DocumentoLeido | undefined>(() =>
+    inicialDado ??
+    (compartido
+      ? { archivo: compartido.archivo, extraido: compartido.extraido, titulo: compartido.extraido.titulo, temasLibro: null, sel: seleccionInicial(compartido.extraido, estado.limites).sel }
+      : undefined),
+  )
   const [fase, setFase] = useState<Fase>(borrador ? 'vista' : inicial ? 'ajustes' : 'elegir')
   const [archivo, setArchivo] = useState<File | null>(inicial?.archivo ?? null)
   const [extraido, setExtraido] = useState<Extraido | null>(inicial?.extraido ?? null)
@@ -90,7 +103,9 @@ export default function CrearFlashcardsIA({
   const [lineas, setLineas] = useState<LineaProvisional[]>([])
   const [arrastrando, setArrastrando] = useState(false)
   const [sel, setSel] = useState<Set<number>>(() => new Set(inicial?.sel ?? []))
-  const [selectorAbierto, setSelectorAbierto] = useState(!!inicial?.temasLibro)
+  const [selectorAbierto, setSelectorAbierto] = useState(
+    !!inicial?.temasLibro || (!inicialDado && !!compartido && seleccionInicial(compartido.extraido, estado.limites).abierto),
+  )
   const [temasLibro, setTemasLibro] = useState<TemaIndice[] | null>(inicial?.temasLibro ?? null)
   const [cargandoIndice, setCargandoIndice] = useState(false)
   const [progresoTemas, setProgresoTemas] = useState<ProgresoTema[]>([])
@@ -174,10 +189,11 @@ export default function CrearFlashcardsIA({
   }, [fase, onClose])
 
   useEffect(() => {
+    if (embebido) return // el popup unificado gestiona el cierre
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && cerrar()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [cerrar])
+  }, [cerrar, embebido])
 
   useEffect(() => {
     if (fase !== 'generando') return
@@ -266,8 +282,8 @@ export default function CrearFlashcardsIA({
   const alternarNivel = (n: FlashcardLevel) =>
     setNiveles((ns) => (ns.includes(n) ? ns.filter((x) => x !== n) : [...ns, n].sort()))
 
-  const generar = async () => {
-    if (!extraido || !puedeGenerar) return
+  const generar = async (): Promise<ResultadoGenerar> => {
+    if (!extraido || !puedeGenerar) return 'no'
     setError(null)
     setSegundos(0)
     setFaseIA('leyendo')
@@ -294,7 +310,7 @@ export default function CrearFlashcardsIA({
       const r = envioLibro
         ? await flashcardsIAGenerar({ ...comun, secciones: envioLibro.secciones, temas: envioLibro.temas }, ctl.signal, onEvento)
         : await flashcardsIAGenerar({ ...comun, secciones: eleccion?.elegidas ?? [] }, ctl.signal, onEvento)
-      if (!montado.current) return
+      if (!montado.current) return 'cancelado'
       const lista =
         'temas' in r
           ? r.temas.flatMap((t) => borradores(t.tarjetas, `t${t.i}-`, t.titulo))
@@ -303,7 +319,7 @@ export default function CrearFlashcardsIA({
       // El texto del documento, con el borrador (solo en este navegador): «Más de este tema» lo
       // necesita también tras recargar. Si el navegador no puede guardarlo, se pedirá el archivo.
       const hash = archivo ? await hashArchivo(archivo).catch(() => null) : null
-      if (!montado.current) return
+      if (!montado.current) return 'cancelado'
       const nuevo: Resultado = {
         titulo: r.titulo,
         lista,
@@ -327,13 +343,35 @@ export default function CrearFlashcardsIA({
       // Guardado ya (antes de tocar nada): una recarga a mitad de revisión no lo pierde.
       persistir(lista, nuevo)
       setFase('vista')
+      return 'ok'
     } catch (e) {
-      if (!montado.current) return
-      if (e instanceof DOMException && e.name === 'AbortError') return
+      if (!montado.current) return 'cancelado'
+      if (e instanceof DOMException && e.name === 'AbortError') return 'cancelado'
       setError(e instanceof Error ? e.message : 'No se pudieron generar las flashcards')
       setFase('ajustes')
+      return 'fallo'
     }
   }
+
+  // Como pestaña del popup unificado: el popup lanza la generación (en cola) y pinta el estado.
+  useImperativeHandle(controlRef, () => ({ generar }))
+  const falta = !extraido
+    ? undefined
+    : niveles.length === 0
+      ? 'Marca al menos un nivel de dificultad.'
+      : nadaElegido
+        ? 'Marca al menos una parte del documento.'
+        : excedeTexto || excedePaginas || excedeTemas
+          ? 'Lo marcado es demasiado grande: desmarca alguna parte.'
+          : excedeCupoChars || sinCupo
+            ? 'No te queda cupo de IA hoy para esto.'
+            : titulo.trim().length === 0
+              ? 'Falta el nombre.'
+              : undefined
+  const listo = fase === 'ajustes' && puedeGenerar
+  useEffect(() => {
+    onEstado?.({ fase, listo, ...(falta && fase === 'ajustes' ? { falta } : {}) })
+  }, [onEstado, fase, listo, falta])
 
   const resumenParte = !extraido
     ? ''
@@ -434,18 +472,9 @@ export default function CrearFlashcardsIA({
 
   const ancho = fase === 'vista' ? 'max-w-3xl' : 'max-w-xl'
 
-  return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#2C3E50]/40 p-4 backdrop-blur-[2px]"
-      onMouseDown={(e) => e.target === e.currentTarget && cerrar()}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="fc-ia-titulo"
-        className={`flex max-h-[92dvh] w-full ${ancho} flex-col overflow-hidden rounded-3xl bg-[#FAF7F4]`}
-        style={{ border: `2px solid ${INK}`, boxShadow: `6px 6px 0 0 ${INK}` }}
-      >
+  const cuerpo = (
+    <>
+      {!embebido && (
         <header className="flex items-start justify-between gap-4 px-6 pb-3 pt-6">
           <div className="min-w-0">
             <h2 id="fc-ia-titulo" className="flex items-center gap-2 text-xl font-extrabold text-[#2C3E50]">
@@ -468,6 +497,7 @@ export default function CrearFlashcardsIA({
             <span className="material-symbols-outlined text-[22px]">close</span>
           </button>
         </header>
+      )}
 
         {fase === 'vista' && resultado ? (
           <>
@@ -487,6 +517,7 @@ export default function CrearFlashcardsIA({
               fuente={resultado.fuente}
               persistir={persistir}
               mas={mas}
+              teclado={visible}
               alGuardar={() => usuario && void borrarBorrador(claveBorrador(usuario, borrador?.origen ?? { tipo: 'documento' }))}
               {...(extraido
                 ? {
@@ -577,18 +608,20 @@ export default function CrearFlashcardsIA({
                       {extraido.paginas === 1 ? '' : 's'} · {fmt(extraido.caracteres)} caracteres
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExtraido(null)
-                      setArchivo(null)
-                      setError(null)
-                      setFase('elegir')
-                    }}
-                    className="text-xs font-bold text-[#7D8A96] hover:text-[#E8A598]"
-                  >
-                    Cambiar
-                  </button>
+                  {!embebido && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExtraido(null)
+                        setArchivo(null)
+                        setError(null)
+                        setFase('elegir')
+                      }}
+                      className="text-xs font-bold text-[#7D8A96] hover:text-[#E8A598]"
+                    >
+                      Cambiar
+                    </button>
+                  )}
                 </div>
                 {extraido.avisos.map((a) => (
                   <p key={a} className="mt-2 text-xs font-medium text-[#B07A1E]">
@@ -777,7 +810,7 @@ export default function CrearFlashcardsIA({
           </div>
         )}
 
-        {fase === 'ajustes' && (
+        {fase === 'ajustes' && !embebido && (
           <footer className="border-t border-[#7D8A96]/15 bg-white px-6 py-4">
             <p className="mb-3 text-[11px] leading-relaxed text-[#7D8A96]">
               El archivo no se guarda. Su texto se envía a un servicio de IA externo (DeepSeek) solo para hacer las tarjetas. La IA puede
@@ -799,8 +832,33 @@ export default function CrearFlashcardsIA({
             </div>
           </footer>
         )}
+    </>
+  )
+  const estilos = <style>{`@keyframes ia-barra{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}@keyframes ia-entra{from{opacity:0;transform:translateX(-0.25rem)}to{opacity:1;transform:none}}.ia-prov-entra{animation:ia-entra .25s ease-out}`}</style>
+  if (embebido) {
+    return (
+      <div className={visible ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+        {cuerpo}
+        {estilos}
       </div>
-      <style>{`@keyframes ia-barra{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}@keyframes ia-entra{from{opacity:0;transform:translateX(-0.25rem)}to{opacity:1;transform:none}}.ia-prov-entra{animation:ia-entra .25s ease-out}`}</style>
+    )
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#2C3E50]/40 p-4 backdrop-blur-[2px]"
+      onMouseDown={(e) => e.target === e.currentTarget && cerrar()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="fc-ia-titulo"
+        className={`flex max-h-[92dvh] w-full ${ancho} flex-col overflow-hidden rounded-3xl bg-[#FAF7F4]`}
+        style={{ border: `2px solid ${INK}`, boxShadow: `6px 6px 0 0 ${INK}` }}
+      >
+        {cuerpo}
+      </div>
+      {estilos}
     </div>
   )
 }

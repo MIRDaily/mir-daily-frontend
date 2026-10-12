@@ -14,6 +14,7 @@ import StudioCountdown from '@/components/studio/StudioCountdown'
 import StudioSearchButton from '@/components/studio/StudioSearchButton'
 import StudioCalendarButton from '@/components/studio/StudioCalendarButton'
 import { AvisoResumenes } from '@/components/resumenes/AvisoResumenes'
+import { BotonDocumentoIA, CapaDocumentoIA, useDocumentoIA } from '@/components/studio/ia/DocumentoIAStudio'
 import type { MonthlyProgressResponse } from '@/services/analyticsService'
 
 // El popup y la decoración de las tarjetas (SVG animados que solo se ven al
@@ -428,6 +429,8 @@ export default function StudioPage() {
   debugRender('StudioPage')
   const { user, loading } = useAuth()
   const reduceMotion = useReducedMotion()
+  // Arrastrar un documento a la página: mapa conceptual, flashcards y/o resumen activo (solo con la IA disponible).
+  const documentoIA = useDocumentoIA()
   const [simulacrosHovered, setSimulacrosHovered] = useState(false)
   const [simulacrosArtVariant, setSimulacrosArtVariant] = useState<0 | 1>(0)
   const [mazosHovered, setMazosHovered] = useState(false)
@@ -963,6 +966,7 @@ export default function StudioPage() {
               <h3 className="mb-4 text-xs font-bold uppercase tracking-wider">Acceso Rápido</h3>
             </Reveal>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <BotonDocumentoIA ia={documentoIA} className="md:col-span-2 lg:col-span-4" />
               <Reveal once reduceMotion={reduceMotion}>
                 <Link
                   href="/library"
@@ -1025,6 +1029,7 @@ export default function StudioPage() {
       </motion.main>
 
       {smartOpen ? <SmartSimulacroModal onClose={() => setSmartOpen(false)} /> : null}
+      <CapaDocumentoIA ia={documentoIA} />
     </div>
   )
 }
