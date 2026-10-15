@@ -18,6 +18,10 @@ import { ExtractError, IAError, type ModoIA } from '@/lib/mapas/ia/types'
 import type { MapDoc } from '@/lib/mapas/types'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
+import { PrecioIA } from '@/components/ia/PrecioIA'
+import { useCobroIA, useCreditosIA } from '@/hooks/useCreditosIA'
+import { precioIA } from '@/lib/ia/precio'
+import { anotarReserva, cancelarGeneracion, mensajeErrorIA, nuevaGeneracion, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
 
 // Rehacer, ampliar o resumir UNA rama con la IA (informe 76). Hace falta el documento del que salió
 // el mapa: se guarda SOLO en este navegador (IndexedDB, 30 días). Si no está, se pide volver a
@@ -93,6 +97,11 @@ function Dialogo({
   )
   const charsFragmento = fragmento.reduce((n, s) => n + s.texto.length, 0)
   const paginas = fragmento.map((s) => s.pagina).filter((p): p is number => !!p)
+  // Créditos: una rama tiene precio fijo (sea cual sea la acción o el tamaño).
+  const gen = useRef<Generacion | null>(null)
+  const tarifaIA = useCreditosIA().tarifa
+  const precio = useMemo(() => precioIA(tarifaIA, { clave: 'rama' }), [tarifaIA])
+  const cobroIA = useCobroIA(precio)
 
   useEffect(() => {
     let vivo = true
@@ -142,7 +151,7 @@ function Dialogo({
   }
 
   const generar = async () => {
-    if (!doc || !rama || !fragmento.length) return
+    if (!doc || !rama || !fragmento.length || !cobroIA.suficiente) return
     setError(null)
     setSegundos(0)
     setLineas([])
@@ -150,6 +159,8 @@ function Dialogo({
     setPaso('generando')
     const c = new AbortController()
     ctl.current = c
+    const g = nuevaGeneracion(precio)
+    gen.current = g
     try {
       const r = await iaRama(
         {
@@ -161,14 +172,17 @@ function Dialogo({
           vecinos: rama.vecinos,
           secciones: fragmento,
           ...(doc.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
+          ...g.cobro,
         },
         c.signal,
         (e) => {
+          if (e.tipo === 'reserva') anotarReserva(g, e)
           if (c.signal.aborted) return
           if (e.tipo === 'fase') setFase(e.fase)
           else if (e.tipo === 'rama' || e.tipo === 'reinicio') setLineas((ls) => aplicarEvento(ls, e))
         },
       )
+      void refrescarCreditos()
       if (c.signal.aborted) return
       // Una sola acción: foto para Ctrl+Z y la rama nueva en su sitio.
       const store = useMindMapStore.getState()
@@ -190,9 +204,18 @@ function Dialogo({
       useUIStore.getState().setRamaIA(null)
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return
-      setError(e instanceof Error ? e.message : 'No se pudo completar')
+      void refrescarCreditos()
+      setError(mensajeErrorIA(e, 'No se pudo completar'))
       setPaso('listo')
     }
+  }
+
+  // «Cancelar» con créditos: se avisa al servidor antes de cortar (y se dice qué se devuelve).
+  const cancelar = async () => {
+    const r = await cancelarGeneracion(gen.current, () => ctl.current?.abort())
+    if (!r.cancelado) return
+    if (r.mensaje) setError(r.mensaje)
+    setPaso('listo')
   }
 
   const ink = t.isDark ? '#FAF7F4' : '#2C3E50'
@@ -300,10 +323,11 @@ function Dialogo({
                 Olvidar el documento en este navegador
               </button>
               <button type="button" onClick={cerrar} style={boton(false)}>Cancelar</button>
-              <button type="button" onClick={() => void generar()} disabled={!fragmento.length} style={boton(true)}>
+              <button type="button" onClick={() => void generar()} disabled={!fragmento.length || !cobroIA.suficiente} style={{ ...boton(true), opacity: fragmento.length && cobroIA.suficiente ? 1 : 0.5 }}>
                 <Sparkles size={15} /> {info.titulo}
               </button>
             </div>
+            <PrecioIA precio={precio} className="mt-3" />
             <p style={{ margin: '10px 0 0', fontSize: '0.7rem', color: t.textSecondary }}>
               La rama nueva sustituye a la de ahora en una sola acción: Ctrl+Z la deshace. La IA puede equivocarse: lo dudoso sale en ámbar.
             </p>
@@ -314,7 +338,7 @@ function Dialogo({
           <div>
             <ProgresoIA fases={['leyendo', 'estructura', 'ordenando']} fase={fase} lineas={lineas} segundos={segundos} />
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-              <button type="button" onClick={() => { ctl.current?.abort(); setPaso('listo') }} style={boton(false)}>Cancelar</button>
+              <button type="button" onClick={() => void cancelar()} style={boton(false)}>Cancelar</button>
             </div>
           </div>
         )}

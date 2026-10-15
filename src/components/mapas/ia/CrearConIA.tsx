@@ -18,6 +18,10 @@ import CrearFlashcardsIA from '@/components/flashcards/ia/CrearFlashcardsIA'
 import { flashcardsIAEstado } from '@/lib/flashcards/ia/api'
 import type { EstadoFlashcardsIA } from '@/lib/flashcards/ia/tarjetas'
 import { seleccionInicial, type PropsEmbebido, type ResultadoGenerar } from '@/lib/ia/embebido'
+import { PrecioIA } from '@/components/ia/PrecioIA'
+import { useCobroIA, useCreditosIA } from '@/hooks/useCreditosIA'
+import { caracteresDocumento, caracteresLibro, claveMapa, precioIA } from '@/lib/ia/precio'
+import { anotarReserva, cancelarGeneracion, mensajeErrorIA, nuevaGeneracion, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
 import {
   NODOS_POR_RAIZ,
   ExtractError,
@@ -124,11 +128,15 @@ export default function CrearConIA({
   const hashRef = useRef<Promise<string | null>>(Promise.resolve(null))
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  // La generación en curso (su cobro y el id de la reserva, para «Cancelar»).
+  const genRef = useRef<Generacion | null>(null)
   const montado = useRef(true)
 
   const { maxChars, maxPaginas } = estado.limites
-  const restantes = Math.max(0, estado.cupo.maxGeneracionesDia - estado.cupo.generacionesHoy)
-  const charsRestantesHoy = Math.max(0, estado.cupo.maxCaracteresDia - estado.cupo.caracteresHoy)
+  // Con los créditos encendidos el servidor no manda el cupo de hoy: no limita aquí.
+  const cupo = estado.cupo
+  const restantes = cupo ? Math.max(0, cupo.maxGeneracionesDia - cupo.generacionesHoy) : Infinity
+  const charsRestantesHoy = cupo ? Math.max(0, cupo.maxCaracteresDia - cupo.caracteresHoy) : Infinity
   // Se lee más de lo que cabe en un mapa: así se puede elegir una parte de un documento largo.
   const topeLectura = Math.max(maxChars * 4, estado.limites.maxCharsLibro ?? 0)
 
@@ -240,6 +248,16 @@ export default function CrearConIA({
   const excedeTemas = !!envioLibro && envioLibro.temas.length > (estado.limites.maxTemas ?? 40)
   const excedeCupoChars = caracteres > charsRestantesHoy
   const sinCupo = restantes === 0
+  // Créditos: el precio de lo marcado con la tarifa del servidor (la misma fórmula y los mismos
+  // caracteres que cuenta él). Cambia al momento con el estilo, las tablas y las partes elegidas.
+  const tarifaIA = useCreditosIA().tarifa
+  const precio = useMemo(() => {
+    if (!extraido) return null
+    const clave = claveMapa(modo, conTablas)
+    if (envioLibro) return precioIA(tarifaIA, { clave, ...caracteresLibro(envioLibro.secciones, envioLibro.temas) })
+    return precioIA(tarifaIA, { clave, caracteres: caracteresDocumento(eleccion?.elegidas ?? []) })
+  }, [extraido, modo, conTablas, envioLibro, eleccion, tarifaIA])
+  const cobroIA = useCobroIA(precio)
   const puedeGenerar =
     !!extraido &&
     !nadaElegido &&
@@ -248,6 +266,7 @@ export default function CrearConIA({
     !excedeTemas &&
     !excedeCupoChars &&
     !sinCupo &&
+    cobroIA.suficiente &&
     !cargandoIndice &&
     titulo.trim().length > 0
 
@@ -294,7 +313,10 @@ export default function CrearConIA({
     setFase('generando')
     const ctl = new AbortController()
     abortRef.current = ctl
+    const gen = nuevaGeneracion(precio)
+    genRef.current = gen
     const onEvento = (e: Parameters<NonNullable<Parameters<typeof iaGenerar>[2]>>[0]) => {
+      if (e.tipo === 'reserva') anotarReserva(gen, e)
       if (!montado.current || ctl.signal.aborted) return
       if (e.tipo === 'fase') setFaseIA(e.fase)
       else if (e.tipo === 'rama' || e.tipo === 'reinicio') setLineas((ls) => aplicarEvento(ls, e))
@@ -316,6 +338,7 @@ export default function CrearConIA({
       paginas: Math.max(1, paginasElegidas),
       ...(conTablas ? { tablas: true as const } : {}),
       ...(extraido.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
+      ...gen.cobro,
     }
     try {
       if (envioLibro) {
@@ -335,6 +358,7 @@ export default function CrearConIA({
             hechos.push({ id, titulo: t.titulo, nodos: t.stats.nodos })
           }
         }
+        void refrescarCreditos()
         if (!montado.current) return 'cancelado'
         setCreados(hechos)
         setFallidos(r.fallidos.map((f) => ({ titulo: f.titulo, motivo: f.motivo })))
@@ -343,6 +367,7 @@ export default function CrearConIA({
         return 'ok'
       }
       const r = await iaGenerar({ ...comun, secciones: eleccion?.elegidas ?? [] }, ctl.signal, onEvento)
+      void refrescarCreditos()
       // Lo que se guarda es el mapa VALIDADO del final, nunca el borrador.
       const id = await createMap(r.titulo, conFuente(r.doc))
       await recordar(id, eleccion?.elegidas ?? [])
@@ -358,12 +383,23 @@ export default function CrearConIA({
       router.push(`/mapas/${id}?ia=1`)
       return 'ok'
     } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) void refrescarCreditos()
       if (!montado.current) return 'cancelado'
       if (e instanceof DOMException && e.name === 'AbortError') return 'cancelado'
-      setError(e instanceof IAError || e instanceof Error ? e.message : 'No se pudo generar el mapa')
+      setError(mensajeErrorIA(e, 'No se pudo generar el mapa'))
       setFase('ajustes')
       return 'fallo'
     }
+  }
+
+  // «Cancelar»: se avisa al servidor antes de cortar (devuelve los créditos según las reglas).
+  const cancelar = async () => {
+    const r = await cancelarGeneracion(genRef.current, () => abortRef.current?.abort())
+    if (!r.cancelado || !montado.current) return
+    // Sin créditos: el servidor corta la llamada al modelo y la apunta como fallida (no cuenta en
+    // los mapas del día; lo gastado sí cuenta en el tope global de gasto).
+    setError(r.mensaje ?? 'Generación cancelada: la IA ha dejado de trabajar y no cuenta en tus mapas de hoy.')
+    setFase('ajustes')
   }
 
   // Como pestaña del popup unificado: el popup lanza la generación (en cola) y pinta el estado.
@@ -376,9 +412,11 @@ export default function CrearConIA({
         ? 'Lo marcado es demasiado grande: desmarca alguna parte.'
         : excedeCupoChars || sinCupo
           ? 'No te queda cupo de IA hoy para esto.'
-          : titulo.trim().length === 0
-            ? 'Falta el título.'
-            : undefined
+          : cobroIA.falta
+            ? cobroIA.falta
+            : titulo.trim().length === 0
+              ? 'Falta el título.'
+              : undefined
   const listo = fase === 'ajustes' && puedeGenerar
   useEffect(() => {
     onEstado?.({ fase, listo, ...(falta && fase === 'ajustes' ? { falta } : {}) })
@@ -497,7 +535,7 @@ export default function CrearConIA({
                 <li>
                   Máximo {fmt(maxChars)} caracteres de texto (unas {Math.round(maxChars / 3000)} páginas de apuntes) y {maxPaginas} páginas.
                 </li>
-                <li>Hoy te quedan {restantes} de {estado.cupo.maxGeneracionesDia} mapas con IA.</li>
+                {cupo && <li>Hoy te quedan {restantes} de {cupo.maxGeneracionesDia} mapas con IA.</li>}
               </ul>
             </>
           )}
@@ -702,9 +740,26 @@ export default function CrearConIA({
               ) : (
                 <p className="mt-4 text-xs text-[#7D8A96]" aria-live="polite">
                   {fmt(caracteres)} caracteres{envioLibro ? ` en ${fmt(envioLibro.temas.length)} temas` : ''}: saldrán unos {fmt(nodosAprox)} nodos y tardará {segMin}–{segMax} segundos
-                  {conTablas ? ' (con tablas, el doble de gasto)' : ''}. Usará {fmt(caracteres)} de los {fmt(charsRestantesHoy)}{' '}
-                  caracteres que te quedan hoy; mapas: te quedan {restantes} de {estado.cupo.maxGeneracionesDia}.
+                  {cupo ? (
+                    <>
+                      {conTablas ? ' (con tablas, el doble de gasto)' : ''}. Usará {fmt(caracteres)} de los {fmt(charsRestantesHoy)}{' '}
+                      caracteres que te quedan hoy; mapas: te quedan {restantes} de {cupo.maxGeneracionesDia}.
+                    </>
+                  ) : (
+                    '.'
+                  )}
                 </p>
+              )}
+              {!nadaElegido && (
+                <PrecioIA
+                  precio={precio}
+                  className="mt-2"
+                  alternativas={[
+                    porTemas ? 'Desmarca algún tema: el precio baja al momento.' : 'Marca menos partes del documento: el precio baja al momento.',
+                    ...(conTablas ? ['Quita «Incluir tablas» (casi duplica el precio).'] : []),
+                    ...(modo === 'detalle' ? ['Pasa a «Esquemático».'] : []),
+                  ]}
+                />
               )}
               {sinCupo && (
                 <p role="alert" className="mt-1 text-sm font-bold text-[#B04A5E]">
@@ -738,13 +793,7 @@ export default function CrearConIA({
                   : 'Al terminar se abrirá el editor con el mapa ya revisado y ordenado.'}{' '}
                 <button
                   type="button"
-                  onClick={() => {
-                    abortRef.current?.abort()
-                    // El servidor corta la llamada al modelo y la apunta como fallida: no cuenta en
-                    // los mapas del día (lo gastado sí cuenta en el tope global de gasto).
-                    setError('Generación cancelada: la IA ha dejado de trabajar y no cuenta en tus mapas de hoy.')
-                    setFase('ajustes')
-                  }}
+                  onClick={() => void cancelar()}
                   className="pointer-events-auto font-bold text-[#7D8A96] underline hover:text-[#B04A5E]"
                 >
                   Cancelar

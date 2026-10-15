@@ -3,6 +3,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { LEVEL_INFO } from '@/lib/studioFlashcards'
+import { PrecioIA } from '@/components/ia/PrecioIA'
+import { useCobroIA } from '@/hooks/useCreditosIA'
+import { estadoCreditos, mensajeErrorIA } from '@/lib/ia/creditos'
 import { cambiarNivel, desplazarNivelesDe, NIVELES, textoCambioNiveles, type Hueco, type Nivel } from '@/lib/resumenes/huecos'
 import type { FuenteFirmada, ModoResumen, ParrafoBorrador } from '@/lib/resumenes/borrador'
 import {
@@ -69,8 +72,10 @@ export type MasConfig = {
   cantidades: number[]
   /** Si ahora no se puede (falta el texto del documento): la explicación y cómo arreglarlo. */
   bloqueo?: React.ReactNode
-  /** Cuántas veces quedan hoy (si se sabe). */
+  /** Cuántas veces quedan hoy (si se sabe; con créditos no hay cupo diario que enseñar). */
   restantes?: number
+  /** Con créditos: lo que cuesta cada «Más» (precio fijo de la tarifa). */
+  precio?: number | null
 }
 
 /** «Rehacer este párrafo»: lo pone quien abre la vista previa. */
@@ -78,6 +83,14 @@ export type RehacerConfig = {
   pedir: (p: { parrafo: ParrafoBorrador; delTema: ParrafoBorrador[] }, signal: AbortSignal) => Promise<ParrafoBorrador>
   bloqueo?: React.ReactNode
   restantes?: number
+  /** Con créditos: lo que cuesta cada «Rehacer». */
+  precio?: number | null
+}
+
+/** Con créditos: ¿llega el saldo para algo que cuesta `precio`? (sin créditos, siempre). */
+function llegaElSaldo(precio: number | null | undefined): boolean {
+  const e = estadoCreditos()
+  return !e.activo || !e.saldo || precio === null || precio === undefined || e.saldo.ilimitado || (e.saldo.puede_usar && precio <= e.saldo.total)
 }
 
 type EstadoMas = { clave: string; cargando: boolean; mensaje?: string; error?: string }
@@ -182,6 +195,7 @@ const Tarjeta = memo(function Tarjeta({
   onRehacer,
   onDeshacer,
   onCerrarBloqueo,
+  precioRehacer = null,
 }: {
   p: ParrafoBorrador
   nivel: Nivel
@@ -212,6 +226,8 @@ const Tarjeta = memo(function Tarjeta({
   onRehacer?: (key: string) => void
   onDeshacer?: (key: string) => void
   onCerrarBloqueo?: () => void
+  /** Con créditos: lo que cuesta rehacerlo (se dice en el botón). */
+  precioRehacer?: number | null
 }) {
   const cambiarHuecos = useCallback((huecos: Hueco[]) => onCambiar(p.key, { huecos }), [onCambiar, p.key])
   const refEl = useCallback((el: HTMLDivElement | null) => registrar(p.key, el), [registrar, p.key])
@@ -326,13 +342,14 @@ const Tarjeta = memo(function Tarjeta({
                   type="button"
                   onClick={() => onRehacer?.(p.key)}
                   disabled={rehaciendo}
-                  title="Pedir a la IA otra versión de este párrafo, con los mismos datos en los huecos (R)"
+                  title={`Pedir a la IA otra versión de este párrafo, con los mismos datos en los huecos (R)${precioRehacer ? `. Usará ${precioRehacer} créditos` : ''}`}
                   className="flex items-center gap-1 rounded-lg px-2 py-0.5 font-bold hover:bg-[#FCEFEC] hover:text-[#C4655A] disabled:opacity-60"
                 >
                   <span aria-hidden className={`inline-block ${rehaciendo ? 'animate-spin' : ''}`}>
                     <span className="material-symbols-outlined text-[0.95rem] leading-none">autorenew</span>
                   </span>
                   {rehaciendo ? 'Rehaciendo…' : 'Rehacer'}
+                  {!rehaciendo && precioRehacer ? <span className="font-semibold text-[#7D8A96]">· {precioRehacer} créditos</span> : null}
                 </button>
               )}
               <button type="button" onClick={() => onEditar(p.key)} className="rounded-lg px-2 py-0.5 font-bold hover:bg-[#FAF7F4] hover:text-[#2C3E50]">
@@ -387,7 +404,8 @@ function PanelMas({
   onPedir: () => void
   onCerrar: () => void
 }) {
-  const sinCupo = mas.restantes !== undefined && mas.restantes <= 0
+  const cobro = useCobroIA(mas.precio ?? null)
+  const sinCupo = (mas.restantes !== undefined && mas.restantes <= 0) || !cobro.suficiente
   const cantidades = mas.cantidades.length ? mas.cantidades : [...CANTIDADES_MAS]
   return (
     <div data-mas-panel className="mb-2 rounded-xl bg-white p-3" style={{ border: `2px solid ${INK}`, boxShadow: `3px 3px 0 0 ${INK}` }}>
@@ -452,6 +470,7 @@ function PanelMas({
             Solo de este tema y sin repetir los que ya hay. Viaja el texto de este tema, no el documento entero.
             {mas.restantes !== undefined ? ` Hoy te quedan ${Math.max(0, mas.restantes)}.` : ''}
           </p>
+          <PrecioIA precio={mas.precio ?? null} className="mt-1.5" />
         </>
       )}
       {error && (
@@ -668,6 +687,7 @@ export function VistaPreviaResumenes({
       }
       if (rehaciendoRef.current) return avisarRehacer(key, 'Ya se está rehaciendo otro párrafo: espera a que termine.')
       if (cfg.restantes !== undefined && cfg.restantes <= 0) return avisarRehacer(key, 'Has llegado al máximo de párrafos rehechos de hoy. Vuelve mañana.')
+      if (!llegaElSaldo(cfg.precio)) return avisarRehacer(key, `No te quedan créditos suficientes: rehacer un párrafo usa ${cfg.precio} créditos.`)
       const ahora = listaRef.current
       const p = ahora.find((x) => x.key === key)
       if (!p) return
@@ -687,7 +707,7 @@ export function VistaPreviaResumenes({
         setLista((ls) => rehacerEnSitio(ls, key, nuevo))
       } catch (e) {
         if (e instanceof DOMException && e.name === 'AbortError') return
-        if (montado.current) avisarRehacer(key, e instanceof Error ? e.message : 'No se pudo rehacer el párrafo.')
+        if (montado.current) avisarRehacer(key, mensajeErrorIA(e, 'No se pudo rehacer el párrafo.'))
       } finally {
         if (rehaciendoRef.current === key) {
           rehaciendoRef.current = null
@@ -753,7 +773,7 @@ export function VistaPreviaResumenes({
       setMasAbierto(null)
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return
-      if (montado.current) setMasEstado({ clave, cargando: false, error: e instanceof Error ? e.message : 'No se pudieron generar más párrafos.' })
+      if (montado.current) setMasEstado({ clave, cargando: false, error: mensajeErrorIA(e, 'No se pudieron generar más párrafos.') })
     }
   }
 
@@ -1283,6 +1303,7 @@ export function VistaPreviaResumenes({
                               onRehacer={rehacerParrafo}
                               onDeshacer={deshacer}
                               onCerrarBloqueo={cerrarBloqueo}
+                              precioRehacer={rehacer?.precio ?? null}
                             />
                           )
                         })}

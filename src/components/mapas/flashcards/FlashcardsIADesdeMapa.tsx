@@ -29,6 +29,10 @@ import { FLASHCARD_LEVELS, LEVEL_INFO, type FlashcardLevel } from '@/lib/studioF
 import { supabase } from '@/lib/supabaseBrowser'
 import { borrarBorrador, claveBorrador, guardarBorrador, haceCuanto, leerBorrador, type BorradorGuardado } from '@/lib/flashcards/ia/borrador'
 import type { FuenteGuardar } from '@/lib/flashcards/ia/tarjetas'
+import { PrecioIA } from '@/components/ia/PrecioIA'
+import { useCobroIA, useCreditosIA } from '@/hooks/useCreditosIA'
+import { caracteresRamaMapa, claveFlashcards, precioIA } from '@/lib/ia/precio'
+import { anotarReserva, cancelarGeneracion, mensajeErrorIA, nuevaGeneracion, nuevoCobro, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
 
 // «Flashcards con IA» desde una rama del mapa (clic derecho en un nodo): al servidor viaja la rama
 // en texto plano (con las filas de sus tablas) y, si este navegador guarda el documento del que
@@ -188,11 +192,22 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
   }, [rama, entero, conDocumento, fragmento, mapaEntero, doc, elegidos, mapTitle])
   const usarDocumento = !!envio && envio.secciones.length > 0
   const caracteres = envio?.chars ?? 0
-  const restantes = estado ? Math.max(0, estado.cupo.maxGeneracionesDia - estado.cupo.generacionesHoy) : 0
-  const charsRestantes = estado ? Math.max(0, estado.cupo.maxCaracteresDia - estado.cupo.caracteresHoy) : 0
+  // Con los créditos encendidos el servidor no manda el cupo de hoy: entonces decide el precio.
+  const cupo = estado?.cupo
+  const restantes = !estado ? 0 : cupo ? Math.max(0, cupo.maxGeneracionesDia - cupo.generacionesHoy) : Infinity
+  const charsRestantes = !estado ? 0 : cupo ? Math.max(0, cupo.maxCaracteresDia - cupo.caracteresHoy) : Infinity
   const excede = !!estado && caracteres > estado.limites.maxChars
+  // Créditos: la rama (como la cuenta el servidor) y su fragmento, con la densidad como factor.
+  const genRef = useRef<Generacion | null>(null)
+  const tarifaIA = useCreditosIA().tarifa
+  const precio = useMemo(
+    () => (envio ? precioIA(tarifaIA, { clave: claveFlashcards('mapa'), caracteres: caracteresRamaMapa(envio.mapa, usarDocumento ? envio.secciones : []), densidad }) : null),
+    [envio, usarDocumento, densidad, tarifaIA],
+  )
+  const precioMas = useMemo(() => precioIA(tarifaIA, { clave: 'flashcards_mas' }), [tarifaIA])
+  const cobroIA = useCobroIA(precio)
   const puede =
-    !!envio && envio.hojas > 0 && envio.mapa.length >= 2 && niveles.length > 0 && !!estado && restantes > 0 && caracteres <= charsRestantes && !excede
+    !!envio && envio.hojas > 0 && envio.mapa.length >= 2 && niveles.length > 0 && !!estado && restantes > 0 && caracteres <= charsRestantes && !excede && cobroIA.suficiente
   const nombre = ((esRaiz ? mapTitle : rama?.titulo) || mapTitle).trim().slice(0, 80)
 
   const generar = async () => {
@@ -204,6 +219,8 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
     setFase('generando')
     const ctl = new AbortController()
     abortRef.current = ctl
+    const gen = nuevaGeneracion(precio)
+    genRef.current = gen
     try {
       if (!envio) return
       const r = await flashcardsIAGenerar(
@@ -214,14 +231,17 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
           mapa: envio.mapa,
           ...(usarDocumento ? { secciones: envio.secciones } : {}),
           ...((doc?.unidad ?? fuente?.unidad) === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
+          ...gen.cobro,
         },
         ctl.signal,
         (e) => {
+          if (e.tipo === 'reserva') anotarReserva(gen, e)
           if (!montado.current || ctl.signal.aborted) return
           if (e.tipo === 'fase') setFaseIA(e.fase)
           else if (e.tipo === 'rama' || e.tipo === 'reinicio') setLineas((ls) => aplicarEvento(ls, e))
         },
       )
+      void refrescarCreditos()
       if (!montado.current) return
       const tarjetas = 'tarjetas' in r ? r.tarjetas : r.temas.flatMap((t) => t.tarjetas)
       if (!tarjetas.length) throw new Error('La IA no devolvió tarjetas válidas para esta rama.')
@@ -247,11 +267,20 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
       persistir(nuevas, base)
       setFase('vista')
     } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) void refrescarCreditos()
       if (!montado.current) return
       if (e instanceof DOMException && e.name === 'AbortError') return
-      setError(e instanceof Error ? e.message : 'No se pudieron generar las flashcards')
+      setError(mensajeErrorIA(e, 'No se pudieron generar las flashcards'))
       setFase('ajustes')
     }
+  }
+
+  // «Cancelar»: con créditos, se avisa al servidor antes de cortar (y se dice qué se devuelve).
+  const cancelar = async () => {
+    const r = await cancelarGeneracion(genRef.current, () => abortRef.current?.abort())
+    if (!r.cancelado || !montado.current) return
+    setError(r.mensaje ?? 'Generación cancelada: la IA ha dejado de trabajar y no cuenta en tus generaciones de hoy.')
+    setFase('ajustes')
   }
 
   const alternarNivel = (n: FlashcardLevel) => setNiveles((ns) => (ns.includes(n) ? ns.filter((x) => x !== n) : [...ns, n].sort()))
@@ -259,11 +288,12 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
   // «Más de este tema» desde el mapa: la rama del nodo de ese tema (dentro de la rama de la que
   // salieron las tarjetas) y, si este navegador guarda el documento, el fragmento de sus páginas.
   const ramaOrigen = (pendiente ?? null)?.origen.tipo === 'mapa' ? ((pendiente?.origen as { nodeId?: string }).nodeId ?? nodeId) : nodeId
-  const masRestantes = estado?.cupo.maxMasDia !== undefined ? estado.cupo.maxMasDia - (estado.cupo.masHoy ?? 0) - masUsadas : undefined
+  const masRestantes = cupo?.maxMasDia !== undefined ? cupo.maxMasDia - (cupo.masHoy ?? 0) - masUsadas : undefined
   const mas: MasConfig | undefined =
     estado?.disponible && estado.opciones?.ampliar
       ? {
           restantes: masRestantes,
+          precio: precioMas,
           pedir: async ({ tema, niveles: nv, cantidad, existentes, paginas, vecinos }, signal) => {
             const nodes = useMindMapStore.getState().nodes
             const id = nodoDeTema(nodes, tema, ramaOrigen) ?? (nodes.some((n) => n.id === ramaOrigen) ? ramaOrigen : null)
@@ -281,9 +311,10 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
                 mapa: sub.mapa,
                 ...(frag.length ? { secciones: frag } : {}),
                 ...((doc?.unidad ?? fuente?.unidad) === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
+                ...nuevoCobro(precioMas),
               },
               signal,
-            )
+            ).finally(() => void refrescarCreditos())
             setMasUsadas((n) => n + 1)
             return id ? { ...r, tarjetas: r.tarjetas.map((t) => ({ ...t, nodeId: id })) } : r
           },
@@ -389,11 +420,7 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
                     No cierres esta ventana.{' '}
                     <button
                       type="button"
-                      onClick={() => {
-                        abortRef.current?.abort()
-                        setError('Generación cancelada: la IA ha dejado de trabajar y no cuenta en tus generaciones de hoy.')
-                        setFase('ajustes')
-                      }}
+                      onClick={() => void cancelar()}
                       className="font-bold underline hover:text-[#B04A5E]"
                     >
                       Cancelar
@@ -527,9 +554,20 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
                   </div>
                   <p className="mt-4 text-xs text-[#7D8A96]" aria-live="polite">
                     {estado
-                      ? `Saldrán unas ${tarjetasAproxMapa(envio?.hojas ?? rama.hojas, densidad, niveles.length)} tarjetas; antes de guardarlas las revisas. Hoy te quedan ${restantes} de ${estado.cupo.maxGeneracionesDia} generaciones.`
+                      ? `Saldrán unas ${tarjetasAproxMapa(envio?.hojas ?? rama.hojas, densidad, niveles.length)} tarjetas; antes de guardarlas las revisas.${cupo ? ` Hoy te quedan ${restantes} de ${cupo.maxGeneracionesDia} generaciones.` : ''}`
                       : 'Comprobando tu cupo de IA…'}
                   </p>
+                  {estado && !excede && (
+                    <PrecioIA
+                      precio={precio}
+                      className="mt-2"
+                      alternativas={[
+                        entero ? 'Desmarca algún bloque: el precio baja al momento.' : 'Elige una rama más pequeña.',
+                        ...(usarDocumento ? ['Quita el documento (la IA usará solo el mapa).'] : []),
+                        ...(densidad === 'muchas' ? ['Elige menos tarjetas por tema.'] : []),
+                      ]}
+                    />
+                  )}
                   {excede && (
                     <p className="mt-1 text-xs font-bold text-[#B04A5E]">
                       {entero ? 'Lo marcado es demasiado grande: desmarca algún bloque o quita el documento.' : 'La rama con su documento es demasiado grande: elige una rama más pequeña o quita el documento.'}

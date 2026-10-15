@@ -20,6 +20,10 @@ import { ExtractError, type EstadoIA, type Extraido, type ModoIA } from '@/lib/m
 import type { MapDoc } from '@/lib/mapas/types'
 import type { MindMapNode } from '@/components/mapas/proto/types/node.types'
 import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
+import { PrecioIA } from '@/components/ia/PrecioIA'
+import { useCobroIA, useCreditosIA } from '@/hooks/useCreditosIA'
+import { caracteresDocumento, claveMapa, precioIA } from '@/lib/ia/precio'
+import { anotarReserva, cancelarGeneracion, mensajeErrorIA, nuevaGeneracion, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
 
 // «Añadir un documento al mapa» (informe 76): p. ej., el mapa de los apuntes más el PowerPoint de
 // clase. El servidor genera el mapa del documento nuevo con los bloques y enfermedades de este como
@@ -85,6 +89,7 @@ function Dialogo({ mapTitle, onHecho }: { mapTitle: string; onHecho: (m: string)
   const [segundos, setSegundos] = useState(0)
   const [plan, setPlan] = useState<PlanAnadir | null>(null)
   const ctl = useRef<AbortController | null>(null)
+  const gen = useRef<Generacion | null>(null)
   const input = useRef<HTMLInputElement>(null)
   const cerrar = () => {
     ctl.current?.abort()
@@ -109,8 +114,16 @@ function Dialogo({ mapTitle, onHecho }: { mapTitle: string; onHecho: (m: string)
   const indice = useMemo(() => (ext ? construirIndice(ext.secciones, ext.marcadores) : []), [ext])
   const eleccion = useMemo(() => (ext ? resumenSeleccion(ext.secciones, sel) : null), [ext, sel])
   const caracteres = eleccion?.caracteres ?? 0
-  const restantes = estado ? Math.max(0, estado.cupo.maxGeneracionesDia - estado.cupo.generacionesHoy) : 0
-  const puede = !!ext && caracteres >= 200 && caracteres <= maxChars && restantes > 0
+  // Con los créditos encendidos el servidor no manda el cupo de hoy: entonces decide el precio.
+  const cupo = estado?.cupo
+  const restantes = !estado ? 0 : cupo ? Math.max(0, cupo.maxGeneracionesDia - cupo.generacionesHoy) : Infinity
+  const tarifaIA = useCreditosIA().tarifa
+  const precio = useMemo(
+    () => (eleccion ? precioIA(tarifaIA, { clave: claveMapa(modo, false), caracteres: caracteresDocumento(eleccion.elegidas) }) : null),
+    [eleccion, modo, tarifaIA],
+  )
+  const cobroIA = useCobroIA(precio)
+  const puede = !!ext && caracteres >= 200 && caracteres <= maxChars && restantes > 0 && cobroIA.suficiente
 
   const leer = async (file: File | undefined) => {
     if (!file) return
@@ -139,6 +152,8 @@ function Dialogo({ mapTitle, onHecho }: { mapTitle: string; onHecho: (m: string)
     setPaso('generando')
     const c = new AbortController()
     ctl.current = c
+    const g = nuevaGeneracion(precio)
+    gen.current = g
     try {
       const r = await iaGenerar(
         {
@@ -148,23 +163,35 @@ function Dialogo({ mapTitle, onHecho }: { mapTitle: string; onHecho: (m: string)
           paginas: Math.max(1, eleccion.paginas),
           guia: guiaDelMapa(),
           ...(ext.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
+          ...g.cobro,
         },
         c.signal,
         (e) => {
+          if (e.tipo === 'reserva') anotarReserva(g, e)
           if (c.signal.aborted) return
           if (e.tipo === 'fase') setFase(e.fase)
           else if (e.tipo === 'rama' || e.tipo === 'reinicio') setLineas((ls) => aplicarEvento(ls, e))
         },
       )
+      void refrescarCreditos()
       if (c.signal.aborted) return
       const p = planAnadir(useMindMapStore.getState().nodes, r.doc as MapDoc)
       setPlan(p)
       setPaso('vista')
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return
-      setError(e instanceof Error ? e.message : 'No se pudo generar')
+      void refrescarCreditos()
+      setError(mensajeErrorIA(e, 'No se pudo generar'))
       setPaso('ajustes')
     }
+  }
+
+  // «Cancelar» con créditos: se avisa al servidor antes de cortar (y se dice qué se devuelve).
+  const cancelar = async () => {
+    const r = await cancelarGeneracion(gen.current, () => ctl.current?.abort())
+    if (!r.cancelado) return
+    if (r.mensaje) setError(r.mensaje)
+    setPaso('ajustes')
   }
 
   const aplicar = () => {
@@ -280,8 +307,17 @@ function Dialogo({ mapTitle, onHecho }: { mapTitle: string; onHecho: (m: string)
                 ? 'Marca al menos una parte del documento.'
                 : caracteres > maxChars
                   ? `Lo marcado tiene ${fmt(caracteres)} caracteres; el máximo es ${fmt(maxChars)}. Desmarca alguna parte.`
-                  : `Cuenta como un mapa con IA (te quedan ${restantes}). Antes de cambiar nada verás qué se añade y dónde.`}
+                  : cupo
+                    ? `Cuenta como un mapa con IA (te quedan ${restantes}). Antes de cambiar nada verás qué se añade y dónde.`
+                    : 'Antes de cambiar nada verás qué se añade y dónde.'}
             </p>
+            {caracteres >= 200 && caracteres <= maxChars && (
+              <PrecioIA
+                precio={precio}
+                className="mt-2"
+                alternativas={['Marca menos partes del documento: el precio baja al momento.', ...(modo === 'detalle' ? ['Pasa a «Esquemático».'] : [])]}
+              />
+            )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
               <button type="button" onClick={cerrar} style={boton(false)}>Cancelar</button>
               <button type="button" onClick={() => void generar()} disabled={!puede} style={{ ...boton(true), opacity: puede ? 1 : 0.5 }}>
@@ -295,7 +331,7 @@ function Dialogo({ mapTitle, onHecho }: { mapTitle: string; onHecho: (m: string)
           <div>
             <ProgresoIA fases={['leyendo', 'estructura', 'ordenando']} fase={fase} lineas={lineas} segundos={segundos} />
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-              <button type="button" onClick={() => { ctl.current?.abort(); setPaso('ajustes') }} style={boton(false)}>Cancelar</button>
+              <button type="button" onClick={() => void cancelar()} style={boton(false)}>Cancelar</button>
             </div>
           </div>
         )}

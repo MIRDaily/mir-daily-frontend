@@ -3,6 +3,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseBrowser'
+import { PrecioIA } from '@/components/ia/PrecioIA'
+import { useCobroIA } from '@/hooks/useCreditosIA'
+import { mensajeErrorIA } from '@/lib/ia/creditos'
 import {
   createFlashcardDeck,
   createFlashcardsBulk,
@@ -66,8 +69,10 @@ export type MasConfig = {
   ) => Promise<MasGeneradas>
   /** Si ahora no se puede (falta el texto del documento): la explicación y cómo arreglarlo. */
   bloqueo?: React.ReactNode
-  /** Cuántas veces quedan hoy (si se sabe). */
+  /** Cuántas veces quedan hoy (si se sabe; con créditos no hay cupo diario que enseñar). */
   restantes?: number
+  /** Con créditos: lo que cuesta cada «Más» (precio fijo de la tarifa). */
+  precio?: number | null
 }
 type EstadoMas = { tema: string; cargando: boolean; mensaje?: string; error?: string }
 type Hecho = { id: string; nombre: string; creadas: number; duplicadas: number; niveles: FlashcardLevel[] }
@@ -272,7 +277,7 @@ export function VistaPreviaFlashcards({
       setMasAbierto(null)
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return
-      setMasEstado({ tema, cargando: false, error: e instanceof Error ? e.message : 'No se pudieron generar más tarjetas' })
+      setMasEstado({ tema, cargando: false, error: mensajeErrorIA(e, 'No se pudieron generar más tarjetas') })
     }
   }
 
@@ -715,7 +720,8 @@ function PanelMas({
   onPedir: () => void
   onCerrar: () => void
 }) {
-  const sinCupo = mas.restantes !== undefined && mas.restantes <= 0
+  const cobro = useCobroIA(mas.precio ?? null)
+  const sinCupo = (mas.restantes !== undefined && mas.restantes <= 0) || !cobro.suficiente
   return (
     <div data-mas-panel className="mb-2 rounded-xl bg-white p-3" style={{ border: `2px solid ${INK}`, boxShadow: `3px 3px 0 0 ${INK}` }}>
       {mas.bloqueo ? (
@@ -779,6 +785,7 @@ function PanelMas({
             Solo de este tema y sin repetir las que ya hay. Viaja el texto de este tema, no el documento entero.
             {mas.restantes !== undefined ? ` Hoy te quedan ${Math.max(0, mas.restantes)}.` : ''}
           </p>
+          <PrecioIA precio={mas.precio ?? null} className="mt-1.5" />
         </>
       )}
       {error && (

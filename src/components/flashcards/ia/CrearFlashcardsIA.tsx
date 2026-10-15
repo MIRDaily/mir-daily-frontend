@@ -27,6 +27,10 @@ import { hashArchivo } from '@/lib/mapas/ia/docs'
 import { fragmentoParaRama } from '@/lib/mapas/ia/rama'
 import type { Seccion } from '@/lib/mapas/ia/types'
 import { seleccionInicial, type PropsEmbebido, type ResultadoGenerar } from '@/lib/ia/embebido'
+import { PrecioIA } from '@/components/ia/PrecioIA'
+import { useCobroIA, useCreditosIA } from '@/hooks/useCreditosIA'
+import { caracteresDocumento, caracteresLibro, claveFlashcards, precioIA } from '@/lib/ia/precio'
+import { anotarReserva, cancelarGeneracion, mensajeErrorIA, nuevaGeneracion, nuevoCobro, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
 
 // «Crear flashcards con IA» desde un documento (PDF, Word, PowerPoint): el mismo camino que «Crear
 // con IA» de los mapas (el archivo se lee en el navegador y no se sube; «Qué parte usar»; tema a
@@ -166,12 +170,16 @@ export default function CrearFlashcardsIA({
   }, [borrador])
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  // La generación en curso (su cobro y el id de la reserva, para «Cancelar»).
+  const genRef = useRef<Generacion | null>(null)
   const montado = useRef(true)
   const porTemas = !!temasLibro
 
   const { maxChars, maxPaginas } = estado.limites
-  const restantes = Math.max(0, estado.cupo.maxGeneracionesDia - estado.cupo.generacionesHoy)
-  const charsRestantesHoy = Math.max(0, estado.cupo.maxCaracteresDia - estado.cupo.caracteresHoy)
+  // Con los créditos encendidos el servidor no manda el cupo de hoy: no limita aquí.
+  const cupo = estado.cupo
+  const restantes = cupo ? Math.max(0, cupo.maxGeneracionesDia - cupo.generacionesHoy) : Infinity
+  const charsRestantesHoy = cupo ? Math.max(0, cupo.maxCaracteresDia - cupo.caracteresHoy) : Infinity
   const topeLectura = Math.max(maxChars * 4, estado.limites.maxCharsLibro ?? 0)
 
   useEffect(() => {
@@ -248,8 +256,18 @@ export default function CrearFlashcardsIA({
   const excedeTemas = !!envioLibro && envioLibro.temas.length > (estado.limites.maxTemas ?? 40)
   const excedeCupoChars = caracteres > charsRestantesHoy
   const sinCupo = restantes === 0
+  // Créditos: lo marcado (tema a tema, un fijo por tema) con la densidad como factor.
+  const tarifaIA = useCreditosIA().tarifa
+  const precio = useMemo(() => {
+    if (!extraido) return null
+    const clave = claveFlashcards('documento')
+    if (envioLibro) return precioIA(tarifaIA, { clave, densidad, ...caracteresLibro(envioLibro.secciones, envioLibro.temas) })
+    return precioIA(tarifaIA, { clave, densidad, caracteres: caracteresDocumento(eleccion?.elegidas ?? []) })
+  }, [extraido, envioLibro, eleccion, densidad, tarifaIA])
+  const precioMas = useMemo(() => precioIA(tarifaIA, { clave: 'flashcards_mas' }), [tarifaIA])
+  const cobroIA = useCobroIA(precio)
   const puedeGenerar =
-    !!extraido && !nadaElegido && !excedeTexto && !excedePaginas && !excedeTemas && !excedeCupoChars && !sinCupo && !cargandoIndice && niveles.length > 0 && titulo.trim().length > 0
+    !!extraido && !nadaElegido && !excedeTexto && !excedePaginas && !excedeTemas && !excedeCupoChars && !sinCupo && cobroIA.suficiente && !cargandoIndice && niveles.length > 0 && titulo.trim().length > 0
 
   const charsPorTema = useMemo(
     () => (envioLibro ? envioLibro.temas.map((t) => envioLibro.secciones.slice(t.desde, t.hasta + 1).reduce((n, s) => n + s.texto.length, 0)) : []),
@@ -292,7 +310,10 @@ export default function CrearFlashcardsIA({
     setFase('generando')
     const ctl = new AbortController()
     abortRef.current = ctl
+    const gen = nuevaGeneracion(precio)
+    genRef.current = gen
     const onEvento = (e: Parameters<NonNullable<Parameters<typeof flashcardsIAGenerar>[2]>>[0]) => {
+      if (e.tipo === 'reserva') anotarReserva(gen, e)
       if (!montado.current || ctl.signal.aborted) return
       if (e.tipo === 'fase') setFaseIA(e.fase)
       else if (e.tipo === 'rama' || e.tipo === 'reinicio') setLineas((ls) => aplicarEvento(ls, e))
@@ -305,11 +326,13 @@ export default function CrearFlashcardsIA({
       densidad,
       paginas: Math.max(1, paginasElegidas),
       ...(extraido.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
+      ...gen.cobro,
     }
     try {
       const r = envioLibro
         ? await flashcardsIAGenerar({ ...comun, secciones: envioLibro.secciones, temas: envioLibro.temas }, ctl.signal, onEvento)
         : await flashcardsIAGenerar({ ...comun, secciones: eleccion?.elegidas ?? [] }, ctl.signal, onEvento)
+      void refrescarCreditos()
       if (!montado.current) return 'cancelado'
       const lista =
         'temas' in r
@@ -345,12 +368,21 @@ export default function CrearFlashcardsIA({
       setFase('vista')
       return 'ok'
     } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) void refrescarCreditos()
       if (!montado.current) return 'cancelado'
       if (e instanceof DOMException && e.name === 'AbortError') return 'cancelado'
-      setError(e instanceof Error ? e.message : 'No se pudieron generar las flashcards')
+      setError(mensajeErrorIA(e, 'No se pudieron generar las flashcards'))
       setFase('ajustes')
       return 'fallo'
     }
+  }
+
+  // «Cancelar»: con créditos, se avisa al servidor antes de cortar (y se dice qué se devuelve).
+  const cancelar = async () => {
+    const r = await cancelarGeneracion(genRef.current, () => abortRef.current?.abort())
+    if (!r.cancelado || !montado.current) return
+    setError(r.mensaje ?? 'Generación cancelada: la IA ha dejado de trabajar y no cuenta en tus generaciones de hoy.')
+    setFase('ajustes')
   }
 
   // Como pestaña del popup unificado: el popup lanza la generación (en cola) y pinta el estado.
@@ -365,9 +397,11 @@ export default function CrearFlashcardsIA({
           ? 'Lo marcado es demasiado grande: desmarca alguna parte.'
           : excedeCupoChars || sinCupo
             ? 'No te queda cupo de IA hoy para esto.'
-            : titulo.trim().length === 0
-              ? 'Falta el nombre.'
-              : undefined
+            : cobroIA.falta
+              ? cobroIA.falta
+              : titulo.trim().length === 0
+                ? 'Falta el nombre.'
+                : undefined
   const listo = fase === 'ajustes' && puedeGenerar
   useEffect(() => {
     onEstado?.({ fase, listo, ...(falta && fase === 'ajustes' ? { falta } : {}) })
@@ -407,11 +441,12 @@ export default function CrearFlashcardsIA({
     }
   }
 
-  const masRestantes = estadoDado?.cupo.maxMasDia !== undefined ? estadoDado.cupo.maxMasDia - (estadoDado.cupo.masHoy ?? 0) - masUsadas : undefined
+  const masRestantes = estadoDado?.cupo?.maxMasDia !== undefined ? estadoDado.cupo.maxMasDia - (estadoDado.cupo.masHoy ?? 0) - masUsadas : undefined
   const mas: MasConfig | undefined =
     estadoDado?.disponible && estadoDado.opciones?.ampliar && resultado
       ? {
           restantes: masRestantes,
+          precio: precioMas,
           pedir: async ({ tema, niveles: nv, cantidad, existentes, paginas, vecinos }, signal) => {
             if (!textoDoc) throw new Error('Falta el texto del documento.')
             // Solo el fragmento de ese tema: las páginas de sus tarjetas (con margen) o, sin páginas, las
@@ -424,9 +459,10 @@ export default function CrearFlashcardsIA({
                 ampliar: { tema, cantidad, existentes, vecinos },
                 secciones: fragmento,
                 ...(textoDoc.unidad === 'diapositiva' ? { unidad: 'diapositiva' as const } : {}),
+                ...nuevoCobro(precioMas),
               },
               signal,
-            )
+            ).finally(() => void refrescarCreditos())
             setMasUsadas((n) => n + 1)
             return r
           },
@@ -590,9 +626,11 @@ export default function CrearFlashcardsIA({
                   <li>
                     Máximo {fmt(maxChars)} caracteres de texto (unas {Math.round(maxChars / 3000)} páginas de apuntes); un documento más largo, tema a tema.
                   </li>
-                  <li>
-                    Hoy te quedan {restantes} de {estado.cupo.maxGeneracionesDia} generaciones de flashcards.
-                  </li>
+                  {cupo && (
+                    <li>
+                      Hoy te quedan {restantes} de {cupo.maxGeneracionesDia} generaciones de flashcards.
+                    </li>
+                  )}
                 </ul>
               </>
             )}
@@ -762,8 +800,18 @@ export default function CrearFlashcardsIA({
                 ) : (
                   <p className="mt-4 text-xs text-[#7D8A96]" aria-live="polite">
                     {fmt(caracteres)} caracteres{envioLibro ? ` en ${fmt(envioLibro.temas.length)} temas` : ''}: saldrán unas {fmt(aprox)} tarjetas, ordenadas por tema y de fácil a demencial. Antes de guardarlas
-                    las revisas. Usará {fmt(caracteres)} de los {fmt(charsRestantesHoy)} caracteres que te quedan hoy.
+                    las revisas.{cupo ? ` Usará ${fmt(caracteres)} de los ${fmt(charsRestantesHoy)} caracteres que te quedan hoy.` : ''}
                   </p>
+                )}
+                {!nadaElegido && (
+                  <PrecioIA
+                    precio={precio}
+                    className="mt-2"
+                    alternativas={[
+                      porTemas ? 'Desmarca algún tema: el precio baja al momento.' : 'Marca menos partes del documento: el precio baja al momento.',
+                      ...(densidad === 'muchas' ? ['Elige «Normal» en la cantidad de tarjetas.'] : []),
+                    ]}
+                  />
                 )}
                 {sinCupo && (
                   <p role="alert" className="mt-1 text-sm font-bold text-[#B04A5E]">
@@ -795,11 +843,7 @@ export default function CrearFlashcardsIA({
                   No cierres esta ventana. Al terminar verás las tarjetas para revisarlas antes de guardarlas.{' '}
                   <button
                     type="button"
-                    onClick={() => {
-                      abortRef.current?.abort()
-                      setError('Generación cancelada: la IA ha dejado de trabajar y no cuenta en tus generaciones de hoy.')
-                      setFase('ajustes')
-                    }}
+                    onClick={() => void cancelar()}
                     className="font-bold text-[#7D8A96] underline hover:text-[#B04A5E]"
                   >
                     Cancelar

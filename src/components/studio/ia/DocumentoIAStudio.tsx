@@ -7,12 +7,14 @@ import { FORMATOS_ACEPTADOS } from '@/lib/mapas/ia/extract'
 import { iaEstado } from '@/lib/mapas/ia/api'
 import { flashcardsIAEstado } from '@/lib/flashcards/ia/api'
 import { resumenesIAEstado } from '@/lib/resumenes/ia'
+import { useCreditosIA } from '@/hooks/useCreditosIA'
 import type { EstadosIA } from './DocumentoIAHub'
 
 // Studio: arrastrar un PDF, Word o PowerPoint a la página (o pulsar «Crear desde un documento») abre
 // el popup unificado para sacar de él un mapa conceptual, flashcards y/o un resumen activo. Solo se
 // ofrece si el servidor dice que alguna de las tres IA está disponible para esta cuenta (el permiso
-// real lo valida siempre el servidor; ocultar esto no protege nada).
+// real lo valida siempre el servidor; ocultar esto no protege nada). Con los créditos encendidos, a
+// quien tenga un plan activo; si no, a los admins, como antes.
 
 const DocumentoIAHub = dynamic(() => import('./DocumentoIAHub'), { ssr: false })
 
@@ -21,7 +23,8 @@ const lleva = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.ty
 
 export function useDocumentoIA() {
   const { profile } = useProfile()
-  const esAdmin = profile?.is_admin === true
+  const creditos = useCreditosIA()
+  const conIA = profile?.is_admin === true || (creditos.activo && !!creditos.saldo?.puede_usar)
   const [estados, setEstados] = useState<EstadosIA | null>(null)
   const [archivo, setArchivo] = useState<File | null>(null)
   const [arrastrando, setArrastrando] = useState(false)
@@ -32,7 +35,7 @@ export function useDocumentoIA() {
   }, [archivo])
 
   useEffect(() => {
-    if (!esAdmin) return
+    if (!conIA) return
     let vivo = true
     void Promise.all([iaEstado(), flashcardsIAEstado(), resumenesIAEstado()]).then(([mapa, flashcards, resumenes]) => {
       if (vivo) setEstados({ mapa, flashcards, resumenes })
@@ -40,7 +43,7 @@ export function useDocumentoIA() {
     return () => {
       vivo = false
     }
-  }, [esAdmin])
+  }, [conIA])
 
   const disponible = !!estados && (!!estados.mapa || !!estados.flashcards || !!estados.resumenes)
 
