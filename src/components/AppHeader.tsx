@@ -10,6 +10,7 @@ import { getOnboardingDeferredFlag } from '@/lib/onboarding'
 import { supabase } from '@/lib/supabaseBrowser'
 import NotificationsPopup from '@/components/NotificationsPopup'
 import HeaderStreakButton from '@/components/progress/HeaderStreakButton'
+import HeaderCreditos from '@/components/ia/HeaderCreditos'
 import AvatarLevelRing from '@/components/progress/AvatarLevelRing'
 import { useNotificationsContext } from '@/providers/NotificationsProvider'
 import type { HeaderBackAction } from '@/providers/HeaderUIProvider'
@@ -31,7 +32,7 @@ function getNavClass(activeTab: HeaderTab, tab: Exclude<HeaderTab, null>) {
   return 'relative text-[#7D8A96] hover:text-[#E8A598] font-medium transition-colors pb-1'
 }
 
-// En móvil las pestañas de arriba no caben, así que van en una fila propia bajo
+// En móvil y tableta (por debajo de 1024 px, desde que la cabecera lleva los créditos de IA) las pestañas de arriba no caben, así que van en una fila propia bajo
 // la cabecera, desplazable. Sin esto no había NINGUNA forma de cambiar de
 // sección desde el móvil, que es justo desde donde se entra a una sala.
 const MOBILE_TABS: { tab: Exclude<HeaderTab, null>; href: string; label: string }[] = [
@@ -55,9 +56,11 @@ export default function AppHeader({
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const [isChallengesOpen, setIsChallengesOpen] = useState(false)
+  const [isCreditosOpen, setIsCreditosOpen] = useState(false)
   const notificationRef = useRef<HTMLDivElement | null>(null)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
   const challengesRef = useRef<HTMLDivElement | null>(null)
+  const creditosRef = useRef<HTMLDivElement | null>(null)
   const profileHref = getOnboardingDeferredFlag() ? '/onboarding' : '/profile'
 
   useEffect(() => {
@@ -80,12 +83,16 @@ export default function AppHeader({
       ) {
         setIsChallengesOpen(false)
       }
+      if (creditosRef.current && !creditosRef.current.contains(event.target as Node)) {
+        setIsCreditosOpen(false)
+      }
     }
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsNotificationOpen(false)
         setIsProfileMenuOpen(false)
         setIsChallengesOpen(false)
+        setIsCreditosOpen(false)
       }
     }
     document.addEventListener('mousedown', handlePointerDown)
@@ -120,20 +127,19 @@ export default function AppHeader({
               <path d="M42.4379 44C42.4379 44 36.0744 33.9038 41.1692 24C46.8624 12.9336 42.2078 4 42.2078 4L7.01134 4C7.01134 4 11.6577 12.932 5.96912 23.9969C0.876273 33.9029 7.27094 44 7.27094 44L42.4379 44Z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#7D8A96] group-hover:text-[#E8A598] transition-colors">
+          {/* Por debajo de 420 px solo el icono: la fila (créditos, campana y perfil) no cabe con el nombre. */}
+          <h1 className="hidden text-2xl font-bold tracking-tight text-[#7D8A96] transition-colors group-hover:text-[#E8A598] min-[420px]:block">
             MIR<span className="text-[#E8A598]">Daily</span>
           </h1>
         </Link>
         <LayoutGroup id="header-tabs">
-          {/* La nav va centrada en absoluto, que es lo que la deja exactamente en
-              mitad de la cabecera. Pero al estar fuera del flujo no empuja a
-              nadie: por debajo de ~1150px se montaba encima del logo por la
-              izquierda y de la campana por la derecha. Ahi vuelve al flujo
-              normal (justify-between del contenedor la coloca en medio) y con
-              menos hueco entre enlaces, asi no pisa a nadie. */}
+          {/* La nav va en el flujo normal: justify-between la deja en medio del hueco libre, con el
+              mismo margen a cada lado. Antes, desde 1150px, iba centrada en absoluto; con la píldora de
+              créditos de IA el grupo de la derecha creció y la pisaba (a 1280px el contenedor ya no
+              crece, así que el centrado absoluto siempre se quedaba sin sitio). */}
           <div
             data-tutorial="nav-pestanas"
-            className="hidden md:flex items-center gap-4 min-[1150px]:gap-8 min-[1150px]:absolute min-[1150px]:left-1/2 min-[1150px]:-translate-x-1/2"
+            className="hidden lg:flex items-center gap-4 min-[1150px]:gap-8"
           >
             <Link className={getNavClass(activeTab, 'studio')} href="/studio">
               {activeTab === 'studio' && (
@@ -204,12 +210,25 @@ export default function AppHeader({
           </div>
         </LayoutGroup>
         <div className="flex items-center gap-2 sm:gap-4">
+          {/* Los créditos de IA, siempre a mano (solo con créditos encendidos y plan). */}
+          <HeaderCreditos
+            open={isCreditosOpen}
+            containerRef={creditosRef}
+            onToggle={() => {
+              setIsNotificationOpen(false)
+              setIsProfileMenuOpen(false)
+              setIsChallengesOpen(false)
+              setIsCreditosOpen((prev) => !prev)
+            }}
+            onClose={() => setIsCreditosOpen(false)}
+          />
           <HeaderStreakButton
             open={isChallengesOpen}
             containerRef={challengesRef}
             onToggle={() => {
               setIsNotificationOpen(false)
               setIsProfileMenuOpen(false)
+              setIsCreditosOpen(false)
               setIsChallengesOpen((prev) => !prev)
             }}
             onClose={() => setIsChallengesOpen(false)}
@@ -226,6 +245,7 @@ export default function AppHeader({
               onClick={() => {
                 setIsProfileMenuOpen(false)
                 setIsChallengesOpen(false)
+                setIsCreditosOpen(false)
                 setIsNotificationOpen((prev) => !prev)
               }}
               className={`relative size-10 rounded-full border-2 border-white shadow-[0_10px_22px_rgba(125,138,150,0.2),inset_0_1px_0_rgba(255,255,255,0.9)] flex items-center justify-center transition-all duration-150 active:scale-95 active:translate-y-0 focus:outline-none focus:ring-2 focus:ring-[#E8A598]/30 ${
@@ -259,6 +279,7 @@ export default function AppHeader({
               aria-expanded={isProfileMenuOpen}
               onClick={() => {
                 setIsNotificationOpen(false)
+                setIsCreditosOpen(false)
                 setIsProfileMenuOpen((prev) => !prev)
               }}
               className="flex w-auto items-center gap-2 rounded-full border-2 border-white xl:w-[176px] shadow-[0_12px_26px_rgba(125,138,150,0.2),inset_0_1px_0_rgba(255,255,255,0.9)] cursor-pointer hover:ring-2 hover:ring-[#E8A598]/20 transition-all duration-150 active:scale-[0.98] active:translate-y-0 pl-1 pr-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#E8A598]/30 bg-white/90 hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(125,138,150,0.24),inset_0_1px_0_rgba(255,255,255,0.95)]"
@@ -332,7 +353,7 @@ export default function AppHeader({
 
       <div
         data-tutorial="nav-pestanas"
-        className="md:hidden -mx-6 mt-3 overflow-x-auto border-t border-[#7D8A96]/10 px-6 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="lg:hidden -mx-6 mt-3 overflow-x-auto border-t border-[#7D8A96]/10 px-6 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div className="flex w-max items-center gap-6">
           {MOBILE_TABS.map(({ tab, href, label }) => (
