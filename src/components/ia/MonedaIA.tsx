@@ -2,7 +2,11 @@
 
 import { useId } from 'react'
 
+const INK = '#2C3E50'
+
 // La moneda de los créditos de IA: la cabeza del fago (el icosaedro de la mascota) acuñada en oro.
+// Con profundidad, como las tarjetas del kit «sticker»: borde de tinta, el canto de la moneda asomando
+// por debajo y una sombra dura desplazada.
 // La misma figura está en public/brand/moneda-ia.svg (para usarla fuera de React). Por debajo de
 // 1,4 rem se quitan la carita y el destello: a ese tamaño solo ensucian.
 
@@ -12,7 +16,7 @@ export function MonedaIA({ tam = '1.25rem', cara, className = '', titulo }: { ta
   const conCara = cara ?? px >= 22
   return (
     <svg
-      viewBox="0 0 64 64"
+      viewBox="0 0 67 67"
       width={tam}
       height={tam}
       className={`inline-block shrink-0 ${className}`}
@@ -33,7 +37,10 @@ export function MonedaIA({ tam = '1.25rem', cara, className = '', titulo }: { ta
           <stop offset="1" stopColor="#C58615" />
         </radialGradient>
       </defs>
-      <circle cx="32" cy="32" r="30" fill={`url(#${id}c)`} stroke="#7A4E05" strokeWidth="2" />
+      {/* Sombra dura (como las tarjetas) y el canto, que asoma por debajo de la cara. */}
+      <circle cx="34.4" cy="36" r="30" fill={INK} />
+      <circle cx="32" cy="34.4" r="30" fill="#B37310" stroke={INK} strokeWidth="2" />
+      <circle cx="32" cy="32" r="30" fill={`url(#${id}c)`} stroke={INK} strokeWidth="2" />
       {px >= 22 && <circle cx="32" cy="32" r="27.6" fill="none" stroke="#9A6508" strokeWidth="1.6" strokeDasharray="1.1 1.7" opacity="0.55" />}
       <circle cx="32" cy="32" r="25.4" fill={`url(#${id}f)`} stroke="#A86F0C" strokeWidth="1.2" />
       <g strokeLinejoin="round">
