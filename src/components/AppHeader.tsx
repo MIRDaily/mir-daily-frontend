@@ -304,6 +304,12 @@ export default function AppHeader({
                     Reportes
                   </Link>
                 ) : null}
+                {profile?.is_admin ? (
+                  <Link className="flex items-center gap-2 px-4 py-2 text-sm text-[#7D8A96] hover:bg-[#FAF7F4] hover:text-[#E8A598]" href="/admin/creditos" onClick={() => setIsProfileMenuOpen(false)}>
+                    <span className="material-symbols-outlined text-[16px]">toll</span>
+                    Créditos de IA
+                  </Link>
+                ) : null}
                 <div className="border-t border-[#7D8A96]/10 my-1"></div>
                 <button
                   onClick={async () => {

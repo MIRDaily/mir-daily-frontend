@@ -125,6 +125,7 @@ export default function ProfileOverview() {
         <div className="grid gap-3 sm:grid-cols-2">
           {[
             { href: '/configuracion', icon: 'settings', label: 'Configuración' },
+            { href: '/profile/creditos', icon: 'toll', label: 'Créditos de IA' },
             { href: '/panel', icon: 'insights', label: 'Panel de rendimiento' },
             { href: '/studio', icon: 'auto_stories', label: 'Estudio' },
             { href: '/notifications', icon: 'notifications', label: 'Notificaciones' },
