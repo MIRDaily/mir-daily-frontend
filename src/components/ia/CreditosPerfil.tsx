@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { SectionLabel, StickerCard, INK } from '@/components/ui/sticker'
+import { MonedaIA } from '@/components/ia/MonedaIA'
+import { CifraIA } from '@/components/ia/PrecioIA'
 import { useCreditosIA } from '@/hooks/useCreditosIA'
 import { iaMovimientos, type Movimiento } from '@/lib/ia/creditos'
 import { bolsaDelMes, describirMovimiento, diasHasta, fechaCorta, type Bolsa } from '@/lib/ia/creditosTexto'
@@ -101,11 +103,16 @@ export default function CreditosPerfil() {
         <div className="flex flex-wrap items-start justify-between gap-4 pl-4">
           <div className="min-w-0">
             <p className="flex items-center gap-2 text-[0.7rem] font-black uppercase tracking-[0.16em] text-[#C4655A]">
-              <Icono nombre="toll" tam="1rem" color="#C4655A" />
+              <MonedaIA tam="1rem" />
               Créditos de IA
             </p>
-            <h1 className="mt-2 text-[2rem] font-black leading-tight text-[#2C3E50] sm:text-[2.4rem]">
-              {saldo.ilimitado ? 'Sin límite' : `${fmt(saldo.total)} créditos`}
+            <h1 className="mt-2 flex items-center gap-3 text-[2rem] font-black leading-tight text-[#2C3E50] sm:text-[2.4rem]">
+              <MonedaIA tam="3rem" titulo="Créditos de IA" />
+              {saldo.ilimitado ? 'Sin límite' : (
+                <span>
+                  <CifraIA valor={saldo.total} /> créditos
+                </span>
+              )}
             </h1>
             <p className="mt-1 text-[0.95rem] text-[#7D8A96]">
               {saldo.plan ? `Plan ${NOMBRE_PLAN[saldo.plan] ?? saldo.plan}` : 'Sin plan'}
@@ -209,9 +216,10 @@ export default function CreditosPerfil() {
                       {new Date(m.creado_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </span>
-                  <span className="shrink-0 text-[0.95rem] font-black tabular-nums" style={{ color: m.creditos < 0 ? '#C4655A' : '#5E8C5A' }}>
+                  <span className="flex shrink-0 items-center gap-1 text-[0.95rem] font-black tabular-nums" style={{ color: m.creditos < 0 ? '#C4655A' : '#5E8C5A' }}>
                     {m.creditos > 0 ? '+' : '−'}
                     {fmt(Math.abs(m.creditos))}
+                    <MonedaIA tam="1rem" />
                   </span>
                 </li>
               ))}

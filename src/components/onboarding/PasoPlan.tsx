@@ -13,6 +13,7 @@ import {
   useTransform,
 } from 'framer-motion'
 import { INK } from '@/components/ui/sticker'
+import { MonedaIA } from '@/components/ia/MonedaIA'
 
 // Onboarding · «Elige tu plan» (MOCKUP, 15/10/2026). Todavía no hace nada: no se guarda en el servidor
 // ni cambia lo que el usuario puede usar; la elección solo se recuerda en este navegador. Cuando haya
@@ -346,7 +347,7 @@ function TarjetaPlan({
           className="relative z-10 mt-4 inline-flex w-fit items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[0.75rem] font-extrabold"
           style={{ border: `2px solid ${plan.creditos ? INK : '#D9D2CE'}`, color: plan.creditos ? '#2C3E50' : '#7D8A96' }}
         >
-          <Icono nombre={plan.creditos ? 'toll' : 'block'} color={plan.creditos ? plan.tinta : '#9AA5AF'} tam="1rem" />
+          {plan.creditos ? <MonedaIA tam="1.05rem" /> : <Icono nombre="block" color="#9AA5AF" tam="1rem" />}
           {plan.ia}
         </span>
         {pro && <span className="relative z-10 mt-2 block text-[0.72rem] font-bold text-[#7D8A96]">7 días de prueba · +300 de regalo el primer mes</span>}
@@ -513,7 +514,7 @@ export default function PasoPlan({ onBack, onNext }: { onBack: () => void; onNex
         <div className="mt-4 rounded-2xl bg-[#FAF7F4] p-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2 text-[0.85rem]">
             <span className="flex items-center gap-1.5 font-extrabold text-[#2C3E50]">
-              <Icono nombre="toll" color={plan.tinta} tam="1.05rem" />
+              <MonedaIA tam="1.3rem" />
               {plan.creditos ? (
                 <>
                   <Contador valor={plan.creditos} reducir={reducir} /> créditos de IA al mes
