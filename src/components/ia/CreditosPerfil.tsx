@@ -137,7 +137,7 @@ export default function CreditosPerfil() {
               <span className="text-[#7D8A96]">se renuevan el {fechaCorta(mes.caduca_at)} (no se acumulan)</span>
             </div>
             <div className="mt-2 h-4 overflow-hidden rounded-full bg-[#F3ECE8]" style={{ border: `2px solid ${INK}` }} role="meter" aria-valuemin={0} aria-valuemax={mes.iniciales} aria-valuenow={mes.saldo} aria-label="Créditos del mes">
-              <div className="h-full rounded-full" style={{ width: `${Math.round(llenado * 100)}%`, background: llenado < 0.2 ? '#D4667A' : ACCENT }} />
+              <div className="h-full rounded-full" style={{ width: `${Math.round(llenado * 100)}%`, background: llenado < 0.2 ? '#D4667A' : 'linear-gradient(180deg, #FFE08A, #E2A52A)' }} />
             </div>
           </div>
         )}

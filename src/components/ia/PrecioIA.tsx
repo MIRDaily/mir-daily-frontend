@@ -43,14 +43,20 @@ const monedasPara = (precio: number) => Math.max(1, Math.min(6, Math.ceil(Math.l
 function PilaMonedas({ precio }: { precio: number }) {
   const reducir = useReducedMotion()
   const n = monedasPara(precio)
+  // En abanico: cada moneda asoma por detrás de la anterior, así se cuentan de un vistazo.
   return (
-    <span aria-hidden className="relative inline-block h-[2.1rem] w-[1.9rem] shrink-0">
+    <motion.span
+      aria-hidden
+      className="relative inline-block h-[1.9rem] shrink-0"
+      animate={{ width: `${1.6 + (n - 1) * 0.55}rem` }}
+      transition={{ type: 'spring', stiffness: 300, damping: 26 }}
+    >
       <AnimatePresence initial={false}>
         {Array.from({ length: n }, (_, i) => (
           <motion.span
             key={i}
-            className="absolute left-0 block"
-            style={{ bottom: `${i * 0.28}rem`, zIndex: i }}
+            className="absolute block"
+            style={{ left: `${i * 0.55}rem`, bottom: `${(i % 2) * 0.12}rem`, zIndex: i }}
             initial={reducir ? false : { y: -14, opacity: 0, rotate: -25 }}
             animate={{ y: 0, opacity: 1, rotate: 0 }}
             exit={reducir ? { opacity: 0 } : { y: -10, opacity: 0, transition: { duration: 0.15 } }}
@@ -60,7 +66,7 @@ function PilaMonedas({ precio }: { precio: number }) {
           </motion.span>
         ))}
       </AnimatePresence>
-    </span>
+    </motion.span>
   )
 }
 
