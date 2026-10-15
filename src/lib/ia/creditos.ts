@@ -154,5 +154,6 @@ export function mensajeErrorIA(e: unknown, porDefecto: string): string {
   if (!(e instanceof IAError)) return e instanceof Error ? e.message : porDefecto
   const rechazo = mensajeRechazo(e.codigo, e.datos)
   if (rechazo) return rechazo
-  return `${e.message}${mensajeDevolucion(e.datos)}`
+  const extra = mensajeDevolucion(e.datos)
+  return extra && !/[.!?…]$/.test(e.message) ? `${e.message}.${extra}` : `${e.message}${extra}`
 }
