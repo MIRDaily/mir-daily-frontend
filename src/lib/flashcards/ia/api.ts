@@ -3,6 +3,7 @@ import { IAError, type Seccion } from '@/lib/mapas/ia/types'
 import { cuerpoOError, leerRespuesta, type EventoIA } from '@/lib/mapas/ia/stream'
 import { resumenParaIndice, sanitizeTemas, type TemaIndice } from '@/lib/mapas/ia/libro'
 import type { FlashcardLevel } from '@/lib/studioFlashcards'
+import { nuevoCobro, type Cobro } from '@/lib/ia/creditos'
 import { sanitizeTarjetas, type Densidad, type EstadoFlashcardsIA, type TarjetaIA } from './tarjetas'
 
 // Llamadas a /api/admin/flashcards-ia. El permiso (rol admin, interruptor y cupos) lo valida
@@ -39,12 +40,12 @@ export async function flashcardsIAEstado(): Promise<EstadoFlashcardsIA | null> {
 /** Índice de un documento largo (el mismo de los mapas; solo viaja el principio de cada sección). */
 export async function flashcardsIAIndice(input: { titulo: string; secciones: Seccion[] }, signal?: AbortSignal): Promise<TemaIndice[]> {
   const r = (await cuerpoOError(
-    await abrir('/indice', { method: 'POST', body: JSON.stringify({ titulo: input.titulo, secciones: resumenParaIndice(input.secciones) }), signal }),
+    await abrir('/indice', { method: 'POST', body: JSON.stringify({ titulo: input.titulo, secciones: resumenParaIndice(input.secciones), ...nuevoCobro(0) }), signal }),
   )) as { temas?: unknown }
   return sanitizeTemas(r?.temas, input.secciones.length)
 }
 
-type Comun = { titulo: string; niveles: FlashcardLevel[]; densidad: Densidad; unidad?: 'diapositiva' }
+type Comun = Partial<Cobro> & { titulo: string; niveles: FlashcardLevel[]; densidad: Densidad; unidad?: 'diapositiva' }
 
 export type PeticionDocumento = Comun & {
   secciones: Seccion[]
@@ -86,7 +87,7 @@ const statsDe = (raw: unknown): StatsIA => {
  * cantidad, las tarjetas que ya hay (el servidor las acota y quita las que las repitan) y SOLO el
  * fragmento de ese tema: `secciones` (de un documento) o `mapa` (+ `secciones`, su fragmento).
  */
-export type PeticionMas = {
+export type PeticionMas = Partial<Cobro> & {
   titulo: string
   niveles: FlashcardLevel[]
   ampliar: { tema: string; cantidad: number; existentes: { pregunta: string; respuesta: string }[]; vecinos?: string[] }

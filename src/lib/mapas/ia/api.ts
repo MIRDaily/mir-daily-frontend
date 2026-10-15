@@ -3,6 +3,7 @@ import { IAError, type EstadoIA, type ModoIA, type Seccion } from './types'
 import { cuerpoOError, leerRespuesta, type EventoIA } from '@/lib/mapas/ia/stream'
 import type { StoredDoc } from '@/lib/mapas/graph'
 import { resumenParaIndice, sanitizeTemas, type TemaIndice } from '@/lib/mapas/ia/libro'
+import { nuevoCobro, type Cobro } from '@/lib/ia/creditos'
 
 // Llamadas a /api/admin/mapas-ia. El permiso (rol admin, interruptor y cupos)
 // lo valida SIEMPRE el backend; aquí solo se pinta lo que devuelva.
@@ -62,7 +63,8 @@ export type LibroGenerado = {
 export async function iaIndice(input: { titulo: string; secciones: Seccion[] }, signal?: AbortSignal): Promise<TemaIndice[]> {
   const r = (await llamar('/indice', {
     method: 'POST',
-    body: JSON.stringify({ titulo: input.titulo, secciones: resumenParaIndice(input.secciones) }),
+    // El índice no gasta créditos, pero con ellos encendidos también anuncia su precio (0).
+    body: JSON.stringify({ titulo: input.titulo, secciones: resumenParaIndice(input.secciones), ...nuevoCobro(0) }),
     signal,
   })) as { temas?: unknown }
   return sanitizeTemas(r?.temas, input.secciones.length)
@@ -72,7 +74,7 @@ export async function iaIndice(input: { titulo: string; secciones: Seccion[] }, 
  * Genera el mapa. Con `onEvento`, en streaming: el diálogo enseña las fases y las ramas según
  * llegan; el resultado es el mismo mapa validado de siempre.
  */
-export type PeticionGenerar = {
+export type PeticionGenerar = Partial<Cobro> & {
   titulo: string
   modo: ModoIA
   secciones: Seccion[]
@@ -109,7 +111,7 @@ export type RamaGenerada = {
  * solo el FRAGMENTO del documento de donde sale. En streaming, como el mapa entero.
  */
 export async function iaRama(
-  input: {
+  input: Partial<Cobro> & {
     accion: 'detalle' | 'resumir' | 'rehacer'
     modo: ModoIA
     titulo: string

@@ -4,6 +4,7 @@ import { cuerpoOError, leerRespuesta, type EventoIA } from '@/lib/mapas/ia/strea
 import { resumenParaIndice, sanitizeTemas, type TemaIndice } from '@/lib/mapas/ia/libro'
 import { sanearFuente, sanearParrafo, type FuenteFirmada, type ModoResumen, type ParrafoBorrador } from '@/lib/resumenes/borrador'
 import type { Hueco, Nivel } from '@/lib/resumenes/huecos'
+import { nuevoCobro, type Cobro } from '@/lib/ia/creditos'
 
 // Llamadas a /api/admin/resumenes-ia. El permiso (rol admin, interruptor y cupos) lo valida SIEMPRE el
 // backend; aquí solo se pinta lo que devuelva. Los párrafos NO se guardan aquí: se guardan después, con
@@ -40,7 +41,7 @@ export type EstadoResumenesIA = {
   /** `ampliar`: «Más de este tema» (con las cantidades que admite); `rehacer`: «Rehacer este párrafo». */
   opciones?: { libro?: boolean; ampliar?: { cantidades: number[] }; rehacer?: boolean }
   limites: { maxChars: number; maxPaginas: number; maxCharsLibro?: number; maxPaginasLibro?: number; maxTemas?: number }
-  cupo: {
+  cupo?: {
     generacionesHoy: number
     maxGeneracionesDia: number
     caracteresHoy: number
@@ -82,12 +83,12 @@ export async function resumenesIAEstado(): Promise<EstadoResumenesIA | null> {
 /** Índice de un documento largo (el mismo de los mapas; solo viaja el principio de cada sección). */
 export async function resumenesIAIndice(input: { titulo: string; secciones: Seccion[] }, signal?: AbortSignal): Promise<TemaIndice[]> {
   const r = (await cuerpoOError(
-    await abrir('/indice', { method: 'POST', body: JSON.stringify({ titulo: input.titulo, secciones: resumenParaIndice(input.secciones) }), signal }),
+    await abrir('/indice', { method: 'POST', body: JSON.stringify({ titulo: input.titulo, secciones: resumenParaIndice(input.secciones), ...nuevoCobro(0) }), signal }),
   )) as { temas?: unknown }
   return sanitizeTemas(r?.temas, input.secciones.length)
 }
 
-export type PeticionResumen = {
+export type PeticionResumen = Partial<Cobro> & {
   titulo: string
   modo: ModoResumen
   niveles: Nivel[]
@@ -156,7 +157,7 @@ export async function resumenesIAGenerar(input: PeticionResumen, signal?: AbortS
 // con el `doc` de los del tema, que ya tiene la vista previa)
 // ---------------------------------------------------------------------------
 
-type ComunAmpliar = {
+type ComunAmpliar = Partial<Cobro> & {
   titulo: string
   modo: ModoResumen
   /** SOLO el fragmento del tema (o del párrafo). */

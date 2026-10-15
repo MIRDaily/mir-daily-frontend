@@ -31,12 +31,15 @@ export type EstadoIA = {
   opciones?: { tablas?: boolean; libro?: boolean; ramas?: boolean }
   /** `maxChars`/`maxPaginas`: un mapa. `maxCharsLibro`/`maxTemas`: documento largo tema a tema (servidor nuevo). */
   limites: { maxChars: number; maxPaginas: number; maxCharsLibro?: number; maxPaginasLibro?: number; maxTemas?: number }
-  cupo: {
+  /** Cupo de hoy. Con los créditos encendidos el servidor no lo manda (manda `creditos`). */
+  cupo?: {
     generacionesHoy: number
     maxGeneracionesDia: number
     caracteresHoy: number
     maxCaracteresDia: number
   }
+  /** Con créditos: el saldo (lo mismo que GET /api/ia/saldo). */
+  creditos?: Record<string, unknown>
 }
 
 /** Error con mensaje listo para enseñar al usuario. */
@@ -47,10 +50,13 @@ export class ExtractError extends Error {}
 export class IAError extends Error {
   readonly status: number
   readonly codigo: string
-  constructor(message: string, status = 0, codigo = '') {
+  /** El cuerpo del error (con créditos: lo devuelto, lo necesario, el precio nuevo…). */
+  readonly datos: Record<string, unknown> | null
+  constructor(message: string, status = 0, codigo = '', datos: Record<string, unknown> | null = null) {
     super(message)
     this.status = status
     this.codigo = codigo
+    this.datos = datos
   }
 }
 

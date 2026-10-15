@@ -77,7 +77,7 @@ export type EstadoFlashcardsIA = {
   densidades: Densidad[]
   opciones?: { libro?: boolean; mapa?: boolean; ampliar?: { cantidades: number[] } }
   limites: { maxChars: number; maxPaginas: number; maxCharsLibro?: number; maxPaginasLibro?: number; maxTemas?: number }
-  cupo: {
+  cupo?: {
     generacionesHoy: number
     maxGeneracionesDia: number
     caracteresHoy: number

@@ -24,8 +24,10 @@ export type EventoIA =
   | { tipo: 'temas'; temas: { titulo: string; chars: number }[] }
   | { tipo: 'tema'; i: number; estado: EstadoTema; nodos?: number }
   | { tipo: 'latido' }
+  /** Con créditos, al empezar: el id de la reserva (para «Cancelar») y lo cobrado. */
+  | { tipo: 'reserva'; usageId: number; creditos: { cobrados: number; saldo: number } }
   | { tipo: 'fin'; datos: Record<string, unknown> }
-  | { tipo: 'error'; error: string; codigo: string; status: number }
+  | { tipo: 'error'; error: string; codigo: string; status: number; creditos?: { cobrados: number; devueltos: number; saldo: number } }
 
 const MAX_TEXTO = 300
 const MAX_NIVEL = 8
@@ -78,18 +80,29 @@ export function leerEvento(linea: string): EventoIA | null {
     }
     case 'latido':
       return { tipo: 'latido' }
+    case 'reserva': {
+      const usageId = entero(r.usageId, 1, Number.MAX_SAFE_INTEGER)
+      if (usageId === null) return null
+      const c = r.creditos && typeof r.creditos === 'object' ? (r.creditos as Record<string, unknown>) : {}
+      return { tipo: 'reserva', usageId, creditos: { cobrados: entero(c.cobrados, 0, 1e7) ?? 0, saldo: entero(c.saldo, 0, 1e9) ?? 0 } }
+    }
     case 'fin': {
       const { tipo: _tipo, ...datos } = r
       void _tipo
       return { tipo: 'fin', datos }
     }
-    case 'error':
+    case 'error': {
+      const c = r.creditos && typeof r.creditos === 'object' ? (r.creditos as Record<string, unknown>) : null
       return {
         tipo: 'error',
         error: typeof r.error === 'string' ? r.error.slice(0, 300) : 'No se pudo generar el mapa',
         codigo: typeof r.codigo === 'string' ? r.codigo.slice(0, 40) : '',
         status: entero(r.status, 0, 599) ?? 0,
+        ...(c
+          ? { creditos: { cobrados: entero(c.cobrados, 0, 1e7) ?? 0, devueltos: entero(c.devueltos, 0, 1e7) ?? 0, saldo: entero(c.saldo, 0, 1e9) ?? 0 } }
+          : {}),
       }
+    }
     default:
       return null
   }
@@ -168,6 +181,7 @@ export async function cuerpoOError(res: Response) {
       typeof cuerpo?.error === 'string' ? cuerpo.error : 'No se pudo completar la operación',
       res.status,
       typeof cuerpo?.codigo === 'string' ? cuerpo.codigo : typeof cuerpo?.motivo === 'string' ? cuerpo.motivo : '',
+      cuerpo && typeof cuerpo === 'object' ? cuerpo : null,
     )
   }
   return cuerpo
@@ -193,7 +207,7 @@ export async function leerRespuesta(res: Response, onEvento: (e: EventoIA) => vo
     const e = leerEvento(linea)
     if (!e || final || fallo) return
     if (e.tipo === 'fin') final = e.datos
-    else if (e.tipo === 'error') fallo = new IAError(e.error, e.status, e.codigo)
+    else if (e.tipo === 'error') fallo = new IAError(e.error, e.status, e.codigo, e.creditos ? { creditos: e.creditos } : null)
     else onEvento(e)
   })
   const reader = res.body.getReader()
