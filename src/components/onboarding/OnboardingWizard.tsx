@@ -14,6 +14,7 @@ import {
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import AvatarSelector from '@/components/Profile/AvatarSelector'
+import PasoPlan from '@/components/onboarding/PasoPlan'
 import { useAuth } from '@/hooks/useAuth'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import {
@@ -89,7 +90,7 @@ function toPayload(state: OnboardingState, useCurrentDisplayAndUser = false): On
 function Stepper({ step }: { step: number }) {
   return (
     <div className="mb-8 flex items-center justify-center gap-2">
-      {[1, 2, 3, 4].map((value) => (
+      {[1, 2, 3, 4, 5].map((value) => (
         <div
           key={value}
           className={`h-2 w-14 rounded-full ${
@@ -1201,7 +1202,7 @@ export default function OnboardingWizard() {
             layoutId="onboarding-shell"
             transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
             className={`mx-auto w-full rounded-3xl border border-[#E9E4E1] bg-white shadow-[0_12px_40px_rgba(45,55,72,0.08)] ${
-              step === 1 ? 'max-w-[680px] p-8 md:p-12' : 'max-w-3xl p-6 md:p-8'
+              step === 1 ? 'max-w-[680px] p-8 md:p-12' : step === 4 ? 'max-w-5xl p-6 md:p-8' : 'max-w-3xl p-6 md:p-8'
             }`}
           >
             {error ? (
@@ -1277,10 +1278,17 @@ export default function OnboardingWizard() {
                   </div>
                 ) : null}
 
+                {/* Elige tu plan: maqueta (todavía no guarda nada en el servidor; ver PasoPlan). */}
                 {step === 4 ? (
+                  <div className="mx-auto w-full">
+                    <PasoPlan onBack={() => setStep(3)} onNext={() => setStep(5)} />
+                  </div>
+                ) : null}
+
+                {step === 5 ? (
                   <div className="mx-auto w-full max-w-2xl">
                     <StepFour
-                      onBack={() => setStep(3)}
+                      onBack={() => setStep(4)}
                       onSubmit={handleFinalSubmit}
                       saving={savingFinal}
                     />
