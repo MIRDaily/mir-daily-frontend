@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { extraerDocumento, FORMATOS_ACEPTADOS } from '@/lib/mapas/ia/extract'
-import { aplicarEvento, arbolLibro, type EstadoTema, type FaseIA, type LineaProvisional } from '@/lib/mapas/ia/stream'
+import { aplicarEvento, type EstadoTema, type FaseIA, type LineaProvisional } from '@/lib/mapas/ia/stream'
 import { construirIndice, resumenSeleccion } from '@/lib/mapas/ia/indice'
 import { entradasDeTemas, temasParaEnviar, type TemaIndice } from '@/lib/mapas/ia/libro'
 import { ExtractError, IAError, type Extraido } from '@/lib/mapas/ia/types'
@@ -12,7 +12,11 @@ import { FLASHCARD_LEVELS, LEVEL_INFO, type FlashcardLevel } from '@/lib/studioF
 import { flashcardsIAGenerar, flashcardsIAIndice, flashcardsIAMas } from '@/lib/flashcards/ia/api'
 import { borradores, DENSIDADES, DESCRIPCION_NIVEL, tarjetasAprox, type Borrador, type Densidad, type EstadoFlashcardsIA } from '@/lib/flashcards/ia/tarjetas'
 import { VistaPreviaFlashcards, type MasConfig } from './VistaPreviaFlashcards'
-import { NivelBadge } from './NivelBadge'
+import DestinoCarpeta from '@/components/carpetas/DestinoCarpeta'
+import { CabeceraCrear, Detalles, FilaDetalle, OpcionAnimada, Opciones, PieCrear, TituloBloque } from '@/components/ia/crear/Kit'
+import { EscenaMonton } from '@/components/ia/crear/Escenas'
+import { useCarpeta } from '@/lib/carpetas/useCarpeta'
+import { textosDocumento } from '@/lib/carpetas/sugerir'
 import { supabase } from '@/lib/supabaseBrowser'
 import {
   borrarBorrador,
@@ -30,7 +34,7 @@ import { seleccionInicial, type PropsEmbebido, type ResultadoGenerar } from '@/l
 import { PrecioIA } from '@/components/ia/PrecioIA'
 import { useCobroIA, useCreditosIA } from '@/hooks/useCreditosIA'
 import { caracteresDocumento, caracteresLibro, claveFlashcards, precioIA } from '@/lib/ia/precio'
-import { anotarReserva, cancelarGeneracion, mensajeErrorIA, nuevaGeneracion, nuevoCobro, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
+import { anotarReserva, mensajeErrorIA, nuevaGeneracion, nuevoCobro, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
 
 // «Crear flashcards con IA» desde un documento (PDF, Word, PowerPoint): el mismo camino que «Crear
 // con IA» de los mapas (el archivo se lee en el navegador y no se sube; «Qué parte usar»; tema a
@@ -390,14 +394,6 @@ export default function CrearFlashcardsIA({
     }
   }
 
-  // «Cancelar»: con créditos, se avisa al servidor antes de cortar (y se dice qué se devuelve).
-  const cancelar = async () => {
-    const r = await cancelarGeneracion(genRef.current, () => abortRef.current?.abort())
-    if (!r.cancelado || !montado.current) return
-    setError(r.mensaje ?? 'Generación cancelada: la IA ha dejado de trabajar y no cuenta en tus generaciones de hoy.')
-    setFase('ajustes')
-  }
-
   // Como pestaña del popup unificado: el popup lanza la generación (en cola) y pinta el estado.
   useImperativeHandle(controlRef, () => ({ generar }))
   const falta = !extraido
@@ -521,380 +517,413 @@ export default function CrearFlashcardsIA({
 
   const ancho = fase === 'vista' ? 'max-w-3xl' : 'max-w-xl'
 
+  // Carpeta del grupo: se decide aquí y llega ya marcada a la revisión (donde se elige el grupo).
+  const carpeta = useCarpeta(
+    useMemo(() => textosDocumento(titulo || extraido?.titulo || '', indice.map((e) => e.titulo)), [titulo, extraido, indice]),
+    !!extraido && !embebido,
+  )
+  const [filaAbierta, setFilaAbierta] = useState<string | null>(null)
+  const alternarFila = (id: string) => {
+    setSelectorAbierto(false)
+    setFilaAbierta((f) => (f === id ? null : id))
+  }
+  const tarjetasCon = (d: Densidad) =>
+    envioLibro ? charsPorTema.reduce((n, c) => n + tarjetasAprox(c, d, niveles.length || 1), 0) : tarjetasAprox(caracteres, d, niveles.length || 1)
+  const datosDocumento = extraido
+    ? `${fmt(extraido.paginas)} ${extraido.unidad === 'diapositiva' ? 'diapositiva' : 'página'}${extraido.paginas === 1 ? '' : 's'} · ${fmt(extraido.caracteres)} caracteres`
+    : ''
+  const quitarTemas = () => {
+    if (!extraido) return
+    setTemasLibro(null)
+    const cabe = extraido.caracteres <= maxChars && extraido.paginas <= maxPaginas
+    setSel(cabe ? new Set(extraido.secciones.map((_, i) => i)) : new Set())
+  }
+
   const cuerpo = (
     <>
       {!embebido && (
-        <header className="flex items-start justify-between gap-4 px-6 pb-3 pt-6">
-          <div className="min-w-0">
-            <h2 id="fc-ia-titulo" className="flex items-center gap-2 text-xl font-extrabold text-[#2C3E50]">
-              <span aria-hidden className="inline-block text-[#E8A598]">
-                <span className="material-symbols-outlined text-[24px] leading-none">auto_awesome</span>
-              </span>
-              {fase === 'vista' ? 'Revisa las flashcards' : 'Flashcards con IA'}
-            </h2>
-            <p className="mt-1 truncate text-sm text-[#7D8A96]">
-              {fase === 'vista' && resultado ? resultado.titulo : 'De un PDF, Word o PowerPoint: tarjetas cortas por tema, de fácil a demencial.'}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={fase === 'vista' ? onClose : cerrar}
-            disabled={fase === 'generando'}
-            aria-label="Cerrar"
-            className="rounded-full p-1.5 text-[#7D8A96] transition-colors hover:bg-white hover:text-[#2C3E50] disabled:opacity-40"
-          >
-            <span className="material-symbols-outlined text-[22px]">close</span>
-          </button>
-        </header>
+        <CabeceraCrear
+          herramienta="flashcards"
+          idTitulo="fc-ia-titulo"
+          titulo={fase === 'vista' ? 'Revisa las flashcards' : fase === 'generando' ? 'Creando tus flashcards…' : 'Nuevas flashcards'}
+          subtitulo={
+            fase === 'vista' && resultado
+              ? resultado.titulo
+              : fase === 'generando'
+                ? (archivo?.name ?? '')
+                : 'Tarjetas de pregunta y respuesta, de fácil a demencial.'
+          }
+          documento={fase === 'ajustes' && extraido && archivo ? { nombre: archivo.name, datos: datosDocumento } : null}
+          {...(fase === 'ajustes'
+            ? {
+                onCambiarDocumento: () => {
+                  setExtraido(null)
+                  setArchivo(null)
+                  setError(null)
+                  setFase('elegir')
+                },
+              }
+            : {})}
+          {...(fase !== 'generando' ? { onCerrar: fase === 'vista' ? onClose : cerrar } : {})}
+        />
       )}
 
-        {fase === 'vista' && resultado ? (
-          <>
-            {resultado.fallidos.length > 0 && (
-              <div className="mx-6 mb-3 rounded-xl bg-[#FAEAED] px-3 py-2 text-[0.78rem] text-[#B04A5E]">
-                <p className="font-extrabold">No salieron {resultado.fallidos.length === 1 ? 'este tema' : `estos ${resultado.fallidos.length} temas`}:</p>
-                <ul className="mt-1 list-disc pl-5">
-                  {resultado.fallidos.map((f) => (
-                    <li key={f}>{f}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <VistaPreviaFlashcards
-              inicial={resultado.lista}
-              nombreGrupo={(borrador?.nombreGrupo ?? resultado.titulo).slice(0, 80)}
-              fuente={resultado.fuente}
-              persistir={persistir}
-              mas={mas}
-              teclado={visible}
-              alGuardar={() => usuario && void borrarBorrador(claveBorrador(usuario, borrador?.origen ?? { tipo: 'documento' }))}
-              {...(extraido
-                ? {
-                    onVolver: () => {
-                      setResultado(null)
-                      setFase('ajustes')
-                    },
-                  }
-                : {})}
-              onCerrar={onClose}
-            />
-          </>
-        ) : (
-          <div className="overflow-y-auto px-6 pb-6">
-            {error && (
-              <div role="alert" className="mb-4 rounded-2xl border border-[#D4667A]/30 bg-[#FAEAED] px-4 py-3 text-sm font-medium text-[#B04A5E]">
-                {error}
-              </div>
-            )}
-
-            {(fase === 'elegir' || fase === 'leyendo') && (
-              <>
-                <input
-                  ref={inputRef}
-                  type="file"
-                  accept={FORMATOS_ACEPTADOS}
-                  className="hidden"
-                  onChange={(e) => {
-                    void leer(e.target.files?.[0])
-                    e.target.value = ''
-                  }}
-                />
-                <button
-                  type="button"
-                  disabled={fase === 'leyendo'}
-                  onClick={() => inputRef.current?.click()}
-                  onDragOver={(e) => {
-                    e.preventDefault()
-                    setArrastrando(true)
-                  }}
-                  onDragLeave={() => setArrastrando(false)}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    setArrastrando(false)
-                    void leer(e.dataTransfer.files?.[0])
-                  }}
-                  className={`flex w-full flex-col items-center gap-2 rounded-3xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
-                    arrastrando ? 'border-[#E8A598] bg-[#FCEFEC]' : 'border-[#7D8A96]/30 bg-white hover:border-[#E8A598]'
-                  } disabled:cursor-wait`}
-                >
-                  {fase === 'leyendo' ? (
-                    <>
-                      <span className="material-symbols-outlined animate-pulse text-[40px] text-[#E8A598]">description</span>
-                      <span className="font-bold text-[#2C3E50]">Leyendo {archivo?.name}…</span>
-                      {progreso && progreso.total > 1 && (
-                        <span className="text-sm text-[#7D8A96]">
-                          Página {progreso.hecho} de {progreso.total}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <span className="material-symbols-outlined text-[40px] text-[#E8A598]">upload_file</span>
-                      <span className="font-bold text-[#2C3E50]">Elige un archivo o suéltalo aquí</span>
-                      <span className="text-sm text-[#7D8A96]">PDF con texto, Word (.docx) o PowerPoint (.pptx)</span>
-                    </>
-                  )}
-                </button>
-                <ul className="mt-4 space-y-1 text-xs text-[#7D8A96]">
-                  <li>
-                    Máximo {fmt(maxChars)} caracteres de texto (unas {Math.round(maxChars / 3000)} páginas de apuntes); un documento más largo, tema a tema.
-                  </li>
-                  {cupo && (
-                    <li>
-                      Hoy te quedan {restantes} de {cupo.maxGeneracionesDia} generaciones de flashcards.
-                    </li>
-                  )}
-                </ul>
-              </>
-            )}
-
-            {(fase === 'ajustes' || fase === 'generando') && extraido && (
-              <div className={fase === 'generando' ? 'hidden' : ''}>
-                <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3">
-                  <span className="material-symbols-outlined text-[28px] text-[#E8A598]">description</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-[#2C3E50]">{archivo?.name}</p>
-                    <p className="text-xs text-[#7D8A96]">
-                      {fmt(extraido.paginas)} {extraido.unidad ?? 'página'}
-                      {extraido.paginas === 1 ? '' : 's'} · {fmt(extraido.caracteres)} caracteres
-                    </p>
-                  </div>
-                  {!embebido && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExtraido(null)
-                        setArchivo(null)
-                        setError(null)
-                        setFase('elegir')
-                      }}
-                      className="text-xs font-bold text-[#7D8A96] hover:text-[#E8A598]"
-                    >
-                      Cambiar
-                    </button>
-                  )}
-                </div>
-                {extraido.avisos.map((a) => (
-                  <p key={a} className="mt-2 text-xs font-medium text-[#B07A1E]">
-                    {a}
-                  </p>
+      {fase === 'vista' && resultado ? (
+        <>
+          {resultado.fallidos.length > 0 && (
+            <div className="mx-6 mb-3 mt-3 rounded-xl bg-[#FAEAED] px-3 py-2 text-[0.78rem] text-[#B04A5E]">
+              <p className="font-extrabold">No salieron {resultado.fallidos.length === 1 ? 'este tema' : `estos ${resultado.fallidos.length} temas`}:</p>
+              <ul className="mt-1 list-disc pl-5">
+                {resultado.fallidos.map((f) => (
+                  <li key={f}>{f}</li>
                 ))}
-                {documentoGrande && !porTemas && (
-                  <p className="mt-3 rounded-xl bg-[#FBF3E1] px-3 py-2 text-[0.8rem] font-semibold text-[#8A6418]">
-                    El documento tiene {fmt(extraido.caracteres)} caracteres y de una vez caben {fmt(maxChars)}.{' '}
-                    {ofrecerLibro ? 'Hazlo tema a tema o elige qué parte usar.' : 'Elige qué parte usar.'}
-                  </p>
-                )}
-                {ofrecerLibro && (
-                  <div className="mt-3 flex items-center gap-3 rounded-2xl bg-white px-4 py-3" style={{ border: `2px solid ${porTemas ? '#E8A598' : INK}` }}>
-                    <span aria-hidden className="inline-block text-[#E8A598]">
-                      <span className="material-symbols-outlined text-[1.4rem] leading-none">library_books</span>
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-extrabold text-[#2C3E50]">Tema a tema</span>
-                      <span className="block text-xs text-[#7D8A96]">
-                        {porTemas
-                          ? `${temasLibro?.length ?? 0} temas encontrados. Cada uno da sus tarjetas y puede ir a su propio grupo.`
-                          : 'Primero la IA saca el índice (unos segundos) y luego hace cada tema por separado.'}
+              </ul>
+            </div>
+          )}
+          <VistaPreviaFlashcards
+            inicial={resultado.lista}
+            nombreGrupo={(borrador?.nombreGrupo ?? resultado.titulo).slice(0, 80)}
+            fuente={resultado.fuente}
+            persistir={persistir}
+            mas={mas}
+            teclado={visible}
+            carpetaInicial={carpeta.arbol ? { valor: carpeta.valor, origen: carpeta.origen } : null}
+            alGuardar={() => usuario && void borrarBorrador(claveBorrador(usuario, borrador?.origen ?? { tipo: 'documento' }))}
+            {...(extraido
+              ? {
+                  onVolver: () => {
+                    setResultado(null)
+                    setFase('ajustes')
+                  },
+                }
+              : {})}
+            onCerrar={onClose}
+          />
+        </>
+      ) : (
+        <div className="overflow-y-auto px-5 pb-5 pt-4">
+          {error && (
+            <div role="alert" className="mb-4 rounded-2xl border border-[#D4667A]/30 bg-[#FAEAED] px-4 py-3 text-sm font-medium text-[#B04A5E]">
+              {error}
+            </div>
+          )}
+
+          {(fase === 'elegir' || fase === 'leyendo') && (
+            <>
+              <input
+                ref={inputRef}
+                type="file"
+                accept={FORMATOS_ACEPTADOS}
+                className="hidden"
+                onChange={(e) => {
+                  void leer(e.target.files?.[0])
+                  e.target.value = ''
+                }}
+              />
+              <button
+                type="button"
+                disabled={fase === 'leyendo'}
+                onClick={() => inputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  setArrastrando(true)
+                }}
+                onDragLeave={() => setArrastrando(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setArrastrando(false)
+                  void leer(e.dataTransfer.files?.[0])
+                }}
+                className="flex w-full flex-col items-center gap-2 rounded-3xl border-2 border-dashed px-6 py-12 text-center transition-colors disabled:cursor-wait"
+                style={{ borderColor: arrastrando ? 'var(--cia-acc-d)' : 'rgba(125,138,150,.3)', background: arrastrando ? 'var(--cia-soft)' : '#fff' }}
+              >
+                {fase === 'leyendo' ? (
+                  <>
+                    <span className="material-symbols-outlined animate-pulse text-[40px]" style={{ color: 'var(--cia-acc-d)' }}>description</span>
+                    <span className="font-bold text-[#2C3E50]">Leyendo {archivo?.name}…</span>
+                    {progreso && progreso.total > 1 && (
+                      <span className="text-sm text-[#7D8A96]">
+                        Página {progreso.hecho} de {progreso.total}
                       </span>
-                    </span>
-                    {porTemas ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTemasLibro(null)
-                          const cabe = extraido.caracteres <= maxChars && extraido.paginas <= maxPaginas
-                          setSel(cabe ? new Set(extraido.secciones.map((_, i) => i)) : new Set())
-                        }}
-                        className="text-xs font-bold text-[#7D8A96] hover:text-[#B04A5E]"
-                      >
-                        Quitar
-                      </button>
-                    ) : (
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[40px]" style={{ color: 'var(--cia-acc-d)' }}>upload_file</span>
+                    <span className="font-bold text-[#2C3E50]">Elige un archivo o suéltalo aquí</span>
+                    <span className="text-sm text-[#7D8A96]">PDF con texto, Word (.docx) o PowerPoint (.pptx)</span>
+                  </>
+                )}
+              </button>
+              <ul className="mt-4 space-y-1 text-xs text-[#7D8A96]">
+                <li>
+                  Máximo {fmt(maxChars)} caracteres de texto (unas {Math.round(maxChars / 3000)} páginas de apuntes); un documento más largo, tema a tema.
+                </li>
+                {cupo && (
+                  <li>
+                    Hoy te quedan {restantes} de {cupo.maxGeneracionesDia} generaciones de flashcards.
+                  </li>
+                )}
+              </ul>
+            </>
+          )}
+
+          {(fase === 'ajustes' || fase === 'generando') && extraido && (
+            <div className={fase === 'generando' ? 'hidden' : 'flex flex-col gap-[18px]'}>
+              {embebido && <p className="text-[0.78rem] text-[#7D8A96]">{datosDocumento}</p>}
+              {extraido.avisos.map((a) => (
+                <p key={a} className="-mb-2 text-xs font-medium text-[#B07A1E]">
+                  {a}
+                </p>
+              ))}
+
+              {ofrecerLibro && !porTemas && documentoGrande && (
+                <div className="flex items-start gap-2.5 rounded-2xl bg-[#FFF6DC] px-3.5 py-3" style={{ border: `2px solid ${INK}` }}>
+                  <span className="material-symbols-outlined text-[22px] text-[#B07A1E]" aria-hidden>auto_stories</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[0.82rem] font-semibold text-[#2C3E50]">
+                      Es largo: {fmt(extraido.caracteres)} caracteres y de una vez caben {fmt(maxChars)}. ¿Cómo lo hacemos?
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => void activarTemas()}
                         disabled={cargandoIndice}
-                        className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-extrabold text-white disabled:opacity-60"
-                        style={{ background: '#E8A598', border: `2px solid ${INK}`, boxShadow: `2px 2px 0 0 ${INK}` }}
+                        className="rounded-full px-3 py-1 text-[0.75rem] font-bold text-white disabled:opacity-60"
+                        style={{ background: INK, border: `2px solid ${INK}` }}
                       >
-                        {cargandoIndice ? 'Sacando el índice…' : 'Sacar el índice'}
+                        {cargandoIndice ? 'Sacando el índice…' : 'Tema a tema'}
                       </button>
-                    )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFilaAbierta(null)
+                          setSelectorAbierto(true)
+                        }}
+                        className="rounded-full bg-white px-3 py-1 text-[0.75rem] font-bold text-[#2C3E50]"
+                        style={{ border: `2px solid ${INK}` }}
+                      >
+                        Solo una parte
+                      </button>
+                    </div>
                   </div>
-                )}
-                <SelectorParte
-                  secciones={extraido.secciones}
-                  indice={indice}
-                  sel={sel}
-                  onChange={setSel}
-                  unidad={extraido.unidad ?? 'página'}
-                  abierto={selectorAbierto}
-                  onAbrir={setSelectorAbierto}
-                  resumen={resumenParte}
-                />
-                {excedeTexto && (
-                  <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
-                    Lo marcado tiene {fmt(caracteres)} caracteres: el máximo {porTemas ? 'tema a tema' : 'de una vez'} es {fmt(maxCharsUsado)}. Desmarca alguna parte.
-                  </p>
-                )}
-                {excedePaginas && (
-                  <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
-                    Lo marcado tiene más de {maxPaginasUsado} páginas. Desmarca alguna parte.
-                  </p>
-                )}
-                {excedeTemas && (
-                  <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
-                    Como mucho {estado.limites.maxTemas ?? 40} temas de una vez. Desmarca alguno.
-                  </p>
-                )}
-                {!excedeTexto && excedeCupoChars && (
-                  <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
-                    Hoy te quedan {fmt(charsRestantesHoy)} caracteres de IA y lo marcado tiene {fmt(caracteres)}. Marca menos o vuelve mañana.
-                  </p>
-                )}
+                </div>
+              )}
+              {ofrecerLibro && !porTemas && !documentoGrande && (
+                <button
+                  type="button"
+                  onClick={() => void activarTemas()}
+                  disabled={cargandoIndice}
+                  className="-mb-2 flex items-center gap-2 self-start text-[0.78rem] font-bold disabled:opacity-60"
+                  style={{ color: 'var(--cia-acc-d)' }}
+                >
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden>library_books</span>
+                  {cargandoIndice ? 'Sacando el índice…' : '¿Trae varios temas? Hacerlo tema a tema'}
+                </button>
+              )}
+              {porTemas && (
+                <div className="flex items-center gap-2.5 rounded-2xl bg-white px-3.5 py-2.5" style={{ border: '2px solid var(--cia-acc)' }}>
+                  <span className="material-symbols-outlined text-[20px]" style={{ color: 'var(--cia-acc-d)' }} aria-hidden>library_books</span>
+                  <span className="min-w-0 flex-1 text-[0.8rem] font-bold text-[#2C3E50]">
+                    Tema a tema · {fmt(temasLibro?.length ?? 0)} temas · cada uno puede ir a su grupo
+                  </span>
+                  <button type="button" onClick={quitarTemas} className="text-xs font-bold text-[#7D8A96] hover:text-[#B04A5E]">
+                    Quitar
+                  </button>
+                </div>
+              )}
 
-                <label className="mt-5 block text-xs font-bold uppercase tracking-wide text-[#7D8A96]" htmlFor="fc-ia-nombre">
-                  {porTemas ? 'Nombre del documento' : 'Nombre del grupo'}
-                </label>
-                <input
-                  id="fc-ia-nombre"
-                  value={titulo}
-                  onChange={(e) => setTitulo(e.target.value.slice(0, 80))}
-                  className="mt-1 w-full rounded-2xl border border-[#7D8A96]/25 bg-white px-4 py-2.5 text-sm font-semibold text-[#2C3E50] outline-none focus:border-[#E8A598]"
-                />
-
-                <p className="mt-5 text-xs font-bold uppercase tracking-wide text-[#7D8A96]">Dificultad</p>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2" role="group" aria-label="Niveles de dificultad">
+              <div>
+                <TituloBloque n={1} nota={nadaElegido ? undefined : `≈${fmt(aprox)} tarjetas`}>
+                  ¿Cuántas tarjetas?
+                </TituloBloque>
+                <Opciones etiqueta="Cantidad de tarjetas" columnas={3}>
+                  {DENSIDADES.map((d, i) => (
+                    <OpcionAnimada
+                      key={d.id}
+                      activa={densidad === d.id}
+                      onElegir={() => setDensidad(d.id)}
+                      titulo={d.titulo}
+                      descripcion={d.descripcion}
+                      dato={`≈${fmt(tarjetasCon(d.id))}`}
+                      escena={<EscenaMonton n={[2, 4, 6][i] ?? 4} />}
+                    />
+                  ))}
+                </Opciones>
+                <h4 className="mb-2 mt-4 flex items-center text-[0.8rem] font-black text-[#2C3E50]">
+                  Dificultad
+                  <span className="ml-auto text-[0.72rem] font-medium text-[#7D8A96]">Puedes marcar varias</span>
+                </h4>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Niveles de dificultad">
                   {FLASHCARD_LEVELS.map((n) => {
                     const on = niveles.includes(n)
                     return (
-                      <label
+                      <button
                         key={n}
-                        className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-white px-3 py-2.5"
-                        style={{ border: `2px solid ${on ? LEVEL_INFO[n].color : 'transparent'}` }}
+                        type="button"
+                        aria-pressed={on}
+                        title={DESCRIPCION_NIVEL[n]}
+                        onClick={() => alternarNivel(n)}
+                        className="flex items-center gap-1.5 rounded-full bg-white py-1.5 pl-2 pr-3 text-[0.78rem] font-bold"
+                        style={{ border: `2px solid ${on ? INK : '#EDE6DE'}`, color: on ? INK : '#7D8A96', boxShadow: on ? `2px 2px 0 0 ${INK}` : 'none' }}
                       >
-                        <input
-                          type="checkbox"
-                          checked={on}
-                          onChange={() => alternarNivel(n)}
-                          style={{ accentColor: LEVEL_INFO[n].color, width: 16, height: 16, marginTop: 2, flexShrink: 0 }}
-                        />
-                        <span className="min-w-0">
-                          <NivelBadge nivel={n} />
-                          <span className="mt-1 block text-xs text-[#7D8A96]">{DESCRIPCION_NIVEL[n]}</span>
-                        </span>
-                      </label>
+                        <span className="size-3.5 rounded-full" style={{ background: LEVEL_INFO[n].color, opacity: on ? 1 : 0.35 }} aria-hidden />
+                        {LEVEL_INFO[n].name}
+                      </button>
                     )
                   })}
                 </div>
-                {niveles.length === 0 && <p className="mt-1 text-xs font-bold text-[#B04A5E]">Marca al menos un nivel.</p>}
-
-                <p className="mt-5 text-xs font-bold uppercase tracking-wide text-[#7D8A96]">Cantidad</p>
-                <div className="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Cantidad de tarjetas">
-                  {DENSIDADES.map((d) => (
-                    <button
-                      key={d.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={densidad === d.id}
-                      onClick={() => setDensidad(d.id)}
-                      className="rounded-2xl bg-white p-2.5 text-left"
-                      style={{ border: `2px solid ${densidad === d.id ? '#E8A598' : 'transparent'}` }}
-                    >
-                      <span className="block text-sm font-extrabold text-[#2C3E50]">{d.titulo}</span>
-                      <span className="block text-[0.72rem] text-[#7D8A96]">{d.descripcion}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {nadaElegido ? (
-                  <p className="mt-4 text-xs font-bold text-[#B04A5E]">Marca al menos una parte del documento.</p>
+                {niveles.length === 0 ? (
+                  <p className="mt-1.5 text-xs font-bold text-[#B04A5E]">Marca al menos un nivel.</p>
                 ) : (
-                  <p className="mt-4 text-xs text-[#7D8A96]" aria-live="polite">
-                    {fmt(caracteres)} caracteres{envioLibro ? ` en ${fmt(envioLibro.temas.length)} temas` : ''}: saldrán unas {fmt(aprox)} tarjetas, ordenadas por tema y de fácil a demencial. Antes de guardarlas
-                    las revisas.{cupo ? ` Usará ${fmt(caracteres)} de los ${fmt(charsRestantesHoy)} caracteres que te quedan hoy.` : ''}
-                  </p>
-                )}
-                {!nadaElegido && (
-                  <PrecioIA
-                    precio={precio}
-                    className="mt-2"
-                    alternativas={[
-                      porTemas ? 'Desmarca algún tema: el precio baja al momento.' : 'Marca menos partes del documento: el precio baja al momento.',
-                      ...(densidad === 'muchas' ? ['Elige «Normal» en la cantidad de tarjetas.'] : []),
-                    ]}
-                  />
-                )}
-                {sinCupo && (
-                  <p role="alert" className="mt-1 text-sm font-bold text-[#B04A5E]">
-                    Has llegado al máximo de generaciones de hoy. Vuelve mañana.
-                  </p>
+                  <p className="mt-1.5 text-[0.72rem] text-[#7D8A96]">Empezarás por las fáciles: cada nivel se abre al dominar el anterior.</p>
                 )}
               </div>
-            )}
 
-            {fase === 'generando' && (
-              <>
-                <ProgresoIA
-                  fases={['leyendo', 'tarjetas', 'ordenando']}
-                  fase={faseIA}
-                  lineas={lineas}
-                  segundos={segundos}
-                  contador={(ls) => `${ls.filter((l) => l.d > 1).length} preguntas · se revisan al terminar`}
-                  {...(porTemas
-                    ? {
-                        arbol: arbolLibro(lineas, progresoTemas.map((t) => t.titulo)),
-                        temas: progresoTemas,
-                        detalle: progresoTemas.length
-                          ? `Temas: ${progresoTemas.filter((p) => p.estado === 'listo').length} de ${progresoTemas.length} listos`
-                          : undefined,
-                      }
-                    : {})}
-                />
-                <p className="mt-2 text-xs text-[#7D8A96]">
-                  No cierres esta ventana. Al terminar verás las tarjetas para revisarlas antes de guardarlas.{' '}
-                  <button
-                    type="button"
-                    onClick={() => void cancelar()}
-                    className="font-bold text-[#7D8A96] underline hover:text-[#B04A5E]"
+              {carpeta.arbol && (
+                <div>
+                  <TituloBloque n={2}>Dónde se guarda</TituloBloque>
+                  <DestinoCarpeta
+                    arbol={carpeta.arbol}
+                    valor={carpeta.valor}
+                    sugerida={carpeta.sugerida}
+                    candidatas={carpeta.sugerencia?.candidatas}
+                    onChange={carpeta.elegir}
+                    {...(porTemas && carpeta.valor.subjectId !== null && carpeta.valor.topicId === null
+                      ? { nota: 'Si guardas un grupo por tema, cada uno irá a su tema dentro de la asignatura.' }
+                      : {})}
+                  />
+                </div>
+              )}
+
+              <div>
+                <TituloBloque n={carpeta.arbol ? 3 : 2} nota="Toca para cambiar">Detalles</TituloBloque>
+                <Detalles>
+                  <FilaDetalle
+                    primera
+                    icono="checklist"
+                    etiqueta="Qué parte usar"
+                    valor={resumenParte}
+                    abierta={selectorAbierto}
+                    onAlternar={() => {
+                      setFilaAbierta(null)
+                      setSelectorAbierto(!selectorAbierto)
+                    }}
                   >
-                    Cancelar
-                  </button>
-                </p>
-              </>
-            )}
-          </div>
-        )}
+                    <SelectorParte
+                      soloContenido
+                      secciones={extraido.secciones}
+                      indice={indice}
+                      sel={sel}
+                      onChange={setSel}
+                      unidad={extraido.unidad ?? 'página'}
+                      abierto={selectorAbierto}
+                      onAbrir={setSelectorAbierto}
+                      resumen={resumenParte}
+                    />
+                  </FilaDetalle>
+                  <FilaDetalle
+                    icono="edit"
+                    etiqueta={porTemas ? 'Nombre del documento' : 'Nombre del grupo'}
+                    valor={titulo.trim() || 'Sin nombre'}
+                    abierta={filaAbierta === 'nombre'}
+                    onAlternar={() => alternarFila('nombre')}
+                  >
+                    <input
+                      id="fc-ia-nombre"
+                      aria-label="Nombre"
+                      value={titulo}
+                      onChange={(e) => setTitulo(e.target.value.slice(0, 80))}
+                      className="w-full rounded-xl border-2 border-[#EDE6DE] bg-[#FAF7F4] px-3 py-2 text-[0.82rem] font-semibold text-[#2C3E50] outline-none focus:border-[var(--cia-acc)]"
+                    />
+                  </FilaDetalle>
+                </Detalles>
+              </div>
 
-        {fase === 'ajustes' && !embebido && (
-          <footer className="border-t border-[#7D8A96]/15 bg-white px-6 py-4">
-            <p className="mb-3 text-[11px] leading-relaxed text-[#7D8A96]">
-              El archivo no se guarda. Su texto se envía a un servicio de IA externo (DeepSeek) solo para hacer las tarjetas. La IA puede
-              equivocarse: las revisas antes de guardarlas.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button type="button" onClick={cerrar} className="rounded-2xl px-4 py-2.5 text-sm font-bold text-[#7D8A96] hover:text-[#2C3E50]">
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => void generar()}
-                disabled={!puedeGenerar}
-                className="flex items-center gap-2 rounded-2xl bg-[#E8A598] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#d18d80] disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
-                {porTemas ? 'Generar los temas' : 'Generar flashcards'}
-              </button>
+              {nadaElegido && <p className="-mt-2 text-xs font-bold text-[#B04A5E]">Marca al menos una parte del documento.</p>}
+              {excedeTexto && (
+                <p role="alert" className="-mt-2 text-sm font-bold text-[#B04A5E]">
+                  Lo marcado tiene {fmt(caracteres)} caracteres: el máximo {porTemas ? 'tema a tema' : 'de una vez'} es {fmt(maxCharsUsado)}. Desmarca alguna parte.
+                </p>
+              )}
+              {excedePaginas && (
+                <p role="alert" className="-mt-2 text-sm font-bold text-[#B04A5E]">
+                  Lo marcado tiene más de {maxPaginasUsado} páginas. Desmarca alguna parte.
+                </p>
+              )}
+              {excedeTemas && (
+                <p role="alert" className="-mt-2 text-sm font-bold text-[#B04A5E]">
+                  Como mucho {estado.limites.maxTemas ?? 40} temas de una vez. Desmarca alguno.
+                </p>
+              )}
+              {!excedeTexto && excedeCupoChars && (
+                <p role="alert" className="-mt-2 text-sm font-bold text-[#B04A5E]">
+                  Hoy te quedan {fmt(charsRestantesHoy)} caracteres de IA y lo marcado tiene {fmt(caracteres)}. Marca menos o vuelve mañana.
+                </p>
+              )}
+              {sinCupo && (
+                <p role="alert" className="-mt-2 text-sm font-bold text-[#B04A5E]">
+                  Has llegado al máximo de generaciones de hoy. Vuelve mañana.
+                </p>
+              )}
+              {cupo && !nadaElegido && (
+                <p className="-mt-2 text-xs text-[#7D8A96]" aria-live="polite">
+                  Usará {fmt(caracteres)} de los {fmt(charsRestantesHoy)} caracteres que te quedan hoy.
+                </p>
+              )}
+              {embebido && !nadaElegido && <PrecioIA precio={precio} />}
             </div>
-          </footer>
-        )}
+          )}
+
+          {fase === 'generando' && (
+            <ProgresoIA
+              herramienta="flashcards"
+              fases={['leyendo', 'tarjetas', 'ordenando']}
+              fase={faseIA}
+              lineas={lineas}
+              segundos={segundos}
+              contador={(ls) => {
+                const n = ls.filter((l) => l.d > 1).length
+                return `${n} ${n === 1 ? 'tarjeta' : 'tarjetas'}`
+              }}
+              {...(porTemas
+                ? {
+                    temas: progresoTemas,
+                    detalle: progresoTemas.length
+                      ? `Temas: ${progresoTemas.filter((p) => p.estado === 'listo').length} de ${progresoTemas.length} listos`
+                      : undefined,
+                  }
+                : {})}
+            />
+          )}
+        </div>
+      )}
+
+      {fase === 'ajustes' && !embebido && extraido && (
+        <PieCrear
+          precio={
+            nadaElegido ? null : (
+              <PrecioIA
+                precio={precio}
+                alternativas={[
+                  porTemas ? 'Desmarca algún tema: el precio baja al momento.' : 'Marca menos partes del documento: el precio baja al momento.',
+                  ...(densidad === 'muchas' ? ['Elige «Normal» en la cantidad de tarjetas.'] : []),
+                ]}
+              />
+            )
+          }
+          boton={porTemas ? 'Generar los temas' : 'Generar flashcards'}
+          onGenerar={() => void generar()}
+          puede={puedeGenerar}
+          {...(falta ? { falta } : {})}
+        />
+      )}
     </>
   )
   const estilos = <style>{`@keyframes ia-barra{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}@keyframes ia-entra{from{opacity:0;transform:translateX(-0.25rem)}to{opacity:1;transform:none}}.ia-prov-entra{animation:ia-entra .25s ease-out}`}</style>
   if (embebido) {
     return (
-      <div className={visible ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+      <div data-cia="flashcards" className={visible ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
         {cuerpo}
         {estilos}
       </div>
@@ -910,8 +939,9 @@ export default function CrearFlashcardsIA({
         role="dialog"
         aria-modal="true"
         aria-labelledby="fc-ia-titulo"
-        className={`flex max-h-[92dvh] w-full ${ancho} flex-col overflow-hidden rounded-3xl bg-[#FAF7F4]`}
-        style={{ border: `2px solid ${INK}`, boxShadow: `6px 6px 0 0 ${INK}` }}
+        data-cia="flashcards"
+        className={`flex max-h-[92dvh] w-full ${ancho} flex-col overflow-hidden rounded-[28px] bg-[#FAF7F4]`}
+        style={{ border: `2px solid ${INK}`, boxShadow: `8px 8px 0 0 ${INK}` }}
       >
         {cuerpo}
       </div>

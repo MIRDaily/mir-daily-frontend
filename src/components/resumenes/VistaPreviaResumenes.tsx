@@ -36,8 +36,8 @@ import {
 import type { MasResumenes } from '@/lib/resumenes/ia'
 import { INK, NivelNuevo, ParrafoHuecos, ResumenHuecos } from './ParrafoHuecos'
 import { EditorParrafo } from './EditorParrafo'
-import SelectorCarpeta from '@/components/carpetas/SelectorCarpeta'
-import { useCarpeta } from '@/lib/carpetas/useCarpeta'
+import DestinoCarpeta from '@/components/carpetas/DestinoCarpeta'
+import { useCarpeta, type CarpetaElegida } from '@/lib/carpetas/useCarpeta'
 import { carpetaDeFila, moverACarpeta } from '@/lib/carpetas/api'
 import { baseParaPartes, carpetaDeParte, nombreCarpeta, textosDocumento } from '@/lib/carpetas/sugerir'
 
@@ -499,6 +499,7 @@ export function VistaPreviaResumenes({
   mas,
   rehacer,
   teclado = true,
+  carpetaInicial,
 }: {
   inicial: ParrafoBorrador[]
   nombreGrupo: string
@@ -516,6 +517,8 @@ export function VistaPreviaResumenes({
   rehacer?: RehacerConfig
   /** Con false (pestaña oculta del popup unificado) las teclas de la revisión no actúan. */
   teclado?: boolean
+  /** La carpeta decidida en los ajustes: llega ya marcada para los grupos nuevos. */
+  carpetaInicial?: CarpetaElegida | null
 }) {
   const [lista, setLista] = useState(inicial)
   const [nivel, setNivel] = useState<Nivel>(2)
@@ -533,7 +536,7 @@ export function VistaPreviaResumenes({
   // usuario elige otra. Un grupo que ya existe conserva la suya.
   const temasParrafos = useMemo(() => lista.filter((p) => p.incluir).map((p) => p.tema), [lista])
   const temasGrupos = useMemo(() => [...new Set(lista.map((p) => p.grupo).filter((g): g is string => !!g))], [lista])
-  const carpeta = useCarpeta(useMemo(() => textosDocumento(nombre || nombreGrupo, temasParrafos, temasGrupos), [nombre, nombreGrupo, temasParrafos, temasGrupos]))
+  const carpeta = useCarpeta(useMemo(() => textosDocumento(nombre || nombreGrupo, temasParrafos, temasGrupos), [nombre, nombreGrupo, temasParrafos, temasGrupos]), true, carpetaInicial)
   // Lo que dice el servidor del grupo de destino: los parecidos (por párrafo) y el literal de cada documento (por grupo).
   const [parecidos, setParecidos] = useState<Map<string, Parecido | null>>(new Map())
   const [usos, setUsos] = useState<Map<string, UsoLiteral[]>>(new Map())
@@ -1369,17 +1372,19 @@ export function VistaPreviaResumenes({
           )}
           {destino !== 'existente' && carpeta.arbol && (
             <div className="mt-2">
-              <SelectorCarpeta
-                arbol={carpeta.arbol}
-                valor={carpeta.valor}
-                sugerida={carpeta.sugerencia?.carpeta}
-                candidatas={carpeta.sugerencia?.candidatas}
-                onChange={carpeta.elegir}
-                disabled={!!guardando}
-              />
-              {destino === 'porTema' && carpeta.valor.subjectId !== null && (
-                <p className="mt-1 text-[0.7rem] text-[#7D8A96]">Cada grupo irá a su tema dentro de la asignatura (o a «General» si no encaja con ninguno).</p>
-              )}
+              <div data-cia="resumen">
+                <DestinoCarpeta
+                  arbol={carpeta.arbol}
+                  valor={carpeta.valor}
+                  sugerida={carpeta.sugerida}
+                  candidatas={carpeta.sugerencia?.candidatas}
+                  onChange={carpeta.elegir}
+                  disabled={!!guardando}
+                  {...(destino === 'porTema' && carpeta.valor.subjectId !== null
+                    ? { nota: 'Cada grupo irá a su tema dentro de la asignatura (o a «Toda la asignatura» si no encaja con ninguno).' }
+                    : {})}
+                />
+              </div>
             </div>
           )}
           {destino === 'existente' && carpeta.arbol && grupos?.find((g) => g.id === elegido) && (

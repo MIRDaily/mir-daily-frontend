@@ -23,7 +23,7 @@ import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
 import { PrecioIA } from '@/components/ia/PrecioIA'
 import { useCobroIA, useCreditosIA } from '@/hooks/useCreditosIA'
 import { caracteresDocumento, claveMapa, precioIA } from '@/lib/ia/precio'
-import { anotarReserva, cancelarGeneracion, mensajeErrorIA, nuevaGeneracion, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
+import { anotarReserva, mensajeErrorIA, nuevaGeneracion, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
 
 // «Añadir un documento al mapa» (informe 76): p. ej., el mapa de los apuntes más el PowerPoint de
 // clase. El servidor genera el mapa del documento nuevo con los bloques y enfermedades de este como
@@ -186,14 +186,6 @@ function Dialogo({ mapTitle, onHecho }: { mapTitle: string; onHecho: (m: string)
     }
   }
 
-  // «Cancelar» con créditos: se avisa al servidor antes de cortar (y se dice qué se devuelve).
-  const cancelar = async () => {
-    const r = await cancelarGeneracion(gen.current, () => ctl.current?.abort())
-    if (!r.cancelado) return
-    if (r.mensaje) setError(r.mensaje)
-    setPaso('ajustes')
-  }
-
   const aplicar = () => {
     if (!plan || !archivo) return
     const store = useMindMapStore.getState()
@@ -329,10 +321,7 @@ function Dialogo({ mapTitle, onHecho }: { mapTitle: string; onHecho: (m: string)
 
         {paso === 'generando' && (
           <div>
-            <ProgresoIA fases={['leyendo', 'estructura', 'ordenando']} fase={fase} lineas={lineas} segundos={segundos} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-              <button type="button" onClick={() => void cancelar()} style={boton(false)}>Cancelar</button>
-            </div>
+            <ProgresoIA herramienta="mapa" fases={['leyendo', 'estructura', 'ordenando']} fase={fase} lineas={lineas} segundos={segundos} />
           </div>
         )}
 

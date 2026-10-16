@@ -21,7 +21,7 @@ import type { MindMapEdge } from '@/components/mapas/proto/types/edge.types'
 import { PrecioIA } from '@/components/ia/PrecioIA'
 import { useCobroIA, useCreditosIA } from '@/hooks/useCreditosIA'
 import { precioIA } from '@/lib/ia/precio'
-import { anotarReserva, cancelarGeneracion, mensajeErrorIA, nuevaGeneracion, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
+import { anotarReserva, mensajeErrorIA, nuevaGeneracion, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
 
 // Rehacer, ampliar o resumir UNA rama con la IA (informe 76). Hace falta el documento del que salió
 // el mapa: se guarda SOLO en este navegador (IndexedDB, 30 días). Si no está, se pide volver a
@@ -210,14 +210,6 @@ function Dialogo({
     }
   }
 
-  // «Cancelar» con créditos: se avisa al servidor antes de cortar (y se dice qué se devuelve).
-  const cancelar = async () => {
-    const r = await cancelarGeneracion(gen.current, () => ctl.current?.abort())
-    if (!r.cancelado) return
-    if (r.mensaje) setError(r.mensaje)
-    setPaso('listo')
-  }
-
   const ink = t.isDark ? '#FAF7F4' : '#2C3E50'
   const borde = t.isDark ? t.border2 : '#2C3E50'
   const boton = (principal: boolean): React.CSSProperties => ({
@@ -336,10 +328,7 @@ function Dialogo({
 
         {paso === 'generando' && (
           <div>
-            <ProgresoIA fases={['leyendo', 'estructura', 'ordenando']} fase={fase} lineas={lineas} segundos={segundos} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-              <button type="button" onClick={() => void cancelar()} style={boton(false)}>Cancelar</button>
-            </div>
+            <ProgresoIA herramienta="mapa" fases={['leyendo', 'estructura', 'ordenando']} fase={fase} lineas={lineas} segundos={segundos} />
           </div>
         )}
       </div>

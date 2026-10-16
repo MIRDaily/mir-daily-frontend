@@ -1,0 +1,81 @@
+/* Diálogos «Crear con IA» (mapa, flashcards, resumen): color y textura de cada herramienta, escenas
+   animadas de las opciones y la pantalla de generación. Prototipo aprobado: LAB/ia-popups/index.html.
+   Todo va con el prefijo cia- para no chocar con nada. */
+
+[data-cia='mapa'] { --cia-acc: #E8A598; --cia-acc-d: #C97D6F; --cia-soft: #FCEFEC; --cia-ink: #8E4F43; --cia-boton: #E8A598; }
+[data-cia='flashcards'] { --cia-acc: #7FB3D5; --cia-acc-d: #3F7EA6; --cia-soft: #EAF3FA; --cia-ink: #2B5A7A; --cia-boton: #3F7EA6; }
+[data-cia='resumen'] { --cia-acc: #8BA888; --cia-acc-d: #5E7F5B; --cia-soft: #EEF4EC; --cia-ink: #3F5A3D; --cia-boton: #5E7F5B; }
+/* --cia-boton: el fondo del botón principal (texto blanco legible; en mapas, el coral de siempre). */
+
+/* Textura de la cabecera: puntos (mapa), pauta (flashcards) y cuaderno con margen (resumen). */
+.cia-tex { position: relative; overflow: hidden; background: var(--cia-soft); }
+.cia-tex::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .55; }
+[data-cia='mapa'] .cia-tex::before { background-image: radial-gradient(circle at 1px 1px, rgba(201, 125, 111, .35) 1.2px, transparent 1.4px); background-size: 14px 14px; }
+[data-cia='flashcards'] .cia-tex::before { background-image: repeating-linear-gradient(0deg, transparent 0 17px, rgba(63, 126, 166, .18) 17px 18px); }
+[data-cia='resumen'] .cia-tex::before {
+  background-image: linear-gradient(90deg, transparent 34px, rgba(176, 74, 94, .25) 34px 35px, transparent 35px),
+    repeating-linear-gradient(0deg, transparent 0 21px, rgba(94, 127, 91, .22) 21px 22px);
+}
+.cia-tex > * { position: relative; }
+
+/* ── Escenas de las opciones: sin .cia-play se ve el fotograma final; con .cia-play, la escena ── */
+.cia-escena svg { max-width: 100%; height: auto; display: block; }
+.cia-escena .a-pop, .cia-escena .a-card, .cia-escena .a-gap, .cia-escena .a-line, .cia-escena .a-scan { transform-box: fill-box; }
+.cia-escena .a-fadeout, .cia-escena .a-scan { opacity: 0; }
+.cia-escena.cia-play .a-draw { stroke-dasharray: 140; animation: cia-draw .55s ease-out var(--d, 0s) both; }
+.cia-escena.cia-play .a-pop { transform-origin: left center; animation: cia-pop .45s cubic-bezier(.3, 1.6, .5, 1) var(--d, 0s) both; }
+.cia-escena.cia-play .a-fade { animation: cia-fade .4s ease var(--d, 0s) both; }
+.cia-escena.cia-play .a-fadeout { animation: cia-fadeout .25s ease var(--d, 0s) both; }
+.cia-escena.cia-play .a-line { transform-origin: left center; animation: cia-line .4s ease-out var(--d, 0s) both; }
+.cia-escena.cia-play .a-card { animation: cia-card .5s cubic-bezier(.2, .9, .3, 1.25) var(--d, 0s) both; }
+.cia-escena.cia-play .a-gap { transform-origin: center; animation: cia-gap .55s cubic-bezier(.3, 1.6, .5, 1) var(--d, 0s) both; }
+.cia-escena.cia-play .a-scan { animation: cia-scan 1.9s ease-in-out var(--d, 0s) both; }
+@keyframes cia-draw { from { stroke-dashoffset: 140; } to { stroke-dashoffset: 0; } }
+@keyframes cia-pop { from { transform: scale(0); opacity: 0; } }
+@keyframes cia-fade { from { opacity: 0; } }
+@keyframes cia-fadeout { from { opacity: 1; } to { opacity: 0; } }
+@keyframes cia-line { from { transform: scaleX(0); } }
+@keyframes cia-card { from { transform: translate(60px, -46px) rotate(28deg); opacity: 0; } }
+@keyframes cia-gap { 0% { transform: scale(.2); opacity: 0; fill: #E2A52A; } 60% { fill: #F6D27A; } }
+@keyframes cia-scan { 0% { transform: translateY(0); opacity: 1; } 90% { transform: translateY(36px); opacity: 1; } 100% { transform: translateY(36px); opacity: 0; } }
+
+/* ── Interruptor (pista 40×24 con borde 2 → hueco 36×20; bola de 16 a 2 px; encendida, +16) ── */
+.cia-toggle { width: 40px; height: 24px; border-radius: 999px; background: #EDE6DE; border: 2px solid #2C3E50; position: relative; flex: none; transition: background .2s; }
+.cia-toggle::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; box-sizing: border-box; border-radius: 999px; background: #fff;
+  border: 2px solid #2C3E50; transition: transform .2s cubic-bezier(.3, 1.4, .5, 1);
+}
+.cia-toggle[data-on='true'] { background: var(--cia-acc); }
+.cia-toggle[data-on='true']::after { transform: translateX(16px); }
+
+/* ── Filas de detalle que se despliegan ── */
+.cia-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .25s ease; }
+.cia-panel[data-open='true'] { grid-template-rows: 1fr; }
+.cia-panel > div { overflow: hidden; min-height: 0; }
+
+/* ── Generación ── */
+.cia-edge { fill: none; stroke: var(--cia-acc-d); stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 260; stroke-dashoffset: 260; animation: cia-trazo .7s ease-out forwards; }
+@keyframes cia-trazo { to { stroke-dashoffset: 0; } }
+.cia-nodo { transform-box: fill-box; transform-origin: center; animation: cia-nodo .45s cubic-bezier(.3, 1.6, .5, 1) both; }
+@keyframes cia-nodo { from { transform: scale(0); opacity: 0; } }
+.cia-tarjeta { animation: cia-llega .6s cubic-bezier(.2, .9, .3, 1.2) both; }
+@keyframes cia-llega { from { transform: translate(240px, -40px) rotate(25deg); opacity: 0; } }
+.cia-palabra { animation: cia-fade .3s ease both; }
+.cia-hueco { display: inline-block; min-width: 3.2rem; border-radius: 999px; border: 2px dashed var(--cia-acc-d); background: var(--cia-soft); color: transparent; line-height: 1.35;
+  animation: cia-hueco .5s cubic-bezier(.3, 1.6, .5, 1) both; }
+@keyframes cia-hueco { 0% { transform: scale(.4); background: #E2A52A; } }
+.cia-paso-activo { animation: cia-latido 1.2s ease-in-out infinite; }
+@keyframes cia-latido { 0%, 100% { box-shadow: 0 0 0 0 rgba(44, 62, 80, .35); } 50% { box-shadow: 0 0 0 7px rgba(44, 62, 80, 0); } }
+.cia-rayas { background: repeating-linear-gradient(-45deg, var(--cia-acc) 0 10px, var(--cia-acc-d) 10px 20px); background-size: 28px 28px; animation: cia-rayas 1s linear infinite; }
+@keyframes cia-rayas { to { background-position: 28px 0; } }
+.cia-flota { animation: cia-flota 2.2s ease-in-out infinite; }
+@keyframes cia-flota { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.cia-icono-vivo { animation: cia-wob 2.4s ease-in-out infinite; }
+@keyframes cia-wob { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg) scale(1.08); } }
+.cia-consejo { transition: opacity .35s; }
+.cia-cuenta { animation: cia-salta .25s ease; }
+@keyframes cia-salta { 50% { transform: scale(1.35); } }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-cia] *, [data-cia] *::before, [data-cia] *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; }
+}

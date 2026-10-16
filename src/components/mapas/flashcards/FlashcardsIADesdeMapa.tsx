@@ -32,7 +32,7 @@ import type { FuenteGuardar } from '@/lib/flashcards/ia/tarjetas'
 import { PrecioIA } from '@/components/ia/PrecioIA'
 import { useCobroIA, useCreditosIA } from '@/hooks/useCreditosIA'
 import { caracteresRamaMapa, claveFlashcards, precioIA } from '@/lib/ia/precio'
-import { anotarReserva, cancelarGeneracion, mensajeErrorIA, nuevaGeneracion, nuevoCobro, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
+import { anotarReserva, mensajeErrorIA, nuevaGeneracion, nuevoCobro, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
 
 // «Flashcards con IA» desde una rama del mapa (clic derecho en un nodo): al servidor viaja la rama
 // en texto plano (con las filas de sus tablas) y, si este navegador guarda el documento del que
@@ -275,14 +275,6 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
     }
   }
 
-  // «Cancelar»: con créditos, se avisa al servidor antes de cortar (y se dice qué se devuelve).
-  const cancelar = async () => {
-    const r = await cancelarGeneracion(genRef.current, () => abortRef.current?.abort())
-    if (!r.cancelado || !montado.current) return
-    setError(r.mensaje ?? 'Generación cancelada: la IA ha dejado de trabajar y no cuenta en tus generaciones de hoy.')
-    setFase('ajustes')
-  }
-
   const alternarNivel = (n: FlashcardLevel) => setNiveles((ns) => (ns.includes(n) ? ns.filter((x) => x !== n) : [...ns, n].sort()))
 
   // «Más de este tema» desde el mapa: la rama del nodo de ese tema (dentro de la rama de la que
@@ -409,6 +401,7 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
               ) : fase === 'generando' ? (
                 <>
                   <ProgresoIA
+                    herramienta="flashcards"
                     fases={['leyendo', 'tarjetas', 'ordenando']}
                     fase={faseIA}
                     lineas={lineas}
@@ -416,16 +409,6 @@ function Dialogo({ nodeId, mapTitle }: { nodeId: string; mapTitle: string }) {
                     vacio="La IA está leyendo la rama…"
                     contador={(ls) => `${ls.filter((l) => l.d > 1).length} preguntas · se revisan al terminar`}
                   />
-                  <p className="mt-2 text-xs text-[#7D8A96]">
-                    No cierres esta ventana.{' '}
-                    <button
-                      type="button"
-                      onClick={() => void cancelar()}
-                      className="font-bold underline hover:text-[#B04A5E]"
-                    >
-                      Cancelar
-                    </button>
-                  </p>
                 </>
               ) : (
                 <>

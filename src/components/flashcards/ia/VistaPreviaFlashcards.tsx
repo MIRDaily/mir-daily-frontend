@@ -35,8 +35,8 @@ import {
 } from '@/lib/flashcards/ia/tarjetas'
 import type { MasGeneradas } from '@/lib/flashcards/ia/api'
 import { NivelBadge } from './NivelBadge'
-import SelectorCarpeta from '@/components/carpetas/SelectorCarpeta'
-import { useCarpeta } from '@/lib/carpetas/useCarpeta'
+import DestinoCarpeta from '@/components/carpetas/DestinoCarpeta'
+import { useCarpeta, type CarpetaElegida } from '@/lib/carpetas/useCarpeta'
 import { carpetaDeFila, moverACarpeta } from '@/lib/carpetas/api'
 import { baseParaPartes, carpetaDeParte, nombreCarpeta, textosDocumento } from '@/lib/carpetas/sugerir'
 
@@ -102,6 +102,7 @@ export function VistaPreviaFlashcards({
   onCerrar,
   mas,
   teclado = true,
+  carpetaInicial,
 }: {
   inicial: Borrador[]
   /** Nombre propuesto para un grupo nuevo. */
@@ -119,6 +120,8 @@ export function VistaPreviaFlashcards({
   mas?: MasConfig
   /** Con false (pestaña oculta del popup unificado) las teclas de la revisión no actúan. */
   teclado?: boolean
+  /** La carpeta decidida en los ajustes: llega ya marcada para los grupos nuevos. */
+  carpetaInicial?: CarpetaElegida | null
 }) {
   const [lista, setLista] = useState<Borrador[]>(inicial)
   const dudosasIniciales = inicial.filter((b) => b.ia?.dudoso).length
@@ -182,7 +185,7 @@ export function VistaPreviaFlashcards({
   // usuario elige otra. Un grupo que ya existe conserva la suya.
   const temasTarjetas = useMemo(() => lista.filter((b) => b.incluir).map((b) => b.tema), [lista])
   const temasGrupos = useMemo(() => [...new Set(inicial.map((b) => b.grupo).filter((g): g is string => !!g))], [inicial])
-  const carpeta = useCarpeta(useMemo(() => textosDocumento(nombre || nombreGrupo, temasTarjetas, temasGrupos), [nombre, nombreGrupo, temasTarjetas, temasGrupos]))
+  const carpeta = useCarpeta(useMemo(() => textosDocumento(nombre || nombreGrupo, temasTarjetas, temasGrupos), [nombre, nombreGrupo, temasTarjetas, temasGrupos]), true, carpetaInicial)
 
   // Lo que se ve, en orden (para moverse con ↑/↓): sin los temas plegados y, si toca, solo dudosas.
   const visibles = useMemo(
@@ -677,17 +680,19 @@ export function VistaPreviaFlashcards({
           {destino === 'porTema' && <p className="text-xs text-[#7D8A96]">Cada tema del documento, en su propio grupo con su nombre.</p>}
           {destino !== 'existente' && carpeta.arbol && (
             <div className="mt-2">
-              <SelectorCarpeta
-                arbol={carpeta.arbol}
-                valor={carpeta.valor}
-                sugerida={carpeta.sugerencia?.carpeta}
-                candidatas={carpeta.sugerencia?.candidatas}
-                onChange={carpeta.elegir}
-                disabled={!!guardando}
-              />
-              {destino === 'porTema' && carpeta.valor.subjectId !== null && (
-                <p className="mt-1 text-[0.7rem] text-[#7D8A96]">Cada grupo irá a su tema dentro de la asignatura (o a «General» si no encaja con ninguno).</p>
-              )}
+              <div data-cia="flashcards">
+                <DestinoCarpeta
+                  arbol={carpeta.arbol}
+                  valor={carpeta.valor}
+                  sugerida={carpeta.sugerida}
+                  candidatas={carpeta.sugerencia?.candidatas}
+                  onChange={carpeta.elegir}
+                  disabled={!!guardando}
+                  {...(destino === 'porTema' && carpeta.valor.subjectId !== null
+                    ? { nota: 'Cada grupo irá a su tema dentro de la asignatura (o a «Toda la asignatura» si no encaja con ninguno).' }
+                    : {})}
+                />
+              </div>
             </div>
           )}
           {destino === 'existente' && destinoDeck && carpeta.arbol && (

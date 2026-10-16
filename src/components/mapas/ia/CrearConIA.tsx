@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createMap } from '@/lib/mapas/api'
-import SelectorCarpeta from '@/components/carpetas/SelectorCarpeta'
+import DestinoCarpeta from '@/components/carpetas/DestinoCarpeta'
+import Image from 'next/image'
+import { CabeceraCrear, Detalles, FilaDetalle, LineaInterruptor, OpcionAnimada, Opciones, PieCrear, TituloBloque } from '@/components/ia/crear/Kit'
+import { EscenaMapa } from '@/components/ia/crear/Escenas'
 import { useCarpeta } from '@/lib/carpetas/useCarpeta'
 import { moverACarpeta } from '@/lib/carpetas/api'
 import { baseParaPartes, carpetaDeParte, textosDocumento } from '@/lib/carpetas/sugerir'
@@ -25,7 +28,7 @@ import { seleccionInicial, type PropsEmbebido, type ResultadoGenerar } from '@/l
 import { PrecioIA } from '@/components/ia/PrecioIA'
 import { useCobroIA, useCreditosIA } from '@/hooks/useCreditosIA'
 import { caracteresDocumento, caracteresLibro, claveMapa, precioIA } from '@/lib/ia/precio'
-import { anotarReserva, cancelarGeneracion, mensajeErrorIA, nuevaGeneracion, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
+import { anotarReserva, mensajeErrorIA, nuevaGeneracion, refrescarCreditos, type Generacion } from '@/lib/ia/creditos'
 import {
   NODOS_POR_RAIZ,
   ExtractError,
@@ -48,25 +51,6 @@ type Fase = 'elegir' | 'leyendo' | 'ajustes' | 'generando' | 'hecho'
 /** Cómo se guarda un documento largo generado tema a tema. */
 type GuardarComo = 'temas' | 'uno'
 type ProgresoTema = { titulo: string; estado: EstadoTema | 'espera' }
-
-const MODOS: { id: ModoIA; titulo: string; descripcion: string; ejemplo: string[] }[] = [
-  {
-    id: 'esquema',
-    titulo: 'Esquemático',
-    descripcion: 'Mapa compacto por bloques: cada enfermedad con sus datos clave.',
-    ejemplo: ['Hipotiroidismo primario', 'Etiología: autoinmune, antiperoxidasa', 'Diagnóstico: TSH alta con T4L baja'],
-  },
-  {
-    id: 'detalle',
-    titulo: 'Con más contenido',
-    descripcion: 'Los mismos bloques, con más datos por enfermedad: cifras, criterios, fármacos.',
-    ejemplo: [
-      'Hipotiroidismo primario',
-      'Marcador: antiperoxidasa positivos en más del 90%',
-      'Tratamiento: levotiroxina 1,6 µg/kg/día en ayunas',
-    ],
-  },
-]
 
 const fmt = (n: number) => n.toLocaleString('es-ES')
 
@@ -108,6 +92,8 @@ export default function CrearConIA({
   // Qué parte del documento se usa: índices de sección marcados (al servidor solo viaja eso).
   const [sel, setSel] = useState<Set<number>>(() => (compartido ? seleccionInicial(compartido.extraido, estado.limites).sel : new Set()))
   const [selectorAbierto, setSelectorAbierto] = useState(() => (compartido ? seleccionInicial(compartido.extraido, estado.limites).abierto : false))
+  // «Detalles»: qué fila está abierta (la de «Qué parte usar» va con selectorAbierto).
+  const [filaAbierta, setFilaAbierta] = useState<string | null>(null)
   // Último título puesto solo (el del archivo o el del tema marcado): si el usuario no lo ha
   // cambiado, marcar un único tema le pone su nombre al mapa.
   const tituloAuto = useRef(compartido?.extraido.titulo ?? '')
@@ -432,16 +418,6 @@ export default function CrearConIA({
     }
   }
 
-  // «Cancelar»: se avisa al servidor antes de cortar (devuelve los créditos según las reglas).
-  const cancelar = async () => {
-    const r = await cancelarGeneracion(genRef.current, () => abortRef.current?.abort())
-    if (!r.cancelado || !montado.current) return
-    // Sin créditos: el servidor corta la llamada al modelo y la apunta como fallida (no cuenta en
-    // los mapas del día; lo gastado sí cuenta en el tope global de gasto).
-    setError(r.mensaje ?? 'Generación cancelada: la IA ha dejado de trabajar y no cuenta en tus mapas de hoy.')
-    setFase('ajustes')
-  }
-
   // Como pestaña del popup unificado: el popup lanza la generación (en cola) y pinta el estado.
   useImperativeHandle(controlRef, () => ({ generar }))
   const falta = !extraido
@@ -493,488 +469,456 @@ export default function CrearConIA({
     return <CrearFlashcardsIA estado={fcEstado} inicial={{ archivo, extraido, titulo, temasLibro, sel }} onClose={onClose} />
   }
 
+  // Cuántos nodos saldrían con cada estilo (para el dato de cada opción).
+  const nodosCon = (m: ModoIA) =>
+    envioLibro ? nodosLibro(charsPorTema, NODOS_POR_RAIZ[m]) : Math.max(5, Math.round(NODOS_POR_RAIZ[m] * Math.sqrt(caracteres)))
+  const datosDocumento = extraido
+    ? `${fmt(extraido.paginas)} ${extraido.unidad === 'diapositiva' ? 'diapositiva' : 'página'}${extraido.paginas === 1 ? '' : 's'} · ${fmt(extraido.caracteres)} caracteres${
+        extraido.tablas ? ` · ${extraido.tablas} ${extraido.tablas === 1 ? 'tabla' : 'tablas'}` : ''
+      }`
+    : ''
+  const cambiarDocumento = () => {
+    setExtraido(null)
+    setArchivo(null)
+    setError(null)
+    setFase('elegir')
+  }
+  const alternarFila = (id: string) => {
+    setSelectorAbierto(false)
+    setFilaAbierta((f) => (f === id ? null : id))
+  }
+
   const cuerpo = (
     <>
       {!embebido && (
-        <header className="flex items-start justify-between gap-4 px-6 pb-3 pt-6">
-          <div>
-            <h2 id="crear-ia-titulo" className="flex items-center gap-2 text-xl font-extrabold text-[#2C3E50]">
-              <span className="material-symbols-outlined text-[24px] text-[#E8A598]">auto_awesome</span>
-              Crear mapa con IA
-            </h2>
-            <p className="mt-1 text-sm text-[#7D8A96]">Convierte un PDF, Word o PowerPoint en un mapa mental.</p>
-          </div>
-          <button
-            type="button"
-            onClick={cerrar}
-            disabled={fase === 'generando'}
-            aria-label="Cerrar"
-            className="rounded-full p-1.5 text-[#7D8A96] transition-colors hover:bg-white hover:text-[#2C3E50] disabled:opacity-40"
-          >
-            <span className="material-symbols-outlined text-[22px]">close</span>
-          </button>
-        </header>
+        <CabeceraCrear
+          herramienta="mapa"
+          idTitulo="crear-ia-titulo"
+          titulo={fase === 'generando' ? (porTemas ? 'Creando tus mapas…' : 'Creando tu mapa…') : fase === 'hecho' ? '¡Listo!' : 'Nuevo mapa mental'}
+          subtitulo={fase === 'generando' || fase === 'hecho' ? (archivo?.name ?? '') : 'La IA lo organiza por bloques: tú eliges cuánto detalle.'}
+          documento={fase === 'ajustes' && extraido && archivo ? { nombre: archivo.name, datos: datosDocumento } : null}
+          {...(fase === 'ajustes' ? { onCambiarDocumento: cambiarDocumento } : {})}
+          {...(fase !== 'generando' ? { onCerrar: cerrar } : {})}
+        />
       )}
 
-        <div className="overflow-y-auto px-6 pb-6">
-          {error && (
-            <div role="alert" className="mb-4 rounded-2xl border border-[#D4667A]/30 bg-[#FAEAED] px-4 py-3 text-sm font-medium text-[#B04A5E]">
-              {error}
-            </div>
-          )}
+      <div className="overflow-y-auto px-5 pb-5 pt-4">
+        {error && (
+          <div role="alert" className="mb-4 rounded-2xl border border-[#D4667A]/30 bg-[#FAEAED] px-4 py-3 text-sm font-medium text-[#B04A5E]">
+            {error}
+          </div>
+        )}
 
-          {(fase === 'elegir' || fase === 'leyendo') && (
-            <>
-              <input
-                ref={inputRef}
-                type="file"
-                accept={FORMATOS_ACEPTADOS}
-                className="hidden"
-                onChange={(e) => {
-                  void leer(e.target.files?.[0])
-                  e.target.value = ''
-                }}
-              />
-              <button
-                type="button"
-                disabled={fase === 'leyendo'}
-                onClick={() => inputRef.current?.click()}
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  setArrastrando(true)
-                }}
-                onDragLeave={() => setArrastrando(false)}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  setArrastrando(false)
-                  void leer(e.dataTransfer.files?.[0])
-                }}
-                className={`flex w-full flex-col items-center gap-2 rounded-3xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
-                  arrastrando ? 'border-[#E8A598] bg-[#FCEFEC]' : 'border-[#7D8A96]/30 bg-white hover:border-[#E8A598]'
-                } disabled:cursor-wait`}
-              >
-                {fase === 'leyendo' ? (
-                  <>
-                    <span className="material-symbols-outlined animate-pulse text-[40px] text-[#E8A598]">description</span>
-                    <span className="font-bold text-[#2C3E50]">Leyendo {archivo?.name}…</span>
-                    {progreso && progreso.total > 1 && (
-                      <span className="text-sm text-[#7D8A96]">
-                        Página {progreso.hecho} de {progreso.total}
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-[40px] text-[#E8A598]">upload_file</span>
-                    <span className="font-bold text-[#2C3E50]">Elige un archivo o suéltalo aquí</span>
-                    <span className="text-sm text-[#7D8A96]">PDF con texto, Word (.docx) o PowerPoint (.pptx)</span>
-                  </>
-                )}
-              </button>
-              <ul className="mt-4 space-y-1 text-xs text-[#7D8A96]">
-                <li>
-                  Máximo {fmt(maxChars)} caracteres de texto (unas {Math.round(maxChars / 3000)} páginas de apuntes) y {maxPaginas} páginas.
-                </li>
-                {cupo && <li>Hoy te quedan {restantes} de {cupo.maxGeneracionesDia} mapas con IA.</li>}
-              </ul>
-            </>
-          )}
-
-          {(fase === 'ajustes' || fase === 'generando') && extraido && (
-            <div className={fase === 'generando' ? 'hidden' : ''}>
-              <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3">
-                <span className="material-symbols-outlined text-[28px] text-[#E8A598]">description</span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-[#2C3E50]">{archivo?.name}</p>
-                  <p className="text-xs text-[#7D8A96]">
-                    {fmt(extraido.paginas)} {extraido.unidad ?? 'página'}
-                    {extraido.paginas === 1 ? '' : 's'} · {fmt(extraido.caracteres)} caracteres
-                    {extraido.tablas ? ` · ${extraido.tablas} ${extraido.tablas === 1 ? 'tabla' : 'tablas'}` : ''}
-                  </p>
-                </div>
-                {!embebido && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExtraido(null)
-                      setArchivo(null)
-                      setError(null)
-                      setFase('elegir')
-                    }}
-                    className="text-xs font-bold text-[#7D8A96] hover:text-[#E8A598]"
-                  >
-                    Cambiar
-                  </button>
-                )}
-              </div>
-
-              {extraido.avisos.map((a) => (
-                <p key={a} className="mt-2 text-xs font-medium text-[#B07A1E]">
-                  {a}
-                </p>
-              ))}
-              {documentoGrande && !porTemas && (
-                <p className="mt-3 rounded-xl bg-[#FBF3E1] px-3 py-2 text-[0.8rem] font-semibold text-[#8A6418]">
-                  El documento tiene {fmt(extraido.caracteres)} caracteres y en un mapa caben {fmt(maxChars)}
-                  {extraido.paginas > maxPaginas ? ` (y ${maxPaginas} páginas)` : ''}.{' '}
-                  {ofrecerLibro ? 'Hazlo tema a tema o elige qué parte usar.' : 'Elige qué parte usar.'}
-                </p>
-              )}
-
-              {ofrecerLibro && (
-                <div
-                  className="mt-3 flex items-center gap-3 rounded-2xl bg-white px-4 py-3"
-                  style={{ border: `2px solid ${porTemas ? '#E8A598' : INK}` }}
-                >
-                  <span aria-hidden className="inline-block text-[#E8A598]">
-                    <span className="material-symbols-outlined text-[1.4rem] leading-none">library_books</span>
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-extrabold text-[#2C3E50]">Tema a tema</span>
-                    <span className="block text-xs text-[#7D8A96]">
-                      {porTemas
-                        ? `${temasLibro?.length ?? 0} temas encontrados. Cada uno se genera aparte, como si fuera un documento suelto.`
-                        : 'Primero la IA saca el índice (unos segundos) y luego hace cada tema por separado.'}
+        {(fase === 'elegir' || fase === 'leyendo') && (
+          <>
+            <input
+              ref={inputRef}
+              type="file"
+              accept={FORMATOS_ACEPTADOS}
+              className="hidden"
+              onChange={(e) => {
+                void leer(e.target.files?.[0])
+                e.target.value = ''
+              }}
+            />
+            <button
+              type="button"
+              disabled={fase === 'leyendo'}
+              onClick={() => inputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault()
+                setArrastrando(true)
+              }}
+              onDragLeave={() => setArrastrando(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setArrastrando(false)
+                void leer(e.dataTransfer.files?.[0])
+              }}
+              className="flex w-full flex-col items-center gap-2 rounded-3xl border-2 border-dashed px-6 py-12 text-center transition-colors disabled:cursor-wait"
+              style={{ borderColor: arrastrando ? 'var(--cia-acc-d)' : 'rgba(125,138,150,.3)', background: arrastrando ? 'var(--cia-soft)' : '#fff' }}
+            >
+              {fase === 'leyendo' ? (
+                <>
+                  <span className="material-symbols-outlined animate-pulse text-[40px]" style={{ color: 'var(--cia-acc-d)' }}>description</span>
+                  <span className="font-bold text-[#2C3E50]">Leyendo {archivo?.name}…</span>
+                  {progreso && progreso.total > 1 && (
+                    <span className="text-sm text-[#7D8A96]">
+                      Página {progreso.hecho} de {progreso.total}
                     </span>
-                  </span>
-                  {porTemas ? (
-                    <button type="button" onClick={desactivarTemas} className="text-xs font-bold text-[#7D8A96] hover:text-[#B04A5E]">
-                      Quitar
-                    </button>
-                  ) : (
+                  )}
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-[40px]" style={{ color: 'var(--cia-acc-d)' }}>upload_file</span>
+                  <span className="font-bold text-[#2C3E50]">Elige un archivo o suéltalo aquí</span>
+                  <span className="text-sm text-[#7D8A96]">PDF con texto, Word (.docx) o PowerPoint (.pptx)</span>
+                </>
+              )}
+            </button>
+            <ul className="mt-4 space-y-1 text-xs text-[#7D8A96]">
+              <li>
+                Máximo {fmt(maxChars)} caracteres de texto (unas {Math.round(maxChars / 3000)} páginas de apuntes) y {maxPaginas} páginas.
+              </li>
+              {cupo && <li>Hoy te quedan {restantes} de {cupo.maxGeneracionesDia} mapas con IA.</li>}
+            </ul>
+          </>
+        )}
+
+        {(fase === 'ajustes' || fase === 'generando') && extraido && (
+          <div className={fase === 'generando' ? 'hidden' : 'flex flex-col gap-[18px]'}>
+            {embebido && (
+              <p className="text-[0.78rem] text-[#7D8A96]">{datosDocumento}</p>
+            )}
+            {extraido.avisos.map((a) => (
+              <p key={a} className="-mb-2 text-xs font-medium text-[#B07A1E]">
+                {a}
+              </p>
+            ))}
+
+            {/* Documento largo: una pregunta con dos respuestas. Tema a tema ya activo: su estado. */}
+            {ofrecerLibro && !porTemas && documentoGrande && (
+              <div className="flex items-start gap-2.5 rounded-2xl bg-[#FFF6DC] px-3.5 py-3" style={{ border: `2px solid ${INK}` }}>
+                <span className="material-symbols-outlined text-[22px] text-[#B07A1E]" aria-hidden>auto_stories</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[0.82rem] font-semibold text-[#2C3E50]">
+                    Es largo: {fmt(extraido.caracteres)} caracteres y en un mapa caben {fmt(maxChars)}. ¿Cómo lo hacemos?
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => void activarTemas()}
                       disabled={cargandoIndice}
-                      className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-extrabold text-white disabled:opacity-60"
-                      style={{ background: '#E8A598', border: `2px solid ${INK}`, boxShadow: `2px 2px 0 0 ${INK}` }}
+                      className="rounded-full px-3 py-1 text-[0.75rem] font-bold text-white disabled:opacity-60"
+                      style={{ background: INK, border: `2px solid ${INK}` }}
                     >
-                      {cargandoIndice ? 'Sacando el índice…' : 'Sacar el índice'}
+                      {cargandoIndice ? 'Sacando el índice…' : 'Tema a tema'}
                     </button>
-                  )}
-                </div>
-              )}
-
-              <SelectorParte
-                secciones={extraido.secciones}
-                indice={indice}
-                sel={sel}
-                onChange={elegir}
-                unidad={extraido.unidad ?? 'página'}
-                abierto={selectorAbierto}
-                onAbrir={setSelectorAbierto}
-                resumen={resumenParte}
-              />
-              {excedeTexto && (
-                <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
-                  Lo marcado tiene {fmt(caracteres)} caracteres: el máximo {porTemas ? 'tema a tema' : 'por mapa'} es {fmt(maxCharsUsado)}. Desmarca alguna parte.
-                </p>
-              )}
-              {excedePaginas && (
-                <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
-                  Lo marcado tiene más de {maxPaginasUsado} páginas. Desmarca alguna parte.
-                </p>
-              )}
-              {excedeTemas && (
-                <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
-                  Como mucho {estado.limites.maxTemas ?? 40} temas de una vez. Desmarca alguno.
-                </p>
-              )}
-              {porTemas && (
-                <div className="mt-4" role="radiogroup" aria-label="Cómo guardarlo">
-                  <p className="text-xs font-bold uppercase tracking-wide text-[#7D8A96]">Cómo guardarlo</p>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    {(
-                      [
-                        ['temas', 'Un mapa por tema', `${fmt(envioLibro?.temas.length ?? 0)} mapas en tu lista, cada uno con su título.`],
-                        ['uno', 'Un mapa grande', 'Todos los temas en un solo mapa, cada tema plegado: se abre el que vayas a estudiar.'],
-                      ] as const
-                    ).map(([id, nombre, desc]) => (
-                      <button
-                        key={id}
-                        type="button"
-                        role="radio"
-                        aria-checked={guardarComo === id}
-                        onClick={() => setGuardarComo(id)}
-                        className="rounded-2xl bg-white p-3 text-left"
-                        style={{ border: `2px solid ${guardarComo === id ? '#E8A598' : '#EDE6DE'}` }}
-                      >
-                        <span className="block text-sm font-extrabold text-[#2C3E50]">{nombre}</span>
-                        <span className="mt-0.5 block text-xs text-[#7D8A96]">{desc}</span>
-                      </button>
-                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilaAbierta(null)
+                        setSelectorAbierto(true)
+                      }}
+                      className="rounded-full bg-white px-3 py-1 text-[0.75rem] font-bold text-[#2C3E50]"
+                      style={{ border: `2px solid ${INK}` }}
+                    >
+                      Solo una parte
+                    </button>
                   </div>
                 </div>
-              )}
-              {!excedeTexto && excedeCupoChars && (
-                <p role="alert" className="mt-2 text-sm font-bold text-[#B04A5E]">
-                  Hoy te quedan {fmt(charsRestantesHoy)} caracteres de IA y lo marcado tiene {fmt(caracteres)}. Marca menos o vuelve mañana.
-                </p>
-              )}
-
-              <label className="mt-5 block text-xs font-bold uppercase tracking-wide text-[#7D8A96]" htmlFor="ia-titulo">
-                {porTemas ? (guardarComo === 'uno' ? 'Título del mapa' : 'Nombre del documento') : 'Título del mapa'}
-              </label>
-              <input
-                id="ia-titulo"
-                value={titulo}
-                onChange={(e) => setTitulo(e.target.value.slice(0, 120))}
-                className="mt-1 w-full rounded-2xl border border-[#7D8A96]/25 bg-white px-4 py-2.5 text-sm font-semibold text-[#2C3E50] outline-none focus:border-[#E8A598]"
-              />
-
-              <p className="mt-5 text-xs font-bold uppercase tracking-wide text-[#7D8A96]">Estilo de los nodos</p>
-              <div className="mt-2 grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Estilo de los nodos">
-                {MODOS.map((m) => {
-                  const activo = modo === m.id
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={activo}
-                      onClick={() => setModo(m.id)}
-                      className={`rounded-2xl border-2 bg-white p-3 text-left transition-colors ${
-                        activo ? 'border-[#E8A598]' : 'border-transparent hover:border-[#7D8A96]/30'
-                      }`}
-                    >
-                      <span className="flex items-center justify-between">
-                        <span className="text-sm font-extrabold text-[#2C3E50]">{m.titulo}</span>
-                        <span
-                          className={`size-4 rounded-full border-2 ${activo ? 'border-[#E8A598] bg-[#E8A598]' : 'border-[#7D8A96]/40'}`}
-                        />
-                      </span>
-                      <span className="mt-0.5 block text-xs text-[#7D8A96]">{m.descripcion}</span>
-                      <span className="mt-2 flex flex-col gap-1">
-                        {m.ejemplo.map((t) => (
-                          <span key={t} className="rounded-lg bg-[#F1F3F5] px-2 py-1 text-[11px] font-medium text-[#2C3E50]">
-                            {t}
-                          </span>
-                        ))}
-                      </span>
-                    </button>
-                  )
-                })}
               </div>
+            )}
+            {ofrecerLibro && !porTemas && !documentoGrande && (
+              <button
+                type="button"
+                onClick={() => void activarTemas()}
+                disabled={cargandoIndice}
+                className="-mb-2 flex items-center gap-2 self-start text-[0.78rem] font-bold disabled:opacity-60"
+                style={{ color: 'var(--cia-acc-d)' }}
+              >
+                <span className="material-symbols-outlined text-[18px]" aria-hidden>library_books</span>
+                {cargandoIndice ? 'Sacando el índice…' : '¿Trae varios temas? Hacerlo tema a tema'}
+              </button>
+            )}
+            {porTemas && (
+              <div className="flex items-center gap-2.5 rounded-2xl bg-white px-3.5 py-2.5" style={{ border: '2px solid var(--cia-acc)' }}>
+                <span className="material-symbols-outlined text-[20px]" style={{ color: 'var(--cia-acc-d)' }} aria-hidden>library_books</span>
+                <span className="min-w-0 flex-1 text-[0.8rem] font-bold text-[#2C3E50]">
+                  Tema a tema · {fmt(temasLibro?.length ?? 0)} temas encontrados
+                </span>
+                <button type="button" onClick={desactivarTemas} className="text-xs font-bold text-[#7D8A96] hover:text-[#B04A5E]">
+                  Quitar
+                </button>
+              </div>
+            )}
 
+            <div>
+              <TituloBloque n={1} nota={nadaElegido ? undefined : `≈${fmt(nodosAprox)} nodos · ${segMin}–${segMax} s`}>
+                ¿Cuánto detalle?
+              </TituloBloque>
+              <Opciones etiqueta="Estilo de los nodos">
+                <OpcionAnimada
+                  activa={modo === 'esquema'}
+                  onElegir={() => setModo('esquema')}
+                  titulo="Esquemático"
+                  descripcion="Un dato clave por rama. Para repasar rápido."
+                  dato={`≈${fmt(nodosCon('esquema'))} nodos`}
+                  escena={<EscenaMapa rico={false} />}
+                />
+                <OpcionAnimada
+                  activa={modo === 'detalle'}
+                  onElegir={() => setModo('detalle')}
+                  titulo="Con más contenido"
+                  descripcion="Cifras, criterios y fármacos en cada rama."
+                  dato={`≈${fmt(nodosCon('detalle'))} nodos`}
+                  escena={<EscenaMapa rico />}
+                />
+              </Opciones>
               {estado.opciones?.tablas && (
-                <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl bg-white px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={tablas}
-                    onChange={(e) => setTablas(e.target.checked)}
-                    style={{ accentColor: '#E8A598', width: 16, height: 16, marginTop: 2, flexShrink: 0 }}
-                  />
-                  <span>
-                    <span className="block text-sm font-extrabold text-[#2C3E50]">Incluir tablas</span>
-                    <span className="mt-0.5 block text-xs text-[#7D8A96]">
-                      La IA prepara, con los datos del documento, tablas que comparan enfermedades (diagnóstico
-                      diferencial), criterios con puntos y clasificaciones. Las tablas del documento se leen con sus
-                      filas y columnas; lo que solo esté en una imagen no se lee.
-                    </span>
-                  </span>
-                </label>
-              )}
-
-              {nadaElegido ? (
-                <p className="mt-4 text-xs font-bold text-[#B04A5E]">Marca al menos una parte del documento.</p>
-              ) : (
-                <p className="mt-4 text-xs text-[#7D8A96]" aria-live="polite">
-                  {fmt(caracteres)} caracteres{envioLibro ? ` en ${fmt(envioLibro.temas.length)} temas` : ''}: saldrán unos {fmt(nodosAprox)} nodos y tardará {segMin}–{segMax} segundos
-                  {cupo ? (
-                    <>
-                      {conTablas ? ' (con tablas, el doble de gasto)' : ''}. Usará {fmt(caracteres)} de los {fmt(charsRestantesHoy)}{' '}
-                      caracteres que te quedan hoy; mapas: te quedan {restantes} de {cupo.maxGeneracionesDia}.
-                    </>
-                  ) : (
-                    '.'
-                  )}
-                </p>
-              )}
-              {carpeta.arbol && (
-                <div className="mt-3">
-                  <SelectorCarpeta
-                    arbol={carpeta.arbol}
-                    valor={carpeta.valor}
-                    sugerida={carpeta.sugerencia?.carpeta}
-                    candidatas={carpeta.sugerencia?.candidatas}
-                    onChange={carpeta.elegir}
-                    disabled={fase === 'generando'}
-                  />
-                  {porTemas && guardarComo !== 'uno' && carpeta.valor.subjectId !== null && carpeta.valor.topicId === null && (
-                    <p className="mt-1 text-[0.7rem] text-[#7D8A96]">Cada tema irá a su carpeta dentro de la asignatura (o a «General» si no encaja con ninguno).</p>
-                  )}
-                </div>
-              )}
-              {!nadaElegido && (
-                <PrecioIA
-                  precio={precio}
-                  className="mt-2"
-                  alternativas={[
-                    porTemas ? 'Desmarca algún tema: el precio baja al momento.' : 'Marca menos partes del documento: el precio baja al momento.',
-                    ...(conTablas ? ['Quita «Incluir tablas» (casi duplica el precio).'] : []),
-                    ...(modo === 'detalle' ? ['Pasa a «Esquemático».'] : []),
-                  ]}
+                <LineaInterruptor
+                  activo={tablas}
+                  onCambiar={setTablas}
+                  etiqueta="Añadir tablas comparativas"
+                  info={`La IA prepara tablas de diagnóstico diferencial, criterios con puntos y clasificaciones.${
+                    extraido.tablas ? ` Las ${extraido.tablas} tablas de tu documento se leen igual, actives esto o no.` : ''
+                  }`}
                 />
               )}
-              {sinCupo && (
-                <p role="alert" className="mt-1 text-sm font-bold text-[#B04A5E]">
-                  Has llegado al máximo de mapas con IA de hoy. Vuelve mañana.
-                </p>
-              )}
             </div>
-          )}
 
-          {fase === 'generando' && (
-            <>
-              <ProgresoIA
-                fases={conTablas && !porTemas ? ['leyendo', 'estructura', 'tablas', 'ordenando'] : ['leyendo', 'estructura', 'ordenando']}
-                fase={faseIA}
-                lineas={lineas}
-                segundos={segundos}
-                {...(porTemas
-                  ? {
-                      arbol: arbolLibro(lineas, progresoTemas.map((t) => t.titulo)),
-                      temas: progresoTemas,
-                      detalle: progresoTemas.length
-                        ? `Temas: ${temasListos} de ${progresoTemas.length} listos${temasFallidos ? ` · ${temasFallidos} no salieron` : ''}`
-                        : undefined,
-                    }
-                  : {})}
-              />
-              <p className="mt-2 text-xs text-[#7D8A96]">
-                No cierres esta ventana.{' '}
-                {porTemas
-                  ? 'Al terminar se guardan los mapas, ya revisados y ordenados.'
-                  : 'Al terminar se abrirá el editor con el mapa ya revisado y ordenado.'}{' '}
-                <button
-                  type="button"
-                  onClick={() => void cancelar()}
-                  className="pointer-events-auto font-bold text-[#7D8A96] underline hover:text-[#B04A5E]"
+            {carpeta.arbol && (
+              <div>
+                <TituloBloque n={2}>Dónde se guarda</TituloBloque>
+                <DestinoCarpeta
+                  arbol={carpeta.arbol}
+                  valor={carpeta.valor}
+                  sugerida={carpeta.sugerencia?.carpeta}
+                  candidatas={carpeta.sugerencia?.candidatas}
+                  onChange={carpeta.elegir}
+                  disabled={fase === 'generando'}
+                  {...(porTemas && guardarComo !== 'uno' && carpeta.valor.subjectId !== null && carpeta.valor.topicId === null
+                    ? { nota: 'Cada tema irá a su carpeta dentro de la asignatura (o a «Toda la asignatura» si no encaja con ninguno).' }
+                    : {})}
+                />
+              </div>
+            )}
+
+            <div>
+              <TituloBloque n={carpeta.arbol ? 3 : 2} nota="Toca para cambiar">Detalles</TituloBloque>
+              <Detalles>
+                <FilaDetalle
+                  primera
+                  icono="checklist"
+                  etiqueta="Qué parte usar"
+                  valor={resumenParte}
+                  abierta={selectorAbierto}
+                  onAlternar={() => {
+                    setFilaAbierta(null)
+                    setSelectorAbierto(!selectorAbierto)
+                  }}
                 >
-                  Cancelar
-                </button>
-              </p>
-            </>
-          )}
+                  <SelectorParte
+                    soloContenido
+                    secciones={extraido.secciones}
+                    indice={indice}
+                    sel={sel}
+                    onChange={elegir}
+                    unidad={extraido.unidad ?? 'página'}
+                    abierto={selectorAbierto}
+                    onAbrir={setSelectorAbierto}
+                    resumen={resumenParte}
+                  />
+                </FilaDetalle>
+                {porTemas && (
+                  <FilaDetalle
+                    icono="library_books"
+                    etiqueta="Cómo guardarlo"
+                    valor={guardarComo === 'uno' ? 'Un mapa grande, con cada tema plegado' : `Un mapa por tema (${fmt(envioLibro?.temas.length ?? 0)})`}
+                    abierta={filaAbierta === 'guardar'}
+                    onAlternar={() => alternarFila('guardar')}
+                  >
+                    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Cómo guardarlo">
+                      {(
+                        [
+                          ['temas', 'Un mapa por tema'],
+                          ['uno', 'Un mapa grande'],
+                        ] as const
+                      ).map(([id, nombre]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          role="radio"
+                          aria-checked={guardarComo === id}
+                          onClick={() => setGuardarComo(id)}
+                          className="rounded-full px-3 py-1 text-[0.75rem] font-bold"
+                          style={{
+                            border: `2px solid ${guardarComo === id ? INK : '#EDE6DE'}`,
+                            background: guardarComo === id ? 'var(--cia-soft)' : '#fff',
+                            color: guardarComo === id ? INK : '#7D8A96',
+                          }}
+                        >
+                          {nombre}
+                        </button>
+                      ))}
+                    </div>
+                  </FilaDetalle>
+                )}
+                <FilaDetalle
+                  icono="edit"
+                  etiqueta={porTemas && guardarComo !== 'uno' ? 'Nombre del documento' : 'Título del mapa'}
+                  valor={titulo.trim() || 'Sin título'}
+                  abierta={filaAbierta === 'titulo'}
+                  onAlternar={() => alternarFila('titulo')}
+                >
+                  <input
+                    id="ia-titulo"
+                    aria-label="Título"
+                    value={titulo}
+                    onChange={(e) => setTitulo(e.target.value.slice(0, 120))}
+                    className="w-full rounded-xl border-2 border-[#EDE6DE] bg-[#FAF7F4] px-3 py-2 text-[0.82rem] font-semibold text-[#2C3E50] outline-none focus:border-[var(--cia-acc)]"
+                  />
+                </FilaDetalle>
+              </Detalles>
+            </div>
 
-          {fase === 'hecho' && (
-            <div className="rounded-2xl bg-white px-4 py-4" style={{ border: `2px solid ${INK}`, boxShadow: `4px 4px 0 0 ${INK}` }}>
-              <p className="flex items-center gap-2 text-base font-extrabold text-[#2C3E50]">
-                <span aria-hidden className="inline-block text-[#8BA888]">
-                  <span className="material-symbols-outlined text-[1.4rem] leading-none">task_alt</span>
-                </span>
+            {nadaElegido && <p className="-mt-2 text-xs font-bold text-[#B04A5E]">Marca al menos una parte del documento.</p>}
+            {excedeTexto && (
+              <p role="alert" className="-mt-2 text-sm font-bold text-[#B04A5E]">
+                Lo marcado tiene {fmt(caracteres)} caracteres: el máximo {porTemas ? 'tema a tema' : 'por mapa'} es {fmt(maxCharsUsado)}. Desmarca alguna parte.
+              </p>
+            )}
+            {excedePaginas && (
+              <p role="alert" className="-mt-2 text-sm font-bold text-[#B04A5E]">
+                Lo marcado tiene más de {maxPaginasUsado} páginas. Desmarca alguna parte.
+              </p>
+            )}
+            {excedeTemas && (
+              <p role="alert" className="-mt-2 text-sm font-bold text-[#B04A5E]">
+                Como mucho {estado.limites.maxTemas ?? 40} temas de una vez. Desmarca alguno.
+              </p>
+            )}
+            {!excedeTexto && excedeCupoChars && (
+              <p role="alert" className="-mt-2 text-sm font-bold text-[#B04A5E]">
+                Hoy te quedan {fmt(charsRestantesHoy)} caracteres de IA y lo marcado tiene {fmt(caracteres)}. Marca menos o vuelve mañana.
+              </p>
+            )}
+            {sinCupo && (
+              <p role="alert" className="-mt-2 text-sm font-bold text-[#B04A5E]">
+                Has llegado al máximo de mapas con IA de hoy. Vuelve mañana.
+              </p>
+            )}
+            {cupo && !nadaElegido && (
+              <p className="-mt-2 text-xs text-[#7D8A96]" aria-live="polite">
+                Usará {fmt(caracteres)} de los {fmt(charsRestantesHoy)} caracteres que te quedan hoy; mapas: te quedan {restantes} de {cupo.maxGeneracionesDia}.
+              </p>
+            )}
+            {embebido && !nadaElegido && <PrecioIA precio={precio} />}
+          </div>
+        )}
+
+        {fase === 'generando' && (
+          <ProgresoIA
+            herramienta="mapa"
+            estimado={segMax}
+            fases={conTablas && !porTemas ? ['leyendo', 'estructura', 'tablas', 'ordenando'] : ['leyendo', 'estructura', 'ordenando']}
+            fase={faseIA}
+            lineas={lineas}
+            segundos={segundos}
+            {...(porTemas
+              ? {
+                  arbol: arbolLibro(lineas, progresoTemas.map((t) => t.titulo)),
+                  temas: progresoTemas,
+                  detalle: progresoTemas.length
+                    ? `Temas: ${temasListos} de ${progresoTemas.length} listos${temasFallidos ? ` · ${temasFallidos} no salieron` : ''}`
+                    : undefined,
+                }
+              : {})}
+          />
+        )}
+
+        {fase === 'hecho' && (
+          <div className="rounded-2xl bg-white px-4 pb-4 pt-3" style={{ border: `2px solid ${INK}`, boxShadow: `4px 4px 0 0 ${INK}` }}>
+            <div className="flex items-center gap-3">
+              <Image src="/img/mascota/celebracion.png" alt="" width={64} height={64} className="shrink-0 object-contain" />
+              <p className="text-base font-extrabold text-[#2C3E50]">
                 {creados.length === 1 && porTemas && guardarComo === 'uno'
                   ? `Mapa creado con ${fmt(progresoTemas.length - fallidos.length)} temas`
                   : creados.length === 1
                     ? 'Mapa creado'
                     : `${fmt(creados.length)} mapas creados`}
-                <span className="text-sm font-semibold text-[#7D8A96]">
-                  · {fmt(creados.reduce((n, c) => n + c.nodos, 0))} nodos
-                </span>
-              </p>
-              <ul className="mt-3 max-h-[16rem] space-y-1 overflow-y-auto">
-                {creados.map((c) => (
-                  <li key={c.id}>
-                    <a
-                      href={`/mapas/${c.id}?ia=1`}
-                      {...(embebido ? { target: '_blank', rel: 'noopener' } : {})}
-                      className="flex items-center justify-between gap-3 rounded-lg px-2 py-1 text-[0.82rem] font-bold text-[#2C3E50] hover:bg-[#FAF7F4]"
-                    >
-                      <span className="min-w-0 truncate">{c.titulo}</span>
-                      <span className="shrink-0 text-[0.72rem] font-semibold text-[#7D8A96]">{fmt(c.nodos)} nodos</span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-              {fallidos.length > 0 && (
-                <div className="mt-3 rounded-xl bg-[#FAEAED] px-3 py-2 text-[0.78rem] text-[#B04A5E]">
-                  <p className="font-extrabold">No salieron {fallidos.length === 1 ? 'este tema' : `estos ${fallidos.length} temas`}:</p>
-                  <ul className="mt-1 list-disc pl-5">
-                    {fallidos.map((f) => (
-                      <li key={f.titulo}>
-                        {f.titulo}: {f.motivo}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-1">Puedes generarlos aparte: vuelve a elegir el archivo y marca solo ese tema.</p>
-                </div>
-              )}
-              <p className="mt-3 text-[0.75rem] text-[#7D8A96]">
-                Cada nodo lleva la página de donde sale: la revisión guiada te lleva a lo dudoso.
+                <span className="block text-sm font-semibold text-[#7D8A96]">{fmt(creados.reduce((n, c) => n + c.nodos, 0))} nodos</span>
               </p>
             </div>
-          )}
-        </div>
-
-        {fase === 'hecho' && (
-          <footer className="flex flex-wrap justify-end gap-3 border-t border-[#7D8A96]/15 bg-white px-6 py-4">
-            {!embebido && porTemas && fcEstado && extraido && archivo && temasLibro && (
-              <button
-                type="button"
-                onClick={() => setAFlashcards(true)}
-                className="mr-auto flex items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-bold text-[#2C3E50]"
-                style={{ border: `2px solid ${INK}`, boxShadow: `3px 3px 0 0 ${INK}` }}
-              >
-                <span aria-hidden className="inline-block text-[#E8A598]">
-                  <span className="material-symbols-outlined text-[1.1rem] leading-none">style</span>
-                </span>
-                Hacer también las flashcards de estos temas
-              </button>
+            <ul className="mt-3 max-h-[16rem] space-y-1 overflow-y-auto">
+              {creados.map((c) => (
+                <li key={c.id}>
+                  <a
+                    href={`/mapas/${c.id}?ia=1`}
+                    {...(embebido ? { target: '_blank', rel: 'noopener' } : {})}
+                    className="flex items-center justify-between gap-3 rounded-lg px-2 py-1 text-[0.82rem] font-bold text-[#2C3E50] hover:bg-[#FAF7F4]"
+                  >
+                    <span className="min-w-0 truncate">{c.titulo}</span>
+                    <span className="shrink-0 text-[0.72rem] font-semibold text-[#7D8A96]">{fmt(c.nodos)} nodos</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+            {fallidos.length > 0 && (
+              <div className="mt-3 rounded-xl bg-[#FAEAED] px-3 py-2 text-[0.78rem] text-[#B04A5E]">
+                <p className="font-extrabold">No salieron {fallidos.length === 1 ? 'este tema' : `estos ${fallidos.length} temas`}:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {fallidos.map((f) => (
+                    <li key={f.titulo}>
+                      {f.titulo}: {f.motivo}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1">Puedes generarlos aparte: vuelve a elegir el archivo y marca solo ese tema.</p>
+              </div>
             )}
-            {creados.length === 1 ? (
-              <button
-                type="button"
-                onClick={() => (embebido ? window.open(`/mapas/${creados[0].id}?ia=1`, '_blank', 'noopener') : router.push(`/mapas/${creados[0].id}?ia=1`))}
-                className="flex items-center gap-2 rounded-2xl bg-[#E8A598] px-5 py-2.5 text-sm font-bold text-white"
-                style={{ border: `2px solid ${INK}`, boxShadow: `3px 3px 0 0 ${INK}` }}
-              >
-                Abrir el mapa
-              </button>
-            ) : null}
+            <p className="mt-3 text-[0.75rem] text-[#7D8A96]">Cada nodo lleva la página de donde sale: la revisión guiada te lleva a lo dudoso.</p>
+          </div>
+        )}
+      </div>
+
+      {fase === 'hecho' && (
+        <footer className="flex flex-wrap justify-end gap-3 bg-white px-5 py-4" style={{ borderTop: `2px solid ${INK}` }}>
+          {!embebido && porTemas && fcEstado && extraido && archivo && temasLibro && (
             <button
               type="button"
-              onClick={onClose}
-              className="rounded-2xl px-4 py-2.5 text-sm font-bold text-[#2C3E50]"
-              style={{ border: `2px solid ${INK}` }}
+              onClick={() => setAFlashcards(true)}
+              className="mr-auto flex items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-bold text-[#2C3E50]"
+              style={{ border: `2px solid ${INK}`, boxShadow: `3px 3px 0 0 ${INK}` }}
             >
-              Cerrar
+              <span aria-hidden className="inline-block" style={{ color: 'var(--cia-acc-d)' }}>
+                <span className="material-symbols-outlined text-[1.1rem] leading-none">style</span>
+              </span>
+              Hacer también las flashcards de estos temas
             </button>
-          </footer>
-        )}
+          )}
+          {creados.length === 1 ? (
+            <button
+              type="button"
+              onClick={() => (embebido ? window.open(`/mapas/${creados[0].id}?ia=1`, '_blank', 'noopener') : router.push(`/mapas/${creados[0].id}?ia=1`))}
+              className="flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-bold text-white"
+              style={{ background: 'var(--cia-acc)', border: `2px solid ${INK}`, boxShadow: `3px 3px 0 0 ${INK}` }}
+            >
+              Abrir el mapa
+            </button>
+          ) : null}
+          <button type="button" onClick={onClose} className="rounded-2xl px-4 py-2.5 text-sm font-bold text-[#2C3E50]" style={{ border: `2px solid ${INK}` }}>
+            Cerrar
+          </button>
+        </footer>
+      )}
 
-        {(fase === 'ajustes' || fase === 'generando') && !embebido && (
-          <footer className="border-t border-[#7D8A96]/15 bg-white px-6 py-4">
-            <p className="mb-3 text-[11px] leading-relaxed text-[#7D8A96]">
-              El archivo no se guarda. Su texto se envía a un servicio de IA externo (DeepSeek) solo para generar el mapa. La IA
-              puede equivocarse: revisa el resultado antes de estudiar con él.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={cerrar}
-                disabled={fase === 'generando'}
-                className="rounded-2xl px-4 py-2.5 text-sm font-bold text-[#7D8A96] hover:text-[#2C3E50] disabled:opacity-40"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => void generar()}
-                disabled={!puedeGenerar || fase === 'generando'}
-                className="flex items-center gap-2 rounded-2xl bg-[#E8A598] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#d18d80] disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
-                {fase === 'generando' ? 'Generando…' : porTemas ? 'Generar los temas' : 'Generar mapa'}
-              </button>
-            </div>
-          </footer>
-        )}
+      {fase === 'ajustes' && !embebido && extraido && (
+        <PieCrear
+          precio={
+            nadaElegido ? null : (
+              <PrecioIA
+                precio={precio}
+                alternativas={[
+                  porTemas ? 'Desmarca algún tema: el precio baja al momento.' : 'Marca menos partes del documento: el precio baja al momento.',
+                  ...(conTablas ? ['Quita las tablas comparativas (casi duplican el precio).'] : []),
+                  ...(modo === 'detalle' ? ['Pasa a «Esquemático».'] : []),
+                ]}
+              />
+            )
+          }
+          boton={porTemas ? 'Generar los temas' : 'Generar mapa'}
+          onGenerar={() => void generar()}
+          puede={puedeGenerar}
+          {...(falta ? { falta } : {})}
+        />
+      )}
     </>
   )
   const estilos = <style>{`@keyframes ia-barra{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}@keyframes ia-entra{from{opacity:0;transform:translateX(-0.25rem)}to{opacity:1;transform:none}}.ia-prov-entra{animation:ia-entra .25s ease-out}`}</style>
   if (embebido) {
     return (
-      <div className={visible ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+      <div data-cia="mapa" className={visible ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
         {cuerpo}
         {estilos}
       </div>
@@ -990,8 +934,9 @@ export default function CrearConIA({
         role="dialog"
         aria-modal="true"
         aria-labelledby="crear-ia-titulo"
-        className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-[#FAF7F4]"
-        style={{ border: `2px solid ${INK}`, boxShadow: `6px 6px 0 0 ${INK}` }}
+        data-cia="mapa"
+        className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-[28px] bg-[#FAF7F4]"
+        style={{ border: `2px solid ${INK}`, boxShadow: `8px 8px 0 0 ${INK}` }}
       >
         {cuerpo}
       </div>
