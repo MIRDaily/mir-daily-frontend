@@ -36,6 +36,10 @@ import {
 import type { MasResumenes } from '@/lib/resumenes/ia'
 import { INK, NivelNuevo, ParrafoHuecos, ResumenHuecos } from './ParrafoHuecos'
 import { EditorParrafo } from './EditorParrafo'
+import SelectorCarpeta from '@/components/carpetas/SelectorCarpeta'
+import { useCarpeta } from '@/lib/carpetas/useCarpeta'
+import { carpetaDeFila, moverACarpeta } from '@/lib/carpetas/api'
+import { baseParaPartes, carpetaDeParte, nombreCarpeta, textosDocumento } from '@/lib/carpetas/sugerir'
 
 // Vista previa de los resúmenes activos con IA: por tema y párrafo. Se puede quitar un párrafo (o
 // desmarcarlo), editar su texto, tocar una palabra o seleccionar un trozo para crear un hueco, tocar un
@@ -525,6 +529,11 @@ export function VistaPreviaResumenes({
   const [guardando, setGuardando] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hecho, setHecho] = useState<Hecho | null>(null)
+  // Carpeta de los grupos nuevos: la sugerida por el nombre y los temas de los párrafos, hasta que el
+  // usuario elige otra. Un grupo que ya existe conserva la suya.
+  const temasParrafos = useMemo(() => lista.filter((p) => p.incluir).map((p) => p.tema), [lista])
+  const temasGrupos = useMemo(() => [...new Set(lista.map((p) => p.grupo).filter((g): g is string => !!g))], [lista])
+  const carpeta = useCarpeta(useMemo(() => textosDocumento(nombre || nombreGrupo, temasParrafos, temasGrupos), [nombre, nombreGrupo, temasParrafos, temasGrupos]))
   // Lo que dice el servidor del grupo de destino: los parecidos (por párrafo) y el literal de cada documento (por grupo).
   const [parecidos, setParecidos] = useState<Map<string, Parecido | null>>(new Map())
   const [usos, setUsos] = useState<Map<string, UsoLiteral[]>>(new Map())
@@ -1003,7 +1012,14 @@ export function VistaPreviaResumenes({
     const ya = existentes?.find((g) => mismoNombre(g.name, name))
     if (ya) return ya
     try {
-      return await crearGrupo(name)
+      const nuevo = await crearGrupo(name)
+      // A su carpeta (un grupo por tema: cada uno a su tema dentro de la asignatura elegida). Si falla,
+      // el grupo ya está creado y queda en «Sin clasificar».
+      if (carpeta.arbol) {
+        const c = destino === 'porTema' ? carpetaDeParte(carpeta.arbol, baseParaPartes(carpeta.valor, carpeta.origen), name) : carpeta.valor
+        if (c.subjectId !== null) await moverACarpeta('resumenes', [nuevo.id], c, carpeta.origen).catch(() => {})
+      }
+      return nuevo
     } catch (e) {
       const otra = (await listarGrupos()).find((g) => mismoNombre(g.name, name))
       if (otra) return otra
@@ -1350,6 +1366,24 @@ export function VistaPreviaResumenes({
                 <p className="mt-1 text-xs text-[#7D8A96]">Ya tienes un grupo con ese nombre: se añadirán a él.</p>
               )}
             </>
+          )}
+          {destino !== 'existente' && carpeta.arbol && (
+            <div className="mt-2">
+              <SelectorCarpeta
+                arbol={carpeta.arbol}
+                valor={carpeta.valor}
+                sugerida={carpeta.sugerencia?.carpeta}
+                candidatas={carpeta.sugerencia?.candidatas}
+                onChange={carpeta.elegir}
+                disabled={!!guardando}
+              />
+              {destino === 'porTema' && carpeta.valor.subjectId !== null && (
+                <p className="mt-1 text-[0.7rem] text-[#7D8A96]">Cada grupo irá a su tema dentro de la asignatura (o a «General» si no encaja con ninguno).</p>
+              )}
+            </div>
+          )}
+          {destino === 'existente' && carpeta.arbol && grupos?.find((g) => g.id === elegido) && (
+            <p className="mt-1 text-xs text-[#7D8A96]">Carpeta del grupo: {nombreCarpeta(carpeta.arbol, carpetaDeFila(grupos.find((g) => g.id === elegido)!))}.</p>
           )}
           {destino === 'existente' &&
             (grupos === null ? (

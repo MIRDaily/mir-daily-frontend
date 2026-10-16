@@ -15,6 +15,9 @@ export type GrupoResumen = {
   color?: string | null
   icon?: string | null
   created_at?: string | null
+  /** Carpeta del grupo (null = «Sin clasificar»; ver lib/carpetas). */
+  folder_subject_id?: number | null
+  folder_topic_id?: number | null
   total: number
   pendientes: number
   resumen: ResumenEstados

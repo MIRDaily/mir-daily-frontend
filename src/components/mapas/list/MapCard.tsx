@@ -25,10 +25,12 @@ type Props = {
   onSubject: (subject: string | null) => void
   onPin: () => void
   onDelete: () => void
+  /** «Mover a carpeta…» (sin esto, no se ofrece: base sin carpetas o mapa de ejemplo). */
+  onMove?: () => void
 }
 
 /** Tarjeta de un mapa: miniatura, título, asignatura y menú «⋯» (renombrar, duplicar, fijar…). */
-export function MapCard({ map, pinSupported, renaming, onStartRename, onRename, onCancelRename, onDuplicate, onSubject, onPin, onDelete }: Props) {
+export function MapCard({ map, pinSupported, renaming, onStartRename, onRename, onCancelRename, onDuplicate, onSubject, onPin, onDelete, onMove }: Props) {
   const [menu, setMenu] = useState<'closed' | 'main' | 'subject'>('closed')
   const ref = useRef<HTMLDivElement>(null)
   const subj = map.subject ? subjectVisual(map.subject) : null
@@ -113,6 +115,11 @@ export function MapCard({ map, pinSupported, renaming, onStartRename, onRename, 
               <button role="menuitem" className={item} onClick={() => { setMenu('closed'); onPin() }}>
                 <span className="material-symbols-outlined text-[18px] text-[#7D8A96]">push_pin</span>
                 {map.pinned ? 'Dejar de fijar' : 'Fijar arriba'}
+              </button>
+            )}
+            {onMove && !map.example && (
+              <button role="menuitem" className={item} onClick={() => { setMenu('closed'); onMove() }}>
+                <span className="material-symbols-outlined text-[18px] text-[#7D8A96]">drive_file_move</span>Mover a carpeta…
               </button>
             )}
             {!map.example && (

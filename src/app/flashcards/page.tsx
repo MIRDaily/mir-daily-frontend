@@ -21,6 +21,8 @@ import { flashcardsIAEstado } from '@/lib/flashcards/ia/api'
 import { useEstadoIA } from '@/lib/ia/estadoIA'
 import { useSoltarDocumento } from '@/hooks/useSoltarDocumento'
 import CapaSoltarDocumento from '@/components/ia/CapaSoltarDocumento'
+import MoverACarpeta from '@/components/carpetas/MoverACarpeta'
+import { carpetaDeFila } from '@/lib/carpetas/api'
 import type { EstadoFlashcardsIA } from '@/lib/flashcards/ia/tarjetas'
 import { borrarBorrador, haceCuanto, listarBorradores, type BorradorGuardado } from '@/lib/flashcards/ia/borrador'
 import { DEFAULT_COLOR_KEY, MAX_FLASHCARD_CHARS, SUBJECT_COLORS, resolveColor, resolveIcon } from '@/lib/flashcardTheme'
@@ -122,6 +124,8 @@ function FlashcardsMindMap() {
   const [iaAbierto, setIaAbierto] = useState(false)
   // Un documento soltado sobre la página: abre «Crear con IA» ya leyéndolo (sin pasar por el botón).
   const [archivoIA, setArchivoIA] = useState<File | null>(null)
+  // «Mover a carpeta…» de un grupo.
+  const [moviendoGrupo, setMoviendoGrupo] = useState<FlashcardDeck | null>(null)
   // Borradores de flashcards con IA sin revisar (en este navegador): se avisa y se retoman.
   const [usuarioId, setUsuarioId] = useState<string | null>(null)
   const [borradores, setBorradores] = useState<BorradorGuardado[]>([])
@@ -844,6 +848,7 @@ function FlashcardsMindMap() {
                 onStudy={(deck) => router.push(`/flashcards/${deck.id}?study=1`)}
                 onEdit={(deck) => setSubjectModal({ existing: deck })}
                 onDelete={(deck) => void handleDeleteSubject(deck)}
+                onMove={(deck) => setMoviendoGrupo(deck)}
               />
             )}
           </>
@@ -996,6 +1001,19 @@ function FlashcardsMindMap() {
       </main>
 
       {/* Modales */}
+      {moviendoGrupo && (
+        <MoverACarpeta
+          tipo="flashcards"
+          id={moviendoGrupo.id}
+          titulo={moviendoGrupo.name}
+          actual={carpetaDeFila(moviendoGrupo)}
+          onClose={() => setMoviendoGrupo(null)}
+          onMovido={() => {
+            // La lista vuelve a pedirse para traer la carpeta nueva del grupo.
+            if (token) void loadSubjects(token)
+          }}
+        />
+      )}
       <CapaSoltarDocumento arrastrando={soltar.arrastrando} rechazo={soltar.rechazo} texto="Se crearán flashcards con IA a partir de él." />
       {(iaAbierto && ia) || borradorAbierto ? (
         <CrearFlashcardsIA

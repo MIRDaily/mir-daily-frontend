@@ -25,6 +25,7 @@ import { MapFileError, parseMapFile } from '@/lib/mapas/json'
 import Image from 'next/image'
 import { iaEstado } from '@/lib/mapas/ia/api'
 import { useEstadoIA } from '@/lib/ia/estadoIA'
+import MoverACarpeta from '@/components/carpetas/MoverACarpeta'
 import { useSoltarDocumento } from '@/hooks/useSoltarDocumento'
 import CapaSoltarDocumento from '@/components/ia/CapaSoltarDocumento'
 import { useTutorialReady } from '@/providers/TutorialProvider'
@@ -50,6 +51,8 @@ export default function MapasPage() {
     return () => setBackAction(null)
   }, [setBackAction])
   const [maps, setMaps] = useState<MapSummary[] | null>(null)
+  // «Mover a carpeta…» de un mapa.
+  const [moviendo, setMoviendo] = useState<MapSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [pinSupported, setPinSupported] = useState(false)
@@ -483,6 +486,7 @@ export default function MapasPage() {
                 onSubject={(subject) => onSubject(m, subject)}
                 onPin={() => onPin(m)}
                 onDelete={() => void onDelete(m)}
+                {...(m.folder ? { onMove: () => setMoviendo(m) } : {})}
               />
             ))}
                     </div>
@@ -507,6 +511,7 @@ export default function MapasPage() {
                 onSubject={(subject) => onSubject(m, subject)}
                 onPin={() => onPin(m)}
                 onDelete={() => void onDelete(m)}
+                {...(m.folder ? { onMove: () => setMoviendo(m) } : {})}
               />
             ))}
                     </div>
@@ -528,6 +533,16 @@ export default function MapasPage() {
         />
       ) : null}
       <CapaSoltarDocumento arrastrando={soltar.arrastrando} rechazo={soltar.rechazo} texto="Se creará un mapa conceptual con IA a partir de él." />
+      {moviendo && moviendo.folder && (
+        <MoverACarpeta
+          tipo="mapa"
+          id={moviendo.id}
+          titulo={moviendo.title}
+          actual={moviendo.folder}
+          onClose={() => setMoviendo(null)}
+          onMovido={(c) => setMaps((prev) => prev?.map((x) => (x.id === moviendo.id ? { ...x, folder: c } : x)) ?? prev)}
+        />
+      )}
       {iaOpen && ia ? (
         <CrearConIA
           estado={ia}

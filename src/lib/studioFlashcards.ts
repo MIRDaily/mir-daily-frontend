@@ -56,6 +56,9 @@ export type FlashcardDeck = {
   icon?: string | null
   created_at?: string | null
   position?: number | null
+  /** Carpeta del grupo (null = «Sin clasificar»; ver lib/carpetas). */
+  folder_subject_id?: number | null
+  folder_topic_id?: number | null
   totalCards: number
   // Pendientes en total, nuevas incluidas.
   dueCards: number

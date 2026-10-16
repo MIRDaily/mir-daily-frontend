@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabaseBrowser'
 import { docNodeCount, newGraphDoc, type StoredDoc } from '@/lib/mapas/graph'
 import { summarizeDoc, type Thumb } from '@/lib/mapas/summary'
+import type { Carpeta } from '@/lib/carpetas/sugerir'
 
 // Acceso a `public.mind_maps` (sql/2026-09-mapas-mentales.sql). Directo con el
 // cliente de Supabase: RLS deja a cada usuario solo lo suyo.
@@ -21,6 +22,8 @@ export type MapSummary = {
   example: boolean
   /** Fijado arriba en la lista. */
   pinned: boolean
+  /** Su carpeta (asignatura y tema), o null si la base todavía no tiene carpetas (sql/2026-10-carpetas.sql). */
+  folder: Carpeta | null
   /** Dibujo en miniatura del mapa (null si está vacío o no se pudo leer). */
   thumb: Thumb | null
   /** Texto de todos los nodos, en minúsculas y sin tildes, para buscar. */
@@ -43,7 +46,9 @@ export async function listMaps(): Promise<{ maps: MapSummary[]; pinSupported: bo
   const query = (cols: string) =>
     supabase.from('mind_maps').select(cols).is('deleted_at', null).order('updated_at', { ascending: false })
   let pinSupported = true
-  let res = await query('id,title,subject,updated_at,doc,pinned')
+  // Sin las columnas de carpeta (SQL sin aplicar), se pide sin ellas: la lista funciona igual.
+  let res = await query('id,title,subject,updated_at,doc,pinned,folder_subject_id,folder_topic_id')
+  if (res.error && /folder_/i.test(res.error.message)) res = await query('id,title,subject,updated_at,doc,pinned')
   if (res.error && /pinned/i.test(res.error.message)) {
     pinSupported = false
     res = await query('id,title,subject,updated_at,doc')
@@ -61,6 +66,9 @@ export async function listMaps(): Promise<{ maps: MapSummary[]; pinSupported: bo
       tableCount: sum.tables,
       example: row.subject === EXAMPLE_SUBJECT,
       pinned: row.pinned === true,
+      folder: 'folder_subject_id' in row
+        ? { subjectId: (row.folder_subject_id as number | null) ?? null, topicId: row.folder_subject_id == null ? null : ((row.folder_topic_id as number | null) ?? null) }
+        : null,
       thumb: sum.thumb,
       text: sum.text,
     }

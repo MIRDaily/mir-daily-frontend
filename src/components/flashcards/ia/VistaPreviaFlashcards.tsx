@@ -35,6 +35,10 @@ import {
 } from '@/lib/flashcards/ia/tarjetas'
 import type { MasGeneradas } from '@/lib/flashcards/ia/api'
 import { NivelBadge } from './NivelBadge'
+import SelectorCarpeta from '@/components/carpetas/SelectorCarpeta'
+import { useCarpeta } from '@/lib/carpetas/useCarpeta'
+import { carpetaDeFila, moverACarpeta } from '@/lib/carpetas/api'
+import { baseParaPartes, carpetaDeParte, nombreCarpeta, textosDocumento } from '@/lib/carpetas/sugerir'
 
 // Vista previa de las flashcards con IA (documento o rama de un mapa): por tema (plegable) y, dentro,
 // de fácil a demencial. Pensada para revisar RÁPIDO: si hay dudosas se abre en ellas y el resto se
@@ -174,6 +178,11 @@ export function VistaPreviaFlashcards({
   const dudosas = lista.filter((b) => b.ia?.dudoso).length
   const secciones = useMemo(() => agrupar(lista), [lista])
   const destinoDeck = decks?.find((d) => d.id === deckId)
+  // Carpeta de los grupos nuevos: la sugerida por el nombre y los temas de las tarjetas, hasta que el
+  // usuario elige otra. Un grupo que ya existe conserva la suya.
+  const temasTarjetas = useMemo(() => lista.filter((b) => b.incluir).map((b) => b.tema), [lista])
+  const temasGrupos = useMemo(() => [...new Set(inicial.map((b) => b.grupo).filter((g): g is string => !!g))], [inicial])
+  const carpeta = useCarpeta(useMemo(() => textosDocumento(nombre || nombreGrupo, temasTarjetas, temasGrupos), [nombre, nombreGrupo, temasTarjetas, temasGrupos]))
 
   // Lo que se ve, en orden (para moverse con ↑/↓): sin los temas plegados y, si toca, solo dudosas.
   const visibles = useMemo(
@@ -361,6 +370,12 @@ export function VistaPreviaFlashcards({
           const n = lote.nombre.length >= 3 ? lote.nombre.slice(0, 80) : `${lote.nombre} (IA)`
           deck = await createFlashcardDeck(tk, { name: n, color: DEFAULT_COLOR_KEY, icon: DEFAULT_ICON })
           creados.current.set(lote.nombre, deck)
+          // A su carpeta (un grupo por tema: cada uno a su tema dentro de la asignatura elegida). Si falla,
+          // el grupo ya está creado y queda en «Sin clasificar».
+          if (carpeta.arbol) {
+            const c = destino === 'porTema' ? carpetaDeParte(carpeta.arbol, baseParaPartes(carpeta.valor, carpeta.origen), lote.nombre) : carpeta.valor
+            if (c.subjectId !== null) await moverACarpeta('flashcards', [deck.id], c, carpeta.origen).catch(() => {})
+          }
         }
         const r = await createFlashcardsBulk(tk, deck.id, paraGuardar(lote.tarjetas, fuente), {
           aiGenerated: true,
@@ -660,6 +675,24 @@ export function VistaPreviaFlashcards({
             </select>
           )}
           {destino === 'porTema' && <p className="text-xs text-[#7D8A96]">Cada tema del documento, en su propio grupo con su nombre.</p>}
+          {destino !== 'existente' && carpeta.arbol && (
+            <div className="mt-2">
+              <SelectorCarpeta
+                arbol={carpeta.arbol}
+                valor={carpeta.valor}
+                sugerida={carpeta.sugerencia?.carpeta}
+                candidatas={carpeta.sugerencia?.candidatas}
+                onChange={carpeta.elegir}
+                disabled={!!guardando}
+              />
+              {destino === 'porTema' && carpeta.valor.subjectId !== null && (
+                <p className="mt-1 text-[0.7rem] text-[#7D8A96]">Cada grupo irá a su tema dentro de la asignatura (o a «General» si no encaja con ninguno).</p>
+              )}
+            </div>
+          )}
+          {destino === 'existente' && destinoDeck && carpeta.arbol && (
+            <p className="mt-1 text-xs text-[#7D8A96]">Carpeta del grupo: {nombreCarpeta(carpeta.arbol, carpetaDeFila(destinoDeck))}.</p>
+          )}
           {!nombreOk && <p className="mt-1 text-xs font-bold text-[#B04A5E]">El nombre necesita al menos 3 caracteres.</p>}
           {excede && <p className="mt-1 text-xs font-bold text-[#B04A5E]">Un grupo admite como mucho {MAX_POR_GRUPO} tarjetas: quita algunas o guárdalas por temas.</p>}
           {destino === 'existente' && destinoDeck && (

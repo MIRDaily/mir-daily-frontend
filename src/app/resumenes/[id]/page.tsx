@@ -33,6 +33,8 @@ import {
   type Parrafo,
 } from '@/lib/resumenes/api'
 import { AJUSTES_POR_DEFECTO, aPeticion, cuantosSeEstudian, sanearAjustes, type Ajustes } from '@/lib/resumenes/sesion'
+import MoverACarpeta from '@/components/carpetas/MoverACarpeta'
+import { carpetaDeFila } from '@/lib/carpetas/api'
 import {
   FILTROS_VACIOS,
   agruparPorTema,
@@ -90,6 +92,8 @@ export default function GrupoResumenPage() {
   const router = useRouter()
   const { setBackAction } = useHeaderUI()
   const [grupo, setGrupo] = useState<GrupoResumen | null>(null)
+  // «Mover a carpeta…» del grupo.
+  const [moviendo, setMoviendo] = useState(false)
   const [parrafos, setParrafos] = useState<Parrafo[]>([])
   const [estado, setEstado] = useState<'cargando' | 'listo' | 'error'>('cargando')
   const [error, setError] = useState<string | null>(null)
@@ -380,6 +384,11 @@ export default function GrupoResumenPage() {
                   <GhostButton icon="delete_sweep" onClick={() => router.push(`/resumenes/${id}/papelera`)}>
                     Papelera
                   </GhostButton>
+                  {'folder_subject_id' in grupo && (
+                    <GhostButton icon="drive_file_move" onClick={() => setMoviendo(true)}>
+                      Mover a carpeta
+                    </GhostButton>
+                  )}
                   <GhostButton
                     icon="delete"
                     onClick={async () => {
@@ -584,6 +593,17 @@ export default function GrupoResumenPage() {
 
       {ajustesAbiertos && (
         <AjustesEstudio parrafos={parrafos} inicial={leerAjustes(id)} onCerrar={() => setAjustesAbiertos(false)} onEmpezar={empezar} />
+      )}
+
+      {moviendo && grupo && (
+        <MoverACarpeta
+          tipo="resumenes"
+          id={grupo.id}
+          titulo={grupo.name}
+          actual={carpetaDeFila(grupo)}
+          onClose={() => setMoviendo(false)}
+          onMovido={(c) => setGrupo((g) => (g ? { ...g, folder_subject_id: c.subjectId, folder_topic_id: c.topicId } : g))}
+        />
       )}
     </div>
   )

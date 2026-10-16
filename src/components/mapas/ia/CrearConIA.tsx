@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createMap } from '@/lib/mapas/api'
+import SelectorCarpeta from '@/components/carpetas/SelectorCarpeta'
+import { useCarpeta } from '@/lib/carpetas/useCarpeta'
+import { moverACarpeta } from '@/lib/carpetas/api'
+import { baseParaPartes, carpetaDeParte, textosDocumento } from '@/lib/carpetas/sugerir'
 import { extraerDocumento, FORMATOS_ACEPTADOS } from '@/lib/mapas/ia/extract'
 import { iaGenerar, iaIndice } from '@/lib/mapas/ia/api'
 import { aplicarEvento, arbolLibro, type EstadoTema, type FaseIA, type LineaProvisional } from '@/lib/mapas/ia/stream'
@@ -222,6 +226,27 @@ export default function CrearConIA({
     [extraido, temasLibro, indiceLocal],
   )
   const eleccion = useMemo(() => (extraido ? resumenSeleccion(extraido.secciones, sel) : null), [extraido, sel])
+  // Carpeta: la sugerida por el título y el índice del documento, hasta que el usuario elige otra.
+  const carpeta = useCarpeta(
+    useMemo(() => textosDocumento(titulo || extraido?.titulo || '', indice.map((e) => e.titulo)), [titulo, extraido, indice]),
+    !!extraido,
+  )
+  /** Archiva lo creado (si el catálogo llegó). Un fallo aquí no tumba la generación: el mapa ya está. */
+  const archivar = async (ids: { id: string; titulo: string }[]) => {
+    if (!carpeta.arbol || ids.length === 0) return
+    const arbol = carpeta.arbol
+    const grupos = new Map<string, { c: typeof carpeta.valor; ids: string[] }>()
+    for (const m of ids) {
+      // Tema a tema, cada mapa a su tema dentro de la asignatura elegida.
+      const c = ids.length > 1 ? carpetaDeParte(arbol, baseParaPartes(carpeta.valor, carpeta.origen), m.titulo) : carpeta.valor
+      const k = `${c.subjectId}-${c.topicId}`
+      ;(grupos.get(k) ?? grupos.set(k, { c, ids: [] }).get(k)!).ids.push(m.id)
+    }
+    for (const { c, ids: lote } of grupos.values()) {
+      if (c.subjectId === null) continue
+      await moverACarpeta('mapa', lote, c, carpeta.origen).catch(() => {})
+    }
+  }
   const envioLibro = useMemo(
     () => (extraido && temasLibro ? temasParaEnviar(extraido.secciones, sel, temasLibro) : null),
     [extraido, temasLibro, sel],
@@ -371,6 +396,7 @@ export default function CrearConIA({
             hechos.push({ id, titulo: t.titulo, nodos: t.stats.nodos })
           }
         }
+        await archivar(hechos)
         void refrescarCreditos()
         if (!montado.current) return 'cancelado'
         setCreados(hechos)
@@ -384,6 +410,7 @@ export default function CrearConIA({
       // Lo que se guarda es el mapa VALIDADO del final, nunca el borrador.
       const id = await createMap(r.titulo, conFuente(r.doc))
       await recordar(id, eleccion?.elegidas ?? [])
+      await archivar([{ id, titulo: r.titulo }])
       if (!montado.current) return 'cancelado'
       if (embebido) {
         // Dentro del popup unificado no se sale a la página del mapa (se perdería lo demás): se avisa y se enlaza.
@@ -762,6 +789,21 @@ export default function CrearConIA({
                     '.'
                   )}
                 </p>
+              )}
+              {carpeta.arbol && (
+                <div className="mt-3">
+                  <SelectorCarpeta
+                    arbol={carpeta.arbol}
+                    valor={carpeta.valor}
+                    sugerida={carpeta.sugerencia?.carpeta}
+                    candidatas={carpeta.sugerencia?.candidatas}
+                    onChange={carpeta.elegir}
+                    disabled={fase === 'generando'}
+                  />
+                  {porTemas && guardarComo !== 'uno' && carpeta.valor.subjectId !== null && carpeta.valor.topicId === null && (
+                    <p className="mt-1 text-[0.7rem] text-[#7D8A96]">Cada tema irá a su carpeta dentro de la asignatura (o a «General» si no encaja con ninguno).</p>
+                  )}
+                </div>
               )}
               {!nadaElegido && (
                 <PrecioIA

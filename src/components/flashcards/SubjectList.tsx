@@ -89,6 +89,7 @@ export default function SubjectList({
   onStudy,
   onEdit,
   onDelete,
+  onMove,
 }: {
   decks: FlashcardDeck[]
   query: string
@@ -99,6 +100,8 @@ export default function SubjectList({
   onStudy: (deck: FlashcardDeck) => void
   onEdit: (deck: FlashcardDeck) => void
   onDelete: (deck: FlashcardDeck) => void
+  /** «Mover a carpeta…» (sin esto, o si el grupo no trae su carpeta, no se ofrece). */
+  onMove?: (deck: FlashcardDeck) => void
 }) {
   const sections = useMemo(() => groupSubjects(decks, query, sort), [decks, query, sort])
 
@@ -188,6 +191,7 @@ export default function SubjectList({
                       onStudy={() => onStudy(row.deck)}
                       onEdit={() => onEdit(row.deck)}
                       onDelete={() => onDelete(row.deck)}
+                      {...(onMove && 'folder_subject_id' in row.deck ? { onMove: () => onMove(row.deck) } : {})}
                     />
                   </motion.li>
                 ))}
@@ -207,6 +211,7 @@ function SubjectRow({
   onStudy,
   onEdit,
   onDelete,
+  onMove,
 }: {
   row: Row
   query: string
@@ -214,6 +219,7 @@ function SubjectRow({
   onStudy: () => void
   onEdit: () => void
   onDelete: () => void
+  onMove?: () => void
 }) {
   const { deck, visual, mastery } = row
   // Sin nada pendiente la fila se apaga: es lo que hace que la lista se lea de
@@ -283,6 +289,7 @@ function SubjectRow({
           ariaLabel={`Acciones de ${deck.name}`}
           items={[
             { label: 'Editar', icon: 'edit', onSelect: onEdit },
+            ...(onMove ? [{ label: 'Mover a carpeta…', icon: 'drive_file_move', onSelect: onMove }] : []),
             { label: 'Eliminar', icon: 'delete', danger: true, onSelect: onDelete },
           ]}
         />
