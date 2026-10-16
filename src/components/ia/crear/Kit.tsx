@@ -166,17 +166,14 @@ export function OpcionAnimada({
       className="relative rounded-[18px] bg-white p-2.5 pb-3 text-left transition-transform hover:-translate-y-0.5 disabled:opacity-50"
       style={{ border: `2px solid ${activa ? INK : '#EDE6DE'}`, boxShadow: activa ? '4px 4px 0 0 var(--cia-acc)' : 'none' }}
     >
-      <span
-        className={`absolute right-2.5 top-2.5 grid size-5 place-items-center ${rol === 'checkbox' ? 'rounded-md' : 'rounded-full'}`}
-        style={{ border: `2px solid ${activa ? INK : '#EDE6DE'}`, background: activa ? 'var(--cia-acc)' : '#fff' }}
-        aria-hidden
-      >
-        {activa && <span className="material-symbols-outlined text-[14px] text-white">check</span>}
-      </span>
       <div ref={ref} className="cia-escena mb-2 grid h-[74px] place-items-center overflow-hidden rounded-xl" style={{ background: activa ? '#fff' : '#FAF7F4' }}>
         {escena}
       </div>
-      <span className="block text-[0.85rem] font-black text-[#2C3E50]">{titulo}</span>
+      {/* La marca va en la línea del título (la casilla estándar de globals.css), nunca encima de la escena. */}
+      <span className="flex items-center gap-2">
+        <span className={`casilla ${rol === 'radio' ? 'casilla-redonda' : ''}`} data-estado={activa ? 'si' : 'no'} aria-hidden />
+        <span className="min-w-0 text-[0.85rem] font-black leading-tight text-[#2C3E50]">{titulo}</span>
+      </span>
       <span className="mt-0.5 block text-[0.72rem] leading-snug text-[#7D8A96]">{descripcion}</span>
       {dato && (
         <span className="mt-1.5 inline-block rounded-full px-2 py-0.5 text-[0.68rem] font-bold" style={{ background: 'var(--cia-soft)', color: 'var(--cia-ink)' }}>

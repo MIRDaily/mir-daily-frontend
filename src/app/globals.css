@@ -2050,3 +2050,78 @@ textarea:disabled {
     animation: none;
   }
 }
+
+/* ── Casillas: un solo estilo en toda la web (kit sticker) ─────────────────────────────────────────────
+   Las nativas (<input type="checkbox">) y las dibujadas (.casilla, con data-estado="si|parte|no") se ven
+   iguales: 18 px, borde de tinta, relleno del color de la herramienta (--cia-acc; coral si no hay) y la
+   marca en blanco. «parte» = a medias (indeterminate). .casilla-redonda: la de elegir una sola opción. */
+input[type='checkbox'],
+.casilla {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  width: 18px !important;
+  height: 18px !important;
+  flex: none;
+  display: inline-grid;
+  place-content: center;
+  vertical-align: middle;
+  border: 2px solid #2c3e50;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+input[type='checkbox']::before,
+.casilla::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+  transform: scale(0);
+  transition: transform 0.15s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+input[type='checkbox']:checked,
+input[type='checkbox']:indeterminate,
+.casilla[data-estado='si'],
+.casilla[data-estado='parte'] {
+  background: var(--cia-acc, #e8a598);
+}
+input[type='checkbox']:checked::before,
+.casilla[data-estado='si']::before {
+  transform: scale(1);
+}
+input[type='checkbox']:indeterminate::before,
+.casilla[data-estado='parte']::before {
+  clip-path: none;
+  width: 9px;
+  height: 2.5px;
+  border-radius: 2px;
+  transform: scale(1);
+}
+input[type='checkbox']:active:not(:disabled) {
+  transform: scale(0.9);
+}
+input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--cia-acc, #e8a598);
+  outline-offset: 2px;
+}
+input[type='checkbox']:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.casilla {
+  cursor: inherit;
+}
+.casilla-redonda {
+  border-radius: 999px;
+}
+@media (prefers-reduced-motion: reduce) {
+  input[type='checkbox'],
+  input[type='checkbox']::before,
+  .casilla,
+  .casilla::before {
+    transition: none;
+  }
+}

@@ -138,14 +138,7 @@ export function SelectorParte({
   )
 }
 
+/** La casilla estándar (globals.css): marcada, a medias o vacía. */
 function Casilla({ estado }: { estado: 'todo' | 'parte' | 'nada' }) {
-  return (
-    <span
-      aria-hidden
-      className="flex size-4 shrink-0 items-center justify-center rounded-[0.3rem] text-[0.7rem] font-black leading-none text-white"
-      style={{ border: `2px solid ${estado === 'nada' ? '#D4C8BE' : INK}`, background: estado === 'nada' ? '#FFFFFF' : 'var(--cia-acc, #E8A598)' }}
-    >
-      {estado === 'todo' ? '✓' : estado === 'parte' ? '–' : ''}
-    </span>
-  )
+  return <span aria-hidden className="casilla" data-estado={estado === 'todo' ? 'si' : estado === 'parte' ? 'parte' : 'no'} />
 }
