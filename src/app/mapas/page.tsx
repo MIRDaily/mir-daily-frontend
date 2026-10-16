@@ -25,6 +25,8 @@ import { MapFileError, parseMapFile } from '@/lib/mapas/json'
 import Image from 'next/image'
 import { iaEstado } from '@/lib/mapas/ia/api'
 import { useEstadoIA } from '@/lib/ia/estadoIA'
+import { useSoltarDocumento } from '@/hooks/useSoltarDocumento'
+import CapaSoltarDocumento from '@/components/ia/CapaSoltarDocumento'
 import { useTutorialReady } from '@/providers/TutorialProvider'
 import { TUTORIAL_MAPAS } from '@/lib/tutorials/scripts'
 import { firstPendingLesson, readLessonsDone, TOTAL_LESSONS } from '@/components/mapas/tutorial/progress'
@@ -86,6 +88,16 @@ export default function MapasPage() {
   // no protege nada: el permiso lo valida el servidor.
   const { estado: ia, refrescar: refrescarIa } = useEstadoIA('mapas', iaEstado)
   const [iaOpen, setIaOpen] = useState(false)
+  // Arrastrar un documento a la página abre «Crear con IA» ya leyéndolo (sin pasar por el botón).
+  const [archivoIA, setArchivoIA] = useState<File | null>(null)
+  const soltar = useSoltarDocumento({
+    activo: !!ia,
+    bloqueado: iaOpen,
+    alSoltar: (f) => {
+      setArchivoIA(f)
+      setIaOpen(true)
+    },
+  })
   // Progreso del tutorial interactivo (lo guarda el propio tutorial en este navegador).
   // (useSyncExternalStore: en el servidor no hay localStorage y la primera pintura dice 0.)
   const lessonsDone = useSyncExternalStore(noSubscribe, () => readLessonsDone().length, () => 0)
@@ -515,7 +527,19 @@ export default function MapasPage() {
           onAction={undo && toast.tone === 'neutral' ? () => void onUndo() : undefined}
         />
       ) : null}
-      {iaOpen && ia ? <CrearConIA estado={ia} onClose={() => { setIaOpen(false); void refrescarIa() }} onCreados={() => void reload()} /> : null}
+      <CapaSoltarDocumento arrastrando={soltar.arrastrando} rechazo={soltar.rechazo} texto="Se creará un mapa conceptual con IA a partir de él." />
+      {iaOpen && ia ? (
+        <CrearConIA
+          estado={ia}
+          {...(archivoIA ? { archivoInicial: archivoIA } : {})}
+          onClose={() => {
+            setIaOpen(false)
+            setArchivoIA(null)
+            void refrescarIa()
+          }}
+          onCreados={() => void reload()}
+        />
+      ) : null}
     </main>
   )
 }

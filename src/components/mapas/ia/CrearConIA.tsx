@@ -74,8 +74,11 @@ export default function CrearConIA({
   visible = true,
   controlRef,
   onEstado,
+  archivoInicial,
 }: PropsEmbebido & {
   estado: EstadoIA
+  /** Un documento soltado sobre la página: se empieza leyéndolo. */
+  archivoInicial?: File
   onClose: () => void
   /** Se han creado mapas sin abrir el editor (un mapa por tema): la lista debe recargarse. */
   onCreados?: () => void
@@ -83,8 +86,8 @@ export default function CrearConIA({
   const router = useRouter()
   // Como pestaña del popup unificado (con el documento ya leído y compartido) se empieza en los ajustes.
   const embebido = !!compartido
-  const [fase, setFase] = useState<Fase>(compartido ? 'ajustes' : 'elegir')
-  const [archivo, setArchivo] = useState<File | null>(compartido?.archivo ?? null)
+  const [fase, setFase] = useState<Fase>(compartido ? 'ajustes' : archivoInicial ? 'leyendo' : 'elegir')
+  const [archivo, setArchivo] = useState<File | null>(compartido?.archivo ?? archivoInicial ?? null)
   const [extraido, setExtraido] = useState<Extraido | null>(compartido?.extraido ?? null)
   const [titulo, setTitulo] = useState(compartido?.extraido.titulo ?? '')
   const [modo, setModo] = useState<ModoIA>('esquema')
@@ -201,6 +204,16 @@ export default function CrearConIA({
       setFase('elegir')
     }
   }
+
+  // Archivo soltado sobre la página (useSoltarDocumento): se lee en cuanto se abre, sin pasar por «elegir».
+  // Una sola vez (en desarrollo, StrictMode monta dos veces) y fuera del cuerpo del efecto.
+  const leidoInicial = useRef(false)
+  useEffect(() => {
+    if (!archivoInicial || leidoInicial.current) return
+    leidoInicial.current = true
+    void Promise.resolve().then(() => leer(archivoInicial))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [archivoInicial])
 
   const indiceLocal = useMemo(() => (extraido ? construirIndice(extraido.secciones, extraido.marcadores) : []), [extraido])
   // Tema a tema, el índice es el del servidor (temas y sus apartados).

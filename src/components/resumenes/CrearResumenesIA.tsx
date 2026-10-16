@@ -156,8 +156,11 @@ export default function CrearResumenesIA({
   visible = true,
   controlRef,
   onEstado,
+  archivoInicial,
 }: PropsEmbebido & {
   estado: EstadoResumenesIA | null
+  /** Un documento soltado sobre la página: se empieza leyéndolo. */
+  archivoInicial?: File
   /** Retomar la revisión de un borrador guardado en este navegador (no hace falta la IA). */
   borrador?: BorradorResumen
   onClose: () => void
@@ -169,8 +172,8 @@ export default function CrearResumenesIA({
     cupo: { generacionesHoy: 0, maxGeneracionesDia: 0, caracteresHoy: 0, maxCaracteresDia: 0 },
   }
   // Con el documento compartido del popup unificado, se empieza en los ajustes con lo que cabe marcado.
-  const [fase, setFase] = useState<Fase>(borrador ? 'vista' : compartido ? 'ajustes' : 'elegir')
-  const [archivo, setArchivo] = useState<File | null>(compartido?.archivo ?? null)
+  const [fase, setFase] = useState<Fase>(borrador ? 'vista' : compartido ? 'ajustes' : archivoInicial ? 'leyendo' : 'elegir')
+  const [archivo, setArchivo] = useState<File | null>(compartido?.archivo ?? archivoInicial ?? null)
   const [extraido, setExtraido] = useState<Extraido | null>(compartido?.extraido ?? null)
   const [titulo, setTitulo] = useState(compartido?.extraido.titulo ?? '')
   const [modo, setModo] = useState<ModoResumen>('resumen')
@@ -331,6 +334,16 @@ export default function CrearResumenesIA({
       setFase('elegir')
     }
   }
+
+  // Archivo soltado sobre la página (useSoltarDocumento): se lee en cuanto se abre, sin pasar por «elegir».
+  // Una sola vez (en desarrollo, StrictMode monta dos veces) y fuera del cuerpo del efecto.
+  const leidoInicial = useRef(false)
+  useEffect(() => {
+    if (!archivoInicial || leidoInicial.current) return
+    leidoInicial.current = true
+    void Promise.resolve().then(() => leer(archivoInicial))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [archivoInicial])
 
   const indiceLocal = useMemo(() => (extraido ? construirIndice(extraido.secciones, extraido.marcadores) : []), [extraido])
   const indice = useMemo(() => (extraido && temasLibro ? entradasDeTemas(temasLibro, extraido.secciones) : indiceLocal), [extraido, temasLibro, indiceLocal])

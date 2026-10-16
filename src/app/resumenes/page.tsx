@@ -17,6 +17,8 @@ import { ICONO_RESUMEN_POR_DEFECTO } from '@/lib/resumenes/grupo'
 import { crearGrupo, listarGrupos, type GrupoResumen } from '@/lib/resumenes/api'
 import { resumenesIAEstado, type EstadoResumenesIA } from '@/lib/resumenes/ia'
 import { useEstadoIA } from '@/lib/ia/estadoIA'
+import { useSoltarDocumento } from '@/hooks/useSoltarDocumento'
+import CapaSoltarDocumento from '@/components/ia/CapaSoltarDocumento'
 import { borrarBorrador, leerBorradores, type BorradorResumen } from '@/lib/resumenes/borrador'
 import { PanelPrevision } from '@/components/resumenes/PanelPrevision'
 import { EjemploResumen } from '@/components/resumenes/EjemploResumen'
@@ -64,7 +66,9 @@ export default function ResumenesPage() {
   const [error, setError] = useState<string | null>(null)
   // Lo último que se supo se pinta al instante y se pide al montarse, sin esperar a los grupos.
   const { estado: ia, refrescar: refrescarIa } = useEstadoIA<EstadoResumenesIA>('resumenes', resumenesIAEstado)
-  const [iaAbierto, setIaAbierto] = useState<{ borrador?: BorradorResumen } | null>(null)
+  const [iaAbierto, setIaAbierto] = useState<{ borrador?: BorradorResumen; archivo?: File } | null>(null)
+  // Un documento soltado sobre la página: abre «Crear con IA» ya leyéndolo (sin pasar por el botón).
+  const soltar = useSoltarDocumento({ activo: !!ia, bloqueado: !!iaAbierto, alSoltar: (archivo) => setIaAbierto({ archivo }) })
   // Borradores de la IA en este navegador: uno por documento, del más reciente al más viejo.
   const [borradores, setBorradores] = useState<BorradorResumen[]>([])
   const [usuario, setUsuario] = useState<string | null>(null)
@@ -303,10 +307,11 @@ export default function ResumenesPage() {
         </p>
       </main>
 
+      <CapaSoltarDocumento arrastrando={soltar.arrastrando} rechazo={soltar.rechazo} texto="Se crearán resúmenes activos con IA a partir de él." />
       {iaAbierto && (
         <CrearResumenesIA
           estado={ia}
-          {...(iaAbierto.borrador ? { borrador: iaAbierto.borrador } : {})}
+          {...(iaAbierto.borrador ? { borrador: iaAbierto.borrador } : iaAbierto.archivo ? { archivoInicial: iaAbierto.archivo } : {})}
           onClose={() => {
             setIaAbierto(null)
             void cargar()

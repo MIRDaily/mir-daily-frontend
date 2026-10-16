@@ -19,6 +19,8 @@ import FlashcardCreateModal from '@/components/studio/FlashcardCreateModal'
 import CrearFlashcardsIA from '@/components/flashcards/ia/CrearFlashcardsIA'
 import { flashcardsIAEstado } from '@/lib/flashcards/ia/api'
 import { useEstadoIA } from '@/lib/ia/estadoIA'
+import { useSoltarDocumento } from '@/hooks/useSoltarDocumento'
+import CapaSoltarDocumento from '@/components/ia/CapaSoltarDocumento'
 import type { EstadoFlashcardsIA } from '@/lib/flashcards/ia/tarjetas'
 import { borrarBorrador, haceCuanto, listarBorradores, type BorradorGuardado } from '@/lib/flashcards/ia/borrador'
 import { DEFAULT_COLOR_KEY, MAX_FLASHCARD_CHARS, SUBJECT_COLORS, resolveColor, resolveIcon } from '@/lib/flashcardTheme'
@@ -118,6 +120,8 @@ function FlashcardsMindMap() {
   // Lo último que se supo se pinta al instante y se pide al montarse, sin esperar a las asignaturas.
   const { estado: ia, refrescar: refrescarIa } = useEstadoIA<EstadoFlashcardsIA>('flashcards', flashcardsIAEstado)
   const [iaAbierto, setIaAbierto] = useState(false)
+  // Un documento soltado sobre la página: abre «Crear con IA» ya leyéndolo (sin pasar por el botón).
+  const [archivoIA, setArchivoIA] = useState<File | null>(null)
   // Borradores de flashcards con IA sin revisar (en este navegador): se avisa y se retoman.
   const [usuarioId, setUsuarioId] = useState<string | null>(null)
   const [borradores, setBorradores] = useState<BorradorGuardado[]>([])
@@ -127,6 +131,14 @@ function FlashcardsMindMap() {
   }, [])
   const [createCtx, setCreateCtx] = useState<null | { deckId: string; topic?: string }>(null)
   const [detailCard, setDetailCard] = useState<Flashcard | null>(null)
+  const soltar = useSoltarDocumento({
+    activo: !!ia,
+    bloqueado: iaAbierto || !!borradorAbierto || !!subjectModal || !!detailCard,
+    alSoltar: (f) => {
+      setArchivoIA(f)
+      setIaAbierto(true)
+    },
+  })
 
   // Selección múltiple (tipo galería)
   const [selectMode, setSelectMode] = useState(false)
@@ -984,13 +996,15 @@ function FlashcardsMindMap() {
       </main>
 
       {/* Modales */}
+      <CapaSoltarDocumento arrastrando={soltar.arrastrando} rechazo={soltar.rechazo} texto="Se crearán flashcards con IA a partir de él." />
       {(iaAbierto && ia) || borradorAbierto ? (
         <CrearFlashcardsIA
           estado={ia}
-          {...(borradorAbierto ? { borrador: borradorAbierto } : {})}
+          {...(borradorAbierto ? { borrador: borradorAbierto } : archivoIA ? { archivoInicial: archivoIA } : {})}
           onClose={() => {
             setIaAbierto(false)
             setBorradorAbierto(null)
+            setArchivoIA(null)
             cargarBorradores(usuarioId)
             // Lo guardado (grupos nuevos o tarjetas en uno que ya había) aparece en la lista.
             if (token) {

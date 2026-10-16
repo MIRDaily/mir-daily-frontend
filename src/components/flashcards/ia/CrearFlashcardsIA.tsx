@@ -72,8 +72,11 @@ export default function CrearFlashcardsIA({
   visible = true,
   controlRef,
   onEstado,
+  archivoInicial,
 }: PropsEmbebido & {
   estado: EstadoFlashcardsIA | null
+  /** Un documento soltado sobre la página: se empieza leyéndolo. */
+  archivoInicial?: File
   /** Retomar la revisión de un borrador guardado en este navegador (no hace falta la IA). */
   borrador?: BorradorGuardado
   /** Empezar con un documento ya leído, con sus temas y partes marcados. */
@@ -94,8 +97,8 @@ export default function CrearFlashcardsIA({
       ? { archivo: compartido.archivo, extraido: compartido.extraido, titulo: compartido.extraido.titulo, temasLibro: null, sel: seleccionInicial(compartido.extraido, estado.limites).sel }
       : undefined),
   )
-  const [fase, setFase] = useState<Fase>(borrador ? 'vista' : inicial ? 'ajustes' : 'elegir')
-  const [archivo, setArchivo] = useState<File | null>(inicial?.archivo ?? null)
+  const [fase, setFase] = useState<Fase>(borrador ? 'vista' : inicial ? 'ajustes' : archivoInicial ? 'leyendo' : 'elegir')
+  const [archivo, setArchivo] = useState<File | null>(inicial?.archivo ?? archivoInicial ?? null)
   const [extraido, setExtraido] = useState<Extraido | null>(inicial?.extraido ?? null)
   const [titulo, setTitulo] = useState(inicial?.titulo ?? '')
   const [niveles, setNiveles] = useState<FlashcardLevel[]>([...FLASHCARD_LEVELS])
@@ -231,6 +234,16 @@ export default function CrearFlashcardsIA({
       setFase('elegir')
     }
   }
+
+  // Archivo soltado sobre la página (useSoltarDocumento): se lee en cuanto se abre, sin pasar por «elegir».
+  // Una sola vez (en desarrollo, StrictMode monta dos veces) y fuera del cuerpo del efecto.
+  const leidoInicial = useRef(false)
+  useEffect(() => {
+    if (!archivoInicial || leidoInicial.current) return
+    leidoInicial.current = true
+    void Promise.resolve().then(() => leer(archivoInicial))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [archivoInicial])
 
   const indiceLocal = useMemo(() => (extraido ? construirIndice(extraido.secciones, extraido.marcadores) : []), [extraido])
   const indice = useMemo(() => (extraido && temasLibro ? entradasDeTemas(temasLibro, extraido.secciones) : indiceLocal), [extraido, temasLibro, indiceLocal])
