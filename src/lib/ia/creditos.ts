@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabaseBrowser'
 import { IAError } from '@/lib/mapas/ia/types'
 import type { TarifaIA } from '@/lib/ia/precio'
+import { caducarEstadosIA } from '@/lib/ia/estadoIACache'
 import {
   avisoAntesDeCancelar,
   mensajeCancelacion,
@@ -77,6 +78,7 @@ export const estadoCreditosServidor = () => INICIAL
 
 /** Vuelve a pedir saldo y tarifa (tras cada generación, cancelación o error). */
 export function refrescarCreditos(): Promise<void> {
+  caducarEstadosIA()
   if (enCurso) return enCurso
   enCurso = (async () => {
     try {

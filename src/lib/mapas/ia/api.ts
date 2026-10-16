@@ -4,6 +4,7 @@ import { cuerpoOError, leerRespuesta, type EventoIA } from '@/lib/mapas/ia/strea
 import type { StoredDoc } from '@/lib/mapas/graph'
 import { resumenParaIndice, sanitizeTemas, type TemaIndice } from '@/lib/mapas/ia/libro'
 import { nuevoCobro, type Cobro } from '@/lib/ia/creditos'
+import { estadoIA } from '@/lib/ia/estadoIA'
 
 // Llamadas a /api/admin/mapas-ia. El permiso (rol admin, interruptor y cupos)
 // lo valida SIEMPRE el backend; aquí solo se pinta lo que devuelva.
@@ -30,14 +31,12 @@ async function llamar(path: string, init: RequestInit = {}) {
   return cuerpoOError(await abrir(path, init))
 }
 
-/** null si la función no está disponible para este usuario (no admin, apagada…). */
-export async function iaEstado(): Promise<EstadoIA | null> {
-  try {
+/** null si la función no está disponible para este usuario (sin plan, apagada…). Recordado: ver estadoIA. */
+export function iaEstado(o?: { fresco?: boolean }): Promise<EstadoIA | null> {
+  return estadoIA('mapas', async () => {
     const e = (await llamar('/estado')) as EstadoIA
     return e?.disponible ? e : null
-  } catch {
-    return null
-  }
+  }, o)
 }
 
 export type MapaGenerado = {

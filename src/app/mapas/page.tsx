@@ -23,9 +23,8 @@ import { useCozyCursorOff } from '@/hooks/useCozyCursorOff'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import { MapFileError, parseMapFile } from '@/lib/mapas/json'
 import Image from 'next/image'
-import { useProfile } from '@/hooks/useProfile'
 import { iaEstado } from '@/lib/mapas/ia/api'
-import type { EstadoIA } from '@/lib/mapas/ia/types'
+import { useEstadoIA } from '@/lib/ia/estadoIA'
 import { useTutorialReady } from '@/providers/TutorialProvider'
 import { TUTORIAL_MAPAS } from '@/lib/tutorials/scripts'
 import { firstPendingLesson, readLessonsDone, TOTAL_LESSONS } from '@/components/mapas/tutorial/progress'
@@ -82,20 +81,11 @@ export default function MapasPage() {
   )
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // «Crear con IA»: solo se ofrece si el backend dice que está disponible para esta cuenta
-  // (rol admin + interruptor). Ocultar el botón no protege nada: el permiso lo valida el servidor.
-  const { profile } = useProfile()
-  const [ia, setIa] = useState<EstadoIA | null>(null)
+  // «Crear con IA»: solo se ofrece si el backend dice que está disponible para esta cuenta (plan o
+  // admin, e interruptor). Lo último que se supo se pinta al instante (ver estadoIA). Ocultar el botón
+  // no protege nada: el permiso lo valida el servidor.
+  const { estado: ia, refrescar: refrescarIa } = useEstadoIA('mapas', iaEstado)
   const [iaOpen, setIaOpen] = useState(false)
-  const esAdmin = profile?.is_admin === true
-  useEffect(() => {
-    if (!esAdmin) return
-    let cancelado = false
-    void iaEstado().then((e) => !cancelado && setIa(e))
-    return () => {
-      cancelado = true
-    }
-  }, [esAdmin, iaOpen])
   // Progreso del tutorial interactivo (lo guarda el propio tutorial en este navegador).
   // (useSyncExternalStore: en el servidor no hay localStorage y la primera pintura dice 0.)
   const lessonsDone = useSyncExternalStore(noSubscribe, () => readLessonsDone().length, () => 0)
@@ -525,7 +515,7 @@ export default function MapasPage() {
           onAction={undo && toast.tone === 'neutral' ? () => void onUndo() : undefined}
         />
       ) : null}
-      {iaOpen && ia ? <CrearConIA estado={ia} onClose={() => setIaOpen(false)} onCreados={() => void reload()} /> : null}
+      {iaOpen && ia ? <CrearConIA estado={ia} onClose={() => { setIaOpen(false); void refrescarIa() }} onCreados={() => void reload()} /> : null}
     </main>
   )
 }

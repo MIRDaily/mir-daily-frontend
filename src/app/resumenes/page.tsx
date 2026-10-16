@@ -16,6 +16,7 @@ import { resolveColor } from '@/lib/flashcardTheme'
 import { ICONO_RESUMEN_POR_DEFECTO } from '@/lib/resumenes/grupo'
 import { crearGrupo, listarGrupos, type GrupoResumen } from '@/lib/resumenes/api'
 import { resumenesIAEstado, type EstadoResumenesIA } from '@/lib/resumenes/ia'
+import { useEstadoIA } from '@/lib/ia/estadoIA'
 import { borrarBorrador, leerBorradores, type BorradorResumen } from '@/lib/resumenes/borrador'
 import { PanelPrevision } from '@/components/resumenes/PanelPrevision'
 import { EjemploResumen } from '@/components/resumenes/EjemploResumen'
@@ -61,7 +62,8 @@ export default function ResumenesPage() {
   const [estado, setEstado] = useState<'cargando' | 'sin-sesion' | 'listo'>('cargando')
   const [grupos, setGrupos] = useState<GrupoResumen[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [ia, setIa] = useState<EstadoResumenesIA | null>(null)
+  // Lo último que se supo se pinta al instante y se pide al montarse, sin esperar a los grupos.
+  const { estado: ia, refrescar: refrescarIa } = useEstadoIA<EstadoResumenesIA>('resumenes', resumenesIAEstado)
   const [iaAbierto, setIaAbierto] = useState<{ borrador?: BorradorResumen } | null>(null)
   // Borradores de la IA en este navegador: uno por documento, del más reciente al más viejo.
   const [borradores, setBorradores] = useState<BorradorResumen[]>([])
@@ -102,7 +104,6 @@ export default function ResumenesPage() {
       if (!vivo) return
       setEstado('listo')
       setUsuario(session.user.id)
-      void resumenesIAEstado().then((e) => vivo && setIa(e))
       void leerBorradores(session.user.id).then((bs) => vivo && setBorradores(bs))
     })()
     return () => {
@@ -309,6 +310,7 @@ export default function ResumenesPage() {
           onClose={() => {
             setIaAbierto(null)
             void cargar()
+            void refrescarIa()
             if (usuario) void leerBorradores(usuario).then(setBorradores)
           }}
         />

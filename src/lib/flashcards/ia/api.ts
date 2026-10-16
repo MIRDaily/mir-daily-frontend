@@ -4,6 +4,7 @@ import { cuerpoOError, leerRespuesta, type EventoIA } from '@/lib/mapas/ia/strea
 import { resumenParaIndice, sanitizeTemas, type TemaIndice } from '@/lib/mapas/ia/libro'
 import type { FlashcardLevel } from '@/lib/studioFlashcards'
 import { nuevoCobro, type Cobro } from '@/lib/ia/creditos'
+import { estadoIA } from '@/lib/ia/estadoIA'
 import { sanitizeTarjetas, type Densidad, type EstadoFlashcardsIA, type TarjetaIA } from './tarjetas'
 
 // Llamadas a /api/admin/flashcards-ia. El permiso (rol admin, interruptor y cupos) lo valida
@@ -27,14 +28,12 @@ async function abrir(path: string, init: RequestInit = {}, accept = 'application
   }
 }
 
-/** null si la función no está disponible para este usuario (no admin, apagada…). */
-export async function flashcardsIAEstado(): Promise<EstadoFlashcardsIA | null> {
-  try {
+/** null si la función no está disponible para este usuario (sin plan, apagada…). Recordado: ver estadoIA. */
+export function flashcardsIAEstado(o?: { fresco?: boolean }): Promise<EstadoFlashcardsIA | null> {
+  return estadoIA('flashcards', async () => {
     const e = (await cuerpoOError(await abrir('/estado'))) as EstadoFlashcardsIA
     return e?.disponible ? e : null
-  } catch {
-    return null
-  }
+  }, o)
 }
 
 /** Índice de un documento largo (el mismo de los mapas; solo viaja el principio de cada sección). */

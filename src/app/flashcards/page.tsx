@@ -18,6 +18,7 @@ import SubjectModal from '@/components/studio/SubjectModal'
 import FlashcardCreateModal from '@/components/studio/FlashcardCreateModal'
 import CrearFlashcardsIA from '@/components/flashcards/ia/CrearFlashcardsIA'
 import { flashcardsIAEstado } from '@/lib/flashcards/ia/api'
+import { useEstadoIA } from '@/lib/ia/estadoIA'
 import type { EstadoFlashcardsIA } from '@/lib/flashcards/ia/tarjetas'
 import { borrarBorrador, haceCuanto, listarBorradores, type BorradorGuardado } from '@/lib/flashcards/ia/borrador'
 import { DEFAULT_COLOR_KEY, MAX_FLASHCARD_CHARS, SUBJECT_COLORS, resolveColor, resolveIcon } from '@/lib/flashcardTheme'
@@ -114,7 +115,8 @@ function FlashcardsMindMap() {
 
   const [subjectModal, setSubjectModal] = useState<null | { existing?: FlashcardDeck }>(null)
   // Flashcards con IA: solo se ofrece si el backend dice que está disponible para esta cuenta.
-  const [ia, setIa] = useState<EstadoFlashcardsIA | null>(null)
+  // Lo último que se supo se pinta al instante y se pide al montarse, sin esperar a las asignaturas.
+  const { estado: ia, refrescar: refrescarIa } = useEstadoIA<EstadoFlashcardsIA>('flashcards', flashcardsIAEstado)
   const [iaAbierto, setIaAbierto] = useState(false)
   // Borradores de flashcards con IA sin revisar (en este navegador): se avisa y se retoman.
   const [usuarioId, setUsuarioId] = useState<string | null>(null)
@@ -182,7 +184,6 @@ function FlashcardsMindMap() {
       await loadSubjects(accessToken)
       if (mounted) setStatus('ready')
       void loadPanel(accessToken)
-      void flashcardsIAEstado().then((e) => mounted && setIa(e))
       const uid = session?.user.id ?? null
       setUsuarioId(uid)
       cargarBorradores(uid)
@@ -996,7 +997,7 @@ function FlashcardsMindMap() {
               void loadSubjects(token)
               void loadPanel(token)
             }
-            void flashcardsIAEstado().then(setIa)
+            void refrescarIa()
           }}
         />
       ) : null}

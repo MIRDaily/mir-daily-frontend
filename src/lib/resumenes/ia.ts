@@ -5,6 +5,7 @@ import { resumenParaIndice, sanitizeTemas, type TemaIndice } from '@/lib/mapas/i
 import { sanearFuente, sanearParrafo, type FuenteFirmada, type ModoResumen, type ParrafoBorrador } from '@/lib/resumenes/borrador'
 import type { Hueco, Nivel } from '@/lib/resumenes/huecos'
 import { nuevoCobro, type Cobro } from '@/lib/ia/creditos'
+import { estadoIA } from '@/lib/ia/estadoIA'
 
 // Llamadas a /api/admin/resumenes-ia. El permiso (rol admin, interruptor y cupos) lo valida SIEMPRE el
 // backend; aquí solo se pinta lo que devuelva. Los párrafos NO se guardan aquí: se guardan después, con
@@ -70,14 +71,12 @@ async function abrir(path: string, init: RequestInit = {}, accept = 'application
   }
 }
 
-/** null si la función no está disponible para este usuario (no admin, apagada…). */
-export async function resumenesIAEstado(): Promise<EstadoResumenesIA | null> {
-  try {
+/** null si la función no está disponible para este usuario (sin plan, apagada…). Recordado: ver estadoIA. */
+export function resumenesIAEstado(o?: { fresco?: boolean }): Promise<EstadoResumenesIA | null> {
+  return estadoIA('resumenes', async () => {
     const e = (await cuerpoOError(await abrir('/estado'))) as EstadoResumenesIA
     return e?.disponible ? e : null
-  } catch {
-    return null
-  }
+  }, o)
 }
 
 /** Índice de un documento largo (el mismo de los mapas; solo viaja el principio de cada sección). */
