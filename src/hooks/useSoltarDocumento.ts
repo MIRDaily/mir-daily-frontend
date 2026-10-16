@@ -56,16 +56,27 @@ export function useSoltarDocumento({ activo, bloqueado = false, alSoltar }: { ac
       if (dentro === 0) setArrastrando(false)
     }
     // Sin esto el navegador no admite el «soltar» (y, con un diálogo abierto, abriría el archivo en la pestaña).
+    // Con un diálogo abierto, su propia zona de soltar ya ha aceptado el archivo (preventDefault) antes de
+    // que el evento suba hasta aquí: entonces no se toca nada. Marcar «none» encima la anulaba, y el PDF
+    // no entraba en el recuadro del diálogo.
     const sobre = (e: DragEvent) => {
       if (!lleva(e)) return
+      if (bloqueadoRef.current) {
+        if (e.defaultPrevented) return
+        e.preventDefault()
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'none'
+        return
+      }
       e.preventDefault()
-      if (e.dataTransfer) e.dataTransfer.dropEffect = bloqueadoRef.current ? 'none' : 'copy'
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
     }
     const suelta = (e: DragEvent) => {
       if (!lleva(e)) return
-      e.preventDefault()
       dentro = 0
       setArrastrando(false)
+      // La zona del diálogo ya lo ha recogido: no se recoge otra vez.
+      if (e.defaultPrevented) return
+      e.preventDefault()
       if (!bloqueadoRef.current) recibir(e.dataTransfer?.files?.[0])
     }
     window.addEventListener('dragenter', entra)
