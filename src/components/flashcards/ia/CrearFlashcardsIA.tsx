@@ -520,7 +520,7 @@ export default function CrearFlashcardsIA({
   // Carpeta del grupo: se decide aquí y llega ya marcada a la revisión (donde se elige el grupo).
   const carpeta = useCarpeta(
     useMemo(() => textosDocumento(titulo || extraido?.titulo || '', indice.map((e) => e.titulo)), [titulo, extraido, indice]),
-    !!extraido && !embebido,
+    !!extraido,
   )
   const [filaAbierta, setFilaAbierta] = useState<string | null>(null)
   const alternarFila = (id: string) => {
@@ -670,7 +670,6 @@ export default function CrearFlashcardsIA({
 
           {(fase === 'ajustes' || fase === 'generando') && extraido && (
             <div className={fase === 'generando' ? 'hidden' : 'flex flex-col gap-[18px]'}>
-              {embebido && <p className="text-[0.78rem] text-[#7D8A96]">{datosDocumento}</p>}
               {extraido.avisos.map((a) => (
                 <p key={a} className="-mb-2 text-xs font-medium text-[#B07A1E]">
                   {a}

@@ -567,9 +567,6 @@ export default function CrearConIA({
 
         {(fase === 'ajustes' || fase === 'generando') && extraido && (
           <div className={fase === 'generando' ? 'hidden' : 'flex flex-col gap-[18px]'}>
-            {embebido && (
-              <p className="text-[0.78rem] text-[#7D8A96]">{datosDocumento}</p>
-            )}
             {extraido.avisos.map((a) => (
               <p key={a} className="-mb-2 text-xs font-medium text-[#B07A1E]">
                 {a}

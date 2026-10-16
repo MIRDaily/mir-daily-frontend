@@ -27,6 +27,7 @@ export function CabeceraCrear({
   onCambiarDocumento,
   onCerrar,
   cerrarDeshabilitado = false,
+  icono,
 }: {
   herramienta: HerramientaIA
   titulo: string
@@ -37,6 +38,8 @@ export function CabeceraCrear({
   onCambiarDocumento?: () => void
   onCerrar?: () => void
   cerrarDeshabilitado?: boolean
+  /** Icono propio (si no, el de la herramienta). */
+  icono?: string
 }) {
   return (
     <header className="cia-tex px-5 pb-4 pt-4" style={{ borderBottom: `2px solid ${INK}` }}>
@@ -47,7 +50,7 @@ export function CabeceraCrear({
           aria-hidden
         >
           <span className="material-symbols-outlined text-[24px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-            {ICONO[herramienta]}
+            {icono ?? ICONO[herramienta]}
           </span>
         </span>
         <div className="min-w-0 flex-1">
@@ -137,6 +140,7 @@ export function OpcionAnimada({
   dato,
   escena,
   disabled = false,
+  rol = 'radio',
 }: {
   activa: boolean
   onElegir: () => void
@@ -146,12 +150,14 @@ export function OpcionAnimada({
   dato?: string
   escena: ReactNode
   disabled?: boolean
+  /** 'checkbox' cuando se pueden elegir varias (el popup de Studio). */
+  rol?: 'radio' | 'checkbox'
 }) {
   const { ref, onPointerEnter, onPointerLeave } = useEscena(activa)
   return (
     <button
       type="button"
-      role="radio"
+      role={rol}
       aria-checked={activa}
       disabled={disabled}
       onClick={onElegir}
@@ -161,7 +167,7 @@ export function OpcionAnimada({
       style={{ border: `2px solid ${activa ? INK : '#EDE6DE'}`, boxShadow: activa ? '4px 4px 0 0 var(--cia-acc)' : 'none' }}
     >
       <span
-        className="absolute right-2.5 top-2.5 grid size-5 place-items-center rounded-full"
+        className={`absolute right-2.5 top-2.5 grid size-5 place-items-center ${rol === 'checkbox' ? 'rounded-md' : 'rounded-full'}`}
         style={{ border: `2px solid ${activa ? INK : '#EDE6DE'}`, background: activa ? 'var(--cia-acc)' : '#fff' }}
         aria-hidden
       >

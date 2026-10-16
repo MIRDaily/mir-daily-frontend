@@ -641,7 +641,7 @@ export default function CrearResumenesIA({
   // Carpeta del grupo: se decide aquí y llega ya marcada a la revisión (donde se elige el grupo).
   const carpeta = useCarpeta(
     useMemo(() => textosDocumento(titulo || extraido?.titulo || '', indice.map((e) => e.titulo)), [titulo, extraido, indice]),
-    !!extraido && !embebido,
+    !!extraido,
   )
   const [filaAbierta, setFilaAbierta] = useState<string | null>(null)
   const alternarFila = (id: string) => {
@@ -795,7 +795,6 @@ export default function CrearResumenesIA({
 
           {(fase === 'ajustes' || fase === 'generando') && extraido && (
             <div className={fase === 'generando' ? 'hidden' : 'flex flex-col gap-[18px]'}>
-              {embebido && <p className="text-[0.78rem] text-[#7D8A96]">{datosDocumento}</p>}
               {previo && (
                 <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-[#FBF3E1] px-3.5 py-2.5" style={{ border: `2px solid ${INK}` }} data-aviso-borrador>
                   <span className="material-symbols-outlined text-[22px] text-[#B07A1E]" aria-hidden>draft</span>

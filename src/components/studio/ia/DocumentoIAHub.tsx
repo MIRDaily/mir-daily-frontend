@@ -10,6 +10,8 @@ import { INK } from '@/components/mapas/ia/ProgresoIA'
 import CrearConIA from '@/components/mapas/ia/CrearConIA'
 import CrearFlashcardsIA from '@/components/flashcards/ia/CrearFlashcardsIA'
 import CrearResumenesIA from '@/components/resumenes/CrearResumenesIA'
+import { CabeceraCrear, OpcionAnimada, type HerramientaIA } from '@/components/ia/crear/Kit'
+import { EscenaMapa, EscenaMonton, EscenaParrafo } from '@/components/ia/crear/Escenas'
 
 // «Crear desde un documento» (Studio): se suelta un PDF, Word o PowerPoint y se elige qué sacar de él
 // —mapa conceptual, flashcards, resumen activo, una cosa o las tres—. Dos pasos:
@@ -29,6 +31,9 @@ const OPCIONES: { id: Id; titulo: string; descripcion: string; icono: string }[]
   { id: 'resumenes', titulo: 'Resumen activo', descripcion: 'Párrafos con huecos para repasar y recordar.', icono: 'text_snippet' },
 ]
 const NOMBRE: Record<Id, string> = { mapa: 'Mapa conceptual', flashcards: 'Flashcards', resumenes: 'Resumen activo' }
+/** Color y textura de cada pestaña (crearIA.css). */
+const HERRAMIENTA: Record<Id, HerramientaIA> = { mapa: 'mapa', flashcards: 'flashcards', resumenes: 'resumen' }
+const ESCENA: Record<Id, React.ReactNode> = { mapa: <EscenaMapa rico={false} />, flashcards: <EscenaMonton n={4} />, resumenes: <EscenaParrafo literal={false} /> }
 
 const SIN_REPORTAR: EstadoEmbebido = { fase: 'ajustes', listo: false }
 const fmt = (n: number) => n.toLocaleString('es-ES')
@@ -179,6 +184,19 @@ export default function DocumentoIAHub({ archivo: archivoInicial, estados, onClo
   const anchoVista = hoy ? repo(hoy).fase === 'vista' : false
   const ancho = paso === 'elegir' ? 'max-w-xl' : anchoVista ? 'max-w-4xl' : 'max-w-2xl'
 
+  // El marco toma el color de la pestaña abierta (en el primer paso, el de mapas: el coral de siempre).
+  const tono: HerramientaIA = paso === 'ajustes' && hoy ? HERRAMIENTA[hoy] : 'mapa'
+  const datosDoc =
+    lectura.estado === 'error'
+      ? (lectura.error ?? 'No se pudo leer el archivo.')
+      : lectura.estado === 'listo' && doc
+        ? `${fmt(doc.extraido.paginas)} ${doc.extraido.unidad ?? 'página'}${doc.extraido.paginas === 1 ? '' : 's'} · ${fmt(doc.extraido.caracteres)} caracteres`
+        : lectura.total && lectura.total > 1
+          ? `Leyendo… página ${lectura.hecho ?? 0} de ${lectura.total}`
+          : `Leyendo… (${tamano(archivo.size)})`
+  const botonPrincipal = 'flex items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-[0.92rem] font-black text-white transition-transform hover:-translate-x-px hover:-translate-y-px active:translate-x-[3px] active:translate-y-[3px] disabled:translate-x-0 disabled:translate-y-0 disabled:opacity-50'
+  const estiloPrincipal = { background: 'var(--cia-boton)', border: `2px solid ${INK}`, boxShadow: `4px 4px 0 0 ${INK}` }
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-[#2C3E50]/40 p-4 backdrop-blur-[2px]"
@@ -188,111 +206,71 @@ export default function DocumentoIAHub({ archivo: archivoInicial, estados, onClo
         role="dialog"
         aria-modal="true"
         aria-labelledby="hub-ia-titulo"
-        className={`flex max-h-[92dvh] w-full ${ancho} flex-col overflow-hidden rounded-3xl bg-[#FAF7F4] transition-[max-width] duration-200`}
-        style={{ border: `2px solid ${INK}`, boxShadow: `6px 6px 0 0 ${INK}` }}
+        data-cia={tono}
+        className={`flex max-h-[92dvh] w-full ${ancho} flex-col overflow-hidden rounded-[28px] bg-[#FAF7F4] transition-[max-width] duration-200`}
+        style={{ border: `2px solid ${INK}`, boxShadow: `8px 8px 0 0 ${INK}` }}
       >
-        <header className="flex items-start justify-between gap-4 px-6 pb-3 pt-6">
-          <div className="min-w-0">
-            <h2 id="hub-ia-titulo" className="flex items-center gap-2 text-xl font-extrabold text-[#2C3E50]">
-              <span aria-hidden className="inline-block text-[#E8A598]">
-                <span className="material-symbols-outlined text-[24px] leading-none">auto_awesome</span>
-              </span>
-              {paso === 'elegir' ? 'Crear desde un documento' : 'Ajustes de cada creación'}
-            </h2>
-            <p className="mt-1 truncate text-sm text-[#7D8A96]">
-              {paso === 'elegir' ? 'Elige qué quieres sacar de él: una cosa o las tres.' : archivo.name}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={intentarCerrar}
-            disabled={generando}
-            aria-label="Cerrar"
-            className="rounded-full p-1.5 text-[#7D8A96] transition-colors hover:bg-white hover:text-[#2C3E50] disabled:opacity-40"
-          >
-            <span className="material-symbols-outlined text-[22px]">close</span>
-          </button>
-        </header>
+        <input
+          ref={inputRef}
+          type="file"
+          accept={FORMATOS_ACEPTADOS}
+          className="hidden"
+          onChange={(e) => {
+            cambiarArchivo(e.target.files?.[0])
+            e.target.value = ''
+          }}
+        />
+        <CabeceraCrear
+          herramienta={tono}
+          icono="auto_awesome"
+          idTitulo="hub-ia-titulo"
+          titulo={paso === 'elegir' ? 'Crear desde un documento' : 'Tus creaciones'}
+          subtitulo={paso === 'elegir' ? 'Elige qué sacar de él: una cosa o las tres.' : 'Ajusta cada una en su pestaña y genéralas.'}
+          documento={{ nombre: archivo.name, datos: datosDoc }}
+          {...(paso === 'elegir' ? { onCambiarDocumento: () => inputRef.current?.click() } : {})}
+          {...(!generando ? { onCerrar: intentarCerrar } : {})}
+        />
 
         {paso === 'elegir' && (
           <>
-            <div className="overflow-y-auto px-6 pb-4">
-              <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3">
-                <span className={`material-symbols-outlined text-[28px] text-[#E8A598] ${lectura.estado === 'leyendo' ? 'animate-pulse' : ''}`}>description</span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-[#2C3E50]">{archivo.name}</p>
-                  <p className={`text-xs ${lectura.estado === 'error' ? 'font-bold text-[#B04A5E]' : 'text-[#7D8A96]'}`} aria-live="polite">
-                    {lectura.estado === 'error'
-                      ? lectura.error
-                      : lectura.estado === 'listo' && doc
-                        ? `${fmt(doc.extraido.paginas)} ${doc.extraido.unidad ?? 'página'}${doc.extraido.paginas === 1 ? '' : 's'} · ${fmt(doc.extraido.caracteres)} caracteres`
-                        : lectura.total && lectura.total > 1
-                          ? `Leyendo… página ${lectura.hecho ?? 0} de ${lectura.total}`
-                          : `Leyendo… (${tamano(archivo.size)})`}
-                  </p>
-                </div>
-                <input
-                  ref={inputRef}
-                  type="file"
-                  accept={FORMATOS_ACEPTADOS}
-                  className="hidden"
-                  onChange={(e) => {
-                    cambiarArchivo(e.target.files?.[0])
-                    e.target.value = ''
-                  }}
-                />
-                <button type="button" onClick={() => inputRef.current?.click()} className="text-xs font-bold text-[#7D8A96] hover:text-[#E8A598]">
-                  Cambiar
-                </button>
-              </div>
-
-              <p className="mt-5 text-xs font-bold uppercase tracking-wide text-[#7D8A96]">¿Qué quieres crear?</p>
-              <div className="mt-2 flex flex-col gap-2" role="group" aria-label="Qué crear">
+            <div className="overflow-y-auto px-5 pb-5 pt-4">
+              <h3 className="mb-2.5 flex items-center gap-2 text-[0.82rem] font-black text-[#2C3E50]">
+                ¿Qué quieres crear?
+                <span className="ml-auto text-[0.72rem] font-medium text-[#7D8A96]">Puedes elegir varias</span>
+              </h3>
+              <div className="grid grid-cols-3 gap-2.5" role="group" aria-label="Qué crear">
                 {OPCIONES.map((o) => {
                   const ok = disponibles.some((d) => d.id === o.id)
-                  const on = elegidas.includes(o.id)
                   return (
-                    <label
-                      key={o.id}
-                      className={`flex items-start gap-3 rounded-2xl bg-white px-4 py-3 ${ok ? 'cursor-pointer' : 'cursor-not-allowed opacity-55'}`}
-                      style={{ border: `2px solid ${on ? '#E8A598' : 'transparent'}` }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={on}
+                    <div key={o.id} data-cia={HERRAMIENTA[o.id]} className="grid">
+                      <OpcionAnimada
+                        rol="checkbox"
+                        activa={elegidas.includes(o.id)}
                         disabled={!ok}
-                        onChange={() => alternar(o.id)}
-                        style={{ accentColor: '#E8A598', width: 18, height: 18, marginTop: 2, flexShrink: 0 }}
+                        onElegir={() => alternar(o.id)}
+                        titulo={o.titulo}
+                        descripcion={ok ? o.descripcion : 'No está disponible para tu cuenta.'}
+                        escena={ESCENA[o.id]}
                       />
-                      <span aria-hidden className="inline-block text-[#E8A598]">
-                        <span className="material-symbols-outlined text-[1.6rem] leading-none">{o.icono}</span>
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-sm font-extrabold text-[#2C3E50]">{o.titulo}</span>
-                        <span className="block text-xs text-[#7D8A96]">{ok ? o.descripcion : 'No está disponible para tu cuenta.'}</span>
-                      </span>
-                    </label>
+                    </div>
                   )
                 })}
               </div>
               {elegidas.length > 1 && (
-                <p className="mt-3 rounded-xl bg-[#FBF3E1] px-3 py-2 text-[0.78rem] font-semibold text-[#8A6418]">
-                  La IA hace una cosa cada vez: al generar, las {elegidas.length} se harán una detrás de otra.
+                <p className="mt-3 flex items-center gap-1.5 text-[0.75rem] font-semibold text-[#8A6418]">
+                  <span className="material-symbols-outlined text-[16px]" aria-hidden>queue</span>
+                  La IA hace una cosa cada vez: las {elegidas.length} se harán una detrás de otra.
                 </p>
               )}
             </div>
-            <footer className="flex shrink-0 justify-end gap-3 border-t border-[#7D8A96]/15 bg-white px-6 py-4">
-              <button type="button" onClick={intentarCerrar} className="rounded-2xl px-4 py-2.5 text-sm font-bold text-[#7D8A96] hover:text-[#2C3E50]">
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={continuar}
-                disabled={!doc || elegidas.length === 0}
-                className="flex items-center gap-2 rounded-2xl bg-[#E8A598] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#d18d80] disabled:opacity-50"
-              >
+            <footer className="flex shrink-0 items-center justify-end gap-3 bg-white px-5 py-3.5" style={{ borderTop: `2px solid ${INK}` }}>
+              <p className="mr-auto flex items-start gap-1.5 text-[0.68rem] leading-snug text-[#7D8A96]">
+                <span className="material-symbols-outlined text-[14px]" aria-hidden>lock</span>
+                El documento se lee en tu navegador: no se sube ni se guarda.
+              </p>
+              <button type="button" onClick={continuar} disabled={!doc || elegidas.length === 0} className={botonPrincipal} style={estiloPrincipal}>
                 {lectura.estado === 'leyendo' ? 'Leyendo el documento…' : 'Continuar'}
-                {lectura.estado !== 'leyendo' && <span className="material-symbols-outlined text-[20px]">arrow_forward</span>}
+                {lectura.estado !== 'leyendo' && <span className="material-symbols-outlined text-[20px]" aria-hidden>arrow_forward</span>}
               </button>
             </footer>
           </>
@@ -300,7 +278,7 @@ export default function DocumentoIAHub({ archivo: archivoInicial, estados, onClo
 
         {paso === 'ajustes' && doc && (
           <>
-            <div role="tablist" aria-label="Qué se va a crear" className="flex shrink-0 gap-2 overflow-x-auto px-6 pb-3">
+            <div role="tablist" aria-label="Qué se va a crear" className="flex shrink-0 gap-2 overflow-x-auto px-5 pb-1 pt-3.5">
               {elegidas.map((id) => {
                 const o = OPCIONES.find((x) => x.id === id)!
                 const et = etiqueta(id)
@@ -314,16 +292,22 @@ export default function DocumentoIAHub({ archivo: archivoInicial, estados, onClo
                     aria-selected={on}
                     disabled={cerrada}
                     onClick={() => setPestana(id)}
-                    className="flex shrink-0 items-center gap-2 rounded-2xl bg-white px-3 py-2 text-left disabled:opacity-60"
-                    style={{ border: `2px solid ${on ? '#E8A598' : 'transparent'}` }}
+                    data-cia={HERRAMIENTA[id]}
+                    className="flex shrink-0 items-center gap-2.5 rounded-2xl bg-white py-2 pl-2 pr-3.5 text-left transition-transform hover:-translate-y-px disabled:opacity-50"
+                    style={{ border: `2px solid ${on ? INK : '#EDE6DE'}`, boxShadow: on ? '3px 3px 0 0 var(--cia-acc)' : 'none' }}
                   >
-                    <span aria-hidden className="inline-block text-[#E8A598]">
-                      <span className="material-symbols-outlined text-[1.3rem] leading-none">{o.icono}</span>
+                    <span
+                      className="grid size-8 place-items-center rounded-[10px] text-white"
+                      style={{ background: 'var(--cia-acc)', border: `2px solid ${INK}` }}
+                      aria-hidden
+                    >
+                      <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>{o.icono}</span>
                     </span>
                     <span>
-                      <span className="block text-sm font-extrabold text-[#2C3E50]">{o.titulo}</span>
-                      <span className="flex items-center gap-1 text-[0.7rem] font-bold" style={{ color: TONO[et.tono] }}>
+                      <span className="block text-[0.82rem] font-extrabold text-[#2C3E50]">{o.titulo}</span>
+                      <span className="flex items-center gap-1 text-[0.68rem] font-bold" style={{ color: TONO[et.tono] }}>
                         {et.tono === 'curso' && <span aria-hidden className="inline-block h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: TONO[et.tono] }} />}
+                        {et.tono === 'ok' && <span className="material-symbols-outlined text-[13px]" aria-hidden>check_circle</span>}
                         {et.texto}
                       </span>
                     </span>
@@ -364,13 +348,10 @@ export default function DocumentoIAHub({ archivo: archivoInicial, estados, onClo
               />
             )}
 
-            <footer className="shrink-0 border-t border-[#7D8A96]/15 bg-white px-6 py-3">
-              <p className="mb-2 text-[11px] leading-relaxed text-[#7D8A96]">
-                Los archivos no se guardan ni se suben: se leen en tu navegador y su texto se envía a un servicio de IA externo (DeepSeek) solo para generar lo que
-                pides. La IA puede equivocarse: revisa el resultado antes de estudiar con él.
-              </p>
+            <footer className="shrink-0 bg-white px-5 pb-3 pt-3.5" style={{ borderTop: `2px solid ${INK}` }}>
               {(aviso || (faltaMsg && pendientes.length > 0 && !generando)) && (
-                <p role="status" className={`mb-2 text-xs font-bold ${aviso ? 'text-[#B04A5E]' : 'text-[#B07A1E]'}`}>
+                <p role="status" className={`mb-2.5 flex items-center gap-1.5 text-[0.75rem] font-bold ${aviso ? 'text-[#B04A5E]' : 'text-[#B07A1E]'}`}>
+                  <span className="material-symbols-outlined text-[16px]" aria-hidden>{aviso ? 'error' : 'info'}</span>
                   {aviso ?? faltaMsg}
                 </p>
               )}
@@ -381,9 +362,10 @@ export default function DocumentoIAHub({ archivo: archivoInicial, estados, onClo
                   <button
                     type="button"
                     onClick={() => setPaso('elegir')}
-                    className="mr-auto rounded-2xl px-3 py-2.5 text-sm font-bold text-[#7D8A96] hover:text-[#2C3E50]"
+                    className="mr-auto flex items-center gap-1 rounded-xl px-2 py-2 text-[0.8rem] font-bold text-[#7D8A96] hover:text-[#2C3E50]"
                   >
-                    ← Cambiar la selección
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden>arrow_back</span>
+                    Cambiar la selección
                   </button>
                 )}
                 {pendientes.length > 1 && hoy && repo(hoy).fase === 'ajustes' && (
@@ -391,29 +373,33 @@ export default function DocumentoIAHub({ archivo: archivoInicial, estados, onClo
                     type="button"
                     onClick={() => void lanzar([hoy])}
                     disabled={!hoyListo}
-                    className="rounded-2xl px-4 py-2.5 text-sm font-bold text-[#2C3E50] disabled:opacity-40"
-                    style={{ border: `2px solid ${INK}` }}
+                    className="rounded-2xl bg-white px-4 py-2.5 text-[0.85rem] font-bold text-[#2C3E50] disabled:opacity-40"
+                    style={{ border: `2px solid ${INK}`, boxShadow: `2px 2px 0 0 ${INK}` }}
                   >
                     Solo «{NOMBRE[hoy]}»
                   </button>
                 )}
                 {pendientes.length === 0 && !generando && (
-                  <button type="button" onClick={intentarCerrar} className="rounded-2xl px-4 py-2.5 text-sm font-bold text-[#2C3E50]" style={{ border: `2px solid ${INK}` }}>
+                  <button
+                    type="button"
+                    onClick={intentarCerrar}
+                    className="rounded-2xl bg-white px-4 py-2.5 text-[0.85rem] font-bold text-[#2C3E50]"
+                    style={{ border: `2px solid ${INK}`, boxShadow: `2px 2px 0 0 ${INK}` }}
+                  >
                     Cerrar
                   </button>
                 )}
                 {pendientes.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => void lanzar(pendientes)}
-                    disabled={!puedeTodo}
-                    className="flex items-center gap-2 rounded-2xl bg-[#E8A598] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#d18d80] disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
+                  <button type="button" onClick={() => void lanzar(pendientes)} disabled={!puedeTodo} className={botonPrincipal} style={estiloPrincipal}>
+                    <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden>auto_awesome</span>
                     {generando ? 'Generando…' : pendientes.length > 1 ? `Generar las ${pendientes.length}` : 'Generar'}
                   </button>
                 )}
               </div>
+              <p className="mt-2 flex items-start gap-1.5 text-[0.68rem] leading-snug text-[#7D8A96]">
+                <span className="material-symbols-outlined text-[14px]" aria-hidden>lock</span>
+                Tu archivo no se guarda. El texto va a la IA (DeepSeek) solo para generar; revisa el resultado antes de estudiar con él.
+              </p>
             </footer>
           </>
         )}
