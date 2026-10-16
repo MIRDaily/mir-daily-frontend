@@ -64,6 +64,8 @@ const ALIASES: Record<string, string> = {
   inmuno: 'inmunologia',
   infeccioso: 'infecciosas',
   microbiologia: 'infecciosas',
+  // «Miscelánea y Ciencias Básicas» pasa a llamarse «Mosaico» (16/10/2026): misma asignatura, mismo peso.
+  mosaico: 'miscelanea',
 }
 
 /** Peso para una asignatura que no esté en la tabla. */

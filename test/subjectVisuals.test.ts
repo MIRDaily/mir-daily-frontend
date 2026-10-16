@@ -99,3 +99,26 @@ describe('subjectVisual', () => {
     nombres.forEach((n) => assert.notEqual(subjectVisual(n).category, 'PERSONAL', n))
   })
 })
+
+describe('nombres nuevos de las asignaturas (16/10/2026)', () => {
+  it('Mosaico es la antigua Miscelánea: mismo peso en el simulacro y misma identidad visual', () => {
+    assert.equal(subjectKeyFor('Mosaico'), 'miscelanea')
+    assert.equal(weightForSubject('Mosaico'), weightForSubject('Miscelánea y Ciencias Básicas'))
+    assert.notEqual(weightForSubject('Mosaico'), DEFAULT_WEIGHT)
+    assert.equal(subjectVisual('Mosaico').sigla, subjectVisual('Miscelánea y Ciencias Básicas').sigla)
+    assert.equal(subjectVisual('Mosaico').key, 'miscelanea')
+  })
+
+  it('los otros cuatro cambios de nombre se siguen reconociendo', () => {
+    const pares: [string, string][] = [
+      ['Estadística y Epidemiología', 'estadistica'],
+      ['Neurología y Neurocirugía', 'neurologia'],
+      ['Endocrinología', 'endocrinologia'],
+      ['Traumatología y Cirugía Ortopédica', 'traumatologia'],
+      ['Ginecología y Obstetricia', 'ginecologia'],
+      ['Oftalmología', 'oftalmologia'],
+      ['Inmunología', 'inmunologia'],
+    ]
+    for (const [nombre, clave] of pares) assert.equal(subjectKeyFor(nombre), clave, nombre)
+  })
+})

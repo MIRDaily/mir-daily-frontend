@@ -51,7 +51,7 @@ const SUBJECT_VISUALS: Record<string, SubjectVisualEntry> = {
   // Básicas
   estadistica: { label: 'Estadística', sigla: 'ET', icon: 'analytics', color: 'slate', category: 'BÁSICA' },
   inmunologia: { label: 'Inmunología', sigla: 'IM', icon: 'biotech', color: 'lavender', category: 'BÁSICA' },
-  miscelanea: { label: 'Miscelánea', sigla: 'MC', icon: 'menu_book', color: 'slate', category: 'BÁSICA' },
+  miscelanea: { label: 'Mosaico', sigla: 'MC', icon: 'menu_book', color: 'slate', category: 'BÁSICA' },
   farmacologia: { label: 'Farmacología', sigla: 'FM', icon: 'medication', color: 'gold', category: 'BÁSICA' },
   bioetica: { label: 'Bioética', sigla: 'BE', icon: 'menu_book', color: 'lavender', category: 'BÁSICA' },
 
@@ -90,6 +90,8 @@ const VISUAL_ALIASES: Record<string, string> = {
   farmaco: 'farmacologia',
   farmacia: 'farmacologia',
   legislacion: 'bioetica',
+  // «Miscelánea y Ciencias Básicas» pasa a llamarse «Mosaico» (16/10/2026).
+  mosaico: 'miscelanea',
 }
 
 /** Las asignaturas del MIR con su sigla y categoría, en orden de categoría y nombre (para elegirlas). */

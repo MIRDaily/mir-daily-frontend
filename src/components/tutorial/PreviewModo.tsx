@@ -82,9 +82,10 @@ function Paso({
 
 const ASIGNATURAS = [
   'Cardiología y Cirugía Cardiovascular', 'Dermatología', 'Digestivo y Cirugía General',
-  'Endocrinología y Nutrición', 'Estadística', 'Hematología', 'Infecciosas y Microbiología',
-  'Miscelánea y Ciencias Básicas', 'Nefrología', 'Neumología y Cirugía Torácica',
-  'Neurología', 'Otorrinolaringología', 'Pediatría', 'Psiquiatría', 'Traumatología', 'Urología',
+  'Endocrinología', 'Estadística y Epidemiología', 'Hematología', 'Infecciosas y Microbiología',
+  'Mosaico', 'Nefrología', 'Neumología y Cirugía Torácica',
+  'Neurología y Neurocirugía', 'Otorrinolaringología', 'Pediatría', 'Psiquiatría',
+  'Traumatología y Cirugía Ortopédica', 'Urología',
 ]
 
 const ATAJOS = ['10', '25', '50', '100', '210']
