@@ -44,9 +44,9 @@ type SubjectVisualEntry = {
 // peso propio (Farmacología, Bioética, Cirugía Plástica): si alguien llama así a
 // un mazo, es una asignatura de verdad y no un cajón personal.
 //
-// La categoría sigue la taxonomía que ya usa la Biblioteca
-// (src/mocks/library.ts): Digestivo y Ginecología van como quirúrgicas porque
-// allí son "Cirugía General y Digestivo" y "Ginecología y Obstetricia".
+// La categoría sigue la taxonomía de la antigua maqueta de la Biblioteca (y la
+// usa ahora su filtro por tipo): Digestivo y Ginecología van como quirúrgicas
+// porque allí eran "Cirugía General y Digestivo" y "Ginecología y Obstetricia".
 const SUBJECT_VISUALS: Record<string, SubjectVisualEntry> = {
   // Básicas
   estadistica: { label: 'Estadística', sigla: 'ET', icon: 'analytics', color: 'slate', category: 'BÁSICA' },

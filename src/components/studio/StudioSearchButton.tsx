@@ -7,10 +7,8 @@
 
    Índice de dos fuentes: los módulos del propio Studio (fijos, con su ruta
    real) y las asignaturas de verdad (`fetchSubjects`, las mismas que usa el
-   constructor de simulacros). Las asignaturas enlazan a /library en general
-   y no a una vista filtrada: /library todavía corre sobre datos de ejemplo
-   (`src/mocks/library.ts`), así que prometer un filtro exacto ahí mentiría
-   más de lo que ayuda.
+   constructor de simulacros). Cada asignatura enlaza a su página de la
+   Biblioteca (/library/<id>), que ya corre sobre el catálogo real.
 ═══════════════════════════════════════════════════════════════════════════ */
 
 import Link from 'next/link'
@@ -75,12 +73,17 @@ export default function StudioSearchButton() {
   }, [open])
 
   useEffect(() => {
-    if (open) {
-      const id = setTimeout(() => inputRef.current?.focus(), 30)
-      return () => clearTimeout(id)
-    }
-    setQuery('')
+    if (!open) return
+    const id = setTimeout(() => inputRef.current?.focus(), 30)
+    return () => clearTimeout(id)
   }, [open])
+
+  // Al cerrar se olvida lo buscado (ajuste durante el render, sin efecto: react.dev «You might not need an effect»).
+  const [openAntes, setOpenAntes] = useState(open)
+  if (open !== openAntes) {
+    setOpenAntes(open)
+    if (!open) setQuery('')
+  }
 
   const q = normalize(query.trim())
   const modules = useMemo(
@@ -175,7 +178,7 @@ export default function StudioSearchButton() {
                       {subjectResults.map((s) => (
                         <li key={s.id}>
                           <Link
-                            href="/library"
+                            href={`/library/${s.id}`}
                             onClick={() => setOpen(false)}
                             className="flex items-center gap-2.5 rounded-xl px-2 py-2 hover:bg-[#FAF7F4]"
                           >

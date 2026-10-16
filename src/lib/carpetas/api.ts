@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseBrowser'
 import type { AsignaturaCatalogo, Carpeta } from '@/lib/carpetas/sugerir'
+import type { ElementoMaterial, Recuento } from '@/lib/carpetas/biblioteca'
 
 // Carpetas del material: el árbol del catálogo (GET /api/carpetas/arbol) y mover mapas o grupos
 // (PATCH /api/carpetas). El servidor valida dueño, asignatura y tema; aquí solo se pide y se pinta.
@@ -73,3 +74,28 @@ export const carpetaDeFila = (f: { folder_subject_id?: number | null; folder_top
   subjectId: f.folder_subject_id ?? null,
   topicId: f.folder_subject_id == null ? null : (f.folder_topic_id ?? null),
 })
+
+// ---- Biblioteca (fase 2): lo del usuario, sin caché (cambia al mover) -------------------------------
+
+/** Cuánto material hay en cada carpeta y en «Sin clasificar». */
+export async function cargarRecuento(): Promise<Recuento> {
+  return (await pedir({ ruta: '/recuento' })) as Recuento
+}
+
+/** Lo que no tiene carpeta, con los textos para sugerirla. */
+export async function cargarSinClasificar(): Promise<ElementoMaterial[]> {
+  const r = await pedir({ ruta: '/sin-clasificar' })
+  return Array.isArray(r?.elementos) ? (r.elementos as ElementoMaterial[]) : []
+}
+
+export type DatosAsignatura = {
+  asignatura: AsignaturaCatalogo
+  /** Preguntas MIR del catálogo: en total y por tema (id → cuántas). */
+  preguntas: { total: number; porTema: Record<string, number> }
+  elementos: ElementoMaterial[]
+}
+
+/** El material del usuario en una asignatura y sus preguntas MIR por tema. */
+export async function cargarAsignatura(id: number): Promise<DatosAsignatura> {
+  return (await pedir({ ruta: `/asignatura/${id}` })) as DatosAsignatura
+}

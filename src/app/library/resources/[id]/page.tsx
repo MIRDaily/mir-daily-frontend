@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import { getUserAndToken } from '@/lib/supabase/server'
-import { findMockResourceById } from '@/mocks/library'
 
 type LibraryResourcePageProps = {
   params: Promise<{ id: string }>
@@ -22,40 +21,6 @@ type LibraryResourceResponse = {
   navigation: {
     prevResourceId: string | null
     nextResourceId: string | null
-  }
-}
-
-function parseDurationToMinutes(duration?: string): number {
-  if (!duration) return 10
-  const match = duration.match(/\d+/)
-  return match ? Number(match[0]) : 10
-}
-
-function buildMockResourceResponse(resourceId: string): LibraryResourceResponse | null {
-  const mock = findMockResourceById(resourceId)
-  if (!mock) return null
-
-  const topicResources = mock.topic.resources
-  const currentIndex = topicResources.findIndex((resource) => resource.id === resourceId)
-
-  return {
-    resource: {
-      id: mock.resource.id,
-      title: mock.resource.title,
-      type: mock.resource.type,
-      estimatedMinutes: parseDurationToMinutes(mock.resource.duration),
-      contentMarkdown: `# ${mock.resource.title}\n\nContenido temporal de respaldo para este recurso.`,
-      topic: { id: 0, name: mock.topic.name },
-      subject: { id: 0, name: mock.subject.name },
-      completed: mock.resource.completed,
-    },
-    navigation: {
-      prevResourceId: currentIndex > 0 ? topicResources[currentIndex - 1].id : null,
-      nextResourceId:
-        currentIndex >= 0 && currentIndex < topicResources.length - 1
-          ? topicResources[currentIndex + 1].id
-          : null,
-    },
   }
 }
 
@@ -85,8 +50,6 @@ async function getResource(resourceId: string, accessToken: string): Promise<Lib
 
 export default async function LibraryResourcePage({ params }: LibraryResourcePageProps) {
   const { id } = await params
-  const isDevelopment = process.env.NODE_ENV !== 'production'
-  let usingFallback = false
   let hasLoadError = false
   let data: LibraryResourceResponse | null = null
 
@@ -94,12 +57,7 @@ export default async function LibraryResourcePage({ params }: LibraryResourcePag
     const { accessToken } = await getUserAndToken()
     data = await getResource(id, accessToken)
   } catch {
-    if (isDevelopment) {
-      usingFallback = true
-      data = buildMockResourceResponse(id)
-    } else {
-      hasLoadError = true
-    }
+    hasLoadError = true
   }
 
   if (hasLoadError) {
@@ -118,10 +76,6 @@ export default async function LibraryResourcePage({ params }: LibraryResourcePag
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-10">
-      {usingFallback ? (
-        <p className="mb-4 text-sm text-[#7D8A96]">API no disponible. Mostrando contenido de respaldo.</p>
-      ) : null}
-
       <header className="mb-8 space-y-3">
         <p className="text-sm font-medium text-[#7D8A96]">
           {resource.subject.name} - {resource.topic.name}

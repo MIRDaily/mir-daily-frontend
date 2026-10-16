@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import GuideEffortMatrix from '@/components/library/guide/GuideEffortMatrix'
 import GuideHeatmap from '@/components/library/guide/GuideHeatmap'
 import GuideMasonry from '@/components/library/guide/GuideMasonry'
@@ -16,8 +16,8 @@ import GuideReveal from '@/components/library/guide/GuideReveal'
 import GuideHeaderCrumbs from '@/components/library/guide/GuideHeaderCrumbs'
 import { GuideQuizProvider, GuideQuizScore } from '@/components/library/guide/GuideQuiz'
 import GuideTableOfContents, { GuideSectionChips, type GuideTocItem } from '@/components/library/guide/GuideTableOfContents'
-import { getStudyGuide } from '@/lib/studyGuides'
-import { LIBRARY_SUBJECT_OVERVIEW_BY_ID } from '@/mocks/library'
+import { ASIGNATURA_DE_GUIA, getStudyGuide, guiaDeAsignatura } from '@/lib/studyGuides'
+import { idDeSegmento } from '@/lib/carpetas/biblioteca'
 import { RECENT_WINDOW, withStats } from '@/lib/studyGuides/stats'
 import type { GuideQuestionKind, GuideTier } from '@/types/studyGuide'
 
@@ -36,15 +36,25 @@ const QUESTION_GROUPS: Array<{ kind: GuideQuestionKind; title: string; tocLabel?
   },
 ]
 
+// La URL lleva el id de la asignatura del catálogo (/library/3080/guia). Las de la maqueta llevaban la clave
+// de texto de la guía (/library/reumatologia/guia): se redirigen, porque los reportes enlazan así.
+function guiaDeRuta(segmento: string) {
+  const id = idDeSegmento(segmento)
+  return id === null ? null : guiaDeAsignatura(id)
+}
+
 export async function generateMetadata({ params }: LibraryGuidePageProps): Promise<Metadata> {
   const { subjectId } = await params
-  const guide = getStudyGuide(subjectId)
+  const guide = guiaDeRuta(subjectId)
   return { title: guide ? `Guía de estudio · ${guide.title} | MIRDaily` : 'Guía de estudio | MIRDaily' }
 }
 
 export default async function LibraryGuidePage({ params }: LibraryGuidePageProps) {
   const { subjectId } = await params
-  const guide = getStudyGuide(subjectId)
+  if (idDeSegmento(subjectId) === null && getStudyGuide(subjectId)) {
+    redirect(`/library/${ASIGNATURA_DE_GUIA[subjectId]}/guia`)
+  }
+  const guide = guiaDeRuta(subjectId)
 
   if (!guide) {
     notFound()
@@ -112,8 +122,8 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
 
         <div className="flex min-w-0 flex-col gap-10">
           <GuideHeaderCrumbs
-            subjectId={guide.subjectId}
-            subjectName={LIBRARY_SUBJECT_OVERVIEW_BY_ID[guide.subjectId]?.name ?? guide.title}
+            subjectId={subjectId}
+            subjectName={guide.title}
             current={`Guía de estudio ${guide.targetExam}`}
           />
 
