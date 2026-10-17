@@ -13,7 +13,6 @@ import {
   renameMap,
   restoreMap,
   setMapPinned,
-  setMapSubject,
   type MapSummary,
 } from '@/lib/mapas/api'
 import { MapCard } from '@/components/mapas/list/MapCard'
@@ -26,6 +25,8 @@ import Image from 'next/image'
 import { iaEstado } from '@/lib/mapas/ia/api'
 import { useEstadoIA } from '@/lib/ia/estadoIA'
 import MoverACarpeta from '@/components/carpetas/MoverACarpeta'
+import { useArbolCarpetas } from '@/lib/carpetas/api'
+import { etiquetaCarpetaMapa, opcionesFiltroCarpeta, pasaFiltroCarpeta, type FiltroCarpeta } from '@/lib/mapas/carpetaMapa'
 import { useSoltarDocumento } from '@/hooks/useSoltarDocumento'
 import CapaSoltarDocumento from '@/components/ia/CapaSoltarDocumento'
 import { useTutorialReady } from '@/providers/TutorialProvider'
@@ -58,7 +59,9 @@ export default function MapasPage() {
   const [pinSupported, setPinSupported] = useState(false)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<Sort>('recent')
-  const [subjectFilter, setSubjectFilter] = useState<string | null>(null)
+  // Filtro por carpeta (la asignatura de folder_subject_id), «Sin clasificar» o todas.
+  const [filtro, setFiltro] = useState<FiltroCarpeta>('todas')
+  const arbol = useArbolCarpetas()
   const [renamingId, setRenamingId] = useState<string | null>(null)
   // Borrar manda el mapa a la papelera (24 h) y ofrece deshacer, igual que en mazos.
   const [undo, setUndo] = useState<{ map: MapSummary; index: number } | null>(null)
@@ -160,14 +163,6 @@ export default function MapasPage() {
     }
   }
 
-  const onSubject = (map: MapSummary, subject: string | null) => {
-    patchMap(map.id, { subject })
-    setMapSubject(map.id, subject).catch((e: unknown) => {
-      patchMap(map.id, { subject: map.subject })
-      showToast(e instanceof Error ? e.message : 'No se pudo cambiar la asignatura', 'error', 3000)
-    })
-  }
-
   const onPin = (map: MapSummary) => {
     patchMap(map.id, { pinned: !map.pinned })
     setMapPinned(map.id, !map.pinned).catch((e: unknown) => {
@@ -176,17 +171,15 @@ export default function MapasPage() {
     })
   }
 
-  // Búsqueda (título, texto de los nodos y asignatura), filtro por asignatura y orden.
-  const subjectsPresent = useMemo(
-    () => [...new Set((maps ?? []).map((m) => m.subject).filter((s): s is string => !!s))].sort((a, b) => a.localeCompare(b, 'es')),
-    [maps],
-  )
+  // Búsqueda (título, texto de los nodos y carpeta), filtro por carpeta y orden. La carpeta es la única
+  // clasificación de un mapa: el texto libre `subject` ya no se enseña ni se edita (lib/mapas/carpetaMapa.ts).
+  const opciones = useMemo(() => opcionesFiltroCarpeta(maps ?? [], arbol, filtro), [maps, arbol, filtro])
   const visible = useMemo(() => {
     const q = searchable(query)
     const list = (maps ?? []).filter((m) => {
-      if (subjectFilter && m.subject !== subjectFilter) return false
+      if (!pasaFiltroCarpeta(m, filtro, arbol)) return false
       if (!q) return true
-      return searchable(m.title).includes(q) || m.text.includes(q) || searchable(m.subject ?? '').includes(q)
+      return searchable(m.title).includes(q) || m.text.includes(q) || searchable(etiquetaCarpetaMapa(m, arbol)?.texto ?? '').includes(q)
     })
     const by: Record<Sort, (a: MapSummary, b: MapSummary) => number> = {
       recent: (a, b) => b.updated_at.localeCompare(a.updated_at),
@@ -194,7 +187,7 @@ export default function MapasPage() {
       size: (a, b) => b.nodeCount - a.nodeCount,
     }
     return [...list].sort(by[sort])
-  }, [maps, query, subjectFilter, sort])
+  }, [maps, query, filtro, arbol, sort])
   const pinnedMaps = visible.filter((m) => m.pinned)
   const restMaps = visible.filter((m) => !m.pinned)
 
@@ -429,21 +422,24 @@ export default function MapasPage() {
               </label>
             </div>
 
-            {subjectsPresent.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtrar por asignatura">
-                {[null, ...subjectsPresent].map((s) => (
+            {opciones.length > 1 && (
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtrar por carpeta">
+                {opciones.map((o) => (
                   <button
-                    key={s ?? 'todas'}
+                    key={String(o.valor)}
                     type="button"
-                    onClick={() => setSubjectFilter(s)}
-                    aria-pressed={subjectFilter === s}
-                    className={`rounded-full border px-3.5 py-1.5 text-xs font-bold transition-colors ${
-                      subjectFilter === s
+                    onClick={() => setFiltro(o.valor)}
+                    aria-pressed={filtro === o.valor}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-bold transition-colors ${
+                      filtro === o.valor
                         ? 'border-[#E8A598] bg-[#FCEFEC] text-[#B87A6F]'
                         : 'border-[#7D8A96]/20 bg-white text-[#7D8A96] hover:border-[#E8A598]'
                     }`}
                   >
-                    {s ?? 'Todas'}
+                    {o.valor === 'sin' ? <span className="material-symbols-outlined text-[15px]">inbox</span> : null}
+                    {o.sigla ? <span className="rounded bg-[#2C3E50] px-1 text-[10px] font-black text-white">{o.sigla}</span> : null}
+                    {o.etiqueta}
+                    <span className="tabular-nums opacity-70">{o.n}</span>
                   </button>
                 ))}
               </div>
@@ -458,7 +454,7 @@ export default function MapasPage() {
                   type="button"
                   onClick={() => {
                     setQuery('')
-                    setSubjectFilter(null)
+                    setFiltro('todas')
                   }}
                   className="mt-1 rounded-xl bg-[#E8A598] px-4 py-2 text-sm font-bold text-white hover:bg-[#d18d80]"
                 >
@@ -483,7 +479,7 @@ export default function MapasPage() {
                 onRename={(t) => onRename(m, t)}
                 onCancelRename={() => setRenamingId(null)}
                 onDuplicate={() => void onDuplicate(m)}
-                onSubject={(subject) => onSubject(m, subject)}
+                carpeta={etiquetaCarpetaMapa(m, arbol)}
                 onPin={() => onPin(m)}
                 onDelete={() => void onDelete(m)}
                 {...(m.folder ? { onMove: () => setMoviendo(m) } : {})}
@@ -508,7 +504,7 @@ export default function MapasPage() {
                 onRename={(t) => onRename(m, t)}
                 onCancelRename={() => setRenamingId(null)}
                 onDuplicate={() => void onDuplicate(m)}
-                onSubject={(subject) => onSubject(m, subject)}
+                carpeta={etiquetaCarpetaMapa(m, arbol)}
                 onPin={() => onPin(m)}
                 onDelete={() => void onDelete(m)}
                 {...(m.folder ? { onMove: () => setMoviendo(m) } : {})}

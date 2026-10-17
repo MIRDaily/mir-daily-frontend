@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 // La lista de flashcards agrupa y colorea las asignaturas reconociéndolas por el
 // nombre del mazo, así que un emparejamiento malo no da error: solo manda la
 // asignatura a la sección equivocada, y eso pasa desapercibido.
@@ -54,12 +56,12 @@ describe('subjectVisual', () => {
     assert.equal(subjectVisual('Farmacología').category, 'BÁSICA')
     assert.equal(subjectVisual('Bioética y legislación').category, 'BÁSICA')
     assert.equal(subjectVisual('Cirugía Plástica').category, 'QUIRÚRGICA')
-    assert.equal(subjectVisual('Bioestadística').sigla, 'ET')
+    assert.equal(subjectVisual('Bioestadística').sigla, 'ES')
   })
 
   it('las asignaturas que empiezan por "Cirugía" se resuelven por su otra palabra', () => {
     assert.equal(subjectVisual('Cirugía General y Digestivo').sigla, 'DG')
-    assert.equal(subjectVisual('Cirugía Ortopédica y Trauma').sigla, 'TM')
+    assert.equal(subjectVisual('Cirugía Ortopédica y Trauma').sigla, 'TR')
     assert.equal(subjectVisual('Cirugía Plástica').sigla, 'CP')
   })
 
@@ -120,5 +122,32 @@ describe('nombres nuevos de las asignaturas (16/10/2026)', () => {
       ['Inmunología', 'inmunologia'],
     ]
     for (const [nombre, clave] of pares) assert.equal(subjectKeyFor(nombre), clave, nombre)
+  })
+})
+
+describe('siglas: las mismas que la base de datos (subjects.sigla, §3.2)', () => {
+  const { asignaturas } = JSON.parse(
+    readFileSync(path.join(import.meta.dirname, 'fixtures', 'siglas-2026-10-17.json'), 'utf8'),
+  ) as { asignaturas: { nombre: string; sigla: string }[] }
+
+  it('cada asignatura visible, por su nombre completo, enseña su sigla de la base de datos', () => {
+    assert.equal(asignaturas.length, 20)
+    for (const { nombre, sigla } of asignaturas) {
+      const v = subjectVisual(nombre)
+      assert.notEqual(v.key, null, `${nombre} se reconoce como asignatura`)
+      assert.equal(v.sigla, sigla, nombre)
+    }
+  })
+
+  it('las que no son asignaturas del catálogo (Farmacología, Bioética, Cirugía Plástica) no chocan con ninguna', () => {
+    const deLaBase = new Set(asignaturas.map((a) => a.sigla))
+    for (const n of ['Farmacología', 'Bioética', 'Cirugía Plástica']) assert.ok(!deLaBase.has(subjectVisual(n).sigla), n)
+  })
+
+  it('los alias siguen reconociendo por nombre (Mosaico → miscelanea, Bioestadística → estadística)', () => {
+    assert.equal(subjectVisual('Mosaico').key, 'miscelanea')
+    assert.equal(subjectVisual('Mosaico').sigla, 'MO')
+    assert.equal(subjectVisual('Miscelánea y Ciencias Básicas').sigla, 'MO')
+    assert.equal(subjectVisual('Bioestadística').key, 'estadistica')
   })
 })

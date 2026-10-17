@@ -84,10 +84,8 @@ export async function renameMap(id: string, title: string) {
   if (error) throw new Error(error.message)
 }
 
-export async function setMapSubject(id: string, subject: string | null) {
-  const { error } = await supabase.from('mind_maps').update({ subject }).eq('id', id)
-  if (error) throw new Error(error.message)
-}
+// `subject` (texto libre) ya no se edita: la carpeta es la única clasificación de un mapa (lib/mapas/carpetaMapa.ts).
+// La columna se conserva: la usa la marca del mapa de ejemplo (EXAMPLE_SUBJECT).
 
 export async function setMapPinned(id: string, pinned: boolean) {
   const { error } = await supabase.from('mind_maps').update({ pinned }).eq('id', id)

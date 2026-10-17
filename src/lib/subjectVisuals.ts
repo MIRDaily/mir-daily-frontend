@@ -31,7 +31,11 @@ export const CATEGORY_LABEL: Record<SubjectCategory, string> = {
 type SubjectVisualEntry = {
   /** Nombre canónico, para cuando el mazo se llama de otra forma. */
   label: string
-  /** Código AMIR, que es como las tiene fichadas cualquiera que prepare el MIR. */
+  /**
+   * La de la base de datos (`subjects.sigla`, tabla §3.2 de la especificación de carpetas). Antes eran los
+   * códigos AMIR (ET, MC, GC, TM); desde el 17/10/2026, las mismas en toda la web. Lo comprueba
+   * test/subjectVisuals.test.ts contra test/fixtures/siglas-2026-10-17.json.
+   */
   sigla: string
   /** Material Symbol. Solo nombres ya usados en la web, para no arriesgar glifos rotos. */
   icon: string
@@ -49,9 +53,9 @@ type SubjectVisualEntry = {
 // porque allí eran "Cirugía General y Digestivo" y "Ginecología y Obstetricia".
 const SUBJECT_VISUALS: Record<string, SubjectVisualEntry> = {
   // Básicas
-  estadistica: { label: 'Estadística', sigla: 'ET', icon: 'analytics', color: 'slate', category: 'BÁSICA' },
+  estadistica: { label: 'Estadística', sigla: 'ES', icon: 'analytics', color: 'slate', category: 'BÁSICA' },
   inmunologia: { label: 'Inmunología', sigla: 'IM', icon: 'biotech', color: 'lavender', category: 'BÁSICA' },
-  miscelanea: { label: 'Mosaico', sigla: 'MC', icon: 'menu_book', color: 'slate', category: 'BÁSICA' },
+  miscelanea: { label: 'Mosaico', sigla: 'MO', icon: 'menu_book', color: 'slate', category: 'BÁSICA' },
   farmacologia: { label: 'Farmacología', sigla: 'FM', icon: 'medication', color: 'gold', category: 'BÁSICA' },
   bioetica: { label: 'Bioética', sigla: 'BE', icon: 'menu_book', color: 'lavender', category: 'BÁSICA' },
 
@@ -70,10 +74,10 @@ const SUBJECT_VISUALS: Record<string, SubjectVisualEntry> = {
 
   // Quirúrgicas
   digestivo: { label: 'Digestivo', sigla: 'DG', icon: 'gastroenterology', color: 'sage', category: 'QUIRÚRGICA' },
-  ginecologia: { label: 'Ginecología', sigla: 'GC', icon: 'pregnant_woman', color: 'rose', category: 'QUIRÚRGICA' },
+  ginecologia: { label: 'Ginecología', sigla: 'GO', icon: 'pregnant_woman', color: 'rose', category: 'QUIRÚRGICA' },
   oftalmologia: { label: 'Oftalmología', sigla: 'OF', icon: 'visibility', color: 'sky', category: 'QUIRÚRGICA' },
   otorrinolaringologia: { label: 'Otorrinolaringología', sigla: 'OR', icon: 'hearing', color: 'teal', category: 'QUIRÚRGICA' },
-  traumatologia: { label: 'Traumatología', sigla: 'TM', icon: 'orthopedics', color: 'slate', category: 'QUIRÚRGICA' },
+  traumatologia: { label: 'Traumatología', sigla: 'TR', icon: 'orthopedics', color: 'slate', category: 'QUIRÚRGICA' },
   urologia: { label: 'Urología', sigla: 'UR', icon: 'water_drop', color: 'teal', category: 'QUIRÚRGICA' },
   // La clave es "plastica" y no "cirugiaplastica": el emparejador acepta prefijos de 5+ letras, y
   // "cirugia" lo es de "cirugiaplastica", así que se llevaba "Cirugía General y Digestivo".

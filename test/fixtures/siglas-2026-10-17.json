@@ -1,0 +1,85 @@
+{
+  "_": "subjects.sigla de producción (visibles), leído el 17/10/2026; = tabla §3.2 de la especificación",
+  "asignaturas": [
+    {
+      "nombre": "Cardiología y Cirugía Cardiovascular",
+      "sigla": "CD"
+    },
+    {
+      "nombre": "Dermatología",
+      "sigla": "DM"
+    },
+    {
+      "nombre": "Digestivo y Cirugía General",
+      "sigla": "DG"
+    },
+    {
+      "nombre": "Endocrinología",
+      "sigla": "ED"
+    },
+    {
+      "nombre": "Estadística y Epidemiología",
+      "sigla": "ES"
+    },
+    {
+      "nombre": "Ginecología y Obstetricia",
+      "sigla": "GO"
+    },
+    {
+      "nombre": "Hematología",
+      "sigla": "HM"
+    },
+    {
+      "nombre": "Infecciosas y Microbiología",
+      "sigla": "IF"
+    },
+    {
+      "nombre": "Inmunología",
+      "sigla": "IM"
+    },
+    {
+      "nombre": "Mosaico",
+      "sigla": "MO"
+    },
+    {
+      "nombre": "Nefrología",
+      "sigla": "NF"
+    },
+    {
+      "nombre": "Neumología y Cirugía Torácica",
+      "sigla": "NM"
+    },
+    {
+      "nombre": "Neurología y Neurocirugía",
+      "sigla": "NR"
+    },
+    {
+      "nombre": "Oftalmología",
+      "sigla": "OF"
+    },
+    {
+      "nombre": "Otorrinolaringología",
+      "sigla": "OR"
+    },
+    {
+      "nombre": "Pediatría",
+      "sigla": "PD"
+    },
+    {
+      "nombre": "Psiquiatría",
+      "sigla": "PQ"
+    },
+    {
+      "nombre": "Reumatología",
+      "sigla": "RM"
+    },
+    {
+      "nombre": "Traumatología y Cirugía Ortopédica",
+      "sigla": "TR"
+    },
+    {
+      "nombre": "Urología",
+      "sigla": "UR"
+    }
+  ]
+}

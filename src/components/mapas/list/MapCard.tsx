@@ -3,10 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import type { MapSummary } from '@/lib/mapas/api'
-import { listSubjects, subjectVisual } from '@/lib/subjectVisuals'
+import { subjectVisual } from '@/lib/subjectVisuals'
+import type { AsignaturaCatalogo } from '@/lib/carpetas/sugerir'
 import { MapThumb } from '@/components/mapas/list/MapThumb'
-
-const SUBJECTS = listSubjects()
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
@@ -22,18 +21,22 @@ type Props = {
   onRename: (title: string) => void
   onCancelRename: () => void
   onDuplicate: () => void
-  onSubject: (subject: string | null) => void
+  /** Su carpeta («Reumatología › Lupus») o null si está «Sin clasificar». */
+  carpeta: { asignatura: AsignaturaCatalogo; texto: string } | null
   onPin: () => void
   onDelete: () => void
   /** «Mover a carpeta…» (sin esto, no se ofrece: base sin carpetas o mapa de ejemplo). */
   onMove?: () => void
 }
 
-/** Tarjeta de un mapa: miniatura, título, asignatura y menú «⋯» (renombrar, duplicar, fijar…). */
-export function MapCard({ map, pinSupported, renaming, onStartRename, onRename, onCancelRename, onDuplicate, onSubject, onPin, onDelete, onMove }: Props) {
-  const [menu, setMenu] = useState<'closed' | 'main' | 'subject'>('closed')
+/**
+ * Tarjeta de un mapa: miniatura, título, carpeta y menú «⋯» (renombrar, duplicar, fijar, mover…). La
+ * carpeta es su única clasificación: el color sale de su asignatura y la sigla, de la base de datos.
+ */
+export function MapCard({ map, pinSupported, renaming, onStartRename, onRename, onCancelRename, onDuplicate, carpeta, onPin, onDelete, onMove }: Props) {
+  const [menu, setMenu] = useState<'closed' | 'main'>('closed')
   const ref = useRef<HTMLDivElement>(null)
-  const subj = map.subject ? subjectVisual(map.subject) : null
+  const color = carpeta ? subjectVisual(carpeta.asignatura.nombre).color : null
 
   useEffect(() => {
     if (menu === 'closed') return
@@ -77,11 +80,22 @@ export function MapCard({ map, pinSupported, renaming, onStartRename, onRename, 
           {map.tableCount > 0 ? ` · ${map.tableCount} ${map.tableCount === 1 ? 'tabla' : 'tablas'}` : ''} · {formatDate(map.updated_at)}
         </p>
         <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
-          {subj && (
-            <span className="rounded-full px-2.5 py-0.5 text-[11px] font-bold" style={{ background: subj.color.soft, color: subj.color.text }}>
-              {map.subject}
+          {carpeta && color ? (
+            <span
+              className="inline-flex max-w-full items-center gap-1 rounded-full py-0.5 pr-2.5 pl-1 text-[11px] font-bold"
+              style={{ background: color.soft, color: color.text }}
+              title={`${carpeta.asignatura.nombre} › ${carpeta.texto.split(' › ')[1]}`}
+            >
+              {carpeta.asignatura.sigla ? (
+                <span className="shrink-0 rounded-full px-1.5 text-[10px] font-black text-white" style={{ background: color.bg }}>
+                  {carpeta.asignatura.sigla}
+                </span>
+              ) : null}
+              <span className="truncate">{carpeta.texto}</span>
             </span>
-          )}
+          ) : map.folder && !map.example ? (
+            <span className="rounded-full bg-[#F2EFED] px-2.5 py-0.5 text-[11px] font-bold text-[#7D8A96]">Sin clasificar</span>
+          ) : null}
           {map.example && (
             <span className="rounded-full bg-[#FCEFEC] px-2.5 py-0.5 text-[11px] font-bold text-[#B87A6F]" title="Mapa de ejemplo para experimentar; se retirará antes del lanzamiento">
               Ejemplo
@@ -122,13 +136,6 @@ export function MapCard({ map, pinSupported, renaming, onStartRename, onRename, 
                 <span className="material-symbols-outlined text-[18px] text-[#7D8A96]">drive_file_move</span>Mover a carpeta…
               </button>
             )}
-            {!map.example && (
-              <button role="menuitem" className={item} onClick={() => setMenu('subject')}>
-                <span className="material-symbols-outlined text-[18px] text-[#7D8A96]">label</span>
-                Asignatura
-                <span className="material-symbols-outlined ml-auto text-[18px] text-[#7D8A96]">chevron_right</span>
-              </button>
-            )}
             <div className="my-1 h-px bg-[#7D8A96]/15" />
             <button role="menuitem" className={`${item} !text-[#B87A6F]`} onClick={() => { setMenu('closed'); onDelete() }}>
               <span className="material-symbols-outlined text-[18px]">delete</span>Enviar a la papelera
@@ -136,30 +143,6 @@ export function MapCard({ map, pinSupported, renaming, onStartRename, onRename, 
           </div>
         )}
 
-        {menu === 'subject' && (
-          <div role="menu" aria-label="Asignatura" className="absolute top-10 right-0 z-30 w-60 rounded-2xl border border-[#7D8A96]/15 bg-white p-1.5 shadow-xl">
-            <button className={`${item} text-[#7D8A96]`} onClick={() => setMenu('main')}>
-              <span className="material-symbols-outlined text-[18px]">arrow_back</span>Asignatura
-            </button>
-            <div className="max-h-64 overflow-y-auto">
-              <button role="menuitemradio" aria-checked={!map.subject} className={item} onClick={() => { setMenu('closed'); onSubject(null) }}>
-                Sin asignatura
-              </button>
-              {SUBJECTS.map((s) => (
-                <button
-                  key={s.label}
-                  role="menuitemradio"
-                  aria-checked={map.subject === s.label}
-                  className={`${item} ${map.subject === s.label ? 'bg-[#FAF7F4]' : ''}`}
-                  onClick={() => { setMenu('closed'); onSubject(s.label) }}
-                >
-                  <span className="material-symbols-outlined text-[18px] text-[#7D8A96]">{s.icon}</span>
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </article>
   )
