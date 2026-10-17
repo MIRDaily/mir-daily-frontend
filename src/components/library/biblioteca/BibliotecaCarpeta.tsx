@@ -6,15 +6,16 @@ import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import MoverACarpeta from '@/components/carpetas/MoverACarpeta'
 import { carpetaDeSegmento, carpetasDeAsignatura, type ElementoMaterial } from '@/lib/carpetas/biblioteca'
 import { useDatosAsignatura } from '@/components/library/biblioteca/useDatosAsignatura'
+import { LineaDominioGrupo, SenalDominio } from '@/components/library/biblioteca/dominioUi'
 import { Estado, FilaElemento, HuecoDominio, SectionLabel, Sigla, StickerCard, colorAcierto } from '@/components/library/biblioteca/ui'
 
 // Una carpeta (un tema, o «General» de la asignatura): dos bloques lado a lado y SIN mezclar cifras (D2).
 //  - Preguntas MIR: cuántas tiene el tema y el acierto del usuario en ellas (analíticas de siempre).
-//  - Tu material: sus mapas y grupos, con abrir, estudiar y «Mover a…». Debajo, el hueco de la señal de
-//    dominio del material (fase 3), que todavía no se calcula.
+//  - Tu material: arriba, la señal de dominio del material (fase 3: cuánto recordarías hoy, cuánto has
+//    visto, último repaso, huecos débiles); debajo, sus mapas y grupos, con abrir, estudiar y «Mover a…».
 
 export default function BibliotecaCarpeta({ subjectId, segmento }: { subjectId: number; segmento: string }) {
-  const { datos, error, aciertoDe, preguntasDe, detalleDe, recargar } = useDatosAsignatura(subjectId)
+  const { datos, error, aciertoDe, preguntasDe, detalleDe, dominioDe, dominioDisponible, recargar } = useDatosAsignatura(subjectId)
   const { setBackAction } = useHeaderUI()
   const [moviendo, setMoviendo] = useState<ElementoMaterial | null>(null)
   const asig = datos?.asignatura ?? null
@@ -59,6 +60,7 @@ export default function BibliotecaCarpeta({ subjectId, segmento }: { subjectId: 
   }
 
   const esGeneral = carpeta.topicId === null
+  const dominio = dominioDe(carpeta.topicId)
   const a = aciertoDe(carpeta.topicId)
   const d = detalleDe(carpeta.topicId)
   const preguntas = preguntasDe(carpeta.topicId) ?? 0
@@ -117,6 +119,15 @@ export default function BibliotecaCarpeta({ subjectId, segmento }: { subjectId: 
 
           <StickerCard as="section" className="flex flex-col gap-4 p-5" depth={5}>
             <SectionLabel right={<span className="text-[11px] font-bold text-[#7D8A96]/70">{elementos.length}</span>}>Tu material</SectionLabel>
+            {elementos.length > 0 ? (
+              dominioDisponible === false ? (
+                <HuecoDominio compacto />
+              ) : dominioDisponible === null ? (
+                <p className="text-xs font-bold text-[#7D8A96]">Calculando cuánto recordarías…</p>
+              ) : (
+                <SenalDominio d={dominio} soloMapas={elementos.every((e) => e.tipo === 'mapa')} />
+              )
+            ) : null}
             {elementos.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-6 text-center">
                 <span className="material-symbols-outlined text-[36px] text-[#E8A598]">folder_open</span>
@@ -131,6 +142,7 @@ export default function BibliotecaCarpeta({ subjectId, segmento }: { subjectId: 
                   <FilaElemento
                     key={`${e.tipo}:${e.id}`}
                     e={e}
+                    extra={e.tipo === 'mapa' ? null : <LineaDominioGrupo g={dominio?.grupos.find((g) => g.deckId === e.id)} />}
                     acciones={
                       <button
                         type="button"
@@ -146,7 +158,6 @@ export default function BibliotecaCarpeta({ subjectId, segmento }: { subjectId: 
                 ))}
               </ul>
             )}
-            <HuecoDominio compacto />
           </StickerCard>
         </div>
       </div>

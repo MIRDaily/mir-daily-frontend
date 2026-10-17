@@ -114,7 +114,7 @@ export function CifrasPreguntas({
 
 export const colorAcierto = (p: number) => (p >= 70 ? '#5C7A59' : p >= 50 ? '#B8862E' : '#B5675A')
 
-/** Hueco reservado para la señal de dominio del material (fase 3): se ve, pero no se calcula todavía. */
+/** Sin la señal de dominio (la base de datos aún no la calcula): se dice, en vez de enseñar un 0. */
 export function HuecoDominio({ compacto = false }: { compacto?: boolean }) {
   return (
     <div
@@ -123,7 +123,7 @@ export function HuecoDominio({ compacto = false }: { compacto?: boolean }) {
     >
       <span className="material-symbols-outlined text-[18px]">psychology_alt</span>
       <span>
-        <b className="font-black text-[#2C3E50]">Dominio del material</b> · muy pronto: cuánto recordarías hoy de lo que has estudiado aquí.
+        <b className="font-black text-[#2C3E50]">Dominio del material</b> · todavía no disponible: cuánto recordarías hoy de lo que has estudiado aquí.
       </span>
     </div>
   )

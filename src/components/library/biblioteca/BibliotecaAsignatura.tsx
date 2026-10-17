@@ -6,6 +6,8 @@ import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import { guiaDeAsignatura } from '@/lib/studyGuides'
 import { carpetasDeAsignatura, cuentaDe, rutaCarpeta } from '@/lib/carpetas/biblioteca'
 import { useDatosAsignatura } from '@/components/library/biblioteca/useDatosAsignatura'
+import { IndicadorDominio } from '@/components/library/biblioteca/dominioUi'
+import { estadoDominio, porcentaje, UMBRAL_BIEN_LLEVADO } from '@/lib/carpetas/dominio'
 import {
   CifrasMaterial,
   CifrasPreguntas,
@@ -20,10 +22,11 @@ import {
 } from '@/components/library/biblioteca/ui'
 
 // Una asignatura de la Biblioteca: «General» y SOLO los temas en los que el usuario tiene material (§3.3).
-// Cada carpeta enseña dos indicadores separados: sus preguntas MIR y su material (D2).
+// Cada carpeta enseña dos indicadores separados: sus preguntas MIR y su material (D2), y dentro del
+// material, la señal de dominio (fase 3) con su propio color, nunca junto a la cifra de preguntas.
 
 export default function BibliotecaAsignatura({ subjectId }: { subjectId: number }) {
-  const { datos, error, aciertoDe, preguntasDe } = useDatosAsignatura(subjectId)
+  const { datos, error, aciertoDe, preguntasDe, dominioDe, dominioDisponible } = useDatosAsignatura(subjectId)
   const { setBackAction } = useHeaderUI()
   const asig = datos?.asignatura ?? null
 
@@ -38,6 +41,8 @@ export default function BibliotecaAsignatura({ subjectId }: { subjectId: number 
   const general = aciertoDe(null)
   const temasConMaterial = carpetas.filter((c) => c.topicId !== null).length
   const ocultos = asig ? asig.temas.length - temasConMaterial : 0
+  // Las carpetas que pueden tener señal: las que tienen algún grupo de flashcards o de resúmenes.
+  const medibles = carpetas.filter((c) => c.cuenta.flashcards + c.cuenta.resumenes > 0)
 
   if (error) {
     return (
@@ -141,9 +146,10 @@ export default function BibliotecaAsignatura({ subjectId }: { subjectId: number 
                           </span>
                           <CifrasPreguntas preguntas={preguntasDe(c.topicId)} acierto={a.acierto} respondidas={a.respondidas} />
                         </div>
-                        <div className="flex flex-col gap-1">
+                        <div className="flex min-w-0 flex-col gap-1">
                           <span className="text-[11px] font-black tracking-wide text-[#7D8A96]/70 uppercase">Tu material</span>
                           <CifrasMaterial cuenta={c.cuenta} compacto />
+                          {dominioDisponible !== false ? <IndicadorDominio d={dominioDe(c.topicId)} cargando={dominioDisponible === null} /> : null}
                         </div>
                       </div>
                     </StickerCard>
@@ -159,7 +165,14 @@ export default function BibliotecaAsignatura({ subjectId }: { subjectId: number 
           ) : null}
         </section>
 
-        {carpetas.length > 0 ? <HuecoDominio /> : null}
+        {carpetas.length > 0 && dominioDisponible === false ? <HuecoDominio /> : null}
+        {medibles.length > 0 && dominioDisponible ? (
+          <p className="text-xs text-[#7D8A96]">
+            {medibles.filter((c) => estadoDominio(dominioDe(c.topicId)) === 'bien').length} de {medibles.length}{' '}
+            {medibles.length === 1 ? 'carpeta con flashcards o resúmenes está bien llevada' : 'carpetas con flashcards o resúmenes están bien llevadas'} (recordarías hoy al
+            menos el {porcentaje(UMBRAL_BIEN_LLEVADO.dominio)} % y has visto el {porcentaje(UMBRAL_BIEN_LLEVADO.cobertura)} % o más). Los mapas no cuentan: no registran estudio.
+          </p>
+        ) : null}
       </div>
     </main>
   )

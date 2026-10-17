@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseBrowser'
 import type { AsignaturaCatalogo, Carpeta } from '@/lib/carpetas/sugerir'
 import type { ElementoMaterial, Recuento } from '@/lib/carpetas/biblioteca'
+import type { RespuestaDominio } from '@/lib/carpetas/dominio'
 
 // Carpetas del material: el árbol del catálogo (GET /api/carpetas/arbol) y mover mapas o grupos
 // (PATCH /api/carpetas). El servidor valida dueño, asignatura y tema; aquí solo se pide y se pinta.
@@ -98,4 +99,13 @@ export type DatosAsignatura = {
 /** El material del usuario en una asignatura y sus preguntas MIR por tema. */
 export async function cargarAsignatura(id: number): Promise<DatosAsignatura> {
   return (await pedir({ ruta: `/asignatura/${id}` })) as DatosAsignatura
+}
+
+/**
+ * La señal de dominio del material de una asignatura, por carpeta (fase 3). `disponible: false` si la
+ * base de datos aún no tiene la función (la Biblioteca enseña entonces el hueco «muy pronto»).
+ */
+export async function cargarDominio(id: number): Promise<RespuestaDominio> {
+  const r = await pedir({ ruta: `/asignatura/${id}/dominio` })
+  return { disponible: r?.disponible === true, carpetas: Array.isArray(r?.carpetas) ? (r.carpetas as RespuestaDominio['carpetas']) : [] }
 }

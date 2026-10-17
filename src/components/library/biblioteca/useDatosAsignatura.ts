@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { cargarAsignatura, type DatosAsignatura } from '@/lib/carpetas/api'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { cargarAsignatura, cargarDominio, type DatosAsignatura } from '@/lib/carpetas/api'
+import { dominioPorCarpeta, type DominioCarpeta, type RespuestaDominio } from '@/lib/carpetas/dominio'
 import { fetchSubjectHeatmap, fetchTopicHeatmap, type SubjectHeatmapCell, type TopicHeatmapCell } from '@/services/analyticsService'
 
 export type AciertoPreguntas = { acierto: number | null; respondidas: number }
@@ -11,6 +12,8 @@ const SIN_RESPUESTAS: AciertoPreguntas = { acierto: null, respondidas: 0 }
  * Lo que enseñan la asignatura y sus carpetas: el material del usuario y las preguntas MIR por tema
  * (GET /api/carpetas/asignatura/:id) y, aparte, su acierto en esas preguntas de siempre (/api/analytics,
  * ventana «todo»). Si las analíticas fallan, se enseña lo demás sin acierto.
+ * La señal de dominio del material (fase 3) llega en su propia petición: si falla o la base de datos aún
+ * no la tiene, `dominio.disponible` es false y la Biblioteca enseña el hueco «muy pronto».
  */
 export function useDatosAsignatura(subjectId: number) {
   const [datos, setDatos] = useState<DatosAsignatura | null>(null)
@@ -18,6 +21,7 @@ export function useDatosAsignatura(subjectId: number) {
   const [temas, setTemas] = useState<Map<number, TopicHeatmapCell>>(new Map())
   const [asig, setAsig] = useState<SubjectHeatmapCell | null>(null)
   const [vuelta, setVuelta] = useState(0)
+  const [dominio, setDominio] = useState<RespuestaDominio | null>(null)
 
   useEffect(() => {
     let vivo = true
@@ -32,6 +36,16 @@ export function useDatosAsignatura(subjectId: number) {
         const mensaje = e instanceof Error ? e.message : 'No se pudo cargar la asignatura'
         setError({ mensaje, noExiste: /no existe|no válida/i.test(mensaje) })
       })
+    return () => {
+      vivo = false
+    }
+  }, [subjectId, vuelta])
+
+  useEffect(() => {
+    let vivo = true
+    cargarDominio(subjectId)
+      .then((d) => vivo && setDominio(d))
+      .catch(() => vivo && setDominio({ disponible: false, carpetas: [] }))
     return () => {
       vivo = false
     }
@@ -68,5 +82,19 @@ export function useDatosAsignatura(subjectId: number) {
   )
   const detalleDe = useCallback((topicId: number | null) => (topicId === null ? asig : temas.get(topicId)) ?? null, [asig, temas])
 
-  return { datos, error, aciertoDe, preguntasDe, detalleDe, recargar: () => setVuelta((v) => v + 1) }
+  const porCarpeta = useMemo(() => dominioPorCarpeta(dominio), [dominio])
+  /** La señal de una carpeta (null = «General»); undefined mientras llega o si no la hay. */
+  const dominioDe = useCallback((topicId: number | null): DominioCarpeta | undefined => porCarpeta.get(topicId ?? 'general'), [porCarpeta])
+
+  return {
+    datos,
+    error,
+    aciertoDe,
+    preguntasDe,
+    detalleDe,
+    dominioDe,
+    /** null mientras llega; false si la base de datos todavía no calcula la señal. */
+    dominioDisponible: dominio === null ? null : dominio.disponible,
+    recargar: () => setVuelta((v) => v + 1),
+  }
 }

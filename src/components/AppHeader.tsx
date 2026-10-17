@@ -375,7 +375,7 @@ export default function AppHeader({
       {backAction && (
         <div className="max-w-7xl mx-auto mt-4 flex items-center gap-2 border-t border-[#7D8A96]/10 pt-3">
           <Link
-            className="flex items-center gap-2 text-xs font-bold tracking-wider text-[#E8A598] uppercase transition-colors hover:text-[#D4978C]"
+            className="flex shrink-0 items-center gap-2 text-xs font-bold tracking-wider text-[#E8A598] uppercase transition-colors hover:text-[#D4978C]"
             href={backAction.href}
           >
             <span className="material-symbols-outlined text-base">arrow_back</span>
@@ -385,7 +385,7 @@ export default function AppHeader({
             <Fragment key={crumb.href}>
               <span className="text-[#7D8A96]/30">/</span>
               <Link
-                className="text-sm font-semibold text-[#7D8A96] transition-colors hover:text-[#E8A598]"
+                className="shrink-0 text-sm font-semibold text-[#7D8A96] transition-colors hover:text-[#E8A598]"
                 href={crumb.href}
               >
                 {crumb.label}
@@ -395,7 +395,11 @@ export default function AppHeader({
           {backAction.current && (
             <>
               <span className="text-[#7D8A96]/30">/</span>
-              <span className="text-sm font-semibold text-[#2C3E50]">{backAction.current}</span>
+              {/* min-w-0 + truncate: un nombre largo («Lupus eritematoso sistémico») se recorta en vez de
+                  desbordar la página en móvil. */}
+              <span className="min-w-0 truncate text-sm font-semibold text-[#2C3E50]" title={backAction.current}>
+                {backAction.current}
+              </span>
             </>
           )}
         </div>
