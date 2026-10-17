@@ -205,7 +205,7 @@ export default function CrearConIA({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [archivoInicial])
 
-  const indiceLocal = useMemo(() => (extraido ? construirIndice(extraido.secciones, extraido.marcadores) : []), [extraido])
+  const indiceLocal = useMemo(() => (extraido ? construirIndice(extraido.secciones, extraido.marcadores, extraido.encabezados) : []), [extraido])
   // Tema a tema, el índice es el del servidor (temas y sus apartados).
   const indice = useMemo(
     () => (extraido && temasLibro ? entradasDeTemas(temasLibro, extraido.secciones) : indiceLocal),

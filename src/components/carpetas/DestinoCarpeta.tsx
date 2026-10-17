@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { subjectVisual } from '@/lib/subjectVisuals'
 import { normalizar, SIN_CLASIFICAR, type AsignaturaCatalogo, type Carpeta } from '@/lib/carpetas/sugerir'
@@ -186,12 +186,22 @@ function HojaCarpetas({
   return createPortal(
     <>
       <div className="fixed inset-0 z-[130] bg-[#2C3E50]/35 transition-opacity duration-200" style={{ opacity: dentro ? 1 : 0 }} onMouseDown={onCerrar} />
+      {/* En móvil, una hoja que sube desde abajo; desde 640 px, un diálogo centrado y completo (abajo,
+          sin su borde inferior, parecía cortado). La animación va por variables: el transform cambia según
+          el ancho y el estilo en línea no admite media queries. */}
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Elegir dónde se guarda"
-        className="fixed bottom-0 left-1/2 z-[131] flex max-h-[82dvh] w-[min(560px,calc(100%-24px))] flex-col rounded-t-[26px] bg-[#FAF7F4] transition-transform duration-300"
-        style={{ border: `2px solid ${INK}`, borderBottom: 0, transform: `translate(-50%, ${dentro ? '0' : '105%'})`, transitionTimingFunction: 'cubic-bezier(.2,.9,.3,1)' }}
+        className="fixed bottom-0 left-1/2 z-[131] flex max-h-[82dvh] w-[min(560px,calc(100%-24px))] flex-col rounded-t-[26px] border-2 border-b-0 border-[#2C3E50] bg-[#FAF7F4] [transform:translate(-50%,var(--hoja-y))] transition-[transform,opacity] duration-300 sm:top-1/2 sm:bottom-auto sm:max-h-[min(86dvh,760px)] sm:rounded-[26px] sm:border-b-2 sm:opacity-[var(--hoja-op)] sm:shadow-[7px_7px_0_0_#2C3E50] sm:[transform:translate(-50%,-50%)_scale(var(--hoja-esc))]"
+        style={
+          {
+            '--hoja-y': dentro ? '0%' : '105%',
+            '--hoja-esc': dentro ? 1 : 0.96,
+            '--hoja-op': dentro ? 1 : 0,
+            transitionTimingFunction: 'cubic-bezier(.2,.9,.3,1)',
+          } as CSSProperties
+        }
       >
         <div className="flex items-center gap-2 px-[18px] pb-2.5 pt-3.5">
           {elegida ? (

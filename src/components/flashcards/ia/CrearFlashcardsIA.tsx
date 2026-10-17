@@ -249,7 +249,7 @@ export default function CrearFlashcardsIA({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [archivoInicial])
 
-  const indiceLocal = useMemo(() => (extraido ? construirIndice(extraido.secciones, extraido.marcadores) : []), [extraido])
+  const indiceLocal = useMemo(() => (extraido ? construirIndice(extraido.secciones, extraido.marcadores, extraido.encabezados) : []), [extraido])
   const indice = useMemo(() => (extraido && temasLibro ? entradasDeTemas(temasLibro, extraido.secciones) : indiceLocal), [extraido, temasLibro, indiceLocal])
   const eleccion = useMemo(() => (extraido ? resumenSeleccion(extraido.secciones, sel) : null), [extraido, sel])
   const envioLibro = useMemo(() => (extraido && temasLibro ? temasParaEnviar(extraido.secciones, sel, temasLibro) : null), [extraido, temasLibro, sel])

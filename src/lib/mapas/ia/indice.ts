@@ -1,6 +1,7 @@
 // Índice del documento para elegir qué parte usar (informe 76). Sale de lo que ya da la extracción:
-// marcadores del PDF, títulos «Tema N» / «N.M. Apartado» al principio de las páginas, títulos de
-// Word y de las diapositivas; si no hay nada de eso, una entrada por página. Puro (sin DOM): se
+// marcadores del PDF, títulos «Tema N» / «N.M. Apartado» al principio de las páginas, títulos del PDF
+// por el tamaño de su letra (extract/encabezados.ts), títulos de Word y de las diapositivas; si no hay
+// nada de eso, una entrada por página. Puro (sin DOM): se
 // prueba con `npm test`.
 //
 // La selección se guarda como un conjunto de ÍNDICES de sección (cada sección es una página, una
@@ -94,8 +95,12 @@ const sumaChars = (secciones: Seccion[], desde: number, hasta: number) => {
   return n
 }
 
-/** Entradas a partir de marcadores ordenados por página: cada una llega hasta donde empieza la siguiente de su nivel o superior. */
-function desdeMarcadores(secciones: Seccion[], marcadores: Marcador[]): EntradaIndice[] {
+/**
+ * Entradas a partir de marcadores ordenados por página: cada una llega hasta donde empieza la siguiente de su
+ * nivel o superior. `compartir`: todas empiezan donde caigan (títulos sacados de la letra, no temas que
+ * empiezan página), así que cada una comparte con la siguiente la página en que esta empieza.
+ */
+function desdeMarcadores(secciones: Seccion[], marcadores: Marcador[], { compartir = false } = {}): EntradaIndice[] {
   const idxDePagina = (p: number) => {
     const i = secciones.findIndex((s, k) => paginaDe(s, k) >= p)
     return i < 0 ? secciones.length - 1 : i
@@ -112,7 +117,7 @@ function desdeMarcadores(secciones: Seccion[], marcadores: Marcador[]): EntradaI
     // no perder su final.
     const hasta = !siguiente
       ? secciones.length - 1
-      : m.nivel === 2 && siguiente.nivel === 2
+      : compartir || (m.nivel === 2 && siguiente.nivel === 2)
         ? Math.max(m.i, siguiente.i)
         : Math.max(m.i, siguiente.i - 1)
     out.push({
@@ -143,10 +148,11 @@ function desdeMarcadores(secciones: Seccion[], marcadores: Marcador[]): EntradaI
 }
 
 /**
- * Índice del documento. Prioridad: marcadores del PDF → temas detectados en las páginas → títulos
- * de las secciones (Word, PowerPoint) → una entrada por página.
+ * Índice del documento. Prioridad: marcadores del PDF → varios temas «Tema N» → títulos del PDF por su
+ * letra (un tema suelto: sus apartados) → apartados numerados «N.M.» → títulos de las secciones (Word,
+ * PowerPoint) → una entrada por página.
  */
-export function construirIndice(secciones: Seccion[], marcadores: Marcador[] = []): EntradaIndice[] {
+export function construirIndice(secciones: Seccion[], marcadores: Marcador[] = [], encabezados: Marcador[] = []): EntradaIndice[] {
   if (secciones.length === 0) return []
   if (marcadores.length >= 2) return desdeMarcadores(secciones, marcadores)
 
@@ -157,8 +163,12 @@ export function construirIndice(secciones: Seccion[], marcadores: Marcador[] = [
     const temas = detectarTemas(secciones)
     const nivel1 = temas.filter((t) => t.nivel === 1)
     // Un tema solo: el índice útil son sus apartados.
-    const utiles = nivel1.length >= 2 ? temas : temas.filter((t) => t.nivel === 2)
-    if (utiles.length >= 2) return desdeMarcadores(secciones, utiles)
+    if (nivel1.length >= 2) return desdeMarcadores(secciones, temas)
+    // Un tema solo: sus apartados. Mejor los títulos por la letra (también los sin número, como
+    // «Etiopatogenia» o «Diagnóstico») que solo los numerados.
+    if (encabezados.length >= 2) return desdeMarcadores(secciones, encabezados, { compartir: true })
+    const apartados = temas.filter((t) => t.nivel === 2)
+    if (apartados.length >= 2) return desdeMarcadores(secciones, apartados)
   }
 
   const repetidas = lineasRepetidas(secciones)

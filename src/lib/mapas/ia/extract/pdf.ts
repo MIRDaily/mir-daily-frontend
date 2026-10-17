@@ -1,6 +1,7 @@
 import { ExtractError, FACTOR_LECTURA, type Extraido } from '../types'
 import { limpiarTexto, quitarRepetidas, tituloDeArchivo } from './limpiar'
 import { cajasDibujadas, componerTexto, detectarTablas, type ItemTexto } from './tablasPdf'
+import { detectarEncabezados, type TrozoPdf } from './encabezados'
 
 type Opciones = { maxChars: number; onProgreso?: (hecho: number, total: number) => void }
 
@@ -28,6 +29,8 @@ export async function extraerPdf(file: File, { maxChars, onProgreso }: Opciones)
 
   const topeLectura = maxChars * FACTOR_LECTURA
   const paginas: string[] = []
+  // Tamaño y letra de cada trozo, para sacar los títulos si el PDF no trae marcadores.
+  const trozos: TrozoPdf[][] = []
   let tablas = 0
   let acumulado = 0
   let truncado = false
@@ -36,6 +39,14 @@ export async function extraerPdf(file: File, { maxChars, onProgreso }: Opciones)
     const page = await pdf.getPage(i)
     const contenido = await page.getTextContent()
     const items = contenido.items.filter((it): it is ItemTexto & typeof it => 'str' in it)
+    trozos.push(
+      items.map((it) => ({
+        str: it.str,
+        alto: Math.hypot(it.transform[2], it.transform[3]),
+        fuente: (it as { fontName?: string }).fontName ?? '',
+        y: it.transform[5],
+      })),
+    )
     // Tablas con su estructura (rejilla dibujada en la página): salen como filas «celda | celda»
     // en vez de columna tras columna. Si algo falla, el texto de siempre.
     let detectadas: ReturnType<typeof detectarTablas> = { tablas: [], deTabla: items.map(() => -1) }
@@ -98,6 +109,14 @@ export async function extraerPdf(file: File, { maxChars, onProgreso }: Opciones)
     /* sin marcadores */
   }
 
+  // Títulos por la letra (apartados de un tema suelto): para el índice de «Qué parte usar». Si algo falla, sin ellos.
+  let encabezados: ReturnType<typeof detectarEncabezados> = []
+  try {
+    encabezados = detectarEncabezados(trozos)
+  } catch {
+    /* sin títulos */
+  }
+
   const limpias = quitarRepetidas(paginas)
   // Cada página lleva su número: el servidor lo devuelve como página de origen de cada nodo.
   const secciones = limpias.map((texto, i) => ({ texto, pagina: i + 1 })).filter((s) => s.texto.length >= 10)
@@ -112,5 +131,6 @@ export async function extraerPdf(file: File, { maxChars, onProgreso }: Opciones)
     avisos,
     truncado,
     ...(marcadores.length >= 2 ? { marcadores } : {}),
+    ...(encabezados.length >= 2 ? { encabezados } : {}),
   }
 }

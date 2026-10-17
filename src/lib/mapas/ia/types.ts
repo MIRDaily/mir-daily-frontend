@@ -20,6 +20,8 @@ export type Extraido = {
   truncado: boolean
   /** Marcadores del PDF (índice del propio archivo): título y página donde empieza. */
   marcadores?: { titulo: string; pagina: number; nivel?: 1 | 2 }[]
+  /** Títulos detectados por el tamaño de la letra (PDF sin marcadores): apartados y sus subapartados. */
+  encabezados?: { titulo: string; pagina: number; nivel?: 1 | 2 }[]
 }
 
 export type ModoIA = 'esquema' | 'detalle'

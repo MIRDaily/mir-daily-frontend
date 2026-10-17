@@ -111,7 +111,7 @@ function Dialogo({ mapTitle, onHecho }: { mapTitle: string; onHecho: (m: string)
   }, [paso])
 
   const maxChars = estado?.limites.maxChars ?? 150000
-  const indice = useMemo(() => (ext ? construirIndice(ext.secciones, ext.marcadores) : []), [ext])
+  const indice = useMemo(() => (ext ? construirIndice(ext.secciones, ext.marcadores, ext.encabezados) : []), [ext])
   const eleccion = useMemo(() => (ext ? resumenSeleccion(ext.secciones, sel) : null), [ext, sel])
   const caracteres = eleccion?.caracteres ?? 0
   // Con los créditos encendidos el servidor no manda el cupo de hoy: entonces decide el precio.
