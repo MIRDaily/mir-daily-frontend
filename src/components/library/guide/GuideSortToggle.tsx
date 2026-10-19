@@ -2,7 +2,9 @@
 
 import { useId } from 'react'
 import { motion } from 'framer-motion'
-import type { GuideTopicWithStats } from '@/lib/studyGuides/stats'
+import type { GuideTopicWithStats, GuideTrend } from '@/lib/studyGuides/stats'
+
+const TREND_RANK: Record<GuideTrend, number> = { sube: 0, estable: 1, baja: 2 }
 
 export type GuideSortKey = 'prevision' | 'historico' | 'tendencia'
 
@@ -16,10 +18,11 @@ export function sortGuideTopics(topics: GuideTopicWithStats[], key: GuideSortKey
   const byHistory = (a: GuideTopicWithStats, b: GuideTopicWithStats) => b.stats.historyCount - a.stats.historyCount
   return [...topics].sort((a, b) => {
     if (key === 'historico') return byHistory(a, b)
+    // Primero lo que sube, luego lo estable y al final lo que baja (con los umbrales de computeTopicStats, que
+    // no llaman tendencia al ruido); dentro de cada grupo, por previsión. Ordenar por la diferencia en bruto ponía
+    // un tema sin preguntas (cambio 0) por delante de temas fuertes que habían bajado una décima.
     if (key === 'tendencia') {
-      const shiftA = a.stats.recentAvg - a.stats.earlierAvg
-      const shiftB = b.stats.recentAvg - b.stats.earlierAvg
-      return shiftB - shiftA || byHistory(a, b)
+      return TREND_RANK[a.stats.trend] - TREND_RANK[b.stats.trend] || b.stats.forecast - a.stats.forecast || byHistory(a, b)
     }
     return b.stats.forecast - a.stats.forecast || byHistory(a, b)
   })
