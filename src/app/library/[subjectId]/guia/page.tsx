@@ -65,7 +65,10 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
   const average = history.reduce((acc, item) => acc + item.count, 0) / history.length
   const years = guide.perYear.map((item) => item.year)
   const topics = withStats(guide.topics)
-  const topicsByPriority = [...topics].sort((a, b) => b.stats.historyCount - a.stats.historyCount)
+  // Preguntas de todo el periodo, último MIR incluido: si no, un tema que acaba de dar el salto (3 en el último MIR)
+  // quedaba por detrás de otros que llevan años sin salir.
+  const totalOf = (topic: (typeof topics)[number]) => topic.stats.historyCount + topic.stats.lastExamCount
+  const topicsByPriority = [...topics].sort((a, b) => totalOf(b) - totalOf(a) || b.stats.forecast - a.stats.forecast)
   const topicsByForecast = [...topics].sort(
     (a, b) => b.stats.forecast - a.stats.forecast || b.stats.historyCount - a.stats.historyCount,
   )
@@ -78,8 +81,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
   const planDays = guide.plan.reduce((acc, step) => acc + step.days, 0)
   const topThree = topicsByPriority.slice(0, 3)
   const topThreeShare = Math.round(
-    (topThree.reduce((acc, topic) => acc + topic.stats.historyCount, 0) /
-      topics.reduce((acc, topic) => acc + topic.stats.historyCount, 0)) *
+    (topThree.reduce((acc, topic) => acc + totalOf(topic), 0) / topics.reduce((acc, topic) => acc + totalOf(topic), 0)) *
       100,
   )
 
@@ -152,7 +154,8 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
                   accent
                 />
                 <StatTile value={<><GuideCountUp to={topThreeShare} />%</>} label={`de las preguntas salen de ${topThree.map((topic) => topic.shortName).join(', ')}`} />
-                <StatTile value={<>1 de <GuideCountUp to={Math.round(210 / average)} /></>} label="preguntas del MIR es de esta asignatura" />
+                {/* 200: las preguntas que puntúan (las 10 de reserva solo entran si se anula alguna) */}
+                <StatTile value={<>1 de <GuideCountUp to={Math.round(200 / average)} /></>} label="preguntas del MIR es de esta asignatura" />
               </div>
 
               <GuideSectionChips items={toc} />
@@ -278,7 +281,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
               major
               icon="menu_book"
               title="Tema a tema"
-              subtitle="De más a menos preguntado (2015–2025). Cada tema dice dónde se concentran las preguntas y lo que hay que llevar sabido."
+              subtitle={`De más a menos preguntado (${years[0]}–${lastYear}). Cada tema dice dónde se concentran las preguntas y lo que hay que llevar sabido.`}
             />
             <div className="flex flex-col gap-3">
               {topicsByPriority.map((topic, index) => (

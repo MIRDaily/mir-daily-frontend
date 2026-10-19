@@ -54,8 +54,10 @@ export function withStats(topics: GuideTopic[]): GuideTopicWithStats[] {
   return topics.map((topic) => ({ ...topic, stats: computeTopicStats(topic) }))
 }
 
+// Por debajo de 1 se muestra con un decimal: «<1» igualaba un tema de 0,6 preguntas al año con uno que no sale nunca.
 export function formatForecast(forecast: number) {
-  if (forecast < 0.5) return '<1'
+  if (forecast < 0.05) return '0'
+  if (forecast < 0.95) return `≈${formatAvg(Math.round(forecast * 10) / 10)}`
   return `≈${Math.round(forecast)}`
 }
 

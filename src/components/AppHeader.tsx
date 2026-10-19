@@ -373,7 +373,8 @@ export default function AppHeader({
       </div>
 
       {backAction && (
-        <div className="max-w-7xl mx-auto mt-4 flex items-center gap-2 border-t border-[#7D8A96]/10 pt-3">
+        // flex-wrap: en móvil la ruta pasa a otra línea antes que recortarse («Guía de…»)
+        <div className="max-w-7xl mx-auto mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-[#7D8A96]/10 pt-3">
           <Link
             className="flex shrink-0 items-center gap-2 text-xs font-bold tracking-wider text-[#E8A598] uppercase transition-colors hover:text-[#D4978C]"
             href={backAction.href}

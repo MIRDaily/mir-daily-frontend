@@ -17,11 +17,27 @@ const HEIGHT = 400
 const PAD = { top: 20, right: 24, bottom: 48, left: 52 }
 // Escala de los ejes: mínimos (crecen si algún tema es más largo o más preguntado), paso de las marcas,
 // divisiones de los cuadrantes y, por debajo de `labelMin` preguntas, temas agrupados en una sola etiqueta.
-// Las asignaturas pequeñas (ningún tema pasa de la mitad de la escala normal) usan la escala reducida;
-// si no, sus puntos quedarían amontonados en la esquina de «Pasada rápida».
 type Scale = { minPages: number; pageStep: number; minQuestions: number; questionStep: number; splitPages: number; splitQuestions: number; labelMin: number }
 const SCALE_NORMAL: Scale = { minPages: 28, pageStep: 7, minQuestions: 20, questionStep: 10, splitPages: 12, splitQuestions: 10, labelMin: 6 }
-const SCALE_SMALL: Scale = { minPages: 10, pageStep: 2, minQuestions: 10, questionStep: 2, splitPages: 5, splitQuestions: 5, labelMin: 3 }
+// Asignaturas pequeñas (menos de 60 preguntas en el periodo, unas 5 al año): con la escala normal sus temas quedaban
+// amontonados en la esquina de «Pasada rápida» y sin nombre. Cada eje se ajusta a sus datos y los cuadrantes se
+// parten por la mitad del eje de preguntas.
+const SMALL_SUBJECT_QUESTIONS = 60
+function smallScale(topPages: number, topQuestions: number): Scale {
+  const shortTopics = topPages <= SCALE_NORMAL.minPages / 2
+  const questionStep = topQuestions <= 10 ? 2 : 4
+  // +1: margen para que el tema más preguntado no quede pegado al borde superior, bajo los rótulos de los cuadrantes
+  const maxQuestions = Math.max(10, Math.ceil((topQuestions + 1) / questionStep) * questionStep)
+  return {
+    minPages: shortTopics ? 10 : SCALE_NORMAL.minPages,
+    pageStep: shortTopics ? 2 : SCALE_NORMAL.pageStep,
+    splitPages: shortTopics ? 5 : SCALE_NORMAL.splitPages,
+    minQuestions: maxQuestions,
+    questionStep,
+    splitQuestions: maxQuestions / 2,
+    labelMin: 3,
+  }
+}
 const LABEL_FONT = 12
 const CHAR_WIDTH = 7.4
 
@@ -66,8 +82,8 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const topPages = Math.max(...topics.map((topic) => topic.pages))
   const topQuestions = Math.max(...topics.map((topic) => topic.stats.historyCount))
-  const small = topPages <= SCALE_NORMAL.minPages / 2 && topQuestions <= SCALE_NORMAL.minQuestions / 2
-  const scale = small ? SCALE_SMALL : SCALE_NORMAL
+  const historyTotal = topics.reduce((acc, topic) => acc + topic.stats.historyCount, 0)
+  const scale = historyTotal < SMALL_SUBJECT_QUESTIONS ? smallScale(topPages, topQuestions) : SCALE_NORMAL
   const maxPages = Math.max(scale.minPages, Math.ceil(topPages / scale.pageStep) * scale.pageStep)
   const maxQuestions = Math.max(scale.minQuestions, Math.ceil(topQuestions / scale.questionStep) * scale.questionStep)
   const x = (pages: number) => PAD.left + (pages / maxPages) * (WIDTH - PAD.left - PAD.right)
