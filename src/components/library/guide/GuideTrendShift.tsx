@@ -13,8 +13,10 @@ type GuideTrendShiftProps = {
 
 // Gráfico "antes → ahora": media anual del periodo anterior frente a la de los últimos MIR.
 export default function GuideTrendShift({ topics, earlierLabel, recentLabel, minAvg = 0.5 }: GuideTrendShiftProps) {
+  // Los temas que suben o bajan se muestran siempre: en asignaturas pequeñas casi ninguno llega a `minAvg`
+  // y el apartado se quedaba sin lo único que sube o baja.
   const rows = topics
-    .filter((topic) => topic.stats.recentAvg >= minAvg || topic.stats.earlierAvg >= minAvg)
+    .filter((topic) => topic.stats.trend !== 'estable' || topic.stats.recentAvg >= minAvg || topic.stats.earlierAvg >= minAvg)
     .sort((a, b) => b.stats.recentAvg - b.stats.earlierAvg - (a.stats.recentAvg - a.stats.earlierAvg))
   const max = Math.ceil(Math.max(...rows.flatMap((topic) => [topic.stats.recentAvg, topic.stats.earlierAvg]), 1))
   const pct = (value: number) => `${(value / max) * 100}%`

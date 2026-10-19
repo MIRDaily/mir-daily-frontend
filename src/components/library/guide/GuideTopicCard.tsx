@@ -46,7 +46,7 @@ export default function GuideTopicCard({
           <span className="flex flex-wrap items-center gap-2 text-xs text-[#7D8A96]">
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase ${tier.chip}`}>{tier.label}</span>
             <span>
-              <strong className="text-[#2C3E50]">{stats.historyCount}</strong> preguntas en {years.length - 1} años · últimos {RECENT_WINDOW}{' '}
+              <strong className="text-[#2C3E50]">{stats.historyCount}</strong> {stats.historyCount === 1 ? 'pregunta' : 'preguntas'} en {years.length - 1} años · últimos {RECENT_WINDOW}{' '}
               MIR: <strong className="text-[#2C3E50]">{formatAvg(stats.recentAvg)}/año</strong>
             </span>
           </span>
