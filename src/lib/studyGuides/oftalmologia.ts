@@ -38,7 +38,7 @@ export const OFTALMOLOGIA_GUIDE: StudyGuide = {
       focus:
         'Siete preguntas desde 2017, cinco con imagen de fondo de ojo: retinopatía diabética e hipertensiva, trombosis venosa y, en 2026, la mancha rojo cereza. Hay que reconocer cada fondo de un vistazo.',
       hotspots: [
-        { name: 'Oclusión de la arteria central: mancha rojo cereza', heat: 3 },
+        { name: 'Oclusión de la arteria central: mancha rojo cereza', heat: 2 },
         { name: 'Trombosis de la vena central y glaucoma neovascular', heat: 3 },
         { name: 'Retinopatía diabética y edema macular', heat: 3 },
         { name: 'Retinopatía hipertensiva y causas secundarias de HTA', heat: 2 },
@@ -117,7 +117,7 @@ export const OFTALMOLOGIA_GUIDE: StudyGuide = {
       code: 'GLA',
       name: 'Glaucoma',
       shortName: 'Glaucoma',
-      tier: 'imprescindible',
+      tier: 'alta',
       perYear: [0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 1],
       lastExamReserve: 0,
       pages: 6,
@@ -152,7 +152,7 @@ export const OFTALMOLOGIA_GUIDE: StudyGuide = {
       focus:
         'Cinco preguntas (2017, 2018, 2020, 2024 y 2025): reflejos pupilares, defectos de campo, edema de papila y seno cavernoso. Salió los dos años anteriores y no en 2026.',
       hotspots: [
-        { name: 'Defectos de campo visual según la lesión', heat: 3 },
+        { name: 'Defectos de campo visual según la lesión', heat: 2 },
         { name: 'Reflejos pupilares y defecto pupilar aferente', heat: 3 },
         { name: 'Edema de papila e hipertensión intracraneal', heat: 2 },
         { name: 'Parálisis del III, IV y VI par; seno cavernoso', heat: 2 },
@@ -181,7 +181,7 @@ export const OFTALMOLOGIA_GUIDE: StudyGuide = {
         'Cuatro preguntas (2016, 2020 y dos en 2023), sobre todo de desprendimiento de vítreo posterior: distinguir unas moscas volantes benignas de una rotura de retina. No ha salido de 2024 a 2026.',
       hotspots: [
         { name: 'Desprendimiento de vítreo posterior: signos de alarma', heat: 3 },
-        { name: 'Desprendimiento de retina regmatógeno', heat: 3 },
+        { name: 'Desprendimiento de retina regmatógeno', heat: 2 },
         { name: 'Retinosis pigmentaria', heat: 2 },
         { name: 'Tipos de desprendimiento: por desgarro, tracción o exudado', heat: 1 },
       ],
@@ -207,7 +207,7 @@ export const OFTALMOLOGIA_GUIDE: StudyGuide = {
       focus:
         'Dos preguntas recientes (2022 y 2025): reconocer una conjuntivitis por sus signos y tratar una reacción alérgica tras un colirio. Se le suele dar poco peso, pero ha vuelto.',
       hotspots: [
-        { name: 'Vírica, bacteriana o alérgica: cómo distinguirlas', heat: 3 },
+        { name: 'Vírica, bacteriana o alérgica: cómo distinguirlas', heat: 2 },
         { name: 'Adenopatía preauricular y folículos', heat: 2 },
         { name: 'Conjuntivitis alérgica y de contacto: tratamiento', heat: 2 },
         { name: 'Chlamydia y conjuntivitis del recién nacido', heat: 1 },

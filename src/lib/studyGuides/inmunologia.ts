@@ -117,9 +117,9 @@ export const INMUNOLOGIA_GUIDE: StudyGuide = {
     {
       id: 'linfocitos-t',
       code: 'LTH',
-      name: 'Linfocitos T, citocinas y HLA',
+      name: 'Inmunidad celular: linfocitos T, citocinas y HLA',
       shortName: 'Linfocitos T',
-      tier: 'alta',
+      tier: 'imprescindible',
       perYear: [0, 0, 0, 1, 1, 0, 0, 2, 1, 1, 1, 0],
       lastExamReserve: 0,
       pages: 6,
@@ -131,6 +131,7 @@ export const INMUNOLOGIA_GUIDE: StudyGuide = {
         { name: 'Células del asma y la inflamación alérgica', heat: 2 },
         { name: 'HLA de clase I y II y asociaciones con enfermedad', heat: 2 },
         { name: 'Autoanticuerpos frente a interferón', heat: 1 },
+        { name: 'Macrófagos alveolares y defensa del pulmón', heat: 1 },
       ],
       keys: [
         'HLA de clase I (A, B, C): en todas las células nucleadas, presenta péptidos del interior de la célula a los CD8. Clase II (DR, DQ, DP): en las presentadoras de antígeno, presenta péptidos captados de fuera a los CD4. Los genes están en el cromosoma 6 y se heredan en bloque.',
@@ -138,6 +139,7 @@ export const INMUNOLOGIA_GUIDE: StudyGuide = {
         'La IL-4 (y la IL-13) hace que el linfocito B cambie a IgE; la IL-5 atrae y activa eosinófilos y es la diana del mepolizumab.',
         'Linfocitos T reguladores (CD4+ CD25+ FoxP3+): frenan la respuesta con IL-10 y TGF-β; las mutaciones de FOXP3 dan el síndrome IPEX. En un tumor ayudan a escapar de la respuesta inmune.',
         'El linfocito T necesita dos señales para activarse: el TCR reconociendo el péptido en el HLA y la coestimulación (CD28 con B7). Sin la segunda, queda anérgico.',
+        'En el alveolo, la célula más numerosa y la primera línea de defensa es el macrófago alveolar: fagocita lo que llega y avisa al resto del sistema inmune.',
         'Las NK matan sin sensibilización previa a las células que pierden el HLA de clase I (infectadas por virus, tumorales) y a las recubiertas de IgG (citotoxicidad dependiente de anticuerpos).',
         'HLA y enfermedad: B27 en espondiloartritis, DQ2/DQ8 en celiaquía (si es negativo, la descarta casi por completo), B51 en Behçet, DR4 en artritis reumatoide.',
       ],
@@ -208,10 +210,10 @@ export const INMUNOLOGIA_GUIDE: StudyGuide = {
       lastExamReserve: 0,
       pages: 4,
       focus:
-        'Cuatro preguntas de 2018 a 2021 sobre receptores de la inmunidad innata (inflamasoma, sensores de virus de ARN) y una de un ganglio linfático. Ninguna desde 2022.',
+        'Cuatro preguntas de 2018 a 2021: tres sobre receptores de la inmunidad innata (en el citoplasma, inflamasoma, sensores de virus de ARN) y una de un ganglio linfático. Ninguna desde 2022.',
       hotspots: [
-        { name: 'Inmunidad innata frente a adaptativa', heat: 3 },
-        { name: 'Receptores de patrones: TLR, NOD y RIG-I', heat: 2 },
+        { name: 'Inmunidad innata frente a adaptativa', heat: 2 },
+        { name: 'Receptores de patrones: TLR, NOD y RIG-I', heat: 3 },
         { name: 'Inflamasoma e IL-1β', heat: 2 },
         { name: 'Órganos linfoides y estructura del ganglio', heat: 1 },
       ],
@@ -263,7 +265,7 @@ export const INMUNOLOGIA_GUIDE: StudyGuide = {
       focus:
         'Dos años seguidos con pregunta (2024, vacuna de ARN mensajero; 2025, vacunas antineumocócicas) y en 2026 una de vacunas vivas, contada en Pediatría. Tema práctico que también entra por Infecciosas y Preventiva.',
       hotspots: [
-        { name: 'Vacunas conjugadas frente a polisacáridas', heat: 3 },
+        { name: 'Vacunas conjugadas frente a polisacáridas', heat: 2 },
         { name: 'Vacunas vivas: contraindicaciones e intervalos', heat: 2 },
         { name: 'Vacunas de ARN mensajero', heat: 2 },
         { name: 'Inmunización pasiva con inmunoglobulinas', heat: 1 },
