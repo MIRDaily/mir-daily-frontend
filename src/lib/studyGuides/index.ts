@@ -1,6 +1,8 @@
 import type { StudyGuide } from '@/types/studyGuide'
 import { CIRUGIA_GENERAL_GUIDE } from '@/lib/studyGuides/cirugia-general'
+import { INMUNOLOGIA_GUIDE } from '@/lib/studyGuides/inmunologia'
 import { NEUROLOGIA_GUIDE } from '@/lib/studyGuides/neurologia'
+import { OFTALMOLOGIA_GUIDE } from '@/lib/studyGuides/oftalmologia'
 import { REUMATOLOGIA_GUIDE } from '@/lib/studyGuides/reumatologia'
 
 // Las guías se escribieron sobre la maqueta de la Biblioteca y su clave es un id de texto
@@ -11,6 +13,8 @@ const STUDY_GUIDES_BY_SUBJECT: Record<string, StudyGuide> = {
   neurologia: NEUROLOGIA_GUIDE,
   'cirugia-general': CIRUGIA_GENERAL_GUIDE,
   reumatologia: REUMATOLOGIA_GUIDE,
+  inmunologia: INMUNOLOGIA_GUIDE,
+  oftalmologia: OFTALMOLOGIA_GUIDE,
 }
 
 /** Clave de la guía → id de la asignatura del catálogo en la que se enseña. */
@@ -18,6 +22,8 @@ export const ASIGNATURA_DE_GUIA: Readonly<Record<string, number>> = {
   neurologia: 1478, // Neurología y Neurocirugía
   'cirugia-general': 3, // Digestivo y Cirugía General
   reumatologia: 3080, // Reumatología
+  inmunologia: 4344, // Inmunología
+  oftalmologia: 4343, // Oftalmología
 }
 
 /** La guía por su clave de texto (la de los reportes). */
