@@ -15,11 +15,13 @@ type Box = { x1: number; y1: number; x2: number; y2: number }
 const WIDTH = 640
 const HEIGHT = 400
 const PAD = { top: 20, right: 24, bottom: 48, left: 52 }
-// Mínimos de los ejes; crecen si alguna asignatura tiene temas más largos o más preguntados.
-const MIN_MAX_PAGES = 28
-const MIN_MAX_QUESTIONS = 20
-// Por debajo de este número de preguntas los temas se agrupan en una sola etiqueta.
-const LABEL_MIN_QUESTIONS = 6
+// Escala de los ejes: mínimos (crecen si algún tema es más largo o más preguntado), paso de las marcas,
+// divisiones de los cuadrantes y, por debajo de `labelMin` preguntas, temas agrupados en una sola etiqueta.
+// Las asignaturas pequeñas (ningún tema pasa de la mitad de la escala normal) usan la escala reducida;
+// si no, sus puntos quedarían amontonados en la esquina de «Pasada rápida».
+type Scale = { minPages: number; pageStep: number; minQuestions: number; questionStep: number; splitPages: number; splitQuestions: number; labelMin: number }
+const SCALE_NORMAL: Scale = { minPages: 28, pageStep: 7, minQuestions: 20, questionStep: 10, splitPages: 12, splitQuestions: 10, labelMin: 6 }
+const SCALE_SMALL: Scale = { minPages: 10, pageStep: 2, minQuestions: 10, questionStep: 2, splitPages: 5, splitQuestions: 5, labelMin: 3 }
 const LABEL_FONT = 12
 const CHAR_WIDTH = 7.4
 
@@ -62,16 +64,22 @@ function overlaps(a: Box, b: Box) {
 export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
   // Tema bajo el cursor (o con el foco): su nombre se resalta encima de todo.
   const [activeId, setActiveId] = useState<string | null>(null)
-  const maxPages = Math.max(MIN_MAX_PAGES, Math.ceil(Math.max(...topics.map((topic) => topic.pages)) / 7) * 7)
-  const maxQuestions = Math.max(MIN_MAX_QUESTIONS, Math.ceil(Math.max(...topics.map((topic) => topic.stats.historyCount)) / 10) * 10)
+  const topPages = Math.max(...topics.map((topic) => topic.pages))
+  const topQuestions = Math.max(...topics.map((topic) => topic.stats.historyCount))
+  const small = topPages <= SCALE_NORMAL.minPages / 2 && topQuestions <= SCALE_NORMAL.minQuestions / 2
+  const scale = small ? SCALE_SMALL : SCALE_NORMAL
+  const maxPages = Math.max(scale.minPages, Math.ceil(topPages / scale.pageStep) * scale.pageStep)
+  const maxQuestions = Math.max(scale.minQuestions, Math.ceil(topQuestions / scale.questionStep) * scale.questionStep)
   const x = (pages: number) => PAD.left + (pages / maxPages) * (WIDTH - PAD.left - PAD.right)
   const y = (questions: number) => HEIGHT - PAD.bottom - (questions / maxQuestions) * (HEIGHT - PAD.top - PAD.bottom)
-  const xTicks = Array.from({ length: maxPages / 7 + 1 }, (_, i) => i * 7)
-  const yTicks = Array.from({ length: maxQuestions / 10 + 1 }, (_, i) => i * 10)
+  const xTicks = Array.from({ length: maxPages / scale.pageStep + 1 }, (_, i) => i * scale.pageStep)
+  const yTicks = Array.from({ length: maxQuestions / scale.questionStep + 1 }, (_, i) => i * scale.questionStep)
+  // Proporción entre la escala usada y la normal, para colocar el aviso de temas menores en el mismo sitio relativo.
+  const ratio = scale.minPages / SCALE_NORMAL.minPages
 
-  const splitX = x(12)
-  const splitY = y(10)
-  const minorCount = topics.filter((topic) => topic.stats.historyCount < LABEL_MIN_QUESTIONS).length
+  const splitX = x(scale.splitPages)
+  const splitY = y(scale.splitQuestions)
+  const minorCount = topics.filter((topic) => topic.stats.historyCount < scale.labelMin).length
 
   // Separa los puntos que caen exactamente en el mismo sitio.
   const sameSpot = new Map<string, string[]>()
@@ -82,12 +90,14 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
   const points = topics.map((topic) => {
     const group = sameSpot.get(`${topic.pages}|${topic.stats.historyCount}`) ?? [topic.id]
     const nudge = group.length > 1 ? (group.indexOf(topic.id) - (group.length - 1) / 2) * 0.7 : 0
-    const major = topic.stats.historyCount >= LABEL_MIN_QUESTIONS
+    const major = topic.stats.historyCount >= scale.labelMin
     return { topic, cx: x(topic.pages + nudge), cy: y(topic.stats.historyCount), r: major ? 8 : 5.5, major }
   })
 
   // Coloca las etiquetas de mayor a menor peso evitando otras etiquetas, puntos y bordes.
   const placed: Box[] = []
+  // Solo las etiquetas que se ven en reposo (las de los temas menores aparecen al pasar el cursor).
+  const visibleLabels: Box[] = []
   const labels = new Map<string, LabelOffset>()
   const pointBoxes = points.map((p) => ({ id: p.topic.id, box: { x1: p.cx - p.r, y1: p.cy - p.r, x2: p.cx + p.r, y2: p.cy + p.r } }))
   // Rótulos fijos del gráfico (cuadrantes y aviso de temas menores): las etiquetas no deben pisarlos.
@@ -130,6 +140,20 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
     const chosen = manual ?? options.reduce((best, option) => (clashes(option) < clashes(best) ? option : best))
     labels.set(p.topic.id, chosen)
     placed.push(labelBox(p.cx, p.cy, chosen, p.topic.shortName))
+    if (p.major) visibleLabels.push(labelBox(p.cx, p.cy, chosen, p.topic.shortName))
+  }
+
+  // Aviso de temas menores: en su sitio de siempre o, si pisa algo, desplazado a la derecha hasta quedar libre.
+  const minorText = `← ${minorCount} ${minorCount === 1 ? 'tema menor' : 'temas menores'}`
+  const minorY = y(2 * ratio) + 4
+  let minorX = x(6.8 * ratio)
+  for (let dx = 0; dx < WIDTH; dx += 4) {
+    const box = textBox(x(6.8 * ratio) + dx, minorY, minorText, 'start', 11)
+    const free = !pointBoxes.some((pb) => overlaps(box, pb.box)) && !visibleLabels.some((other) => overlaps(box, other)) && !fixedBoxes.some((other) => overlaps(box, other))
+    if (free && box.x2 <= WIDTH - PAD.right) {
+      minorX = box.x1
+      break
+    }
   }
 
   return (
@@ -245,8 +269,8 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
           </g>
 
           {minorCount > 0 ? (
-            <text x={x(6.8)} y={y(2) + 4} className="fill-[#7D8A96] text-[11px]">
-              {`← ${minorCount} ${minorCount === 1 ? 'tema menor' : 'temas menores'}`}
+            <text x={minorX} y={minorY} className="fill-[#7D8A96] text-[11px]">
+              {minorText}
             </text>
           ) : null}
         </svg>
