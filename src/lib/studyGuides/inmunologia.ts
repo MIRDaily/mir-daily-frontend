@@ -22,9 +22,9 @@ export const INMUNOLOGIA_GUIDE: StudyGuide = {
     { year: 2023, count: 5 },
     { year: 2024, count: 5 },
     { year: 2025, count: 6 },
-    { year: 2026, count: 4 },
+    { year: 2026, count: 3 },
   ],
-  lastExamTotal: 4,
+  lastExamTotal: 3,
   lastExamReserveTotal: 0,
   topics: [
     {
@@ -64,11 +64,11 @@ export const INMUNOLOGIA_GUIDE: StudyGuide = {
       name: 'Inmunoterapia',
       shortName: 'Inmunoterapia',
       tier: 'imprescindible',
-      perYear: [1, 0, 1, 0, 0, 1, 1, 1, 1, 2, 3, 3],
+      perYear: [1, 0, 1, 0, 0, 1, 1, 1, 1, 2, 3, 2],
       lastExamReserve: 0,
       pages: 6,
       focus:
-        'El tema que más crece: desde 2020 ha caído todos los años, con 3 preguntas en 2025 y otras 3 en 2026 (CAR-T, PD-L1 y un melanoma en un paciente con miastenia). Suma 14 desde 2015: inhibidores de puntos de control, CAR-T, vacunas y anticuerpos monoclonales.',
+        'El tema que más crece: desde 2020 ha caído todos los años, con 3 preguntas en 2025 y 2 en 2026 (CAR-T y PD-L1). Suma 13 desde 2015: inhibidores de puntos de control, CAR-T, vacunas y anticuerpos monoclonales.',
       hotspots: [
         { name: 'Inhibidores de PD-1, PD-L1 y CTLA-4: cómo actúan', heat: 3 },
         { name: 'CAR-T y síndrome de liberación de citocinas', heat: 3 },
@@ -200,13 +200,13 @@ export const INMUNOLOGIA_GUIDE: StudyGuide = {
   insights: [
     {
       icon: 'equalizer',
-      title: 'Cuatro preguntas, en la media',
-      body: 'El MIR 2026 trajo 4 preguntas de Inmunología, sin reservas ni imágenes: en la línea de los últimos años (entre 4 y 6 desde 2021). Dos vinieron en el bloque 174-175 y otras dos sueltas en la zona de Oncología (131 y 133).',
+      title: 'Tres preguntas, algo por debajo',
+      body: 'El MIR 2026 trajo 3 preguntas de Inmunología, sin reservas ni imágenes: algo menos que de 2021 a 2025 (entre 4 y 6). Dos vinieron en el bloque 174-175 y otra suelta en la zona de Oncología (131). El melanoma con miastenia (133) se cuenta en Dermatología.',
     },
     {
       icon: 'trending_up',
       title: 'La inmunoterapia ya manda',
-      body: 'Tres de las cuatro preguntas de 2026 fueron de Inmunoterapia: CAR-T, PD-L1 y un melanoma en un paciente con miastenia. Desde 2020 ha caído todos los años y suma 12 preguntas en siete convocatorias, más que cualquier otro tema en ese periodo.',
+      body: 'Dos de las tres preguntas de 2026 fueron de Inmunoterapia: CAR-T y PD-L1. Desde 2020 ha caído todos los años y suma 11 preguntas en siete convocatorias, más que cualquier otro tema en ese periodo.',
     },
     {
       icon: 'child_care',
@@ -221,18 +221,18 @@ export const INMUNOLOGIA_GUIDE: StudyGuide = {
     {
       icon: 'menu_book',
       title: 'Pocas páginas, mucho rendimiento',
-      body: 'Unas 32 páginas de teoría para 4-5 preguntas al año. Patología del sistema inmunitario e Inmunoterapia ocupan 16 y reúnen casi dos tercios de las preguntas desde 2015 (35 de 54).',
+      body: 'Unas 32 páginas de teoría para 4-5 preguntas al año. Patología del sistema inmunitario e Inmunoterapia ocupan 16 y reúnen casi dos tercios de las preguntas desde 2015 (34 de 53).',
     },
     {
       icon: 'hub',
       title: 'Inmunología también en otras asignaturas',
-      body: 'Fitofotodermatitis con imagen (Dermatología: la fototoxicidad no es una hipersensibilidad tipo IV), artritis por pembrolizumab (Reumatología), vacunas vivas en niños (Pediatría), HLA-DQ2/DQ8 en la celiaquía (Digestivo) y rinitis alérgica (Otorrino, reserva).',
+      body: 'Fitofotodermatitis con imagen (Dermatología: la fototoxicidad no es una hipersensibilidad tipo IV), melanoma con miastenia que contraindica la inmunoterapia (Dermatología), artritis por pembrolizumab (Reumatología), vacunas vivas en niños (Pediatría), HLA-DQ2/DQ8 en la celiaquía (Digestivo) y rinitis alérgica (Otorrino, reserva).',
     },
   ],
   plan: [
     {
       title: '1.ª vuelta · Lo que más cae',
-      subtitle: 'Patología del sistema inmunitario e Inmunoterapia: 35 de las 54 preguntas desde 2015. Inmunodeficiencias, anafilaxia, hipersensibilidad, puntos de control y CAR-T.',
+      subtitle: 'Patología del sistema inmunitario e Inmunoterapia: 34 de las 53 preguntas desde 2015. Inmunodeficiencias, anafilaxia, hipersensibilidad, puntos de control y CAR-T.',
       topicIds: ['patologia', 'inmunoterapia'],
       days: 2,
     },
@@ -267,22 +267,6 @@ export const INMUNOLOGIA_GUIDE: StudyGuide = {
         'PD-L1 se mide por inmunohistoquímica en el tejido tumoral (porcentaje de células teñidas). La secuenciación estudia mutaciones, el Western blot no dice qué células expresan la proteína y la FISH detecta amplificaciones o reordenamientos.',
     },
     {
-      number: 133,
-      kind: 'bloque',
-      topicId: 'inmunoterapia',
-      tag: 'Inmunoterapia · Melanoma y miastenia',
-      stem: 'Paciente varón de 63 años con antecedentes de miastenia gravis. Ha sido diagnosticado recientemente de melanoma estadio IV con extensa carga de enfermedad con afectación hepática múltiple, pulmonar bilateral y adenopatías generalizadas. Se realiza una determinación de BRAF por inmunohistoquímica siendo positiva para V600E. ¿Cuál sería el tratamiento más razonable teniendo en cuenta el riesgo beneficio?',
-      options: [
-        'Pembrolizumab.',
-        'Nivolumab.',
-        'Dabrafenib-Trametinib.',
-        'Nivolumab-Ipilimumab.',
-      ],
-      correct: 3,
-      explanation:
-        'Los inhibidores de puntos de control pueden empeorar de forma grave una miastenia, sobre todo en combinación con ipilimumab. Con BRAF V600E, la terapia dirigida con inhibidores de BRAF y MEK es eficaz y evita ese riesgo.',
-    },
-    {
       number: 174,
       kind: 'bloque',
       topicId: 'patologia',
@@ -313,6 +297,22 @@ export const INMUNOLOGIA_GUIDE: StudyGuide = {
       correct: 2,
       explanation:
         'El síndrome de liberación de citocinas se debe sobre todo a la IL-6, además de la IL-1 y el interferón gamma (el cuaderno dice «citosinas»). Es precoz (primeros días), da fiebre e hipotensión, y el tocilizumab es su tratamiento de primera línea.',
+    },
+    {
+      number: 133,
+      kind: 'frontera',
+      topicId: 'inmunoterapia',
+      tag: 'Dermatología · Melanoma y miastenia',
+      stem: 'Paciente varón de 63 años con antecedentes de miastenia gravis. Ha sido diagnosticado recientemente de melanoma estadio IV con extensa carga de enfermedad con afectación hepática múltiple, pulmonar bilateral y adenopatías generalizadas. Se realiza una determinación de BRAF por inmunohistoquímica siendo positiva para V600E. ¿Cuál sería el tratamiento más razonable teniendo en cuenta el riesgo beneficio?',
+      options: [
+        'Pembrolizumab.',
+        'Nivolumab.',
+        'Dabrafenib-Trametinib.',
+        'Nivolumab-Ipilimumab.',
+      ],
+      correct: 3,
+      explanation:
+        'Los inhibidores de puntos de control pueden empeorar de forma grave una miastenia, sobre todo en combinación con ipilimumab. Con BRAF V600E, la terapia dirigida con inhibidores de BRAF y MEK es eficaz y evita ese riesgo.',
     },
     {
       number: 9,
@@ -397,5 +397,5 @@ export const INMUNOLOGIA_GUIDE: StudyGuide = {
     },
   ],
   sourcesNote:
-    'Pesos calculados con las preguntas MIR de Inmunología de 2015 a 2025 repartidas por los 6 temas del banco de preguntas (los mismos que ofrece el simulador) y con la clasificación de las preguntas del MIR 2026 (cuaderno oficial, versión 0). De 2016 a 2025 las cifras son las de las preguntas del banco; 2015, que no está en el banco, sale del reparto por temas del manual de referencia (3 preguntas; su gráfico anual da 4). Las preguntas de inmunoterapia oncológica sin otra asignatura clara (131 y 133 en 2026) se cuentan aquí, como las de años anteriores. Las respuestas del MIR 2026 están contrastadas con las definitivas publicadas tras las impugnaciones; ninguna de Inmunología fue anulada. La previsión para el MIR 2027 es una media ponderada (70 % los últimos 5 MIR, 30 % los anteriores): orientativa, no una predicción exacta. La extensión de cada tema es aproximada.',
+    'Pesos calculados con las preguntas MIR de Inmunología de 2015 a 2025 repartidas por los 6 temas del banco de preguntas (los mismos que ofrece el simulador) y con la clasificación de las preguntas del MIR 2026 (cuaderno oficial, versión 0). De 2016 a 2025 las cifras son las de las preguntas del banco; 2015, que no está en el banco, sale del reparto por temas del manual de referencia (3 preguntas; su gráfico anual da 4). Las preguntas de inmunoterapia oncológica sin otra asignatura clara (la 131 en 2026) se cuentan aquí, como las de años anteriores; la 133, un melanoma con miastenia, está en Dermatología. Las respuestas del MIR 2026 están contrastadas con las definitivas publicadas tras las impugnaciones; ninguna de Inmunología fue anulada. La previsión para el MIR 2027 es una media ponderada (70 % los últimos 5 MIR, 30 % los anteriores): orientativa, no una predicción exacta. La extensión de cada tema es aproximada.',
 }
