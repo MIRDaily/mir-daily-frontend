@@ -19,15 +19,19 @@ const PAD = { top: 20, right: 24, bottom: 48, left: 52 }
 // divisiones de los cuadrantes y, por debajo de `labelMin` preguntas, temas agrupados en una sola etiqueta.
 type Scale = { minPages: number; pageStep: number; minQuestions: number; questionStep: number; splitPages: number; splitQuestions: number; labelMin: number }
 const SCALE_NORMAL: Scale = { minPages: 28, pageStep: 7, minQuestions: 20, questionStep: 10, splitPages: 12, splitQuestions: 10, labelMin: 6 }
-// Asignaturas pequeñas (menos de 60 preguntas en el periodo, unas 5 al año): con la escala normal sus temas quedaban
+// Asignaturas pequeñas (menos de 6 preguntas al año de media en el periodo): con la escala normal sus temas quedaban
 // amontonados en la esquina de «Pasada rápida» y sin nombre. Cada eje se ajusta a sus datos y los cuadrantes se
-// parten por la mitad del eje de preguntas.
-const SMALL_SUBJECT_QUESTIONS = 60
+// parten por la mitad del eje de preguntas. Va por media y no por total: Dermatología (60 en 11 años, 5,5 al año)
+// se quedaba fuera de un umbral de «menos de 60».
+const SMALL_SUBJECT_PER_YEAR = 6
 function smallScale(topPages: number, topQuestions: number): Scale {
   const shortTopics = topPages <= SCALE_NORMAL.minPages / 2
   const questionStep = topQuestions <= 10 ? 2 : 4
-  // +1: margen para que el tema más preguntado no quede pegado al borde superior, bajo los rótulos de los cuadrantes
-  const maxQuestions = Math.max(10, Math.ceil((topQuestions + 1) / questionStep) * questionStep)
+  // Margen: el tema más preguntado queda como mucho al 85 % del eje, por debajo de los rótulos de los cuadrantes
+  // (con un margen fijo de +1, las 14 preguntas de Neoplasias cutáneas en un eje de 16 pisaban el subtítulo).
+  let maxQuestions = questionStep
+  while (topQuestions * 20 > maxQuestions * 17) maxQuestions += questionStep
+  maxQuestions = Math.max(10, maxQuestions)
   return {
     minPages: shortTopics ? 10 : SCALE_NORMAL.minPages,
     pageStep: shortTopics ? 2 : SCALE_NORMAL.pageStep,
@@ -83,7 +87,8 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
   const topPages = Math.max(...topics.map((topic) => topic.pages))
   const topQuestions = Math.max(...topics.map((topic) => topic.stats.historyCount))
   const historyTotal = topics.reduce((acc, topic) => acc + topic.stats.historyCount, 0)
-  const scale = historyTotal < SMALL_SUBJECT_QUESTIONS ? smallScale(topPages, topQuestions) : SCALE_NORMAL
+  const historyYears = Math.max(1, (topics[0]?.perYear.length ?? 1) - 1)
+  const scale = historyTotal < SMALL_SUBJECT_PER_YEAR * historyYears ? smallScale(topPages, topQuestions) : SCALE_NORMAL
   const maxPages = Math.max(scale.minPages, Math.ceil(topPages / scale.pageStep) * scale.pageStep)
   const maxQuestions = Math.max(scale.minQuestions, Math.ceil(topQuestions / scale.questionStep) * scale.questionStep)
   const x = (pages: number) => PAD.left + (pages / maxPages) * (WIDTH - PAD.left - PAD.right)

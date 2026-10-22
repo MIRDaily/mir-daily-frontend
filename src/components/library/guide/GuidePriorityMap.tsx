@@ -70,7 +70,8 @@ export default function GuidePriorityMap({ topics, recentYears, targetExam }: Gu
                   </motion.span>
 
                   <span className="flex min-w-0 flex-col gap-1">
-                    <span className="truncate font-semibold text-[#2C3E50]">{topic.shortName}</span>
+                    {/* En móvil, 14 px: a 16 px «Inmunopatología» no cabía junto a la previsión */}
+                    <span className="truncate font-semibold text-[#2C3E50] max-md:text-sm">{topic.shortName}</span>
                     <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase ${tier.chip}`}>
                       {tier.label}
                     </span>
