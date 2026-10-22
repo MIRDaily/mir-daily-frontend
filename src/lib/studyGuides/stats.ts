@@ -1,4 +1,4 @@
-import type { GuideTopic } from '@/types/studyGuide'
+import type { GuideTopic, StudyGuide } from '@/types/studyGuide'
 
 /** Número de convocatorias (incluido el último MIR) que cuentan como "recientes". */
 export const RECENT_WINDOW = 5
@@ -53,8 +53,25 @@ export function computeTopicStats(topic: GuideTopic): TopicStats {
   }
 }
 
+// Las reservas del último MIR cuentan como preguntas normales, igual que en los años anteriores (el manual y el banco
+// de preguntas las incluyen): se suman al último año de la serie, y de ahí salen totales, previsión, tendencia y tablas.
+// `lastExamReserve` se queda solo para decir cuántas de esas preguntas fueron de reserva.
+function withLastExamReserve(topic: GuideTopic): GuideTopic {
+  if (topic.lastExamReserve === 0) return topic
+  const perYear = [...topic.perYear]
+  perYear[perYear.length - 1] += topic.lastExamReserve
+  return { ...topic, perYear }
+}
+
 export function withStats(topics: GuideTopic[]): GuideTopicWithStats[] {
-  return topics.map((topic) => ({ ...topic, stats: computeTopicStats(topic) }))
+  return topics.map(withLastExamReserve).map((topic) => ({ ...topic, stats: computeTopicStats(topic) }))
+}
+
+/** Preguntas por año de la asignatura con las reservas del último MIR sumadas, como en el resto de años. */
+export function subjectPerYear(guide: StudyGuide) {
+  return guide.perYear.map((item, index) =>
+    index === guide.perYear.length - 1 ? { ...item, count: item.count + guide.lastExamReserveTotal } : item,
+  )
 }
 
 // Por debajo de 1 se muestra con un decimal: «<1» igualaba un tema de 0,6 preguntas al año con uno que no sale nunca.

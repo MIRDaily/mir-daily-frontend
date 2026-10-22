@@ -18,7 +18,7 @@ import { GuideQuizProvider, GuideQuizScore } from '@/components/library/guide/Gu
 import GuideTableOfContents, { GuideSectionChips, type GuideTocItem } from '@/components/library/guide/GuideTableOfContents'
 import { ASIGNATURA_DE_GUIA, getStudyGuide, guiaDeAsignatura } from '@/lib/studyGuides'
 import { idDeSegmento } from '@/lib/carpetas/biblioteca'
-import { RECENT_WINDOW, formatAvg, withStats } from '@/lib/studyGuides/stats'
+import { RECENT_WINDOW, formatAvg, subjectPerYear, withStats } from '@/lib/studyGuides/stats'
 import type { GuideQuestionKind, GuideTier } from '@/types/studyGuide'
 
 type LibraryGuidePageProps = {
@@ -60,7 +60,10 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
     notFound()
   }
 
-  const history = guide.perYear.filter((item) => item.year !== guide.perYear.at(-1)?.year)
+  // Las reservas del último MIR cuentan como preguntas normales (como en los años anteriores)
+  const perYear = subjectPerYear(guide)
+  const lastExamCount = guide.lastExamTotal + guide.lastExamReserveTotal
+  const history = perYear.filter((item) => item.year !== perYear.at(-1)?.year)
   const lastYear = guide.perYear.at(-1)?.year ?? 0
   const average = history.reduce((acc, item) => acc + item.count, 0) / history.length
   const years = guide.perYear.map((item) => item.year)
@@ -150,8 +153,12 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
                 {/* Con menos de 10 al año el redondeo engaña (4,5 → 5): se muestra con un decimal, como en el gráfico */}
                 <StatTile value={average < 10 ? formatAvg(average) : <GuideCountUp to={Math.round(average)} />} label={`preguntas por año de media (${guide.historyRange})`} />
                 <StatTile
-                  value={<><GuideCountUp to={guide.lastExamTotal} />+<GuideCountUp to={guide.lastExamReserveTotal} /></>}
-                  label={`en el ${guide.lastExam} (bloque + reserva)`}
+                  value={<GuideCountUp to={lastExamCount} />}
+                  label={
+                    guide.lastExamReserveTotal > 0
+                      ? `en el ${guide.lastExam} (${guide.lastExamReserveTotal} de reserva)`
+                      : `en el ${guide.lastExam}`
+                  }
                   accent
                 />
                 <StatTile value={<><GuideCountUp to={topThreeShare} />%</>} label={`de las preguntas salen de ${topThree.map((topic) => topic.shortName).join(', ')}`} />
@@ -188,11 +195,11 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
             <section id="tendencia" className="flex scroll-mt-24 flex-col gap-5 rounded-2xl border border-[#EAE4E2] bg-white p-5 sm:p-6">
               <SectionHeading icon="bar_chart" title="Preguntas por año" subtitle={`${guide.title}, ${guide.perYear[0]?.year}–${lastYear}.`} />
-              <GuideTrendChart perYear={guide.perYear} average={average} highlightYear={lastYear} />
+              <GuideTrendChart perYear={perYear} average={average} highlightYear={lastYear} />
               <p className="text-sm leading-relaxed">
                 {/* «Estable» solo si el rango no supera la media; «por debajo» solo si se aleja más de un 15 %. */}
                 {maxYearCount - minCount <= average ? 'Peso estable, entre' : 'Entre'} {minCount} y {maxYearCount} preguntas al año.{' '}
-                {guide.lastExamTotal < average * 0.85 ? (
+                {lastExamCount < average * 0.85 ? (
                   <>
                     El <strong className="text-[#2C3E50]">{guide.lastExam}</strong> se quedó por debajo de la media: lo normal es que el siguiente
                     vuelva a acercarse a ella.

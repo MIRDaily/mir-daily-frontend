@@ -221,7 +221,7 @@ function TopicTimeline({
 }
 
 function LastExamBadge({ topic, lastExamLabel }: { topic: GuideTopicWithStats; lastExamLabel: string }) {
-  if (topic.stats.lastExamCount === 0 && topic.lastExamReserve === 0) {
+  if (topic.stats.lastExamCount === 0) {
     const isSurprise = topic.stats.totalCount >= 10 && topic.stats.trend !== 'baja'
     return (
       <span
@@ -236,7 +236,7 @@ function LastExamBadge({ topic, lastExamLabel }: { topic: GuideTopicWithStats; l
   return (
     <span className="rounded-full bg-[#2C3E50] px-2.5 py-1 text-[11px] font-semibold text-white">
       {lastExamLabel}: {topic.stats.lastExamCount}
-      {topic.lastExamReserve > 0 ? ` + ${topic.lastExamReserve}R` : ''}
+      {topic.lastExamReserve > 0 ? ` (${topic.lastExamReserve} de reserva)` : ''}
     </span>
   )
 }

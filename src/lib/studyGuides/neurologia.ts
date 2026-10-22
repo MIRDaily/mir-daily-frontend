@@ -36,7 +36,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       lastExamReserve: 1,
       pages: 26,
       focus:
-        'El tema más preguntado de la asignatura: casi 3 preguntas por año. Columna, TCE, tumores y LCR (hidrocefalia e HII) concentran casi todo.',
+        'El tema más preguntado de la asignatura: unas 3 preguntas por año. Columna, TCE, tumores y LCR (hidrocefalia e HII) concentran casi todo.',
       hotspots: [
         { name: 'Patología raquimedular: lumbalgia, hernias, estenosis de canal', heat: 3 },
         { name: 'Tumores cerebrales: metástasis, meningioma, glioma, fosa posterior infantil', heat: 3 },
@@ -405,12 +405,12 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     {
       icon: 'trending_down',
       title: 'Año flojo, no tendencia',
-      body: 'El MIR 2026 trajo 10 preguntas de Neuro (+2 de reserva), frente a una media de 14. Desde 2015 ha oscilado entre 11 y 21: no des la asignatura por devaluada.',
+      body: 'El MIR 2026 trajo 12 preguntas de Neuro (2 de ellas de reserva), frente a una media de 14. Desde 2015 ha oscilado entre 11 y 21: no des la asignatura por devaluada.',
     },
     {
       icon: 'crisis_alert',
       title: 'Ictus: cero en 2026',
-      body: 'Es el 2.º tema más preguntado (casi 2 por año) y en 2026 no cayó ninguna. Es la mejor apuesta para el MIR 2027: llévalo perfecto.',
+      body: 'Es el tercer tema más preguntado desde 2015 (19 preguntas) y en 2026 no cayó ninguna. Es la mejor apuesta para el MIR 2027: llévalo perfecto.',
     },
     {
       icon: 'bolt',
@@ -420,7 +420,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     {
       icon: 'neurology',
       title: 'Lo que sube y lo que baja',
-      body: 'Neurocirugía se ha más que duplicado (4,4 preguntas/año desde 2022 frente a 1,9 antes) y Semiología también sube. Demencias cae en picado (2 en 5 años) y Epilepsia baja.',
+      body: 'Neurocirugía se ha más que duplicado (4,6 preguntas/año desde 2022 frente a 1,9 antes) y Semiología también sube. Demencias cae en picado (2 en 5 años) y Epilepsia baja.',
     },
     {
       icon: 'bedtime',

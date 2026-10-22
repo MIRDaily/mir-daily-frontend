@@ -100,7 +100,7 @@ export const UROLOGIA_GUIDE: StudyGuide = {
       lastExamReserve: 1,
       pages: 8,
       focus:
-        'El tema más regular: 9 preguntas en 8 de las 11 convocatorias de 2015 a 2025 (la de 2023, sobre la bacteriuria de la embarazada, fue anulada). En 2026 solo entró como reserva, la 203, que llegó a puntuar: qué germen no es habitual en la ITU.',
+        'El tema más regular: 10 preguntas desde 2015, con alguna en 8 de las 11 convocatorias de 2015 a 2025 (la de 2023, sobre la bacteriuria de la embarazada, fue anulada). En 2026 solo entró como reserva, la 203, que llegó a puntuar: qué germen no es habitual en la ITU.',
       hotspots: [
         { name: 'Bacteriuria asintomática: cuándo tratar', heat: 3 },
         { name: 'Pielonefritis que no mejora y formas graves', heat: 2 },
@@ -360,13 +360,13 @@ export const UROLOGIA_GUIDE: StudyGuide = {
   insights: [
     {
       icon: 'equalizer',
-      title: 'Siete preguntas y una reserva',
-      body: 'El MIR 2026 trajo 7 preguntas de Urología (84 a 88, 130 y 132) y la reserva 203, que llegó a puntuar al sustituir a una anulada: la cifra más alta desde 2019 (8). De 2015 a 2025 la media fue de 5,2 por convocatoria, con extremos de 2 (2021 y 2022) y 10 (2018).',
+      title: 'Ocho preguntas, una de reserva',
+      body: 'El MIR 2026 trajo 8 preguntas de Urología: 84 a 88, 130, 132 y la reserva 203, que llegó a puntuar al sustituir a una anulada. Son tantas como en 2019 y más que en cualquier MIR desde entonces. De 2015 a 2025 la media fue de 5,2 por convocatoria, con extremos de 2 (2021 y 2022) y 10 (2018).',
     },
     {
       icon: 'biotech',
       title: 'Un año de onco-urología',
-      body: 'Seis de las siete preguntas de 2026 fueron tumores: tres de próstata, dos de vejiga y una de riñón. Solo la vejiga hiperactiva (87) se salió del guion, y la reserva fue de infecciones.',
+      body: 'Seis de las ocho preguntas de 2026 fueron tumores: tres de próstata, dos de vejiga y una de riñón. Las otras dos, la vejiga hiperactiva (87) y la reserva de infecciones (203).',
     },
     {
       icon: 'trending_up',
@@ -392,13 +392,13 @@ export const UROLOGIA_GUIDE: StudyGuide = {
   plan: [
     {
       title: '1.ª vuelta · Onco-urología',
-      subtitle: 'Cáncer de próstata, tumores de vejiga y vías, y cáncer renal: 6 de las 7 preguntas de 2026 y 22 de las 64 desde 2015.',
+      subtitle: 'Cáncer de próstata, tumores de vejiga y vías, y cáncer renal: 6 de las 8 preguntas de 2026 y 22 de las 65 desde 2015.',
       topicIds: ['prostata', 'vias', 'renal'],
       days: 2,
     },
     {
       title: '2.ª vuelta · Urología de urgencias y consulta',
-      subtitle: 'Litiasis, infecciones, incontinencia e hiperplasia benigna: la mitad de las preguntas desde 2015 (32 de 64). Céntrate en qué se hace primero.',
+      subtitle: 'Litiasis, infecciones, incontinencia e hiperplasia benigna: la mitad de las preguntas desde 2015 (33 de 65). Céntrate en qué se hace primero.',
       topicIds: ['litiasis', 'infecciones', 'incontinencia', 'hbp'],
       days: 2,
     },
@@ -588,5 +588,5 @@ export const UROLOGIA_GUIDE: StudyGuide = {
     },
   ],
   sourcesNote:
-    'Pesos calculados con las preguntas MIR de Urología de 2015 a 2025 repartidas por los 12 temas del banco de preguntas (los mismos que ofrece el simulador) y con la clasificación de las preguntas del MIR 2026 (cuaderno oficial, versión 0). De 2016 a 2025 las cifras son las de las preguntas del banco, que coinciden tema a tema con el reparto del manual de referencia (la 138 de 2023 está anulada, pero cuenta como pregunta preguntada); 2015, que no está en el banco, sale de ese reparto. Fisiología de la micción, cistitis intersticial y estenosis de uretra no son temas del banco y no han tenido preguntas de 2015 a 2026: se repasan dentro de Incontinencia, Infecciones y Traumatismos. Las respuestas del MIR 2026 están contrastadas con las definitivas publicadas tras las impugnaciones; ninguna de Urología fue anulada y la reserva 203 puntuó. La previsión para el MIR 2027 es una media ponderada (70 % los últimos 5 MIR, 30 % los anteriores): orientativa, no una predicción exacta. La extensión de cada tema es aproximada.',
+    'Pesos calculados con las preguntas MIR de Urología de 2015 a 2025 repartidas por los 12 temas del banco de preguntas (los mismos que ofrece el simulador) y con la clasificación de las preguntas del MIR 2026 (cuaderno oficial, versión 0). De 2016 a 2025 las cifras son las de las preguntas del banco, que coinciden tema a tema con el reparto del manual de referencia (la 138 de 2023 está anulada, pero cuenta como pregunta preguntada); 2015, que no está en el banco, sale de ese reparto. Fisiología de la micción, cistitis intersticial y estenosis de uretra no son temas del banco y no han tenido preguntas de 2015 a 2026: se repasan dentro de Incontinencia, Infecciones y Traumatismos. Las respuestas del MIR 2026 están contrastadas con las definitivas publicadas tras las impugnaciones; ninguna de Urología fue anulada y la reserva 203 puntuó. Las reservas cuentan como cualquier otra pregunta, también en el MIR 2026. La previsión para el MIR 2027 es una media ponderada (70 % los últimos 5 MIR, 30 % los anteriores): orientativa, no una predicción exacta. La extensión de cada tema es aproximada.',
 }

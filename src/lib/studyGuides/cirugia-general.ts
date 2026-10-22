@@ -211,7 +211,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
       lastExamReserve: 1,
       pages: 20,
       focus:
-        'Era el tema estrella de Digestivo y ha bajado (de 1,6 a 1,0 preguntas por año), pero en 2025 volvieron dos y en 2026 dos más (una anulada y otra impugnada en reserva).',
+        'Era el tema estrella de Digestivo y ha bajado (de 1,6 a 1,2 preguntas por año), pero en 2025 volvieron dos y en 2026 dos más (una anulada y otra impugnada en reserva).',
       hotspots: [
         { name: 'Hemorragia por varices: tratamiento agudo y profilaxis', heat: 3 },
         { name: 'Ascitis, gradiente albúmina suero-ascitis y PBE', heat: 3 },
@@ -502,7 +502,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
     {
       icon: 'trending_up',
       title: 'Un año muy cargado',
-      body: 'El MIR 2026 trajo 26 preguntas de Digestivo y Cirugía General (+2 de reserva), frente a una media de 21 desde 2015: tantas como en 2017 y la cifra más alta desde entonces.',
+      body: 'El MIR 2026 trajo 28 preguntas de Digestivo y Cirugía General (2 de ellas de reserva), frente a una media de 21 desde 2015: tantas como en 2016, el máximo de la serie.',
     },
     {
       icon: 'content_cut',

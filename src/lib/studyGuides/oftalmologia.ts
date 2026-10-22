@@ -37,7 +37,7 @@ export const OFTALMOLOGIA_GUIDE: StudyGuide = {
       lastExamReserve: 0,
       pages: 10,
       focus:
-        'El tema que manda: 18 de las 40 preguntas desde 2015, con alguna todos los años salvo 2024, y seis con imagen de fondo de ojo. Lo que más se repite: DMAE, oclusiones vasculares (en 2026, la mancha rojo cereza) y desprendimiento de vítreo y de retina.',
+        'El tema que manda: 18 de las 41 preguntas desde 2015, con alguna todos los años salvo 2024, y seis con imagen de fondo de ojo. Lo que más se repite: DMAE, oclusiones vasculares (en 2026, la mancha rojo cereza) y desprendimiento de vítreo y de retina.',
       hotspots: [
         { name: 'DMAE seca y húmeda: clínica y tratamiento', heat: 3 },
         { name: 'Oclusiones venosa y arterial', heat: 3 },
@@ -244,13 +244,13 @@ export const OFTALMOLOGIA_GUIDE: StudyGuide = {
   insights: [
     {
       icon: 'equalizer',
-      title: 'Tres preguntas y una reserva',
-      body: 'El MIR 2026 trajo 3 preguntas de Oftalmología (la 7, con imagen de fondo de ojo, la 106 y la 107) y la reserva 204, que llegó a puntuar al sustituir a una anulada. En la línea de siempre: entre 2 y 5 por convocatoria desde 2015.',
+      title: 'Cuatro preguntas, una de reserva',
+      body: 'El MIR 2026 trajo 4 preguntas de Oftalmología: la 7 (con imagen de fondo de ojo), la 106, la 107 y la reserva 204, que llegó a puntuar al sustituir a una anulada. En la línea de siempre: entre 2 y 5 por convocatoria desde 2015.',
     },
     {
       icon: 'visibility',
       title: 'La retina sigue mandando',
-      body: 'Patología de la retina suma 18 de las 40 preguntas desde 2015, más que Uveítis, Neurooftalmología y Glaucoma juntos (16). La imagen de fondo de ojo es casi fija en la asignatura: ha salido en 2017, 2018, 2019, 2021, 2022, 2025 y 2026.',
+      body: 'Patología de la retina suma 18 de las 41 preguntas desde 2015, más que Uveítis, Neurooftalmología y Glaucoma juntos (17). La imagen de fondo de ojo es casi fija en la asignatura: ha salido en 2017, 2018, 2019, 2021, 2022, 2025 y 2026.',
     },
     {
       icon: 'trending_up',
@@ -276,7 +276,7 @@ export const OFTALMOLOGIA_GUIDE: StudyGuide = {
   plan: [
     {
       title: '1.ª vuelta · Retina',
-      subtitle: 'Casi la mitad de las preguntas (18 de 40): DMAE, oclusiones, retinopatía diabética y desprendimiento. Aprende a reconocer cada fondo de ojo en imagen.',
+      subtitle: 'Casi la mitad de las preguntas (18 de 41): DMAE, oclusiones, retinopatía diabética y desprendimiento. Aprende a reconocer cada fondo de ojo en imagen.',
       topicIds: ['retina'],
       days: 2,
     },

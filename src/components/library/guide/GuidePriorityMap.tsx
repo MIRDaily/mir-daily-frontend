@@ -111,7 +111,7 @@ export default function GuidePriorityMap({ topics, recentYears, targetExam, peri
                           {isLast && topic.lastExamReserve > 0 ? (
                             <span
                               className="absolute -top-1.5 -right-1.5 h-2.5 w-2.5 rounded-full border-2 border-[#D9B26F] bg-white"
-                              title="Pregunta de reserva"
+                              title={topic.lastExamReserve === 1 ? 'Incluye una pregunta de reserva' : `Incluye ${topic.lastExamReserve} preguntas de reserva`}
                             />
                           ) : null}
                         </span>
@@ -142,7 +142,7 @@ export default function GuidePriorityMap({ topics, recentYears, targetExam, peri
           <span className="h-3 w-3 rounded ring-2 ring-[#2C3E50]/70 ring-offset-1" /> último MIR
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full border-2 border-[#D9B26F]" /> + pregunta de reserva
+          <span className="h-2.5 w-2.5 rounded-full border-2 border-[#D9B26F]" /> incluye reserva
         </span>
         <span>
           {targetExam}: previsión orientativa de preguntas (pesa un 70 % lo de los últimos {RECENT_WINDOW} MIR).
