@@ -1,5 +1,6 @@
 import type { StudyGuide } from '@/types/studyGuide'
 import { CIRUGIA_GENERAL_GUIDE } from '@/lib/studyGuides/cirugia-general'
+import { DERMATOLOGIA_GUIDE } from '@/lib/studyGuides/dermatologia'
 import { INMUNOLOGIA_GUIDE } from '@/lib/studyGuides/inmunologia'
 import { NEUROLOGIA_GUIDE } from '@/lib/studyGuides/neurologia'
 import { OFTALMOLOGIA_GUIDE } from '@/lib/studyGuides/oftalmologia'
@@ -17,6 +18,7 @@ const STUDY_GUIDES_BY_SUBJECT: Record<string, StudyGuide> = {
   inmunologia: INMUNOLOGIA_GUIDE,
   oftalmologia: OFTALMOLOGIA_GUIDE,
   urologia: UROLOGIA_GUIDE,
+  dermatologia: DERMATOLOGIA_GUIDE,
 }
 
 /** Clave de la guía → id de la asignatura del catálogo en la que se enseña. */
@@ -27,6 +29,7 @@ export const ASIGNATURA_DE_GUIA: Readonly<Record<string, number>> = {
   inmunologia: 4344, // Inmunología
   oftalmologia: 4343, // Oftalmología
   urologia: 764, // Urología
+  dermatologia: 1425, // Dermatología
 }
 
 /** La guía por su clave de texto (la de los reportes). */
