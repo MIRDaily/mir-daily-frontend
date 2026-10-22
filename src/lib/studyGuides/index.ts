@@ -4,6 +4,7 @@ import { INMUNOLOGIA_GUIDE } from '@/lib/studyGuides/inmunologia'
 import { NEUROLOGIA_GUIDE } from '@/lib/studyGuides/neurologia'
 import { OFTALMOLOGIA_GUIDE } from '@/lib/studyGuides/oftalmologia'
 import { REUMATOLOGIA_GUIDE } from '@/lib/studyGuides/reumatologia'
+import { UROLOGIA_GUIDE } from '@/lib/studyGuides/urologia'
 
 // Las guías se escribieron sobre la maqueta de la Biblioteca y su clave es un id de texto
 // (`guide.subjectId`). Esa clave se conserva: los reportes de contenido la guardan en `guide_ref`
@@ -15,6 +16,7 @@ const STUDY_GUIDES_BY_SUBJECT: Record<string, StudyGuide> = {
   reumatologia: REUMATOLOGIA_GUIDE,
   inmunologia: INMUNOLOGIA_GUIDE,
   oftalmologia: OFTALMOLOGIA_GUIDE,
+  urologia: UROLOGIA_GUIDE,
 }
 
 /** Clave de la guía → id de la asignatura del catálogo en la que se enseña. */
@@ -24,6 +26,7 @@ export const ASIGNATURA_DE_GUIA: Readonly<Record<string, number>> = {
   reumatologia: 3080, // Reumatología
   inmunologia: 4344, // Inmunología
   oftalmologia: 4343, // Oftalmología
+  urologia: 764, // Urología
 }
 
 /** La guía por su clave de texto (la de los reportes). */
