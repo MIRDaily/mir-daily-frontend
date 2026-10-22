@@ -46,7 +46,7 @@ export default function GuideTopicCard({
           <span className="flex flex-wrap items-center gap-2 text-xs text-[#7D8A96]">
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase ${tier.chip}`}>{tier.label}</span>
             <span>
-              <strong className="text-[#2C3E50]">{stats.historyCount}</strong> {stats.historyCount === 1 ? 'pregunta' : 'preguntas'} en {years.length - 1} años · últimos {RECENT_WINDOW}{' '}
+              <strong className="text-[#2C3E50]">{stats.totalCount}</strong> {stats.totalCount === 1 ? 'pregunta' : 'preguntas'} en {years.length} MIR · últimos {RECENT_WINDOW}{' '}
               MIR: <strong className="text-[#2C3E50]">{formatAvg(stats.recentAvg)}/año</strong>
             </span>
           </span>
@@ -222,7 +222,7 @@ function TopicTimeline({
 
 function LastExamBadge({ topic, lastExamLabel }: { topic: GuideTopicWithStats; lastExamLabel: string }) {
   if (topic.stats.lastExamCount === 0 && topic.lastExamReserve === 0) {
-    const isSurprise = topic.stats.historyCount >= 10 && topic.stats.trend !== 'baja'
+    const isSurprise = topic.stats.totalCount >= 10 && topic.stats.trend !== 'baja'
     return (
       <span
         className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${isSurprise ? 'bg-[#E8A598]/15 text-[#B5655A]' : 'bg-[#F2EFED] text-[#7D8A96]'}`}

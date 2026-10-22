@@ -9,6 +9,8 @@ export type TopicStats = {
   /** Preguntas del periodo histórico (todos los años salvo el último MIR) */
   historyCount: number
   lastExamCount: number
+  /** Preguntas de todo el periodo, último MIR incluido: lo que cuentan los totales y el orden «Histórico» */
+  totalCount: number
   recentCount: number
   recentAvg: number
   earlierAvg: number
@@ -41,6 +43,7 @@ export function computeTopicStats(topic: GuideTopic): TopicStats {
   return {
     historyCount: sum(values.slice(0, -1)),
     lastExamCount: values.at(-1) ?? 0,
+    totalCount: sum(values),
     recentCount: sum(recent),
     recentAvg,
     earlierAvg,

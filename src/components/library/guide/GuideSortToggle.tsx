@@ -15,9 +15,11 @@ const SORT_OPTIONS: Array<{ key: GuideSortKey; label: string; icon: string }> = 
 ]
 
 export function sortGuideTopics(topics: GuideTopicWithStats[], key: GuideSortKey) {
-  const byHistory = (a: GuideTopicWithStats, b: GuideTopicWithStats) => b.stats.historyCount - a.stats.historyCount
+  // Histórico = todo el periodo con el último MIR, igual que la columna Total: sin él, un tema con 3 preguntas en el
+  // último MIR quedaba por detrás de otro con menos total.
+  const byHistory = (a: GuideTopicWithStats, b: GuideTopicWithStats) => b.stats.totalCount - a.stats.totalCount
   return [...topics].sort((a, b) => {
-    if (key === 'historico') return byHistory(a, b)
+    if (key === 'historico') return byHistory(a, b) || b.stats.forecast - a.stats.forecast
     // Primero lo que sube, luego lo estable y al final lo que baja (con los umbrales de computeTopicStats, que
     // no llaman tendencia al ruido); dentro de cada grupo, por previsión. Ordenar por la diferencia en bruto ponía
     // un tema sin preguntas (cambio 0) por delante de temas fuertes que habían bajado una décima.

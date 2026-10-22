@@ -7,6 +7,8 @@ import GuideReveal from '@/components/library/guide/GuideReveal'
 
 type GuideEffortMatrixProps = {
   topics: GuideTopicWithStats[]
+  /** Periodo de las preguntas del eje vertical, último MIR incluido (p. ej. «2015–2026») */
+  periodLabel: string
 }
 
 type LabelOffset = { dx: number; dy: number; anchor: 'start' | 'end' | 'middle' }
@@ -45,18 +47,6 @@ function smallScale(topPages: number, topQuestions: number): Scale {
 const LABEL_FONT = 12
 const CHAR_WIDTH = 7.4
 
-// Ajustes a mano (Neurología); el resto de temas se colocan solos sin pisarse.
-const LABEL_OFFSETS: Record<string, LabelOffset> = {
-  neurocirugia: { dx: -12, dy: 4, anchor: 'end' },
-  ictus: { dx: 12, dy: 4, anchor: 'start' },
-  semiologia: { dx: 0, dy: 24, anchor: 'middle' },
-  movimiento: { dx: -12, dy: -6, anchor: 'end' },
-  epilepsia: { dx: 12, dy: 4, anchor: 'start' },
-  'autoinmunes-snc': { dx: -12, dy: 4, anchor: 'end' },
-  demencias: { dx: 12, dy: 12, anchor: 'start' },
-  cefalea: { dx: -12, dy: 4, anchor: 'end' },
-}
-
 // Posiciones candidatas, en orden de preferencia, para las etiquetas automáticas.
 const CANDIDATES: LabelOffset[] = [
   { dx: 12, dy: 4, anchor: 'start' },
@@ -67,6 +57,11 @@ const CANDIDATES: LabelOffset[] = [
   { dx: -12, dy: -8, anchor: 'end' },
   { dx: 12, dy: 16, anchor: 'start' },
   { dx: -12, dy: 16, anchor: 'end' },
+  // Más separadas en vertical, para cuando varios temas quedan en fila a la misma altura
+  { dx: 12, dy: -20, anchor: 'start' },
+  { dx: -12, dy: -20, anchor: 'end' },
+  { dx: 12, dy: 28, anchor: 'start' },
+  { dx: -12, dy: 28, anchor: 'end' },
 ]
 
 function labelBox(cx: number, cy: number, offset: LabelOffset, text: string): Box {
@@ -74,23 +69,28 @@ function labelBox(cx: number, cy: number, offset: LabelOffset, text: string): Bo
   const x = cx + offset.dx
   const x1 = offset.anchor === 'start' ? x : offset.anchor === 'end' ? x - width : x - width / 2
   const baseline = cy + offset.dy
-  return { x1, y1: baseline - LABEL_FONT + 2, x2: x1 + width, y2: baseline + 3 }
+  // Alto real del texto (ascendentes y descendentes): con 2 px menos, dos nombres en temas contiguos se pisaban
+  return { x1, y1: baseline - LABEL_FONT, x2: x1 + width, y2: baseline + 4 }
 }
 
 function overlaps(a: Box, b: Box) {
   return a.x1 < b.x2 && b.x1 < a.x2 && a.y1 < b.y2 && b.y1 < a.y2
 }
 
-export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
+export default function GuideEffortMatrix({ topics, periodLabel }: GuideEffortMatrixProps) {
   // Tema bajo el cursor (o con el foco): su nombre se resalta encima de todo.
   const [activeId, setActiveId] = useState<string | null>(null)
   const topPages = Math.max(...topics.map((topic) => topic.pages))
-  const topQuestions = Math.max(...topics.map((topic) => topic.stats.historyCount))
-  const historyTotal = topics.reduce((acc, topic) => acc + topic.stats.historyCount, 0)
-  const historyYears = Math.max(1, (topics[0]?.perYear.length ?? 1) - 1)
-  const scale = historyTotal < SMALL_SUBJECT_PER_YEAR * historyYears ? smallScale(topPages, topQuestions) : SCALE_NORMAL
+  // Recompensa = preguntas de todo el periodo, último MIR incluido (como los totales del resto de la guía)
+  const topQuestions = Math.max(...topics.map((topic) => topic.stats.totalCount))
+  const periodTotal = topics.reduce((acc, topic) => acc + topic.stats.totalCount, 0)
+  const periodYears = Math.max(1, topics[0]?.perYear.length ?? 1)
+  const scale = periodTotal < SMALL_SUBJECT_PER_YEAR * periodYears ? smallScale(topPages, topQuestions) : SCALE_NORMAL
   const maxPages = Math.max(scale.minPages, Math.ceil(topPages / scale.pageStep) * scale.pageStep)
-  const maxQuestions = Math.max(scale.minQuestions, Math.ceil(topQuestions / scale.questionStep) * scale.questionStep)
+  // El mismo margen en las dos escalas: el tema más preguntado, como mucho al 85 % del eje (con el último MIR,
+  // las 35 de Neurocirugía en un eje de 40 pisaban el rótulo de «Pilares»).
+  let maxQuestions = Math.max(scale.minQuestions, Math.ceil(topQuestions / scale.questionStep) * scale.questionStep)
+  while (topQuestions * 20 > maxQuestions * 17) maxQuestions += scale.questionStep
   const x = (pages: number) => PAD.left + (pages / maxPages) * (WIDTH - PAD.left - PAD.right)
   const y = (questions: number) => HEIGHT - PAD.bottom - (questions / maxQuestions) * (HEIGHT - PAD.top - PAD.bottom)
   const xTicks = Array.from({ length: maxPages / scale.pageStep + 1 }, (_, i) => i * scale.pageStep)
@@ -100,32 +100,27 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
 
   const splitX = x(scale.splitPages)
   const splitY = y(scale.splitQuestions)
-  const minorCount = topics.filter((topic) => topic.stats.historyCount < scale.labelMin).length
+  const minorCount = topics.filter((topic) => topic.stats.totalCount < scale.labelMin).length
 
   // Separa los puntos que caen exactamente en el mismo sitio.
   const sameSpot = new Map<string, string[]>()
   for (const topic of topics) {
-    const key = `${topic.pages}|${topic.stats.historyCount}`
+    const key = `${topic.pages}|${topic.stats.totalCount}`
     sameSpot.set(key, [...(sameSpot.get(key) ?? []), topic.id])
   }
   const points = topics.map((topic) => {
-    const group = sameSpot.get(`${topic.pages}|${topic.stats.historyCount}`) ?? [topic.id]
+    const group = sameSpot.get(`${topic.pages}|${topic.stats.totalCount}`) ?? [topic.id]
     const nudge = group.length > 1 ? (group.indexOf(topic.id) - (group.length - 1) / 2) * 0.7 : 0
-    const major = topic.stats.historyCount >= scale.labelMin
-    return { topic, cx: x(topic.pages + nudge), cy: y(topic.stats.historyCount), r: major ? 8 : 5.5, major }
+    const major = topic.stats.totalCount >= scale.labelMin
+    return { topic, cx: x(topic.pages + nudge), cy: y(topic.stats.totalCount), r: major ? 8 : 5.5, major }
   })
 
-  // Coloca las etiquetas de mayor a menor peso evitando otras etiquetas, puntos y bordes.
-  const placed: Box[] = []
-  // Solo las etiquetas que se ven en reposo (las de los temas menores aparecen al pasar el cursor).
-  const visibleLabels: Box[] = []
-  const labels = new Map<string, LabelOffset>()
   const pointBoxes = points.map((p) => ({ id: p.topic.id, box: { x1: p.cx - p.r, y1: p.cy - p.r, x2: p.cx + p.r, y2: p.cy + p.r } }))
   // Rótulos fijos del gráfico (cuadrantes y aviso de temas menores): las etiquetas no deben pisarlos.
   const textBox = (tx: number, ty: number, text: string, anchor: 'start' | 'end', size = 12): Box => {
     const width = text.length * size * 0.6
     const x1 = anchor === 'start' ? tx : tx - width
-    return { x1, y1: ty - size + 2, x2: x1 + width, y2: ty + 3 }
+    return { x1, y1: ty - size, x2: x1 + width, y2: ty + 4 }
   }
   // Los rótulos de los cuadrantes inferiores bajan al pie del gráfico si tienen algún punto encima.
   const lowY = (tx: number, text: string) => {
@@ -143,25 +138,61 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
     textBox(splitX - 10, pasadaRapidaY, 'Pasada rápida', 'end'),
   ]
   const inside = (box: Box) => box.x1 >= PAD.left + 2 && box.x2 <= WIDTH - PAD.right && box.y1 >= PAD.top && box.y2 <= HEIGHT - PAD.bottom
-  // Primero los temas con nombre visible; los menores solo lo muestran al pasar el cursor.
-  const byWeight = [...points].sort((a, b) => Number(b.major) - Number(a.major) || b.topic.stats.historyCount - a.topic.stats.historyCount)
-  for (const p of byWeight) {
-    const manual = LABEL_OFFSETS[p.topic.id]
-    const options = manual ? [manual] : CANDIDATES
-    // Número de choques de cada posición; se queda con la primera sin choques o, si no hay, con la que menos tenga.
-    const clashes = (offset: LabelOffset) => {
-      const box = labelBox(p.cx, p.cy, offset, p.topic.shortName)
-      return (
-        (inside(box) ? 0 : 10) +
-        placed.filter((other) => overlaps(box, other)).length * 3 +
-        pointBoxes.filter((pb) => pb.id !== p.topic.id && overlaps(box, pb.box)).length * 2 +
-        fixedBoxes.filter((other) => overlaps(box, other)).length
-      )
+  // Choques de una etiqueta en una posición con lo ya colocado, los rótulos fijos y los puntos.
+  const clashes = (p: (typeof points)[number], offset: LabelOffset, placed: Box[]) => {
+    const box = labelBox(p.cx, p.cy, offset, p.topic.shortName)
+    return (
+      (inside(box) ? 0 : 10) +
+      placed.filter((other) => overlaps(box, other)).length * 3 +
+      pointBoxes.filter((pb) => pb.id !== p.topic.id && overlaps(box, pb.box)).length * 2 +
+      fixedBoxes.filter((other) => overlaps(box, other)).length * 3
+    )
+  }
+  // Nombres visibles (de mayor a menor peso): búsqueda con vuelta atrás del reparto con menos choques. La primera
+  // solución que prueba es la de colocar cada nombre en su mejor sitio libre, una a una; si choca algo, prueba otros
+  // repartos, hasta un tope de intentos. Con varios temas en fila a la misma altura (Dermatología), colocar uno a uno
+  // dejaba sin sitio al último.
+  const byWeight = [...points].sort((a, b) => Number(b.major) - Number(a.major) || b.topic.stats.totalCount - a.topic.stats.totalCount)
+  const majors = byWeight.filter((p) => p.major)
+  const best = { offsets: [] as LabelOffset[], cost: Infinity }
+  const current: LabelOffset[] = []
+  const currentBoxes: Box[] = []
+  let tries = 0
+  const search = (index: number, cost: number) => {
+    if (cost >= best.cost || tries > 3000) return
+    if (index === majors.length) {
+      best.offsets = [...current]
+      best.cost = cost
+      return
     }
-    const chosen = manual ?? options.reduce((best, option) => (clashes(option) < clashes(best) ? option : best))
+    tries += 1
+    const p = majors[index]
+    const ranked = CANDIDATES
+      .map((offset) => ({ offset, cost: clashes(p, offset, currentBoxes) }))
+      .sort((a, b) => a.cost - b.cost)
+    for (const option of ranked) {
+      current.push(option.offset)
+      currentBoxes.push(labelBox(p.cx, p.cy, option.offset, p.topic.shortName))
+      search(index + 1, cost + option.cost)
+      current.pop()
+      currentBoxes.pop()
+      if (best.cost === 0) return
+    }
+  }
+  search(0, 0)
+  const labels = new Map<string, LabelOffset>()
+  // Solo las etiquetas que se ven en reposo (las de los temas menores aparecen al pasar el cursor).
+  const visibleLabels: Box[] = []
+  majors.forEach((p, i) => {
+    labels.set(p.topic.id, best.offsets[i])
+    visibleLabels.push(labelBox(p.cx, p.cy, best.offsets[i], p.topic.shortName))
+  })
+  // Los menores, uno a uno en su mejor sitio
+  const placed = [...visibleLabels]
+  for (const p of byWeight.filter((point) => !point.major)) {
+    const chosen = CANDIDATES.reduce((acc, option) => (clashes(p, option, placed) < clashes(p, acc, placed) ? option : acc))
     labels.set(p.topic.id, chosen)
     placed.push(labelBox(p.cx, p.cy, chosen, p.topic.shortName))
-    if (p.major) visibleLabels.push(labelBox(p.cx, p.cy, chosen, p.topic.shortName))
   }
 
   // Aviso de temas menores: en su sitio de siempre o, si pisa algo, desplazado a la derecha hasta quedar libre.
@@ -231,7 +262,7 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
             transform={`rotate(-90 14 ${(PAD.top + HEIGHT - PAD.bottom) / 2})`}
             className="fill-[#2C3E50] text-[11.5px] font-semibold"
           >
-            Recompensa → preguntas 2015–2025
+            Recompensa → preguntas {periodLabel}
           </text>
 
           {points.map(({ topic, cx, cy, r }, index) => (
@@ -243,7 +274,7 @@ export default function GuideEffortMatrix({ topics }: GuideEffortMatrixProps) {
               onFocus={() => setActiveId(topic.id)}
               onBlur={() => setActiveId((current) => (current === topic.id ? null : current))}
             >
-              <title>{`${topic.name}: ${topic.stats.historyCount} preguntas, ~${topic.pages} páginas`}</title>
+              <title>{`${topic.name}: ${topic.stats.totalCount} preguntas, ~${topic.pages} páginas`}</title>
               <circle className="guia-pop cursor-pointer hover:[r:11]" style={cssVars({ '--i': index * 5 })} cx={cx} cy={cy} r={r} fill={TIER_STYLES[topic.tier].color} stroke="#fff" strokeWidth={2} />
             </a>
           ))}

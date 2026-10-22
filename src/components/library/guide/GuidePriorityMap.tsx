@@ -12,13 +12,15 @@ type GuidePriorityMapProps = {
   topics: GuideTopicWithStats[]
   recentYears: number[]
   targetExam: string
+  /** Periodo de los totales, último MIR incluido (p. ej. «2015–2026») */
+  periodLabel: string
 }
 
-export default function GuidePriorityMap({ topics, recentYears, targetExam }: GuidePriorityMapProps) {
+export default function GuidePriorityMap({ topics, recentYears, targetExam, periodLabel }: GuidePriorityMapProps) {
   const [sortKey, setSortKey] = useState<GuideSortKey>('prevision')
   const sorted = useMemo(() => sortGuideTopics(topics, sortKey), [topics, sortKey])
-  const max = Math.max(...topics.map((topic) => topic.stats.historyCount), 1)
-  const total = topics.reduce((acc, topic) => acc + topic.stats.historyCount, 0)
+  const max = Math.max(...topics.map((topic) => topic.stats.totalCount), 1)
+  const total = topics.reduce((acc, topic) => acc + topic.stats.totalCount, 0)
   const shortYear = (year: number | undefined) => `'${String(year ?? '').slice(2)}`
   const recentRangeLabel = `${shortYear(recentYears[0])}–${shortYear(recentYears.at(-1))}`
 
@@ -29,7 +31,7 @@ export default function GuidePriorityMap({ topics, recentYears, targetExam }: Gu
       <div className="hidden grid-cols-[1.5rem_minmax(0,10rem)_minmax(0,1fr)_auto_6.5rem_4rem] items-end gap-4 border-b border-[#EAE4E2] pb-2 text-[11px] font-semibold tracking-wider text-[#7D8A96] uppercase md:grid">
         <span>#</span>
         <span>Tema</span>
-        <span>2015–2025 · % asignatura</span>
+        <span>{periodLabel} · % asignatura</span>
         <span className="flex gap-1">
           {recentYears.map((year) => (
             <span key={year} className="w-6 text-center normal-case">
@@ -46,7 +48,7 @@ export default function GuidePriorityMap({ topics, recentYears, targetExam }: Gu
           {sorted.map((topic, index) => {
             const tier = TIER_STYLES[topic.tier]
             const trend = TREND_STYLES[topic.stats.trend]
-            const share = Math.round((topic.stats.historyCount / total) * 100)
+            const share = Math.round((topic.stats.totalCount / total) * 100)
             const recent = topic.perYear.slice(-RECENT_WINDOW)
             return (
               <motion.li
@@ -81,11 +83,11 @@ export default function GuidePriorityMap({ topics, recentYears, targetExam }: Gu
                     <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-[#F2EFED]">
                       <span
                         className={`guia-grow-x block h-full rounded-full ${tier.bar}`}
-                        style={{ width: `${Math.max(2, (topic.stats.historyCount / max) * 100)}%`, ...cssVars({ '--i': index }) }}
+                        style={{ width: `${Math.max(2, (topic.stats.totalCount / max) * 100)}%`, ...cssVars({ '--i': index }) }}
                       />
                     </span>
                     <span className="w-14 shrink-0 text-right text-sm">
-                      <strong className="text-[#2C3E50]">{topic.stats.historyCount}</strong>
+                      <strong className="text-[#2C3E50]">{topic.stats.totalCount}</strong>
                       <span className="text-xs text-[#7D8A96]"> · {share}%</span>
                     </span>
                   </span>

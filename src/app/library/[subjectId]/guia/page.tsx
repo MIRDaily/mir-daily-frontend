@@ -67,14 +67,15 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
   const topics = withStats(guide.topics)
   // Preguntas de todo el periodo, último MIR incluido: si no, un tema que acaba de dar el salto (3 en el último MIR)
   // quedaba por detrás de otros que llevan años sin salir.
-  const totalOf = (topic: (typeof topics)[number]) => topic.stats.historyCount + topic.stats.lastExamCount
+  const totalOf = (topic: (typeof topics)[number]) => topic.stats.totalCount
   const topicsByPriority = [...topics].sort((a, b) => totalOf(b) - totalOf(a) || b.stats.forecast - a.stats.forecast)
   const topicsByForecast = [...topics].sort(
-    (a, b) => b.stats.forecast - a.stats.forecast || b.stats.historyCount - a.stats.historyCount,
+    (a, b) => b.stats.forecast - a.stats.forecast || b.stats.totalCount - a.stats.totalCount,
   )
   const maxTopicYearCount = Math.max(...topics.flatMap((topic) => topic.perYear))
   const earlierLabel = `${years[0]}–${years[years.length - RECENT_WINDOW - 1]}`
   const recentLabel = `${years[years.length - RECENT_WINDOW]}–${lastYear}`
+  const periodLabel = `${years[0]}–${lastYear}`
   const topicsById = Object.fromEntries(topics.map((topic) => [topic.id, topic]))
   const minCount = Math.min(...history.map((item) => item.count))
   const maxYearCount = Math.max(...history.map((item) => item.count))
@@ -217,7 +218,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
               title="Mapa de prioridades"
               subtitle={`Ordenado por la previsión para el ${guide.targetExam}, que pesa más lo reciente. Pulsa un tema para ver su resumen.`}
             />
-            <GuidePriorityMap topics={topicsByForecast} recentYears={years.slice(-RECENT_WINDOW)} targetExam={guide.targetExam} />
+            <GuidePriorityMap topics={topicsByForecast} recentYears={years.slice(-RECENT_WINDOW)} targetExam={guide.targetExam} periodLabel={periodLabel} />
           </section>
 
           {/* Evolución por tema */}
@@ -230,7 +231,7 @@ export default async function LibraryGuidePage({ params }: LibraryGuidePageProps
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
             <section id="rentabilidad" className="flex scroll-mt-24 flex-col gap-5 rounded-2xl border border-[#EAE4E2] bg-white p-5 sm:p-6">
               <SectionHeading icon="scatter_plot" title="Esfuerzo frente a recompensa" subtitle="Dónde rinde más cada hora de estudio." />
-              <GuideEffortMatrix topics={topics} />
+              <GuideEffortMatrix topics={topics} periodLabel={periodLabel} />
               <TierLegend />
             </section>
 
