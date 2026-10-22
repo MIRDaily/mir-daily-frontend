@@ -568,7 +568,7 @@ export const UROLOGIA_GUIDE: StudyGuide = {
       ],
       correct: 4,
       explanation:
-        'Una infección se atribuye a la asistencia si empieza a partir de las 48 horas del ingreso o, si es quirúrgica, dentro de los 30 días de la intervención. La ITU del paciente sondado a las 72 horas lo es; la neumonía que empieza a las 24 horas del ingreso, no. La sonda vesical es el principal factor de riesgo de ITU nosocomial.',
+        'Una infección se atribuye a la asistencia si empieza a partir de las 48 horas del ingreso o, si es quirúrgica, dentro de los 30 días de la intervención (90 si se dejó un implante). La ITU del paciente sondado a las 72 horas lo es; la neumonía que empieza a las 24 horas del ingreso, no. La sonda vesical es el principal factor de riesgo de ITU nosocomial.',
     },
     {
       number: 165,
