@@ -533,7 +533,7 @@ export const CIRUGIA_GENERAL_GUIDE: StudyGuide = {
   plan: [
     {
       title: '1.ª vuelta · Los pilares',
-      subtitle: 'Casi la mitad de las preguntas. Cáncer colorrectal y EII, estudiados juntos (cribado y vigilancia).',
+      subtitle: 'Casi cuatro de cada diez preguntas. Cáncer colorrectal y EII, estudiados juntos (cribado y vigilancia).',
       topicIds: ['ccr', 'eii', 'esofago', 'biliar', 'plastica'],
       days: 6,
     },

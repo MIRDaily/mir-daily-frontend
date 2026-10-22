@@ -295,7 +295,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       lastExamReserve: 0,
       pages: 4,
       focus:
-        'Pocas preguntas directas, pero la miastenia aparece mucho de rebote en otras asignaturas (en 2026, en Oncología).',
+        'Pocas preguntas directas, pero la miastenia aparece mucho de rebote en otras asignaturas (en 2026, en un melanoma, de Dermatología).',
       hotspots: [
         { name: 'Miastenia gravis: diagnóstico y tratamiento', heat: 2 },
         { name: 'Diagnóstico diferencial con Eaton-Lambert y botulismo', heat: 1 },
@@ -394,7 +394,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       perYear: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       lastExamReserve: 0,
       pages: 2,
-      focus: 'Ninguna pregunta en 11 años. Basta con la ataxia de Friedreich.',
+      focus: 'Ninguna pregunta de 2015 a 2026. Basta con la ataxia de Friedreich.',
       hotspots: [{ name: 'Ataxia de Friedreich', heat: 1 }],
       keys: [
         'Friedreich: AR, expansión GAA (frataxina). Ataxia + arreflexia + Babinski, pies cavos, escoliosis, diabetes y miocardiopatía hipertrófica (la causa de muerte).',
@@ -430,7 +430,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
     {
       icon: 'hub',
       title: 'Neuro también en otras asignaturas',
-      body: 'Fístula de LCR (ORL), miastenia con inmunoterapia (Oncología), TCE con collarín (Urgencias), coma por opiáceos, red flags de lumbalgia… Lo que estudias aquí puntúa también allí.',
+      body: 'Fístula de LCR (ORL), miastenia con inmunoterapia (Dermatología), TCE con collarín (Urgencias), coma por opiáceos, red flags de lumbalgia… Lo que estudias aquí puntúa también allí.',
     },
   ],
   plan: [
@@ -683,7 +683,7 @@ export const NEUROLOGIA_GUIDE: StudyGuide = {
       number: 133,
       kind: 'frontera',
       topicId: 'placa-motora',
-      tag: 'Oncología · Miastenia',
+      tag: 'Dermatología · Miastenia',
       stem: 'Paciente varón de 63 años con antecedentes de miastenia gravis. Ha sido diagnosticado recientemente de melanoma estadio IV con extensa carga de enfermedad con afectación hepática múltiple, pulmonar bilateral y adenopatías generalizadas. Se realiza una determinación de BRAF por inmunohistoquímica siendo positiva para V600E. ¿Cuál sería el tratamiento más razonable teniendo en cuenta el riesgo beneficio?',
       options: [
         'Pembrolizumab.',
