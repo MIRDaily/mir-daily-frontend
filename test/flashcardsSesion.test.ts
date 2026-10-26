@@ -10,7 +10,7 @@ import type { Escalera } from '@/lib/flashcards/escalera'
 
 let n = 0
 const carta = (topic: string | null, level: 1 | 2 | 3 | 4 | null, status: Flashcard['status'], isDue: boolean): Flashcard => ({
-  itemId: ++n, flashcardId: `f${n}`, front: `P${n}`, back: 'R', topic, level, status, isDue,
+  itemId: ++n, flashcardId: `f${n}`, front: `P${n}`, back: 'R', topic, level, status, isDue, totalReviews: 0,
 })
 const CARDS: Flashcard[] = [
   carta('Gota', 1, 'failed', true),
