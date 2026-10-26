@@ -1,0 +1,48 @@
+# CI del frontend: en cada PR y en cada push a main.
+#
+#   tsc        sin errores
+#   eslint     sin errores NUEVOS (los que ya había están congelados en eslint-suppressions.json)
+#   npm test   tests de lógica (node --test)
+#
+# Node 24 porque los tests ejecutan TypeScript directamente (Node 24 quita los tipos solo).
+# Los E2E (Playwright) no van aquí: se lanzan a mano contra producción con una cuenta de prueba
+# (ver e2e/README.md).
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  comprobar:
+    name: tsc, eslint y tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: ESLint (sin errores nuevos)
+        run: npx eslint .
+
+      - name: Tests
+        run: npm test
