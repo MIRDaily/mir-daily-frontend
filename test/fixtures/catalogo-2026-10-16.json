@@ -563,6 +563,39 @@
   ]
  },
  {
+  "id": 4344,
+  "nombre": "Inmunología",
+  "nombreCorto": "Inmunología",
+  "sigla": "IM",
+  "subtitulo": null,
+  "temas": [
+   {
+    "id": 4821,
+    "nombre": "Bases inmunológicas del trasplante"
+   },
+   {
+    "id": 4822,
+    "nombre": "Generalidades"
+   },
+   {
+    "id": 4823,
+    "nombre": "Inmunidad celular"
+   },
+   {
+    "id": 4824,
+    "nombre": "Inmunidad humoral"
+   },
+   {
+    "id": 4825,
+    "nombre": "Inmunoterapia"
+   },
+   {
+    "id": 4826,
+    "nombre": "Patología del sistema inmunitario"
+   }
+  ]
+ },
+ {
   "id": 1224,
   "nombre": "Mosaico",
   "nombreCorto": "Mosaico",
@@ -807,6 +840,47 @@
    {
     "id": 1654,
     "nombre": "Trastornos del movimiento"
+   }
+  ]
+ },
+ {
+  "id": 4343,
+  "nombre": "Oftalmología",
+  "nombreCorto": "Oftalmología",
+  "sigla": "OF",
+  "subtitulo": null,
+  "temas": [
+   {
+    "id": 4874,
+    "nombre": "Conjuntiva"
+   },
+   {
+    "id": 4875,
+    "nombre": "Córnea y esclera"
+   },
+   {
+    "id": 4876,
+    "nombre": "Glaucoma"
+   },
+   {
+    "id": 4877,
+    "nombre": "Neurooftalmología"
+   },
+   {
+    "id": 4878,
+    "nombre": "Patología de la retina"
+   },
+   {
+    "id": 4879,
+    "nombre": "Patología del cristalino"
+   },
+   {
+    "id": 4880,
+    "nombre": "Refracción"
+   },
+   {
+    "id": 4881,
+    "nombre": "Uveítis"
    }
   ]
  },
