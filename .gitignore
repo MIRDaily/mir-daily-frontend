@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# E2E (Playwright): sesión de la cuenta de prueba y resultados de cada ejecución
+/e2e/.auth/
+/e2e/resultados/
