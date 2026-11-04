@@ -1,0 +1,1926 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cose la nefrona</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+<style>
+/* ════════════════════════════════════════════════════════════════════════
+   Minijuego de nefrología: la nefrona estirada, en tres fases.
+     1. Coser cada transportador en su hueco de la membrana apical.
+     2. Decir qué iones mueve y hacia dónde (luz → célula o célula → luz).
+     3. Enganchar los fármacos y decir si activan o bloquean.
+   HTML autocontenido, sin build, con los mismos tokens que la web. En la web se sirve
+   en un iframe desde /studio/minijuegos/nefrona (public/minijuegos/cose-la-nefrona.html);
+   la copia de trabajo vive en LAB/nefrona/transportadores.html y se copia tal cual.
+   La textura de la casa aquí es la tela: fondo de lino y bordes con
+   pespunte discontinuo, como el logo.
+═══════════════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#FAF7F4; --ink:#2c3e50; --muted:#7D8A96; --border:#EAE4E2;
+  --accent:#E8A598; --accent-deep:#d18d80; --green:#8BA888; --green-ink:#4F6E4C; --red:#C4655A;
+  --stitch:#7f8b84; --cream:#FFFDF9; --coral-ink:#B05A49;
+  --lumen:108px; --blood:50px; --slotw:96px;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:Lexend,system-ui,sans-serif; color:var(--ink); min-height:100vh;
+  background-color:var(--bg);
+  /* lino: trama y urdimbre muy suaves */
+  background-image:
+    repeating-linear-gradient(0deg, rgba(44,62,80,.028) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, rgba(44,62,80,.022) 0 1px, transparent 1px 5px);
+  -webkit-tap-highlight-color:transparent;
+}
+button{font:inherit;color:inherit}
+.ms{font-family:'Material Symbols Outlined';font-weight:normal;font-style:normal;font-size:20px;line-height:1;
+  display:inline-block;white-space:nowrap;font-variation-settings:'FILL' 0,'wght' 500,'GRAD' 0,'opsz' 24;
+  -webkit-font-smoothing:antialiased;user-select:none;flex-shrink:0}
+.ms.fill{font-variation-settings:'FILL' 1,'wght' 500,'GRAD' 0,'opsz' 24}
+
+/* ── El cosido: borde de tinta + sombra dura + pespunte por dentro ───────── */
+.stitch{position:relative;border:2px solid var(--ink);border-radius:var(--r,20px);
+  box-shadow:var(--sh,4px) var(--sh,4px) 0 0 var(--ink)}
+.stitch::before{content:"";position:absolute;inset:var(--si,5px);border:2px dashed var(--stitch);
+  border-radius:max(0px, calc(var(--r,20px) - var(--si,5px)));pointer-events:none;opacity:.85}
+
+.wrap{max-width:1500px;margin:0 auto;padding:18px 16px 48px}
+
+/* ── Cabecera ───────────────────────────────────────────────────────────── */
+header.top{--r:28px;--sh:6px;display:flex;flex-wrap:wrap;align-items:center;gap:14px 26px;
+  padding:18px 24px;background:linear-gradient(135deg,#fff,#FFF6F2)}
+.logo{--r:999px;--sh:0px;--si:5px;border:1.5px solid #d9d0c8;background:var(--cream);
+  padding:9px 22px 10px;font-weight:800;font-size:19px;color:#EE9C8A;letter-spacing:-.01em;flex-shrink:0}
+.logo::before{border-color:#8a968f}
+.titles{flex:1;min-width:240px}
+.eyebrow{font-size:10px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--coral-ink)}
+h1{margin:3px 0 2px;font-size:clamp(24px,3vw,32px);font-weight:900;letter-spacing:-.02em;line-height:1.05}
+h1 em{font-style:normal;color:var(--accent-deep)}
+.titles p{margin:0;color:var(--muted);font-weight:300;font-size:14.5px;line-height:1.45}
+.hud{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.steps{display:flex;gap:6px;flex-wrap:wrap}
+.step{--r:999px;--sh:2px;--si:3px;background:#fff;padding:7px 14px 7px 8px;display:flex;align-items:center;gap:7px;
+  font-size:12.5px;font-weight:700;color:var(--muted);border-color:#b9c0c6;box-shadow:none}
+.step::before{border-color:#cfd4d0}
+.step .n{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:900;
+  background:#F1ECE8;color:var(--muted)}
+.step .st-err{font-size:11px;color:var(--red);font-weight:800}
+.step.active{color:var(--ink);background:#FFEDE7;border-color:var(--ink);box-shadow:2px 2px 0 var(--ink)}
+.step.active::before{border-color:var(--stitch)}
+.step.active .n{background:var(--accent);color:#fff}
+.step.done{color:var(--green-ink);border-color:var(--ink);background:#EEF5EC}
+.step.done .n{background:var(--green);color:#fff}
+.errs{--r:999px;--sh:3px;--si:3px;background:#fff;padding:7px 14px;font-size:13px;font-weight:800;display:flex;align-items:center;gap:6px}
+.errs .ms{color:var(--red);font-size:18px}
+/* el contador se sacude y se tiñe un momento con cada fallo */
+.errs.hit{animation:errHit .55s ease}
+@keyframes errHit{15%{transform:translateX(-5px) scale(1.08);background:#F8DCD6}35%{transform:translateX(5px) scale(1.08);background:#F8DCD6}
+  55%{transform:translateX(-3px)}75%{transform:translateX(2px)}}
+.btn{--r:16px;--sh:3px;--si:4px;background:#fff;border:2px solid var(--ink);padding:9px 16px;font-weight:800;font-size:14px;
+  display:inline-flex;align-items:center;gap:7px;cursor:pointer;transition:transform .15s}
+.btn:hover{transform:translateY(-2px)}
+.btn:focus-visible,.tchip:focus-visible,.slot:focus-visible,.bin:focus-visible,.ichip:focus-visible,.dchip:focus-visible{outline:3px solid #6aa0d8;outline-offset:3px}
+.btn.primary{background:var(--accent);color:#fff;text-shadow:0 1px 0 rgba(0,0,0,.12)}
+.btn.primary::before{border-color:rgba(255,255,255,.75)}
+.btn.green{background:var(--green);color:#fff}
+.btn.green::before{border-color:rgba(255,255,255,.75)}
+.btn.small{padding:7px 12px;font-size:13px}
+
+/* ── Tablero: la nefrona estirada ───────────────────────────────────────── */
+.board-card{--r:28px;--sh:6px;--si:7px;background:#fff;margin-top:18px;padding:16px 0 10px}
+.scroller{overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;padding:0 0 8px;scrollbar-width:thin}
+.board{position:relative;width:max-content;min-width:100%;display:flex;align-items:stretch;gap:10px;padding:0 18px 4px;
+  user-select:none;-webkit-user-select:none}
+.lumen{position:absolute;left:0;right:0;top:0;height:var(--lumen);
+  background:radial-gradient(circle, rgba(77,115,145,.20) 1.6px, transparent 2.2px) 0 0/28px 24px, #E8F1F8;
+  animation:flow 2.6s linear infinite}
+.lumen::before,.lumen::after{content:"";position:absolute;left:0;right:0;border-top:2px dashed #9fbad0}
+.lumen::before{top:5px}
+.blood{position:absolute;left:0;right:0;bottom:4px;height:var(--blood);background:#F9E6E1}
+.blood::before{content:"";position:absolute;left:0;right:0;bottom:5px;border-top:2px dashed #e2b2a7}
+@keyframes flow{to{background-position:28px 0,0 0}}
+
+.seg{position:relative;z-index:1;display:flex;flex-direction:column}
+.seg-top{height:var(--lumen);position:relative}
+.seg-bottom{height:var(--blood);display:flex;align-items:center;justify-content:center;gap:4px;
+  font-size:11px;font-weight:800;color:#9A574B;white-space:nowrap;padding:0 4px}
+.seg-bottom .ms{font-size:15px}
+.patch{--r:22px;--sh:4px;--si:6px;background:var(--tint);padding:0 12px 10px;flex:1;display:flex;flex-direction:column;
+  min-height:178px}
+.groups{display:flex;gap:10px;margin-top:-32px;position:relative;z-index:2}
+.group{display:flex;flex-direction:column;align-items:center}
+.group + .group{border-left:2px dashed rgba(44,62,80,.28);padding-left:10px}
+.slots{display:flex;gap:8px}
+.group-label{font-size:9.5px;font-weight:800;color:#6c7682;text-transform:uppercase;letter-spacing:.08em;margin-top:4px;text-align:center}
+.seg-name{margin-top:auto;padding-top:8px;font-size:12px;font-weight:800;line-height:1.15;text-align:center;display:flex;
+  align-items:center;justify-content:center;gap:6px}
+.seg-name .num{flex-shrink:0;width:19px;height:19px;border-radius:50%;background:var(--ink);color:#fff;font-size:10px;
+  display:grid;place-items:center}
+
+.slot-col{width:var(--slotw);display:flex;flex-direction:column;align-items:center;position:relative}
+.slot{width:100%;height:64px;border-radius:18px;cursor:pointer;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;text-align:center;padding:4px 6px;gap:2px;position:relative;transition:transform .15s,background .15s}
+.slot.empty{background:rgba(255,255,255,.6);border:2px dashed var(--ink);color:#8a949e}
+.slot.empty .ms{font-size:22px}
+.slot.filled{background:var(--cream);border:2px solid var(--ink);box-shadow:3px 3px 0 var(--ink)}
+.slot.filled::before{content:"";position:absolute;inset:4px;border:2px dashed var(--stitch);border-radius:13px;pointer-events:none;opacity:.8}
+.slot.fixed{cursor:default;background:#F4F7FA;border:2px solid #9aa6b1;box-shadow:none}
+.tname{font-size:13.5px;font-weight:900;color:var(--coral-ink);line-height:1.05}
+.tname.long{font-size:11.5px}
+.ttype{font-size:9.5px;font-weight:600;color:#6c7682;line-height:1.1;max-width:100%;overflow-wrap:anywhere}
+.slot.hover,.slot.armed.hover{transform:scale(1.06);background:#FFE7DF}
+body.arm-tr .slot.empty,body.arm-drug .slot.filled:not(.fixed){animation:breathe 1.4s ease-in-out infinite}
+@keyframes breathe{50%{background-color:#FFE3DA}}
+.slot.current{outline:3px solid var(--accent);outline-offset:4px;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{outline-offset:8px;outline-color:rgba(232,165,152,.35)}}
+.slot.dim{opacity:.55}
+
+.flow{position:absolute;bottom:calc(100% + 4px);left:-6px;right:-6px;display:flex;justify-content:center;align-items:flex-end;
+  gap:3px;pointer-events:none}
+.iflow{display:flex;flex-direction:column;align-items:center;gap:0}
+.iflow .ms{font-size:17px;font-weight:700}
+.iflow.in{animation:down 1.8s ease-in-out infinite}
+.iflow.in .ms{color:var(--green-ink)}
+.iflow.out{animation:up 1.8s ease-in-out infinite}
+.iflow.out .ms{color:var(--red)}
+.iflow.pop{animation:popin .5s cubic-bezier(.3,1.6,.5,1) both}
+@keyframes down{0%,100%{transform:translateY(-3px)}50%{transform:translateY(3px)}}
+@keyframes up{0%,100%{transform:translateY(3px)}50%{transform:translateY(-3px)}}
+@keyframes popin{from{transform:scale(.3);opacity:0}}
+.ion{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 5px;border-radius:8px;border:1.5px solid var(--ink);
+  background:var(--c);white-space:nowrap;line-height:1.2}
+
+.badges{display:flex;flex-direction:column;gap:3px;margin-top:9px;min-height:66px;width:100%}
+.badge{display:flex;align-items:center;gap:3px;font-size:9.5px;font-weight:800;border-radius:999px;border:1.5px solid var(--ink);
+  padding:2px 6px 2px 3px;white-space:nowrap;overflow:hidden;animation:popin .45s cubic-bezier(.3,1.6,.5,1) both}
+.badge span:last-child{overflow:hidden;text-overflow:ellipsis}
+.badge .ms{font-size:13px}
+.badge.block{background:#F8DCD6;color:#86352B}
+.badge.act{background:#E1EEDD;color:#3D5E3A}
+
+/* columnas especiales */
+.seg-glom{width:84px}
+.seg-glom .seg-top{display:grid;place-items:center}
+.glom-svg{width:82px;height:82px}
+.seg-glom .patch,.seg-end .patch{background:transparent;border:none;box-shadow:none;min-height:0}
+.seg-glom .patch::before,.seg-end .patch::before{display:none}
+.glom-text{margin-top:10px;text-align:center;font-size:12px;font-weight:800;line-height:1.2}
+.glom-text small{display:block;font-weight:500;color:var(--muted);font-size:10.5px;margin-top:3px}
+.seg-end{width:62px}
+.seg-end .seg-top{display:grid;place-items:center}
+.urine{--r:999px;--sh:2px;--si:3px;background:#FFF9E0;padding:8px 9px;display:flex;flex-direction:column;align-items:center;
+  font-size:10.5px;font-weight:900}
+.urine .ms{font-size:18px;color:#C29A2E}
+.band-tag{position:absolute;left:8px;font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}
+.band-tag.l{top:12px;color:#4D7391}
+.band-tag.b{bottom:12px;color:#9A574B}
+
+/* ── Aviso flotante (pistas y perlas): aparece arriba y se va solo ─────── */
+#say{position:fixed;z-index:75;left:50%;top:14px;width:min(560px,calc(100vw - 24px));margin:0;
+  --r:20px;--sh:4px;background:var(--cream);padding:10px 34px 10px 10px;display:flex;gap:11px;align-items:flex-start;
+  transform:translate(-50%,calc(-100% - 30px));opacity:0;pointer-events:none;cursor:pointer;
+  transition:transform .4s cubic-bezier(.3,1.3,.5,1),opacity .25s}
+#say.show{transform:translate(-50%,0);opacity:1;pointer-events:auto}
+#say .x{position:absolute;right:9px;top:9px;font-size:17px;color:var(--muted)}
+.say .face{width:34px;height:34px;border-radius:50%;border:2px solid var(--ink);display:grid;place-items:center;flex-shrink:0;
+  background:#FFE7DF}
+.say .face .ms{font-size:19px}
+.say p{margin:6px 0 0;font-size:14px;line-height:1.5}
+.say.ok{background:#F1F7EF}.say.ok .face{background:var(--green);color:#fff}
+.say.bad{background:#FDF0EC}.say.bad .face{background:var(--red);color:#fff}
+
+/* ── Bandeja ───────────────────────────────────────────────────────────── */
+.tray{--r:28px;--sh:6px;--si:7px;margin-top:16px;background:#fff;padding:18px 20px 20px}
+.tray-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}
+.tray-head .ico{width:38px;height:38px;border-radius:12px;border:2px solid var(--ink);display:grid;place-items:center;
+  background:#FFE7DF;flex-shrink:0}
+.tray-head b{font-size:16px;font-weight:900}
+.tray-head p{margin:2px 0 0;color:var(--muted);font-size:13px;line-height:1.45}
+.tray-head .count{margin-left:auto;font-size:13px;font-weight:900;background:#F4EFEA;border-radius:999px;padding:5px 11px;
+  white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:12px}
+.tchip,.dchip{--r:999px;--sh:3px;--si:4px;background:var(--cream);padding:11px 20px;font-weight:900;font-size:14.5px;
+  color:var(--coral-ink);cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;transition:transform .15s}
+.tchip:hover,.dchip:hover,.ichip:hover{transform:translateY(-2px) rotate(-1deg)}
+.dchip{color:var(--ink);display:inline-flex;align-items:center;gap:8px;padding:9px 18px 9px 9px}
+.dchip .pill{width:28px;height:28px;border-radius:50%;background:#EAF0F5;border:1.5px solid var(--ink);display:grid;place-items:center}
+.dchip .pill .ms{font-size:16px}
+.selected{background:#FFE3DA !important;transform:translateY(-3px) rotate(-1.5deg) !important}
+.lifting{opacity:.35}
+.ghost{position:fixed;left:0;top:0;z-index:100;pointer-events:none;margin:0;
+  transform:translate(-50%,-50%) rotate(-4deg) scale(1.06);box-shadow:6px 8px 0 0 rgba(44,62,80,.85);opacity:.96}
+
+.p2{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px}
+.qcard{--r:22px;--sh:0px;--si:6px;background:#FFFBF8;padding:16px}
+.qhead{display:flex;align-items:center;gap:12px}
+.qhead .mini{--r:16px;--sh:2px;--si:3px;background:var(--cream);padding:8px 13px;font-weight:900;color:var(--coral-ink);font-size:15px;white-space:nowrap}
+.qhead b{font-size:15px;font-weight:900;display:block}
+.qhead small{color:var(--muted);font-size:12px}
+.qhead .count{margin-left:auto;font-size:12px;font-weight:900;background:#F4EFEA;border-radius:999px;padding:5px 10px;white-space:nowrap}
+.qnote{margin:10px 0 0;font-size:12.5px;color:#7a5a2c;background:#FFF4D6;border-radius:10px;padding:6px 10px;display:flex;gap:6px;align-items:center}
+.qnote .ms{font-size:16px}
+.bins{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.bin{border:2px dashed var(--ink);border-radius:18px;min-height:104px;padding:36px 10px 10px;display:flex;flex-wrap:wrap;gap:7px;
+  align-content:flex-start;position:relative;cursor:pointer;transition:background .15s,transform .15s}
+.bin.reabs{background:#F1F7EF}
+.bin.sec{background:#FDF0EC}
+.bin.hover{transform:scale(1.02);background:#FFE7DF}
+body.arm-ion .bin{animation:breathe 1.4s ease-in-out infinite}
+.bin-label{position:absolute;left:10px;top:9px;right:10px;font-size:11px;font-weight:900;display:flex;align-items:center;gap:4px;
+  text-transform:uppercase;letter-spacing:.05em}
+.bin.reabs .bin-label{color:var(--green-ink)}
+.bin.sec .bin-label{color:#A0473C}
+.bin-label .ms{font-size:17px}
+.bin-label small{font-weight:600;text-transform:none;letter-spacing:0;color:var(--muted);margin-left:auto}
+.ichip{--r:12px;--sh:2px;--si:3px;background:var(--c);padding:7px 13px;font-weight:900;font-size:14px;cursor:grab;
+  touch-action:none;user-select:none;-webkit-user-select:none;transition:transform .15s}
+.ichip::before{border-color:rgba(44,62,80,.35)}
+.ichip.inbin{cursor:pointer;padding:5px 8px 5px 11px;font-size:13px;display:inline-flex;align-items:center;gap:3px}
+.ichip.inbin .ms{font-size:15px}
+.ichip.wrong{border-color:var(--red);box-shadow:2px 2px 0 var(--red);animation:shake .4s}
+.ichip.locked{cursor:default}
+.qactions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px;align-items:center}
+.pearl{margin-top:14px;background:#F1F7EF;border:2px solid var(--green);border-radius:14px;padding:10px 12px;font-size:13.5px;
+  line-height:1.5;display:flex;gap:8px}
+.pearl .ms{color:var(--green-ink)}
+.palette .pal-head{font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.palette .chips{gap:10px}
+.tiny{font-size:12px;color:var(--muted);line-height:1.5;margin:14px 0 0}
+
+.tray-foot{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;margin-top:16px}
+.tray-foot .tiny{margin:0}
+.dev{position:fixed;right:14px;bottom:14px;z-index:70;background:var(--ink);color:#fff;border-radius:16px;padding:9px 13px;
+  font-size:12px;box-shadow:4px 4px 0 rgba(44,62,80,.3);max-width:250px;outline:2px dashed rgba(255,255,255,.35);outline-offset:-6px}
+.dev summary{cursor:pointer;font-weight:900;letter-spacing:.14em;display:flex;align-items:center;gap:6px;list-style:none}
+.dev summary::-webkit-details-marker{display:none}
+.dev summary .ms{font-size:16px}
+.dev p{margin:8px 0;color:#c9d3dc;line-height:1.4}
+.dev .dev-row{display:flex;flex-direction:column;gap:6px}
+.dev button{background:#fff;color:var(--ink);border:none;border-radius:10px;padding:7px 10px;font-weight:800;font-size:12px;
+  cursor:pointer;text-align:left;display:flex;align-items:center;gap:6px}
+.dev button .ms{font-size:16px}
+.done-card{display:flex;flex-wrap:wrap;align-items:center;gap:14px 18px}
+.done-card .big{font-size:40px;color:var(--accent-deep)}
+.done-card b{font-size:18px;font-weight:900}
+.done-card p{margin:2px 0 0;color:var(--muted);font-size:14px}
+.done-card .btn{margin-left:auto}
+
+/* ── Popover del efecto del fármaco ─────────────────────────────────────── */
+.pop-veil{position:fixed;inset:0;z-index:60;background:rgba(44,62,80,.14)}
+.pop{--r:20px;--sh:5px;position:fixed;z-index:61;width:272px;background:#fff;padding:16px}
+.pop h4{margin:0 0 3px;font-size:15px;font-weight:900;line-height:1.3;padding-right:26px}
+.pop p{margin:0 0 12px;font-size:12.5px;color:var(--muted)}
+.pop .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pop .btn{justify-content:center}
+.pop .btn.block{background:#F8DCD6;color:#86352B}
+.pop .btn.act{background:#E1EEDD;color:#3D5E3A}
+.pop .btn.wrong{opacity:.45;animation:shake .4s;pointer-events:none}
+.pop .x{position:absolute;right:10px;top:10px;border:none;background:none;cursor:pointer;padding:4px;z-index:1}
+
+/* ── Resultado final ───────────────────────────────────────────────────── */
+.veil{position:fixed;inset:0;z-index:80;background:rgba(44,62,80,.38);display:grid;place-items:center;padding:16px;
+  animation:fade .25s}
+@keyframes fade{from{opacity:0}}
+.final{--r:30px;--sh:8px;--si:8px;width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--cream);
+  padding:30px 28px 24px;text-align:center;animation:popin .45s cubic-bezier(.3,1.5,.5,1)}
+.final .stars{display:flex;justify-content:center;gap:6px}
+.final .stars .ms{font-size:52px;color:#E9B949}
+.final .stars .ms.off{color:#ddd5cc}
+.final h2{margin:8px 0 4px;font-size:28px;font-weight:900;letter-spacing:-.02em}
+.final > p{margin:0;color:var(--muted)}
+.fstats{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:18px 0}
+.fstat{--r:16px;--sh:2px;--si:3px;background:#fff;padding:10px 16px;font-size:12px;color:var(--muted);font-weight:700}
+.fstat b{display:block;font-size:22px;color:var(--ink);font-weight:900}
+.final h3{text-align:left;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--coral-ink);margin:8px 0}
+.review{list-style:none;margin:0;padding:0;text-align:left;display:flex;flex-direction:column;gap:7px}
+.review li{background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:8px 11px;font-size:13px;line-height:1.45;display:flex;gap:9px}
+.review .ph.hint{background:#FFF4D6;color:#7a5a2c}
+.review .ph{flex-shrink:0;font-size:10px;font-weight:900;background:#F4EFEA;border-radius:999px;padding:3px 8px;height:fit-content;margin-top:1px}
+.factions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:22px}
+
+@keyframes shake{20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+.shake{animation:shake .4s}
+
+@media (max-width:900px){
+  .p2{grid-template-columns:1fr}
+}
+@media (max-width:560px){
+  header.top{padding:14px 16px}
+  .logo{font-size:16px;padding:7px 16px 8px}
+  .bins{grid-template-columns:1fr}
+  .tray{padding:16px 14px}
+  .tchip,.dchip{font-size:13.5px}
+  .done-card .btn{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none !important;transition:none !important}
+}
+
+/* ── Soltar sobre el segmento entero ─────────────────────────────────── */
+body.arm-tr :is(.patch,.group)[data-drop="seg"]{outline:3px dashed rgba(209,141,128,.65);outline-offset:4px}
+:is(.patch,.group)[data-drop="seg"].hover{outline:3px solid var(--accent) !important;outline-offset:4px}
+.patch.hover{background:#FFE7DF}
+.group.hover{background:rgba(255,231,223,.85);border-radius:14px}
+:is(.patch,.group)[data-drop="seg"].bad{outline:3px solid var(--red) !important;outline-offset:4px}
+.slot.filled{cursor:pointer}
+
+/* ── «Cómo leerla»: se abre al entrar y se pliega en un icono ─────────── */
+.help-btn{position:absolute;z-index:5;left:18px;top:14px;width:42px;height:42px;--r:999px;--sh:3px;--si:3px;background:#fff;
+  display:grid;place-items:center;cursor:pointer;padding:0;border:2px solid var(--ink)}
+.help-btn .ms{font-size:22px;color:var(--coral-ink)}
+.help-btn[aria-expanded="true"]{background:#FFE7DF}
+.help-pop{position:absolute;z-index:6;left:18px;top:66px;width:min(430px,calc(100% - 36px));--r:20px;--sh:5px;background:#fff;
+  padding:14px 18px 15px;font-size:13px;line-height:1.5;transform-origin:20px -30px;transform:scale(.15);opacity:0;pointer-events:none;
+  transition:transform .4s cubic-bezier(.3,1.25,.5,1),opacity .3s}
+.help-pop.open{transform:none;opacity:1;pointer-events:auto}
+.help-pop b.t{font-size:14px;font-weight:900;display:block;margin-bottom:4px}
+.help-pop p{margin:5px 0 0;color:#4b5a68;display:flex;gap:7px;align-items:flex-start}
+.help-pop p .ms{font-size:18px;flex-shrink:0;margin-top:1px}
+/* en la estirada el icono vive abajo a la derecha, sobre la sangre (ahí no hay nada) */
+.help-btn.br{left:auto;top:auto;right:18px;bottom:16px}
+.help-pop.br{left:auto;top:auto;right:18px;bottom:68px;transform-origin:calc(100% - 20px) calc(100% + 30px)}
+
+/* ── Ventana de cada transportador ───────────────────────────────────── */
+.info-pop{position:fixed;z-index:65;width:330px;max-width:calc(100vw - 24px);--r:22px;--sh:5px;background:#fff;padding:14px 16px 16px;
+  animation:popin .3s cubic-bezier(.3,1.4,.5,1)}
+.info-pop .x{position:absolute;right:10px;top:10px;border:none;background:none;cursor:pointer;padding:4px;z-index:1}
+.info-head{display:flex;align-items:center;gap:10px;padding-right:28px}
+.info-head .mini{--r:14px;--sh:2px;--si:3px;background:var(--cream);padding:7px 12px;font-weight:900;color:var(--coral-ink);font-size:15px;white-space:nowrap}
+.info-head b{display:block;font-size:14px;font-weight:900}
+.info-head small{color:var(--muted);font-size:12px}
+.anim{display:block;width:100%;height:auto;margin-top:12px;border:2px solid var(--ink);border-radius:14px;background:#fff}
+.anim text{font-family:Lexend,sans-serif;font-weight:800}
+.anim .ion-move{animation:ionIn 2.8s ease-in-out infinite both}
+.anim .ion-move.out{animation-name:ionOut}
+.anim .tr-body{transform-box:fill-box;transform-origin:center;animation:trPulse 1.4s ease-in-out infinite}
+@keyframes ionIn{0%{transform:translateY(0);opacity:0}12%{opacity:1}82%{opacity:1}100%{transform:translateY(128px);opacity:0}}
+@keyframes ionOut{0%{transform:translateY(0);opacity:0}12%{opacity:1}82%{opacity:1}100%{transform:translateY(-128px);opacity:0}}
+@keyframes trPulse{50%{transform:scale(1.035)}}
+.anim-key{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11.5px;font-weight:800}
+.anim-key span{display:inline-flex;align-items:center;gap:3px}
+.anim-locked{margin-top:12px;border:2px dashed #b9c0c6;border-radius:14px;padding:14px;font-size:12.5px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.info-pearl{margin:6px 0 0;font-size:13px;line-height:1.5;color:#4b5a68}
+.info-drugs{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+.info-drugs .badge{font-size:11px;padding:3px 9px 3px 5px}
+
+/* ── Deshacer / Rehacer y confirmación de reinicio ───────────────────── */
+.btn.icon{padding:8px 9px}
+.btn.icon .ms{font-size:20px}
+.btn:disabled{opacity:.38;cursor:not-allowed}
+.btn:disabled:hover{transform:none}
+.confirm-pop{position:fixed;z-index:70;width:260px;--r:18px;--sh:4px;background:#fff;padding:14px 16px;
+  animation:popin .25s cubic-bezier(.3,1.4,.5,1)}
+.confirm-pop b{font-size:14px;font-weight:900}
+.confirm-pop p{margin:4px 0 12px;font-size:13px;color:var(--muted);line-height:1.45}
+.confirm-pop .row{display:flex;gap:8px;justify-content:flex-end}
+/* ════════ Variante anatómica: se cose directamente sobre el tubo ════════ */
+a.btn{text-decoration:none;color:var(--ink)}
+.board.anat{display:block;width:1430px;min-width:0;height:800px;padding:0;--slotw:86px}
+.board.anat .ttype{font-size:8.8px;overflow-wrap:normal}
+.anat-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.hit{pointer-events:stroke;cursor:pointer;transition:stroke .15s}
+body.arm-tr .hit{stroke:rgba(232,165,152,.22)}
+.hit.hover{stroke:rgba(232,165,152,.55) !important}
+.hit.bad{stroke:rgba(196,101,90,.5) !important}
+.sock{position:absolute;z-index:2;width:var(--slotw);transform:translate(-50%,-50%)}
+.sock .slot{height:46px;border-radius:15px}
+.board.anat .ttype{display:none}
+.board.anat .tname.long{font-size:11px}
+.sock .slot.empty{background:rgba(255,255,255,.5);opacity:.75}
+.sock .flow.at-bottom{bottom:auto;top:calc(100% + 4px)}
+.sock .flow.at-right{bottom:auto;top:-1px;left:calc(100% + 8px);right:auto;flex-direction:column;gap:3px;align-items:flex-start}
+.sock .flow.at-left{bottom:auto;top:-1px;right:calc(100% + 8px);left:auto;flex-direction:column;gap:3px;align-items:flex-end}
+.board.anat .iflow.side-right,.board.anat .iflow.side-left{flex-direction:row;align-items:center;gap:2px}
+/* reabsorbe = se aleja del túbulo · secreta = va hacia el túbulo */
+.board.anat .iflow{--dx:0px;--dy:0px}
+.board.anat .iflow.in,.board.anat .iflow.out{animation:nudge 1.8s ease-in-out infinite}
+.board.anat .iflow.pop{animation:popin .5s cubic-bezier(.3,1.6,.5,1) both}
+.board.anat .side-top.in{--dy:-3px}.board.anat .side-top.out{--dy:3px}
+.board.anat .side-bottom.in{--dy:3px}.board.anat .side-bottom.out{--dy:-3px}
+.board.anat .side-right.in{--dx:3px}.board.anat .side-right.out{--dx:-3px}
+.board.anat .side-left.in{--dx:-3px}.board.anat .side-left.out{--dx:3px}
+@keyframes nudge{0%,100%{transform:translate(calc(var(--dx) * -1),calc(var(--dy) * -1))}50%{transform:translate(var(--dx),var(--dy))}}
+.sock .badges{position:absolute;margin:0;min-height:0;left:0;right:0;top:calc(100% + 6px);width:auto}
+.sock .badges.after-flow{top:calc(100% + 46px)}
+.sock .badges.at-right{left:calc(100% + 8px);right:auto;width:96px;top:25px}
+.sock .badges.beside{left:calc(100% + 72px);right:auto;width:100px;top:-1px}
+.sock .badges.after-flow{top:calc(100% + 44px)}
+.legend-card{position:absolute;z-index:2;--r:22px;--sh:4px;--si:6px;background:#fff;padding:14px 16px;font-size:12.5px;line-height:1.5}
+.legend-card b{font-size:13px;font-weight:900}
+.legend-card p{margin:6px 0 0;color:#4b5a68}
+.legend-card .ms{font-size:16px;vertical-align:-3px}
+.svg-label{font-family:Lexend,sans-serif;font-size:13px;font-weight:800;fill:var(--ink)}
+.svg-small{font-family:Lexend,sans-serif;font-size:11px;font-weight:600;fill:#6c7682}
+.svg-na{font-family:Lexend,sans-serif;font-size:11px;font-weight:800;fill:#9A574B}
+
+/* Dentro de la web va en un iframe: fuera el logo, la cabecera del sitio ya lo pone */
+.embed .logo,.embed .eyebrow{display:none}
+
+/* ════════ Final: estudio / repaso ════════ */
+.fbadge{display:flex;justify-content:center}
+.fbadge .ms{font-size:52px;color:var(--accent-deep)}
+.fnote{margin:12px 0 0;font-size:13px;background:#FFF4D6;border-radius:12px;padding:8px 12px;color:#7a5a2c;display:flex;gap:6px;
+  align-items:center;justify-content:center}
+.fnote .ms{font-size:17px}
+.step.practice{color:var(--coral-ink);border-color:var(--ink);gap:5px;padding-left:10px}
+.step.practice .ms{font-size:17px}
+
+/* ════════ Cambio de forma (morph) y pantalla completa ════════ */
+.btn.form{min-width:128px;justify-content:center}
+.morph-layer{position:absolute;inset:0;z-index:4;pointer-events:auto;overflow:hidden;border-radius:26px}
+.morph-layer > *{position:absolute}
+.morph-chip{transform-origin:0 0;will-change:transform}
+.morph-chip > .slot{margin:0}
+.morph-chip.anat .ttype{display:none}
+.morph-chip.anat .tname.long{font-size:11px}
+
+body.fs{overflow:hidden}
+body.fs .wrap{max-width:none;height:100vh;height:100dvh;padding:10px 12px;display:grid;
+  grid-template-columns:minmax(0,1fr) 380px;grid-template-rows:auto auto minmax(0,1fr);gap:10px 14px}
+body.fs header.top{grid-column:1 / -1;grid-row:1;padding:8px 14px;--sh:4px;gap:8px 16px}
+body.fs .logo,body.fs .eyebrow,body.fs .titles p{display:none}
+body.fs .titles{min-width:0;flex:0 1 auto}
+body.fs h1{font-size:21px;margin:0}
+body.fs .board-card{grid-column:1;grid-row:2 / 4;margin:0;display:flex;flex-direction:column;min-height:0;padding:10px 0 6px}
+body.fs .scroller{flex:1;min-height:0;overflow:auto;display:flex}
+body.fs .board{margin:auto;min-width:0;flex-shrink:0}
+body.fs .tray{grid-column:2;grid-row:2 / 4;margin:0;overflow:auto;min-height:0}
+body.fs .p2{grid-template-columns:1fr}
+@media (max-width:900px){
+  body.fs{overflow:auto}
+  body.fs .wrap{display:block;height:auto;min-height:100vh}
+  body.fs .board-card,body.fs .tray{margin-top:10px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top stitch">
+    <div class="logo stitch">MirDaily</div>
+    <div class="titles">
+      <div class="eyebrow">Minijuego · Nefrología</div>
+      <h1>Cose la <em>nefrona</em></h1>
+      <p>Coloca los transportadores, di qué mueven y engancha los fármacos que los activan o los bloquean.</p>
+    </div>
+    <div class="hud">
+      <div class="steps" id="steps"></div>
+      <div class="errs stitch" title="Fallos totales"><span class="ms">close</span><span id="errTotal">0 fallos</span></div>
+      <button class="btn stitch small form" id="formBtn"></button>
+      <button class="btn stitch small icon" id="fsBtn" title="Pantalla completa" aria-label="Pantalla completa" aria-pressed="false"><span class="ms">fullscreen</span></button>
+      <button class="btn stitch small icon" id="undo" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" disabled><span class="ms">undo</span></button>
+      <button class="btn stitch small icon" id="redo" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" disabled><span class="ms">redo</span></button>
+      <button class="btn stitch small" id="reset" title="Empezar de nuevo"><span class="ms">restart_alt</span>Reiniciar</button>
+    </div>
+  </header>
+
+  <section class="board-card stitch" aria-label="Nefrona">
+    <button class="help-btn br stitch" id="helpBtn" aria-label="Cómo leer la nefrona" aria-expanded="true"><span class="ms">help</span></button>
+    <div class="help-pop br stitch open" id="helpPop" role="note">
+      <b class="t">Cómo leerla</b>
+      <p><span class="ms">touch_app</span><span>Suelta cada transportador sobre el <b>segmento</b> donde trabaja. Arriba va la <b>luz</b> (la orina que se forma), en medio las <b>células</b> y abajo la <b>sangre</b>.</span></p>
+      <p><span class="ms" style="color:var(--green-ink)">arrow_downward</span><span><b>Reabsorbe</b>: la flecha verde baja, se aleja de la luz del túbulo.</span></p>
+      <p><span class="ms" style="color:var(--red)">arrow_upward</span><span><b>Secreta</b>: la flecha coral sube hacia la luz del túbulo.</span></p>
+      <p><span class="ms">info</span><span>Toca un transportador ya colocado para verlo funcionar.</span></p>
+    </div>
+    <div class="scroller" id="scroller"><div class="board" id="board"></div></div>
+  </section>
+
+  <section class="tray stitch" id="tray"></section>
+</div>
+
+<!-- Aviso flotante: pistas al fallar, perlas al acertar -->
+<div class="say stitch" id="say" role="status" aria-live="polite"></div>
+
+<!-- Trucos: rellenar fases con lo correcto para estudiar con calma -->
+<details class="dev" id="dev">
+  <summary><span class="ms">auto_fix_high</span>Trucos</summary>
+  <p>Rellena las respuestas correctas para estudiarlas con calma. No suma fallos.</p>
+  <div class="dev-row">
+    <button data-fill="1"><span class="ms">looks_one</span>Rellenar fase 1</button>
+    <button data-fill="2"><span class="ms">looks_two</span>Rellenar fases 1 y 2</button>
+    <button data-fill="3"><span class="ms">looks_3</span>Rellenar todo</button>
+    <button data-fill="final"><span class="ms">emoji_events</span>Ver pantalla final</button>
+  </div>
+</details>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════
+   CONTENIDO
+═══════════════════════════════════════════════════════════════════════════ */
+const IONS = {
+  Na:{t:'Na⁺',c:'#F6D77A'}, K:{t:'K⁺',c:'#CDBBEB'}, Cl:{t:'Cl⁻',c:'#AEDAA6'}, Cl2:{t:'2Cl⁻',c:'#AEDAA6'},
+  H:{t:'H⁺',c:'#F4ADA0'}, HCO3:{t:'HCO₃⁻',c:'#A3CBEC'}, Glu:{t:'Glucosa',c:'#F7C691'}, H2O:{t:'H₂O',c:'#C4E6F4'},
+  Ca:{t:'Ca²⁺',c:'#DDD7D0'}
+};
+const ION_ORDER = ['Na','K','Cl','Cl2','H','HCO3','Glu','H2O','Ca'];
+
+/* zonas = trozos de membrana apical con huecos */
+const ZONE = {
+  tcp:'túbulo contorneado proximal', desc:'rama descendente fina', aag:'rama ascendente gruesa', tcd:'túbulo contorneado distal',
+  colp:'célula principal del colector', coli:'célula intercalada α del colector'
+};
+/* «en el túbulo…» / «en la rama…»: el artículo según la zona */
+const enZona = z => `${['desc', 'aag', 'colp', 'coli'].includes(z) ? 'la' : 'el'} ${ZONE[z]}`;
+
+const SEGMENTS = [
+  {id:'glom', kind:'glom'},
+  {id:'tcp', num:1, name:'Túbulo contorneado proximal', na:'≈ 65 % del Na⁺', tint:'#FBE6DF', groups:[{zone:'tcp', n:3}]},
+  {id:'desc', num:2, kind:'desc', name:'Rama descendente fina', na:'solo agua', tint:'#E4EEF6'},
+  {id:'aag', num:3, name:'Rama ascendente gruesa', na:'≈ 25 % del Na⁺', tint:'#F7EDCF', groups:[{zone:'aag', n:2}]},
+  {id:'tcd', num:4, name:'Túbulo contorneado distal', na:'≈ 5 %', tint:'#E4F0E1', groups:[{zone:'tcd', n:1}]},
+  {id:'col', num:5, name:'Túbulo colector', na:'≈ 2-3 % del Na⁺', tint:'#ECE6F4',
+    groups:[{zone:'colp', n:3, label:'Célula principal'}, {zone:'coli', n:1, label:'Intercalada α'}]},
+  {id:'end', kind:'end'}
+];
+
+const TR = {
+  SGLT2:{name:'SGLT2', type:'Cotransportador', zones:['tcp'], reabs:['Na','Glu'], sec:[],
+    where:'túbulo proximal',
+    hint:'Piensa en dónde se recupera casi toda la glucosa filtrada.',
+    clin:{tcp:'Trabaja en el primer tramo del túbulo proximal (segmentos S1-S2): mucha capacidad y poca afinidad.'},
+    pearl:{tcp:'Recupera ~90 % de la glucosa filtrada. Con glucemias por encima de ~180 mg/dL se satura y aparece glucosuria.'}},
+  NHE3:{name:'NHE3', type:'Intercambiador', zones:['tcp'], reabs:['Na'], sec:['H'],
+    where:'túbulo proximal',
+    hint:'Es el intercambiador de Na⁺ más abundante de toda la nefrona.',
+    clin:{tcp:'Es el gran motor del túbulo proximal, donde se recuperan unos dos tercios del filtrado. Lo estimula la angiotensina II.'},
+    pearl:{tcp:'Mete Na⁺ y saca H⁺. Ese H⁺, con la anhidrasa carbónica, permite recuperar ~80 % del HCO₃⁻ filtrado.'}},
+  AC:{name:'Anhidrasa carbónica', f:1, type:'Enzima', zones:['tcp'], reabs:['HCO3'], sec:[],
+    where:'túbulo proximal',
+    note:'Es una enzima, no un transportador: piensa en qué acaba recuperando.',
+    hint:'Trabaja en equipo con el NHE3.',
+    clin:{tcp:'Es una enzima, no un transportador: trabaja en el borde en cepillo y dentro de la célula del túbulo proximal.'},
+    pearl:{tcp:'No transporta nada: convierte H⁺ + HCO₃⁻ en CO₂ + H₂O, que difunde a la célula y regenera el HCO₃⁻ que vuelve a la sangre.'}},
+  NKCC2:{name:'NKCC2', type:'Cotransportador', zones:['aag'], reabs:['Na','K','Cl2'], sec:[],
+    where:'rama ascendente gruesa',
+    note:'Ojo con la estequiometría del cloro.',
+    hint:'Su segmento es impermeable al agua y es el que diluye la orina.',
+    clin:{aag:'Trabaja en un segmento impermeable al agua y crea el gradiente que concentra la orina. Mutado: síndrome de Bartter tipo 1.'},
+    pearl:{aag:'Reabsorbe ~25 % del Na⁺ y crea el gradiente que concentra la orina. Mutado: síndrome de Bartter tipo 1.'}},
+  ROMK:{name:'ROMK', type:'Canal de K⁺', zones:['aag','colp'], reabs:[], sec:['K'],
+    where:'rama ascendente gruesa y célula principal del colector (hay dos)',
+    hint:'Hay dos copias: busca los dos segmentos que necesitan un canal de potasio.',
+    clin:{aag:'Trabaja en equipo con el NKCC2, que sin él se pararía. Mutado: síndrome de Bartter tipo 2.',
+      colp:'Su actividad sube cuando llega mucho flujo al final de la nefrona.'},
+    pearl:{
+      aag:'Devuelve a la luz el K⁺ que entra por el NKCC2 para que no se pare, y deja la luz positiva: así se reabsorben Ca²⁺ y Mg²⁺ entre las células. Mutado: Bartter tipo 2.',
+      colp:'Principal salida de K⁺ a la orina. La estimulan la aldosterona y un flujo distal alto (por eso los diuréticos de asa y las tiazidas bajan el K⁺).'}},
+  NCC:{name:'NCC', type:'Cotransportador', zones:['tcd'], reabs:['Na','Cl'], sec:[],
+    where:'túbulo contorneado distal',
+    hint:'Si falta, aparece el síndrome de Gitelman.',
+    clin:{tcd:'Vive justo después de la mácula densa. Mutado: síndrome de Gitelman.'},
+    pearl:{tcd:'Reabsorbe ~5 % del Na⁺. Mutado: síndrome de Gitelman (hipopotasemia, hipomagnesemia e hipocalciuria).'}},
+  ENaC:{name:'ENaC', type:'Canal de Na⁺', zones:['colp'], reabs:['Na'], sec:[],
+    where:'célula principal del colector',
+    hint:'Su ganancia de función da el síndrome de Liddle.',
+    clin:{colp:'Trabaja en la célula principal. Ganancia de función: síndrome de Liddle (HTA con renina y aldosterona bajas).'},
+    pearl:{colp:'Solo deja pasar Na⁺ (el K⁺ sale por el ROMK). Al entrar el Na⁺ la luz queda negativa y empuja la salida de K⁺ y H⁺. Ganancia de función: síndrome de Liddle (HTA, hipopotasemia y aldosterona baja).'}},
+  AQP2:{name:'AQP2 · V2', f:1, type:'Canal de agua', zones:['colp'], reabs:['H2O'], sec:[],
+    where:'célula principal del colector',
+    note:'No todo lo que se mueve es un ion.',
+    hint:'Es la que regula la hormona antidiurética.',
+    clin:{colp:'Solo se inserta en la membrana cuando hace falta concentrar la orina. Si falla: diabetes insípida nefrogénica.'},
+    pearl:{colp:'La ADH se une al receptor V2 y sube la AQP2 a la membrana apical. Si fallan el V2 o la AQP2: diabetes insípida nefrogénica.'}},
+  HATP:{name:'H⁺-ATPasa', f:1, type:'Bomba', zones:['coli'], reabs:[], sec:['H'],
+    where:'célula intercalada α del colector',
+    hint:'Si falla, aparece una acidosis tubular renal distal (tipo 1).',
+    clin:{coli:'Trabaja en las células intercaladas α. Si falla: acidosis tubular renal tipo 1 (distal).'},
+    pearl:{coli:'Acidifica la orina excretando H⁺. Si falla: acidosis tubular renal tipo 1 (distal), con pH urinario > 5,5 y nefrocalcinosis.'}}
+};
+const TRAY_TR = ['SGLT2','NHE3','AC','NKCC2','ROMK','NCC','ENaC','ROMK','AQP2','HATP'];
+
+const DRUGS = {
+  empa:{name:'Empagliflozina', short:'Empagliflozina', targets:['SGLT2@tcp'], eff:'block', whereTxt:'el SGLT2 del túbulo proximal',
+    hint:'Las gliflozinas provocan glucosuria: ¿dónde se recupera la glucosa?',
+    pearl:'iSGLT2: glucosuria y natriuresis leve. Protegen riñón y corazón (ERC, IC). Ojo: cetoacidosis euglucémica e infecciones genitales.'},
+  aceta:{name:'Acetazolamida', short:'Acetazolamida', targets:['AC@tcp'], eff:'block', whereTxt:'la anhidrasa carbónica del túbulo proximal',
+    hint:'Produce bicarbonaturia.',
+    pearl:'Bicarbonaturia → acidosis metabólica hiperclorémica. Usos: glaucoma, mal de altura y alcalosis metabólica.'},
+  furo:{name:'Furosemida', short:'Furosemida', targets:['NKCC2@aag'], eff:'block', whereTxt:'el NKCC2 de la rama ascendente gruesa',
+    hint:'Es un diurético de asa.',
+    pearl:'El diurético más potente: hipopotasemia, alcalosis metabólica, hipercalciuria e hipomagnesemia. Ototóxica a dosis altas.'},
+  hctz:{name:'Hidroclorotiazida', short:'Tiazida', targets:['NCC@tcd'], eff:'block', whereTxt:'el NCC del túbulo distal',
+    hint:'Es una tiazida: su efecto recuerda al síndrome de Gitelman.',
+    pearl:'Hiponatremia, hipopotasemia, hiperuricemia e hiperglucemia… y HIPOcalciuria: útil en la litiasis cálcica.'},
+  amil:{name:'Amilorida', short:'Amilorida', targets:['ENaC@colp'], eff:'block', whereTxt:'el ENaC de la célula principal',
+    hint:'Es un ahorrador de potasio que no depende de la aldosterona.',
+    pearl:'Ahorrador de K⁺: riesgo de hiperpotasemia. De elección en el síndrome de Liddle y en la DI nefrogénica por litio.'},
+  espiro:{name:'Espironolactona', short:'Espironolact.', targets:['ENaC@colp','ROMK@colp','HATP@coli'], eff:'block',
+    whereTxt:'ENaC, ROMK y H⁺-ATPasa del colector (vía receptor mineralocorticoide)',
+    hint:'Antagoniza el receptor de la aldosterona.',
+    pearl:'Al frenar la aldosterona bajan ENaC, ROMK y H⁺-ATPasa: hiperpotasemia y acidosis (como una ATR tipo 4). Ginecomastia. Mejora la supervivencia en la IC con FE reducida.'},
+  tolva:{name:'Tolvaptán', m:1, short:'Tolvaptán', targets:['AQP2@colp'], eff:'block', whereTxt:'la AQP2 vía receptor V2',
+    hint:'Es un antagonista del receptor V2 de la ADH.',
+    pearl:'Acuarético: corrige la hiponatremia del SIADH y frena el crecimiento de quistes en la PQRAD. Vigila la corrección rápida del Na⁺ y el hígado.'},
+  desmo:{name:'Desmopresina', short:'Desmopresina', targets:['AQP2@colp'], eff:'act', whereTxt:'la AQP2 vía receptor V2',
+    hint:'Es un análogo de la ADH.',
+    pearl:'Agonista V2: inserta AQP2. Diabetes insípida central y enuresis; en hemofilia A leve y von Willebrand libera FVIII y FvW.'},
+  fludro:{name:'Fludrocortisona', short:'Fludrocort.', targets:['ENaC@colp','ROMK@colp','HATP@coli'], eff:'act',
+    whereTxt:'ENaC, ROMK y H⁺-ATPasa del colector (como la aldosterona)',
+    hint:'Hace lo mismo que la aldosterona.',
+    pearl:'Mineralocorticoide: estimula ENaC, ROMK y H⁺-ATPasa → retiene Na⁺ y pierde K⁺ y H⁺. Sustitución en la enfermedad de Addison y en la hipotensión ortostática.'}
+};
+const DRUG_IDS = Object.keys(DRUGS);
+
+/* ════════════════════════════════════════════════════════════════════════
+   ESTADO
+═══════════════════════════════════════════════════════════════════════════ */
+const $ = (s, r = document) => r.querySelector(s);
+const SLOT_IDS = SEGMENTS.flatMap(s => (s.groups || []).flatMap(g => Array.from({length:g.n}, (_, i) => `${g.zone}-${i}`)));
+const zoneOf = id => id.split('-')[0];
+const keyOf = id => `${S.placed[id]}@${zoneOf(id)}`;
+const el = tr => `${tr.f ? 'la' : 'el'} ${tr.name}`;
+const al = tr => `${tr.f ? 'a la' : 'al'} ${tr.name}`;
+const movesTxt = tr => {
+  const solo = tr.reabs.length + tr.sec.length === 1 ? 'solo ' : '';
+  return [tr.reabs.length && `${solo}reabsorbe ${ionsTxt(tr.reabs)}`, tr.sec.length && `${solo}secreta ${ionsTxt(tr.sec)}`].filter(Boolean).join(' y ');
+};
+const ionsTxt = arr => arr.length ? arr.map(k => IONS[k].t).join(', ') : '—';
+/* Hasta resolver sus iones no se destripa nada: tipo genérico («Canal», no
+   «Canal de K⁺») y perla clínica en vez de la del mecanismo. */
+const known = id => !!(S.ionDone[id] || S.phase === 3);
+const typeOf = (tr, id) => known(id) ? tr.type : tr.type.replace(/ de .*/, '');
+const pearlOf = (tr, id) => known(id) ? tr.pearl[zoneOf(id)] : tr.clin[zoneOf(id)];
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const sameSet = (a, b) => a.length === b.length && a.every(x => b.includes(x));
+const TOTAL_DECISIONS = TRAY_TR.length * 2 + DRUG_IDS.length * 2;   // fármaco: diana + efecto
+
+let S;
+function fresh() {
+  return {
+    phase:1, done:false, errors:[0,0,0], log:[], logKeys:new Set(),
+    placed:{}, tray:shuffle([...TRAY_TR]),
+    queue:[], qi:0, bins:{reabs:[], sec:[]}, wrong:new Set(), solved:false, ionDone:{},
+    drugs:[], badges:{},
+    hints:[0,0,0], hintKeys:new Set(), tricks:[], practice:null
+  };
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   TABLERO
+═══════════════════════════════════════════════════════════════════════════ */
+const board = $('#board'), scroller = $('#scroller');
+
+const GLOM_SVG = `<svg class="glom-svg" viewBox="0 0 84 84" aria-hidden="true">
+  <circle cx="42" cy="42" r="36" fill="#FBE6DF" stroke="#2c3e50" stroke-width="2.2"/>
+  <circle cx="42" cy="42" r="29.5" fill="none" stroke="#7f8b84" stroke-width="2" stroke-dasharray="5 4" stroke-linecap="round"/>
+  <path d="M8 52 C20 50 18 30 28 28 S36 44 42 40 S44 22 52 24 S58 44 64 40 S70 30 78 34" fill="none" stroke="#E07F6E" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M8 52 C20 50 18 30 28 28 S36 44 42 40 S44 22 52 24 S58 44 64 40 S70 30 78 34" fill="none" stroke="#F7C2B7" stroke-width="1.6" stroke-linecap="round"/>
+</svg>`;
+
+function buildStretched() {
+  board.innerHTML = '<div class="lumen"></div><div class="blood"></div>';
+  for (const seg of SEGMENTS) {
+    const col = document.createElement('div');
+    col.className = `seg seg-${seg.kind || 'std'}`;
+    if (seg.kind === 'glom') {
+      col.innerHTML = `<div class="seg-top">${GLOM_SVG}<span class="band-tag l" style="left:auto;right:-6px;top:auto;bottom:-2px;display:none"></span></div>
+        <div class="patch"><div class="glom-text">Glomérulo<small>filtra ~180 L/día</small></div></div>
+        <div class="seg-bottom" style="color:#9A574B;font-size:9px;letter-spacing:.12em">SANGRE</div>`;
+      col.querySelector('.seg-top').insertAdjacentHTML('afterbegin', '<span class="band-tag l" style="top:-1px;left:-8px">LUZ</span>');
+    } else if (seg.kind === 'end') {
+      col.innerHTML = `<div class="seg-top"><div class="urine stitch"><span class="ms fill">water_drop</span>Orina</div></div>
+        <div class="patch"></div><div class="seg-bottom"></div>`;
+    } else if (seg.kind === 'desc') {
+      col.innerHTML = `<div class="seg-top"></div>
+        <div class="patch stitch" style="--tint:${seg.tint}" data-drop="seg" data-zone="desc">
+          <div class="groups"><div class="group"><div class="slots">
+            <div class="slot-col" style="--slotw:66px">
+              <div class="flow">${flowHtml(['H2O'], [], false)}</div>
+              <div class="slot fixed" title="Acuaporina 1: siempre abierta"><span class="tname" style="color:#4D7391">AQP1</span><span class="ttype">Agua</span></div>
+            </div></div></div></div>
+          <div class="seg-name"><span class="num">${seg.num}</span>${seg.name}</div>
+        </div>
+        <div class="seg-bottom"><span class="ms">water_drop</span>${seg.na}</div>`;
+    } else {
+      const multi = seg.groups.length > 1;
+      const groups = seg.groups.map(g => `<div class="group"${multi ? ` data-drop="seg" data-zone="${g.zone}"` : ''}><div class="slots">${
+        Array.from({length:g.n}, (_, i) => {
+          const id = `${g.zone}-${i}`;
+          return `<div class="slot-col" id="col-${id}">
+            <div class="flow" id="flow-${id}"></div>
+            <button class="slot empty" data-drop="slot" data-slot="${id}"></button>
+            <div class="badges" id="badges-${id}"></div>
+          </div>`;
+        }).join('')}</div>${g.label ? `<div class="group-label">${g.label}</div>` : ''}</div>`).join('');
+      col.innerHTML = `<div class="seg-top"></div>
+        <div class="patch stitch" style="--tint:${seg.tint}"${multi ? '' : ` data-drop="seg" data-zone="${seg.groups[0].zone}"`}>
+          <div class="groups">${groups}</div>
+          <div class="seg-name"><span class="num">${seg.num}</span>${seg.name}</div>
+        </div>
+        <div class="seg-bottom">${seg.na}</div>`;
+    }
+    board.appendChild(col);
+  }
+  board.querySelectorAll('.slot[data-slot]').forEach(btn => {
+    btn.addEventListener('click', () => onSlotClick(btn));
+    renderSlot(btn.dataset.slot);
+  });
+  board.querySelectorAll('[data-drop="seg"]').forEach(el => el.addEventListener('click', e => {
+    if (e.target.closest('.slot[data-slot]')) return;
+    if (selected && accepts(el, selected.payload)) handleDrop(selected.payload, el);
+  }));
+  fitBoard();
+}
+
+/* ── Geometría de la nefrona anatómica (lienzo de 1430 × 780) ──────────────
+   Cada tubo se pinta en capas para que parezca cosido: tinta de borde, relleno,
+   pespunte discontinuo y otra vez relleno por el centro, así solo asoman dos
+   hilos pegados a los bordes. Encima va un trazo invisible y ancho por tramo
+   (.hit) que es donde se sueltan los transportadores. */
+const TUBES = [
+  {zone:'tcp',  w:46, fill:'#F6D3C8', d:'M168 150 C215 150 225 95 295 95 C365 95 375 175 445 175 C515 175 525 95 595 95 C650 95 675 140 675 205 L675 280'},
+  {zone:'desc', w:32, fill:'#D3E3F0', d:'M675 280 L675 700 C675 772 790 772 790 700'},
+  {zone:'aag',  w:46, fill:'#F2DFA2', d:'M790 700 L790 250'},
+  {zone:'tcd',  w:42, fill:'#CDE4C7', d:'M790 250 C790 170 840 130 910 130 C980 130 990 205 1050 205 C1110 205 1120 130 1180 130 C1210 130 1226 150 1230 185'},
+  {zone:'colp', w:56, fill:'#DCD1EC', d:'M1230 40 L1230 590'},
+  {zone:'coli', w:56, fill:'#EBD3E4', d:'M1230 590 L1230 730'}
+];
+/* Dónde se cose cada transportador y hacia dónde salen sus iones e insignias. */
+const SOCKETS = {
+  /* El transportador se cose sobre una sola pared: su borde interior llega
+     al centro del tubo y el resto asoma por fuera, donde salen sus iones. */
+  'tcp-0': {x:295,  y:118, flow:'bottom'},
+  'tcp-1': {x:445,  y:198, flow:'bottom'},
+  'tcp-2': {x:595,  y:118, flow:'bottom'},
+  'aag-0': {x:833,  y:590, flow:'right', badge:'beside'},
+  'aag-1': {x:833,  y:440, flow:'right', badge:'beside'},
+  'tcd-0': {x:1050, y:228, flow:'bottom'},
+  'colp-0':{x:1273, y:270, flow:'right', badge:'right'},
+  'colp-1':{x:1273, y:390, flow:'right', badge:'right'},
+  'colp-2':{x:1273, y:510, flow:'right', badge:'right'},
+  'coli-0':{x:1273, y:660, flow:'right', badge:'right'}
+};
+
+function anatSvg() {
+  const layer = (stroke, dw, extra = '') => TUBES.map(t =>
+    `<path d="${t.d}" fill="none" stroke="${stroke === 'fill' ? t.fill : stroke}" stroke-width="${t.w + dw}" stroke-linecap="round" stroke-linejoin="round" ${extra}/>`).join('');
+  return `<svg class="anat-svg" viewBox="0 0 1430 800" aria-hidden="true">
+    <defs><marker id="flecha" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2c3e50"/></marker></defs>
+    <!-- arteriolas -->
+    <path d="M6 116 C28 116 40 126 58 134" fill="none" stroke="#2c3e50" stroke-width="19" stroke-linecap="round"/>
+    <path d="M6 116 C28 116 40 126 58 134" fill="none" stroke="#E9A193" stroke-width="13" stroke-linecap="round"/>
+    <path d="M6 186 C28 186 40 176 58 168" fill="none" stroke="#2c3e50" stroke-width="16" stroke-linecap="round"/>
+    <path d="M6 186 C28 186 40 176 58 168" fill="none" stroke="#C98377" stroke-width="10" stroke-linecap="round"/>
+    <text class="svg-small" x="6" y="98">aferente</text>
+    <text class="svg-small" x="6" y="214">eferente</text>
+    <!-- tubos cosidos -->
+    ${layer('#2c3e50', 5)}
+    ${layer('fill', 0)}
+    ${TUBES.map(t => `<path d="${t.d}" fill="none" stroke="#7f8b84" stroke-width="${t.w - 7}" stroke-dasharray="6 5" stroke-linejoin="round" opacity=".85"/>`).join('')}
+    ${layer('fill', -11)}
+    <path d="M1198 590 L1262 590" stroke="#2c3e50" stroke-width="1.8" stroke-dasharray="5 3"/>
+    <!-- glomérulo -->
+    <circle cx="110" cy="150" r="60" fill="#FBE6DF" stroke="#2c3e50" stroke-width="2.8"/>
+    <circle cx="110" cy="150" r="52" fill="none" stroke="#7f8b84" stroke-width="2.2" stroke-dasharray="6 4" stroke-linecap="round"/>
+    <path d="M62 136 C74 106 96 116 98 136 S120 166 128 140 S148 116 156 142 S134 186 114 174 S80 184 78 162 S96 146 112 152"
+      fill="none" stroke="#E07F6E" stroke-width="6" stroke-linecap="round"/>
+    <path d="M62 136 C74 106 96 116 98 136 S120 166 128 140 S148 116 156 142 S134 186 114 174 S80 184 78 162 S96 146 112 152"
+      fill="none" stroke="#F7C2B7" stroke-width="2" stroke-linecap="round"/>
+    <text class="svg-label" x="110" y="238" text-anchor="middle">Glomérulo</text>
+    <text class="svg-small" x="110" y="253" text-anchor="middle">filtra ~180 L/día</text>
+    <!-- mácula densa -->
+    <path d="M812 190 L840 112" stroke="#7f8b84" stroke-width="1.8" stroke-dasharray="4 4"/>
+    <circle cx="804" cy="198" r="5.5" fill="#C9A27A" stroke="#2c3e50" stroke-width="1.5"/>
+    <circle cx="813" cy="187" r="5" fill="#C9A27A" stroke="#2c3e50" stroke-width="1.5"/>
+    <circle cx="801" cy="211" r="4.5" fill="#C9A27A" stroke="#2c3e50" stroke-width="1.5"/>
+    <text class="svg-label" x="760" y="100">Mácula densa</text>
+    <!-- rótulos de los tramos -->
+    <text class="svg-label" x="445" y="364" text-anchor="middle">1 · Túbulo contorneado proximal</text>
+    <text class="svg-na" x="445" y="380" text-anchor="middle">≈ 65 % del Na⁺</text>
+    <text class="svg-label" x="650" y="400" text-anchor="end">2 · Rama descendente fina</text>
+    <text class="svg-na" x="650" y="416" text-anchor="end">solo agua</text>
+    <text class="svg-label" x="848" y="706">3 · Rama ascendente gruesa</text>
+    <text class="svg-na" x="848" y="722">≈ 25 % del Na⁺</text>
+    <text class="svg-label" x="1035" y="52" text-anchor="middle">4 · Túbulo contorneado distal</text>
+    <text class="svg-na" x="1035" y="68" text-anchor="middle">≈ 5 %</text>
+    <text class="svg-label" x="1274" y="60">5 · Túbulo colector</text>
+    <text class="svg-na" x="1274" y="76">≈ 2-3 % del Na⁺</text>
+    <text class="svg-small" x="1274" y="220">Célula principal</text>
+    <text class="svg-small" x="1274" y="606">Célula intercalada α</text>
+    <!-- orina -->
+    <path d="M1230 744 L1230 778" stroke="#2c3e50" stroke-width="2.5" marker-end="url(#flecha)"/>
+    <text class="svg-label" x="1252" y="782">Orina</text>
+    <!-- zonas donde se suelta (invisibles) -->
+    ${TUBES.map(t => `<path class="hit" data-drop="seg" data-zone="${t.zone}" d="${t.d}" fill="none" stroke="rgba(0,0,0,0)" stroke-width="${t.w + 34}" stroke-linecap="round" stroke-linejoin="round"/>`).join('')}
+  </svg>`;
+}
+
+function sockHtml(id, k) {
+  const flowCls = k.flow === 'top' ? '' : ` at-${k.flow}`;
+  const badgeCls = k.badge === 'right' ? ' at-right' : k.badge === 'beside' ? ' beside' : k.flow === 'bottom' ? ' after-flow' : '';
+  return `<div class="sock" style="left:${k.x}px;top:${k.y}px">
+    <div class="flow${flowCls}" id="flow-${id}"></div>
+    <button class="slot empty" data-drop="slot" data-slot="${id}"></button>
+    <div class="badges${badgeCls}" id="badges-${id}"></div>
+  </div>`;
+}
+
+function buildAnat() {
+  let html = anatSvg();
+  for (const id of SLOT_IDS) html += sockHtml(id, SOCKETS[id]);
+  html += `<div class="sock" style="left:639px;top:510px;--slotw:72px">
+    <div class="flow at-left">${flowHtml(['H2O'], [], false, 'left')}</div>
+    <div class="slot fixed" title="Acuaporina 1: siempre abierta"><span class="tname" style="color:#4D7391">AQP1</span><span class="ttype">Agua</span></div>
+  </div>`;
+  board.innerHTML = html;
+  board.querySelectorAll('.slot[data-slot]').forEach(btn => {
+    btn.addEventListener('click', () => onSlotClick(btn));
+    renderSlot(btn.dataset.slot);
+  });
+  board.querySelectorAll('.hit').forEach(p => p.addEventListener('click', () => {
+    if (selected && accepts(p, selected.payload)) handleDrop(selected.payload, p);
+  }));
+  fitBoard();
+}
+
+/* En la nefrona anatómica la flecha va pegada al túbulo y el ion por fuera:
+   reabsorber = la flecha se aleja del túbulo (verde); secretar = la flecha
+   apunta al túbulo (coral). «side» es hacia dónde quedan los iones. */
+const AWAY = {top:'arrow_upward', bottom:'arrow_downward', right:'arrow_forward', left:'arrow_back'};
+const TOWARD = {top:'arrow_downward', bottom:'arrow_upward', right:'arrow_back', left:'arrow_forward'};
+function flowAnat(reabs, sec, pop, side) {
+  const item = (k, cls, icon) => {
+    const ion = `<span class="ion" style="--c:${IONS[k].c}">${IONS[k].t}</span>`, arr = `<span class="ms">${icon}</span>`;
+    const inner = side === 'top' || side === 'left' ? ion + arr : arr + ion;
+    return `<div class="iflow ${cls} side-${side}${pop ? ' pop' : ''}">${inner}</div>`;
+  };
+  return reabs.map(k => item(k, 'in', AWAY[side])).join('') + sec.map(k => item(k, 'out', TOWARD[side])).join('');
+}
+
+/* Una partida, dos formas: el tablero se construye según MODE. */
+function buildBoard() {
+  board.classList.toggle('anat', MODE === 'anatomica');
+  if (MODE === 'anatomica') buildAnat(); else buildStretched();
+  SLOT_IDS.forEach(id => { renderFlow(id); renderBadges(id); });
+}
+
+function flowHtml(reabs, sec, pop, side) {
+  if (side) return flowAnat(reabs, sec, pop, side);
+  return reabs.map(k => `<div class="iflow in${pop ? ' pop' : ''}"><span class="ion" style="--c:${IONS[k].c}">${IONS[k].t}</span><span class="ms">arrow_downward</span></div>`).join('')
+       + sec.map(k => `<div class="iflow out${pop ? ' pop' : ''}"><span class="ion" style="--c:${IONS[k].c}">${IONS[k].t}</span><span class="ms">arrow_upward</span></div>`).join('');
+}
+
+const slotBtn = id => board.querySelector(`.slot[data-slot="${id}"]`);
+
+function renderSlot(id) {
+  const btn = slotBtn(id); if (!btn) return;
+  const kind = S.placed[id];
+  btn.classList.toggle('current', S.phase === 2 && !S.done && S.queue[S.qi] === id);
+  if (kind) {
+    const tr = TR[kind];
+    btn.classList.remove('empty'); btn.classList.add('filled');
+    btn.innerHTML = `<span class="tname${tr.name.length > 10 ? ' long' : ''}">${tr.name}</span><span class="ttype">${typeOf(tr, id)}</span>`;
+    btn.setAttribute('aria-label', `${tr.name}, ${typeOf(tr, id)}, en ${ZONE[zoneOf(id)]}`);
+  } else {
+    btn.classList.remove('filled'); btn.classList.add('empty');
+    btn.innerHTML = '<span class="ms">add</span>';
+    btn.setAttribute('aria-label', `Hueco vacío en ${ZONE[zoneOf(id)]}`);
+  }
+}
+function renderFlow(id, pop) {
+  const el = $(`#flow-${id}`), kind = S.placed[id];
+  el.innerHTML = S.ionDone[id] && kind ? flowHtml(TR[kind].reabs, TR[kind].sec, pop, MODE === 'anatomica' ? SOCKETS[id].flow : undefined) : '';
+  if (pop) setTimeout(() => el.querySelectorAll('.pop').forEach(n => n.classList.remove('pop')), 600);
+}
+function renderBadges(id) {
+  const el = $(`#badges-${id}`);
+  el.innerHTML = (S.badges[id] || []).map(d => {
+    const D = DRUGS[d];
+    return `<span class="badge ${D.eff}" title="${D.name}: ${D.eff === 'block' ? 'bloquea' : 'activa'}"><span class="ms">${D.eff === 'block' ? 'block' : 'bolt'}</span><span>${D.short}</span></span>`;
+  }).join('');
+}
+
+/* En portátil cabe entera si se encoge un poco; en móvil se encoge lo justo y se desliza. */
+function fitBoard() {
+  board.style.zoom = 1;
+  const needW = board.offsetWidth, needH = board.offsetHeight, availW = scroller.clientWidth;
+  let z;
+  if (document.body.classList.contains('fs') && innerWidth > 900) {
+    // pantalla completa: que quepa entera, a lo ancho y a lo alto
+    z = Math.max(0.5, Math.min(1.8, availW / needW, (scroller.clientHeight - 6) / needH));
+  } else z = Math.max(0.72, Math.min(1.15, availW / needW));
+  board.style.zoom = z;
+}
+addEventListener('resize', fitBoard);
+
+/* ════════════════════════════════════════════════════════════════════════
+   CABECERA, MENSAJES Y BANDEJA
+═══════════════════════════════════════════════════════════════════════════ */
+const STEP_NAMES = ['Transportadores', 'Iones', 'Fármacos'];
+function renderHud() {
+  saveGame();
+  $('#steps').innerHTML = STEP_NAMES.map((n, i) => {
+    const p = i + 1, done = S.phase > p || (S.phase === p && S.done);
+    const cls = done ? 'done' : S.phase === p ? 'active' : '';
+    return `<div class="step stitch ${cls}"><span class="n">${done ? '✓' : p}</span>${n}${S.errors[i] ? `<span class="st-err">${S.errors[i]}✕</span>` : ''}</div>`;
+  }).join('') + (S.practice ? '<div class="step stitch practice"><span class="ms">replay</span>Repaso</div>' : '');
+  const tot = S.errors.reduce((a, b) => a + b, 0);
+  const hn = S.hints.reduce((a, b) => a + b, 0);
+  $('#errTotal').innerHTML = `<b>${tot}</b> ${tot === 1 ? 'fallo' : 'fallos'}${hn ? ` · ${hn} ${hn === 1 ? 'pista' : 'pistas'}` : ''}`;
+}
+
+/* Aviso flotante: se queda lo justo para leerlo (más si el texto es largo),
+   no se va mientras el ratón está encima y se cierra al tocarlo. */
+const sayEl = $('#say');
+let sayTimer = 0;
+const hideSay = () => { clearTimeout(sayTimer); sayEl.classList.remove('show'); };
+function say(html, kind = 'info') {
+  const icon = kind === 'ok' ? 'check' : kind === 'bad' ? 'close' : 'lightbulb';
+  sayEl.className = `say stitch ${kind} show`;
+  sayEl.innerHTML = `<span class="face"><span class="ms">${icon}</span></span><p>${html}</p><span class="ms x" aria-hidden="true">close</span>`;
+  clearTimeout(sayTimer);
+  const len = sayEl.textContent.length;
+  sayTimer = setTimeout(hideSay, Math.min(10000, 3500 + len * 45));
+}
+sayEl.addEventListener('click', hideSay);
+sayEl.addEventListener('pointerenter', () => clearTimeout(sayTimer));
+sayEl.addEventListener('pointerleave', () => { if (sayEl.classList.contains('show')) sayTimer = setTimeout(hideSay, 2500); });
+
+function miss(phase, key, text) {
+  S.errors[phase - 1]++;
+  if (!S.logKeys.has(key)) { S.logKeys.add(key); S.log.push({phase, text}); }
+  renderHud();
+  const errs = $('.errs'); errs.classList.remove('hit'); void errs.offsetWidth; errs.classList.add('hit');
+}
+
+/* «Pista»: voluntaria. La primera vez por cada ficha cuesta medio fallo
+   (cuenta para las estrellas); volver a verla es gratis. */
+function useHint(key, phase, html, review) {
+  if (!S.hintKeys.has(key)) {
+    S.hintKeys.add(key); S.hints[phase - 1]++;
+    S.logKeys.add(`hint-${key}`); S.log.push({phase, text:review, hint:true});
+    renderHud(); saveGame();
+  }
+  say(html);
+}
+function hintTr() {
+  const idx = selected?.payload.type === 'tr' ? selected.payload.idx : S.tray.findIndex(Boolean);
+  const k = S.tray[idx]; if (!k) return;
+  useHint(`tr-${k}`, 1, `<b>${TR[k].name}</b>: ${TR[k].hint}`, `<b>${TR[k].name}</b> va en: ${TR[k].where}.`);
+}
+function hintDrug() {
+  const idx = selected?.payload.type === 'drug' ? selected.payload.idx : S.drugs.findIndex(Boolean);
+  const d = S.drugs[idx]; if (!d) return;
+  useHint(`drug-${d}`, 3, `<b>${DRUGS[d].name}</b>: ${DRUGS[d].hint}`, `<b>${DRUGS[d].name}</b> ${effTxt(DRUGS[d])} ${DRUGS[d].whereTxt}.`);
+}
+function hintIon() {
+  const id = S.queue[S.qi], tr = TR[S.placed[id]];
+  const n = tr.reabs.length + tr.sec.length, s = c => c === 1 ? 'sustancia' : 'sustancias';
+  const what = n === 1
+    ? `mueve una sola sustancia y la ${tr.reabs.length ? 'reabsorbe' : 'secreta'}`
+    : `mueve ${n} ${s(n)}: ${[tr.reabs.length && `reabsorbe ${tr.reabs.length}`, tr.sec.length && `secreta ${tr.sec.length}`].filter(Boolean).join(' y ')}`;
+  useHint(`ion-${keyOf(id)}`, 2, `<b>${tr.name}</b> ${what}.${tr.note ? ' ' + tr.note : ''}`, `<b>${tr.name}</b> ${movesTxt(tr)}.`);
+}
+
+const tray = $('#tray');
+function renderTray() {
+  saveGame();
+  if (S.done) return renderDoneCard();
+  if (S.phase === 1) {
+    const left = S.tray.filter(Boolean).length;
+    tray.innerHTML = `<div class="tray-head"><span class="ico"><span class="ms">drag_pan</span></span>
+      <div><b>Fase 1 · Coloca los transportadores</b><p>Arrástralos al segmento de la nefrona donde trabajan (o toca la ficha y luego el segmento).</p></div>
+      <span class="count">${TRAY_TR.length - left}/${TRAY_TR.length}</span></div>
+      <div class="chips">${S.tray.map((k, i) => k ? `<button class="tchip stitch" data-i="${i}">${TR[k].name}</button>` : '').join('')}</div>
+      <div class="tray-foot"><button class="btn stitch small" id="hint"><span class="ms">lightbulb</span>Pista</button>
+      <button class="btn stitch small" id="skip"><span class="ms">help</span>No me lo sé</button>
+      <span class="tiny">Toca una ficha y pide una <b>pista</b> (medio fallo) o pulsa <b>No me lo sé</b> (se coloca sola, un fallo).</span></div>`;
+    tray.querySelectorAll('.tchip').forEach(el => bindDraggable(el, {type:'tr', idx:+el.dataset.i}));
+    $('#skip').addEventListener('click', skipTr);
+    $('#hint').addEventListener('click', hintTr);
+  } else if (S.phase === 2) {
+    renderIonTray();
+  } else {
+    const left = S.drugs.filter(Boolean).length;
+    tray.innerHTML = `<div class="tray-head"><span class="ico"><span class="ms">medication</span></span>
+      <div><b>Fase 3 · Engancha los fármacos</b><p>Arrastra cada fármaco al transportador sobre el que actúa y di si lo activa o lo bloquea.</p></div>
+      <span class="count">${DRUG_IDS.length - left}/${DRUG_IDS.length}</span></div>
+      <div class="chips">${S.drugs.map((d, i) => d ? `<button class="dchip stitch" data-i="${i}"><span class="pill"><span class="ms">pill</span></span>${DRUGS[d].name}</button>` : '').join('')}</div>
+      <div class="tray-foot"><button class="btn stitch small" id="hint"><span class="ms">lightbulb</span>Pista</button>
+      <button class="btn stitch small" id="skip"><span class="ms">help</span>No me lo sé</button>
+      <span class="tiny">Toca una ficha y pide una <b>pista</b> (medio fallo) o pulsa <b>No me lo sé</b> (se coloca sola, un fallo).</span></div>`;
+    tray.querySelectorAll('.dchip').forEach(el => bindDraggable(el, {type:'drug', idx:+el.dataset.i}));
+    $('#skip').addEventListener('click', skipDrug);
+    $('#hint').addEventListener('click', hintDrug);
+  }
+}
+
+function renderIonTray() {
+  saveGame();
+  const id = S.queue[S.qi], kind = S.placed[id], tr = TR[kind];
+  const binHtml = b => S.bins[b].map(k => `<button class="ichip stitch inbin${S.wrong.has(`${b}:${k}`) ? ' wrong' : ''}${S.solved ? ' locked' : ''}" style="--c:${IONS[k].c}" data-bin="${b}" data-ion="${k}" ${S.solved ? 'tabindex="-1"' : `aria-label="Quitar ${IONS[k].t}"`}>${IONS[k].t}${S.solved ? '' : '<span class="ms">close</span>'}</button>`).join('');
+  tray.innerHTML = `<div class="tray-head"><span class="ico"><span class="ms">swap_vert</span></span>
+      <div><b>Fase 2 · Qué mueve cada uno y hacia dónde</b><p>Mete cada sustancia en «Reabsorbe» o en «Secreta». Tienen que estar todas las que mueve, y ninguna más.</p></div></div>
+    <div class="p2">
+      <div class="qcard stitch">
+        <div class="qhead"><span class="mini stitch">${tr.name}</span>
+          <div><b>¿Qué mueve?</b><small>${typeOf(tr, id)} · ${ZONE[zoneOf(id)]}</small></div>
+          <span class="count">${S.qi + 1}/${S.queue.length}</span></div>
+        <div class="bins">
+          <div class="bin reabs" data-drop="bin" data-bin="reabs" tabindex="0" role="button" aria-label="Caja: reabsorbe">
+            <span class="bin-label"><span class="ms">output</span>Reabsorbe<small>sale del túbulo</small></span>${binHtml('reabs')}</div>
+          <div class="bin sec" data-drop="bin" data-bin="sec" tabindex="0" role="button" aria-label="Caja: secreta">
+            <span class="bin-label"><span class="ms">input</span>Secreta<small>entra al túbulo</small></span>${binHtml('sec')}</div>
+        </div>
+        ${S.solved
+          ? `<div class="pearl"><span class="ms">check_circle</span><span>${tr.pearl[zoneOf(id)]}</span></div>
+             <div class="qactions"><button class="btn stitch primary" id="nextIon">${S.qi + 1 < S.queue.length ? 'Siguiente transportador' : 'Terminar fase'}<span class="ms">arrow_forward</span></button></div>`
+          : `<div class="qactions"><button class="btn stitch small" id="hintIon"><span class="ms">lightbulb</span>Pista</button>
+             <button class="btn stitch small" id="skipIon" style="margin-right:auto"><span class="ms">help</span>No me lo sé</button>
+             <button class="btn stitch small" id="clearBins"><span class="ms">ink_eraser</span>Vaciar</button>
+             <button class="btn stitch green" id="check"><span class="ms">done_all</span>Comprobar</button></div>`}
+      </div>
+      <div class="palette">
+        <div class="pal-head">Iones y moléculas</div>
+        <div class="chips">${ION_ORDER.map(k => `<button class="ichip stitch" style="--c:${IONS[k].c}" data-ion="${k}">${IONS[k].t}</button>`).join('')}</div>
+        <p class="tiny">Arrastra a una caja, o toca el ion y luego la caja. Toca un ion dentro de la caja para quitarlo. Puede que sobren.</p>
+      </div>
+    </div>`;
+  tray.querySelectorAll('.palette .ichip').forEach(el => bindDraggable(el, {type:'ion', ion:el.dataset.ion}));
+  tray.querySelectorAll('.bin').forEach(el => {
+    el.addEventListener('click', e => { if (e.target.closest('.inbin')) return; onBinClick(el); });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onBinClick(el); } });
+  });
+  tray.querySelectorAll('.inbin').forEach(el => el.addEventListener('click', () => {
+    if (S.solved) return;
+    record();
+    const b = el.dataset.bin; S.bins[b] = S.bins[b].filter(x => x !== el.dataset.ion); S.wrong.clear(); renderIonTray();
+  }));
+  $('#check')?.addEventListener('click', checkIons);
+  $('#skipIon')?.addEventListener('click', skipIon);
+  $('#hintIon')?.addEventListener('click', hintIon);
+  $('#clearBins')?.addEventListener('click', () => { record(); S.bins = {reabs:[], sec:[]}; S.wrong.clear(); renderIonTray(); });
+  $('#nextIon')?.addEventListener('click', nextIon);
+}
+
+function renderDoneCard() {
+  const p = S.phase, err = S.errors[p - 1];
+  const txt = [
+    ['¡Nefrona montada!', 'Fase 2: qué mueve cada uno'],
+    ['¡Iones en marcha!', 'Fase 3: los fármacos'],
+    ['¡Nefrona cosida!', 'Ver resultado']
+  ][p - 1];
+  tray.innerHTML = `<div class="done-card"><span class="ms fill big">${p === 3 ? 'emoji_events' : 'celebration'}</span>
+    <div><b>${txt[0]}</b><p>${err ? `${err} ${err === 1 ? 'fallo' : 'fallos'} en esta fase.` : 'Sin un solo fallo en esta fase.'}</p></div>
+    <button class="btn stitch primary" id="advance">${txt[1]}<span class="ms">arrow_forward</span></button></div>`;
+  $('#advance').addEventListener('click', advance);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   ARRASTRAR (ratón y táctil) Y TOCAR-TOCAR
+═══════════════════════════════════════════════════════════════════════════ */
+let drag = null, selected = null, suppressClick = false, ghost = null;
+
+function bindDraggable(el, payload) {
+  el.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || morphing || $('.pop') || $('.veil')) return;
+    drag = {el, payload, sx:e.clientX, sy:e.clientY, x:e.clientX, y:e.clientY, moved:false, hover:null};
+  });
+  el.addEventListener('click', e => {
+    if (suppressClick) return;
+    e.stopPropagation();
+    if (selected && selected.el === el) return clearSelection();
+    clearSelection();
+    selected = {el, payload};
+    el.classList.add('selected');
+    document.body.classList.add(`arm-${payload.type}`);
+  });
+}
+
+addEventListener('pointermove', e => {
+  if (!drag) return;
+  drag.x = e.clientX; drag.y = e.clientY;
+  if (!drag.moved) {
+    if (Math.hypot(drag.x - drag.sx, drag.y - drag.sy) < 6) return;
+    drag.moved = true; clearSelection();
+    ghost = drag.el.cloneNode(true);
+    ghost.classList.add('ghost'); ghost.classList.remove('selected');
+    document.body.appendChild(ghost);
+    drag.el.classList.add('lifting');
+    document.body.classList.add(`arm-${drag.payload.type}`);
+    requestAnimationFrame(tick);
+  }
+  ghost.style.left = drag.x + 'px'; ghost.style.top = drag.y + 'px';
+  updateHover();
+}, {passive:true});
+
+addEventListener('pointerup', () => {
+  if (!drag) return;
+  const d = drag;
+  if (d.moved) {
+    suppressClick = true; setTimeout(() => suppressClick = false, 0);
+    const t = targetAt(d.x, d.y, d.payload);
+    endDrag();
+    if (t) handleDrop(d.payload, t);
+  } else drag = null;
+});
+addEventListener('pointercancel', () => drag && endDrag());
+addEventListener('click', e => { if (suppressClick) { e.stopPropagation(); e.preventDefault(); } }, true);
+
+function endDrag() {
+  drag?.el.classList.remove('lifting');
+  drag?.hover?.classList.remove('hover');
+  ghost?.remove(); ghost = null;
+  document.body.classList.remove('arm-tr', 'arm-ion', 'arm-drug');
+  drag = null;
+}
+
+function tick() {
+  if (!drag || !drag.moved) return;
+  const r = scroller.getBoundingClientRect();
+  if (drag.y > r.top && drag.y < r.bottom) {
+    if (drag.x < r.left + 56) scroller.scrollLeft -= 12;
+    else if (drag.x > r.right - 56) scroller.scrollLeft += 12;
+  }
+  if (drag.y < 48) scrollBy(0, -12);
+  else if (drag.y > innerHeight - 48) scrollBy(0, 12);
+  updateHover();
+  requestAnimationFrame(tick);
+}
+
+function accepts(t, p) {
+  if (!t) return false;
+  if (p.type === 'tr') return S.phase === 1 && (t.dataset.drop === 'seg' || t.dataset.drop === 'slot');
+  if (p.type === 'ion') return S.phase === 2 && !S.solved && t.dataset.drop === 'bin';
+  if (p.type === 'drug') return S.phase === 3 && t.dataset.drop === 'slot' && !!S.placed[t.dataset.slot];
+  return false;
+}
+function targetAt(x, y, p) {
+  const t = document.elementFromPoint(x, y)?.closest('[data-drop]');
+  return accepts(t, p) ? t : null;
+}
+function updateHover() {
+  const t = targetAt(drag.x, drag.y, drag.payload);
+  if (t !== drag.hover) { drag.hover?.classList.remove('hover'); t?.classList.add('hover'); drag.hover = t; }
+}
+function clearSelection() {
+  selected?.el.classList.remove('selected');
+  selected = null;
+  document.body.classList.remove('arm-tr', 'arm-ion', 'arm-drug');
+}
+document.addEventListener('click', e => {
+  if (selected && !e.target.closest('[data-drop]') && !e.target.closest('.tchip,.dchip,.ichip')) clearSelection();
+});
+
+function onSlotClick(btn) {
+  if (selected) {
+    const p = selected.payload;
+    if (accepts(btn, p)) handleDrop(p, btn);
+    else if (p.type === 'tr') say('Ese hueco ya está ocupado: elige uno vacío.');
+    else if (p.type === 'drug') say('Los fármacos se enganchan a un transportador ya colocado.');
+    return;
+  }
+  const id = btn.dataset.slot;
+  if (S.placed[id]) openInfo(id);
+}
+function onBinClick(bin) {
+  if (selected && accepts(bin, selected.payload)) handleDrop(selected.payload, bin);
+}
+
+function handleDrop(p, t) {
+  clearSelection();
+  if (p.type === 'tr') placeTransporter(p.idx, t.dataset.zone || zoneOf(t.dataset.slot));
+  else if (p.type === 'ion') addIon(p.ion, t.dataset.bin);
+  else if (p.type === 'drug') dropDrug(p.idx, t.dataset.slot);
+}
+
+function shake(el) { if (!el) return; el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
+
+/* ════════════════════════════════════════════════════════════════════════
+   FASE 1 · TRANSPORTADORES
+═══════════════════════════════════════════════════════════════════════════ */
+/* Se suelta sobre un SEGMENTO: la ficha se cose en el primer hueco libre. */
+function placeTransporter(idx, zone) {
+  const kind = S.tray[idx]; if (!kind || !zone) return;
+  const tr = TR[kind];
+  /* Al fallar no se dice dónde va: rebota, el tramo parpadea y suma un fallo.
+     Para saberlo está «No me lo sé»; y al final, «Para repasar». */
+  const wrong = !tr.zones.includes(zone) || SLOT_IDS.some(s => zoneOf(s) === zone && S.placed[s] === kind);
+  if (wrong) {
+    miss(1, tr.zones.includes(zone) ? `tr-${kind}-dup` : `tr-${kind}`,
+      tr.zones.includes(zone) ? `Hay dos <b>${tr.name}</b>: ${tr.where}.` : `<b>${tr.name}</b> va en: ${tr.where}.`);
+    flashZone(zone);
+    shake(tray.querySelector(`.tchip[data-i="${idx}"]`));
+    return;
+  }
+  const id = SLOT_IDS.find(s => zoneOf(s) === zone && !S.placed[s]);
+  if (!id) return say('Ese tramo ya está completo.');
+  record();
+  commitTr(idx, id);
+  say(`<b>${tr.name}</b> cosido en ${enZona(zone)}. ${tr.clin[zone]}`, 'ok');
+}
+function flashZone(zone) {
+  const el = board.querySelector(`[data-drop="seg"][data-zone="${zone}"]`); if (!el) return;
+  el.classList.add('bad'); setTimeout(() => el.classList.remove('bad'), 700);
+}
+function commitTr(idx, id) {
+  S.placed[id] = S.tray[idx]; S.tray[idx] = null;
+  renderSlot(id);
+  if (SLOT_IDS.every(s => S.placed[s])) { S.done = true; renderHud(); }
+  renderTray();
+}
+/* Hueco correcto libre para una ficha (ROMK: el tramo que aún no tenga uno). */
+function correctSlotFor(kind) {
+  for (const z of TR[kind].zones) {
+    if (SLOT_IDS.some(s => zoneOf(s) === z && S.placed[s] === kind)) continue;
+    const free = SLOT_IDS.find(s => zoneOf(s) === z && !S.placed[s]);
+    if (free) return free;
+  }
+}
+/* «No me lo sé»: la ficha seleccionada, o la primera que quede. */
+function pickIdx(type, list) {
+  const i = selected?.payload.type === type ? selected.payload.idx : list.findIndex(Boolean);
+  clearSelection();
+  return i;
+}
+function skipTr() {
+  const idx = pickIdx('tr', S.tray); if (idx < 0 || !S.tray[idx]) return;
+  const kind = S.tray[idx], tr = TR[kind], id = correctSlotFor(kind);
+  miss(1, `tr-${kind}`, `<b>${tr.name}</b> va en: ${tr.where}.`);
+  record();
+  commitTr(idx, id);
+  say(`<b>${tr.name}</b> va en ${enZona(zoneOf(id))}. ${tr.clin[zoneOf(id)]}`);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   FASE 2 · IONES
+═══════════════════════════════════════════════════════════════════════════ */
+function startPhase2() {
+  // orden barajado: que no se aprenda la secuencia de memoria
+  Object.assign(S, {phase:2, done:false, queue:shuffle([...SLOT_IDS]), qi:0, bins:{reabs:[], sec:[]}, wrong:new Set(), solved:false});
+  if (S.practice) {
+    // repaso: solo los transportadores cuyos iones fallaste; el resto ya resuelto
+    S.queue.forEach(id => { if (!S.practice.ion.includes(keyOf(id))) { S.ionDone[id] = true; renderFlow(id); } });
+    S.queue = S.queue.filter(id => !S.ionDone[id]);
+    if (!S.queue.length) return startPhase3();
+  }
+  focusCurrent();
+  say('Para cada transportador: ¿qué reabsorbe y qué secreta? Pon todo lo que mueve; en la paleta sobran iones.');
+}
+function focusCurrent() {
+  SLOT_IDS.forEach(renderSlot);
+  const btn = slotBtn(S.queue[S.qi]);
+  const r = btn.getBoundingClientRect(), sr = scroller.getBoundingClientRect();
+  scroller.scrollBy({left:(r.left + r.width / 2) - (sr.left + sr.width / 2), behavior:'smooth'});
+}
+function addIon(ion, bin) {
+  if (S.bins[bin].includes(ion)) return;
+  record();
+  S.bins[bin].push(ion); S.wrong.clear(); renderIonTray();
+}
+function checkIons() {
+  const id = S.queue[S.qi], tr = TR[S.placed[id]];
+  if (!S.bins.reabs.length && !S.bins.sec.length) return say('Mete al menos un ion en alguna caja antes de comprobar.');
+  const okR = sameSet(S.bins.reabs, tr.reabs), okS = sameSet(S.bins.sec, tr.sec);
+  if (okR && okS) {
+    record();
+    S.solved = true; S.ionDone[id] = true;
+    renderSlot(id); renderFlow(id, true); renderIonTray();
+    say(`<b>${tr.name}</b> ${movesTxt(tr)}.`, 'ok');
+    return;
+  }
+  // Sin pistas: ni qué sobra ni cuántos faltan. Para eso está «Pista».
+  miss(2, `ion-${id}`, `<b>${tr.name}</b> ${movesTxt(tr)}.`);
+  shake($('.qcard'));
+  say('No es correcto. Revisa las dos cajas.', 'bad');
+}
+function solveIon(id) {
+  const tr = TR[S.placed[id]];
+  Object.assign(S, {bins:{reabs:[...tr.reabs], sec:[...tr.sec]}, wrong:new Set(), solved:true});
+  S.ionDone[id] = true;
+  renderSlot(id); renderFlow(id, true); renderIonTray();
+}
+function skipIon() {
+  const id = S.queue[S.qi], tr = TR[S.placed[id]];
+  miss(2, `ion-${id}`, `<b>${tr.name}</b> ${movesTxt(tr)}.`);
+  record();
+  solveIon(id);
+  say(`Era así: <b>${tr.name}</b> ${movesTxt(tr)}.`);
+}
+function nextIon() {
+  record();
+  if (S.qi + 1 >= S.queue.length) {
+    S.done = true; SLOT_IDS.forEach(renderSlot); renderHud(); renderTray();
+    say('Todos los transportadores se mueven. Fíjate en el patrón: casi todo entra; solo ROMK y la H⁺-ATPasa (y el NHE3 con su H⁺) secretan.', 'ok');
+    return;
+  }
+  Object.assign(S, {qi:S.qi + 1, bins:{reabs:[], sec:[]}, wrong:new Set(), solved:false});
+  focusCurrent(); renderIonTray();
+  say('Siguiente. ¿Qué reabsorbe y qué secreta?');
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   FASE 3 · FÁRMACOS
+═══════════════════════════════════════════════════════════════════════════ */
+function startPhase3() {
+  Object.assign(S, {phase:3, done:false, drugs:shuffle([...DRUG_IDS])});
+  SLOT_IDS.forEach(id => { renderSlot(id); renderFlow(id); });
+  if (S.practice) {
+    // repaso: solo los fármacos que fallaste; los demás ya enganchados
+    S.drugs.forEach((d, i) => { if (d && !S.practice.drug.includes(d)) attachDrug(i, true); });
+    if (S.done) { renderHud(); renderTray(); setTimeout(showFinal, 400); return; }
+  }
+  say('Último paso: engancha cada fármaco a su diana. Algunos actúan sobre varios transportadores a la vez.');
+}
+function dropDrug(idx, id) {
+  const d = S.drugs[idx]; if (!d) return;
+  const D = DRUGS[d], kind = S.placed[id];
+  if (!D.targets.includes(keyOf(id))) {
+    // sin pista: rebota y suma un fallo
+    miss(3, `drug-${d}`, `<b>${D.name}</b> actúa sobre ${D.whereTxt}.`);
+    shake(slotBtn(id));
+    shake(tray.querySelector(`.dchip[data-i="${idx}"]`));
+    return;
+  }
+  openPop(idx, id);
+}
+function openPop(idx, id) {
+  const d = S.drugs[idx], D = DRUGS[d], tr = TR[S.placed[id]];
+  const veil = document.createElement('div'); veil.className = 'pop-veil';
+  const pop = document.createElement('div'); pop.className = 'pop stitch'; pop.setAttribute('role', 'dialog');
+  pop.innerHTML = `<button class="x" aria-label="Cerrar"><span class="ms">close</span></button>
+    <h4>¿Qué le hace ${D.m ? 'el' : 'la'} ${D.name.toLowerCase()} ${al(tr)}?</h4><p>Diana correcta. Ahora el efecto:</p>
+    <div class="row"><button class="btn stitch block" data-e="block"><span class="ms">block</span>Bloquea</button>
+    <button class="btn stitch act" data-e="act"><span class="ms">bolt</span>Activa</button></div>`;
+  document.body.append(veil, pop);
+  const r = slotBtn(id).getBoundingClientRect();
+  const left = Math.min(innerWidth - 284, Math.max(12, r.left + r.width / 2 - 136));
+  let top = r.bottom + 12; if (top + 170 > innerHeight) top = Math.max(12, r.top - 182);
+  pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  const close = () => { veil.remove(); pop.remove(); };
+  veil.addEventListener('click', close);
+  pop.querySelector('.x').addEventListener('click', close);
+  pop.querySelector('[data-e]').focus();
+  pop.querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.e !== D.eff) {
+      miss(3, `eff-${d}`, `<b>${D.name}</b> ${D.eff === 'block' ? 'bloquea' : 'activa'} ${D.whereTxt}.`);
+      b.classList.add('wrong');
+      pop.querySelector('p').textContent = 'No. Piénsalo otra vez.';
+      return;
+    }
+    close();
+    record();
+    attachDrug(idx);
+    say(`<b>${D.name}</b> ${effTxt(D)} ${D.whereTxt}. ${D.pearl}`, 'ok');
+  }));
+}
+const effTxt = D => D.eff === 'block' ? 'bloquea' : 'activa';
+function attachDrug(idx, quiet) {
+  const d = S.drugs[idx], D = DRUGS[d];
+  S.drugs[idx] = null;
+  for (const t of D.targets) {
+    const sid = SLOT_IDS.find(s => keyOf(s) === t);
+    if (sid) { (S.badges[sid] ||= []).push(d); renderBadges(sid); }
+  }
+  if (S.drugs.every(x => !x)) { S.done = true; renderHud(); if (!quiet) setTimeout(showFinal, 900); }
+  renderTray();
+}
+function skipDrug() {
+  const idx = pickIdx('drug', S.drugs); if (idx < 0 || !S.drugs[idx]) return;
+  const D = DRUGS[S.drugs[idx]];
+  miss(3, `drug-${S.drugs[idx]}`, `<b>${D.name}</b> ${effTxt(D)} ${D.whereTxt}.`);
+  record();
+  attachDrug(idx);
+  say(`Era así: <b>${D.name}</b> ${effTxt(D)} ${D.whereTxt}. ${D.pearl}`);
+}
+
+/* ── Trucos: rellena las fases con lo correcto para estudiar, sin sumar fallos ── */
+function devFill(n) {
+  record();
+  clearSelection();
+  $('.pop-veil')?.remove(); $('.pop')?.remove(); $('.veil')?.remove();
+  const trick = p => { if (!S.tricks.includes(p)) S.tricks.push(p); };
+  if (S.phase === 1) {
+    if (S.tray.some(Boolean)) trick(1);
+    S.tray.forEach((k, i) => { if (k) commitTr(i, correctSlotFor(k)); });
+    if (n > 1) startPhase2();
+  }
+  if (S.phase === 2 && n >= 2) {
+    if (S.queue.some(id => !S.ionDone[id])) trick(2);
+    S.queue.forEach(id => { S.ionDone[id] = true; renderFlow(id); });
+    Object.assign(S, {qi:Math.max(0, S.queue.length - 1), solved:true, done:true});
+    if (n > 2) startPhase3();
+  }
+  if (S.phase === 3 && n >= 3) {
+    if (S.drugs.some(Boolean)) trick(3);
+    S.drugs.forEach((d, i) => { if (d) attachDrug(i, true); });
+  }
+  SLOT_IDS.forEach(renderSlot); renderHud(); renderTray();
+  say('Truco aplicado: ahí tienes las respuestas correctas. Toca cualquier transportador para estudiarlo.');
+}
+document.querySelectorAll('#dev [data-fill]').forEach(b => b.addEventListener('click', () => {
+  const f = b.dataset.fill;
+  if (f === 'final') { devFill(3); showFinal(); } else devFill(+f);
+}));
+
+/* ════════════════════════════════════════════════════════════════════════
+   FLUJO Y FINAL
+═══════════════════════════════════════════════════════════════════════════ */
+function advance() {
+  if (S.phase < 3) record();
+  if (S.phase === 1) startPhase2();
+  else if (S.phase === 2) startPhase3();
+  else return showFinal();
+  renderHud(); renderTray();
+}
+
+function showFinal() {
+  if ($('.veil') || !(S.phase === 3 && S.done)) return;
+  const total = S.errors.reduce((a, b) => a + b, 0);
+  const hn = S.hints.reduce((a, b) => a + b, 0);
+  const score = total + hn / 2;                       // cada pista, medio fallo
+  const study = S.tricks.length > 0, practice = !!S.practice;
+  const stars = score <= 3 ? 3 : score <= 8 ? 2 : 1;
+  const title = practice ? 'Repaso terminado' : study ? 'Partida de estudio' : ['Hay que repasar puntadas', '¡Bien cosida!', '¡De matrícula!'][stars - 1];
+  const f = failsOf(), nF = f.tr.length + f.ion.length + f.drug.length;
+  const tk = S.tricks.slice().sort();
+  const fases = tk.length === 1 ? `la fase ${tk[0]}` : `las fases ${tk.slice(0, -1).join(', ')} y ${tk[tk.length - 1]}`;
+  const top = practice ? '<div class="fbadge"><span class="ms">replay</span></div>'
+    : study ? '<div class="fbadge"><span class="ms">auto_fix_high</span></div>'
+    : `<div class="stars">${[1,2,3].map(i => `<span class="ms fill${i > stars ? ' off' : ''}">star</span>`).join('')}</div>`;
+  const v = document.createElement('div'); v.className = 'veil';
+  v.innerHTML = `<div class="final stitch" role="dialog" aria-label="Resultado">
+    ${top}
+    <h2>${title}</h2>
+    <p>${total} ${total === 1 ? 'fallo' : 'fallos'}${practice ? ' en el repaso' : ` en ${TOTAL_DECISIONS} decisiones`}${hn ? ` y ${hn} ${hn === 1 ? 'pista' : 'pistas'} (medio fallo cada una)` : ''}.</p>
+    ${study && !practice ? `<p class="fnote"><span class="ms">auto_fix_high</span>Usaste trucos en ${fases}: esta vez no hay estrellas.</p>` : ''}
+    <div class="fstats">${STEP_NAMES.map((n, i) => `<div class="fstat stitch"><b>${S.errors[i]}</b>${n}</div>`).join('')}${hn ? `<div class="fstat stitch"><b>${hn}</b>Pistas</div>` : ''}</div>
+    ${S.log.length
+      ? `<h3>Para repasar</h3><ul class="review">${S.log.map(l => `<li><span class="ph${l.hint ? ' hint' : ''}">Fase ${l.phase}${l.hint ? ' · pista' : ''}</span><span>${l.text}</span></li>`).join('')}</ul>`
+      : '<p style="margin-top:6px">Ni una puntada torcida. 🧵</p>'}
+    <div class="factions"><button class="btn stitch" id="fClose"><span class="ms">visibility</span>Ver la nefrona</button>
+    ${nF ? `<button class="btn stitch" id="fRetry"><span class="ms">replay</span>Repetir fallos y pistas (${nF})</button>` : ''}
+    <button class="btn stitch primary" id="fAgain"><span class="ms">restart_alt</span>Jugar otra vez</button></div></div>`;
+  document.body.appendChild(v);
+  v.addEventListener('click', e => { if (e.target === v) v.remove(); });
+  $('#fClose').addEventListener('click', () => v.remove());
+  $('#fRetry')?.addEventListener('click', () => { v.remove(); startPractice(f); });
+  $('#fAgain').addEventListener('click', () => { v.remove(); init(); say('Partida nueva. ¡A coser!'); });
+  ($('#fRetry') || $('#fAgain')).focus();
+}
+
+/* Lo fallado en la partida: transportadores mal colocados, iones mal dichos
+   (por transportador@tramo) y fármacos con diana o efecto equivocados. */
+function failsOf() {
+  const tr = new Set(), ion = new Set(), drug = new Set();
+  for (const k of S.logKeys) {
+    let m;
+    if ((m = /^(?:hint-)?tr-(\w+?)(-dup)?$/.exec(k))) tr.add(m[1]);
+    else if ((m = /^ion-(\w+-\d+)$/.exec(k))) { if (S.placed[m[1]]) ion.add(keyOf(m[1])); }
+    else if ((m = /^hint-ion-(\w+@\w+)$/.exec(k))) ion.add(m[1]);
+    else if ((m = /^(?:hint-)?(drug|eff)-(\w+)$/.exec(k))) drug.add(m[2]);
+  }
+  return {tr:[...tr], ion:[...ion], drug:[...drug]};
+}
+/* «Repetir lo que fallé»: partida nueva con lo acertado ya puesto. */
+function startPractice(f) {
+  init();
+  S.practice = f;
+  S.tray.forEach((k, i) => { if (k && !f.tr.includes(k)) { S.placed[correctSlotFor(k)] = k; S.tray[i] = null; } });
+  SLOT_IDS.forEach(renderSlot);
+  if (S.tray.every(k => !k)) { S.done = true; startPhase2(); }
+  renderHud(); renderTray();
+  const n = f.tr.length + f.ion.length + f.drug.length;
+  if (!(S.phase === 3 && S.done)) say(`Repaso: solo lo que fallaste (${n} ${n === 1 ? 'cosa' : 'cosas'}). Lo demás ya está puesto.`);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   AYUDA Y VENTANA DE CADA TRANSPORTADOR
+═══════════════════════════════════════════════════════════════════════════ */
+/* «Cómo leerla»: se ve unos segundos y se pliega en el icono */
+const helpPop = $('#helpPop'), helpBtn = $('#helpBtn');
+function setHelp(open) { helpPop.classList.toggle('open', open); helpBtn.setAttribute('aria-expanded', String(open)); }
+let helpTimer = setTimeout(() => setHelp(false), 7000);
+helpPop.addEventListener('pointerenter', () => clearTimeout(helpTimer));
+helpBtn.addEventListener('click', e => { e.stopPropagation(); clearTimeout(helpTimer); setHelp(!helpPop.classList.contains('open')); });
+document.addEventListener('pointerdown', e => { if (!e.target.closest('#helpPop,#helpBtn')) { clearTimeout(helpTimer); setHelp(false); } });
+
+/* Ventana de un transportador: ficha + animación de cómo funciona */
+let infoCard = null;
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+function closeInfo() { infoCard?.remove(); infoCard = null; }
+document.addEventListener('pointerdown', e => { if (infoCard && !e.target.closest('.info-pop')) closeInfo(); }, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeInfo(); });
+addEventListener('scroll', closeInfo, {passive:true});
+scroller.addEventListener('scroll', closeInfo, {passive:true});
+
+/* Corte de la membrana: luz arriba, célula abajo. Cada sustancia cruza el
+   transportador por su carril; verde si se reabsorbe, coral si se secreta. */
+function animSvg(tr) {
+  const items = [...tr.reabs.map(k => ({k, dir:'in'})), ...tr.sec.map(k => ({k, dir:'out'}))];
+  const pw = k => 14 + [...IONS[k].t].length * 6.6;
+  const gap = Math.max(36, ...items.map(it => pw(it.k) + 8));
+  const n = items.length, cx = 160, tw = n * gap + 18;
+  const lanes = items.map((it, i) => {
+    const x = cx + (i - (n - 1) / 2) * gap, w = pw(it.k);
+    const col = it.dir === 'in' ? '#4F6E4C' : '#C4655A';
+    const [y1, y2] = it.dir === 'in' ? [26, 146] : [146, 26];
+    return {x, w, col, y1, y2, it, i};
+  });
+  return `<svg class="anim" viewBox="0 0 320 172" role="img" aria-label="Animación de ${tr.name}">
+    <defs>
+      <marker id="mIn" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#4F6E4C"/></marker>
+      <marker id="mOut" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#C4655A"/></marker>
+    </defs>
+    <rect x="0" y="0" width="320" height="70" fill="#E6F0F7"/>
+    <rect x="0" y="70" width="320" height="30" fill="#F5E9D8"/>
+    <rect x="0" y="100" width="320" height="72" fill="#FBEDE8"/>
+    <line x1="0" y1="74" x2="320" y2="74" stroke="#7f8b84" stroke-width="2" stroke-dasharray="6 4"/>
+    <line x1="0" y1="96" x2="320" y2="96" stroke="#7f8b84" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="10" y="18" font-size="10.5" fill="#4D7391">LUZ · ORINA</text>
+    <text x="10" y="164" font-size="10.5" fill="#9A574B">CÉLULA → SANGRE</text>
+    <g class="tr-body">
+      <rect x="${cx - tw / 2}" y="56" width="${tw}" height="58" rx="16" fill="#FFFDF9" stroke="#2c3e50" stroke-width="2.2"/>
+      <rect x="${cx - tw / 2 + 4}" y="60" width="${tw - 8}" height="50" rx="12" fill="none" stroke="#7f8b84" stroke-width="1.6" stroke-dasharray="5 4"/>
+      ${lanes.map(l => `<rect x="${l.x - 8}" y="58" width="16" height="54" rx="7" fill="${l.it.dir === 'in' ? '#E3EFE0' : '#F8DCD6'}"/>`).join('')}
+    </g>
+    ${lanes.map(l => `<line x1="${l.x}" y1="${l.y1}" x2="${l.x}" y2="${l.y2}" stroke="${l.col}" stroke-width="2" stroke-dasharray="3 4" opacity=".7" marker-end="url(#${l.it.dir === 'in' ? 'mIn' : 'mOut'})"/>`).join('')}
+    ${lanes.map(l => `<g class="ion-move ${l.it.dir}" style="animation-delay:${(l.i * 0.45).toFixed(2)}s"><g transform="translate(${l.x} ${l.y1 - 4})">
+      <rect x="${-l.w / 2}" y="-10" width="${l.w}" height="20" rx="8" fill="${IONS[l.it.k].c}" stroke="#2c3e50" stroke-width="1.6"/>
+      <text y="4" text-anchor="middle" font-size="11" fill="#2c3e50">${IONS[l.it.k].t}</text></g></g>`).join('')}
+  </svg>
+  <div class="anim-key">
+    ${tr.reabs.length ? `<span style="color:var(--green-ink)"><span class="ms" style="font-size:16px">arrow_downward</span>Reabsorbe ${ionsTxt(tr.reabs)}</span>` : ''}
+    ${tr.sec.length ? `<span style="color:var(--red)"><span class="ms" style="font-size:16px">arrow_upward</span>Secreta ${ionsTxt(tr.sec)}</span>` : ''}
+  </div>`;
+}
+
+function openInfo(id) {
+  closeInfo();
+  const kind = S.placed[id], tr = TR[kind], z = zoneOf(id);
+  const unlocked = S.ionDone[id] || S.phase === 3;
+  const drugs = (S.badges[id] || []).map(d => `<span class="badge ${DRUGS[d].eff}"><span class="ms">${DRUGS[d].eff === 'block' ? 'block' : 'bolt'}</span><span>${DRUGS[d].name}</span></span>`).join('');
+  const card = document.createElement('div');
+  card.className = 'info-pop stitch'; card.setAttribute('role', 'dialog'); card.setAttribute('aria-label', tr.name);
+  card.innerHTML = `<button class="x" aria-label="Cerrar"><span class="ms">close</span></button>
+    <div class="info-head"><span class="mini stitch">${tr.name}</span><div><b>${typeOf(tr, id)}</b><small>${cap(ZONE[z])}</small></div></div>
+    ${unlocked ? animSvg(tr) : `<div class="anim-locked"><span class="ms">lock</span>Resuelve qué mueve en la fase 2 para verlo funcionar.</div>`}
+    <p class="info-pearl">${pearlOf(tr, id)}</p>
+    ${drugs ? `<div class="info-drugs">${drugs}</div>` : ''}`;
+  document.body.appendChild(card);
+  const r = slotBtn(id).getBoundingClientRect(), w = card.offsetWidth, h = card.offsetHeight;
+  const left = Math.min(innerWidth - w - 12, Math.max(12, r.left + r.width / 2 - w / 2));
+  let top = r.bottom + 12;
+  if (top + h > innerHeight - 12) top = r.top - h - 12;
+  card.style.left = left + 'px'; card.style.top = Math.max(12, top) + 'px';
+  card.querySelector('.x').addEventListener('click', closeInfo);
+  infoCard = card;
+}
+
+/* La partida se guarda en el navegador en cada cambio y se recupera al volver. */
+const SAVE_KEY = 'nefrona.partida.v1';
+function saveGame() {
+  if (!S) return;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S, (k, v) => v instanceof Set ? {__set:[...v]} : v)); } catch {}
+}
+function loadGame() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;
+    const o = JSON.parse(raw, (k, v) => v && typeof v === 'object' && Array.isArray(v.__set) ? new Set(v.__set) : v);
+    if (!o || !Array.isArray(o.tray) || o.tray.length !== TRAY_TR.length || !Array.isArray(o.errors)) return false;
+    S = Object.assign(fresh(), o);
+    return true;
+  } catch { return false; }
+}
+
+function init() {
+  S = fresh();
+  hist.undo = []; hist.redo = []; updateHist();
+  clearSelection();
+  buildBoard(); setHelpMode(); updateFormBtn();
+  renderHud(); renderTray();
+  scroller.scrollLeft = 0;
+}
+/* Reiniciar: se pregunta dentro de la página (confirm() lo bloquean algunos visores). */
+function askReset() {
+  if ($('.confirm-pop')) return;
+  const pop = document.createElement('div');
+  pop.className = 'confirm-pop stitch'; pop.setAttribute('role', 'alertdialog');
+  pop.innerHTML = `<b>¿Empezar de nuevo?</b><p>Se borran la partida y los fallos.</p>
+    <div class="row"><button class="btn stitch small" data-a="no">Cancelar</button>
+    <button class="btn stitch small primary" data-a="si"><span class="ms">restart_alt</span>Reiniciar</button></div>`;
+  document.body.appendChild(pop);
+  const r = $('#reset').getBoundingClientRect();
+  pop.style.left = Math.max(12, Math.min(innerWidth - pop.offsetWidth - 12, r.right - pop.offsetWidth)) + 'px';
+  pop.style.top = (r.bottom + 10) + 'px';
+  const close = () => { pop.remove(); document.removeEventListener('pointerdown', outside, true); };
+  const outside = e => { if (!e.target.closest('.confirm-pop')) close(); };
+  document.addEventListener('pointerdown', outside, true);
+  pop.querySelector('[data-a="no"]').addEventListener('click', close);
+  pop.querySelector('[data-a="si"]').addEventListener('click', () => { close(); init(); say('Partida nueva. ¡A coser!'); });
+  pop.querySelector('[data-a="si"]').focus();
+}
+$('#reset').addEventListener('click', askReset);
+
+/* ── Historial: Deshacer / Rehacer ──
+   Cada jugada que cambia el tablero guarda antes una foto del estado. Los fallos,
+   en cambio, se quedan como estén: deshacer no borra lo que ya contó. */
+const hist = {undo:[], redo:[]};
+function record() {
+  hist.undo.push(structuredClone(S));
+  if (hist.undo.length > 300) hist.undo.shift();
+  hist.redo = [];
+  updateHist();
+}
+function restore(snap) {
+  const keep = {errors:S.errors, log:S.log, logKeys:S.logKeys, hints:S.hints, hintKeys:S.hintKeys, tricks:S.tricks};
+  S = Object.assign(snap, keep);
+  clearSelection();
+  closeInfo();
+  $('.pop-veil')?.remove(); $('.pop')?.remove(); $('.veil')?.remove();
+  SLOT_IDS.forEach(id => { renderSlot(id); renderFlow(id); renderBadges(id); });
+  renderHud(); renderTray(); updateHist();
+}
+function undo() {
+  if (!hist.undo.length || morphing) return;
+  hist.redo.push(structuredClone(S));
+  restore(hist.undo.pop());
+  say('Un paso atrás. Los fallos que ya cometiste se siguen contando.');
+}
+function redo() {
+  if (!hist.redo.length || morphing) return;
+  hist.undo.push(structuredClone(S));
+  restore(hist.redo.pop());
+  say('Un paso adelante.');
+}
+function updateHist() {
+  $('#undo').disabled = !hist.undo.length;
+  $('#redo').disabled = !hist.redo.length;
+}
+$('#undo').addEventListener('click', undo);
+$('#redo').addEventListener('click', redo);
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
+});
+
+/* ════════════════════════════════════════════════════════════════════════
+   FORMAS (estirada ⇄ anatómica) CON MORPH Y PANTALLA COMPLETA
+═══════════════════════════════════════════════════════════════════════════ */
+if (window.top !== window.self) document.documentElement.classList.add('embed');
+let MODE = (() => {
+  const q = new URLSearchParams(location.search).get('forma');
+  if (q === 'anatomica' || q === 'estirada') return q;
+  try { return localStorage.getItem('nefrona.forma') === 'anatomica' ? 'anatomica' : 'estirada'; } catch { return 'estirada'; }
+})();
+let morphing = false;
+function saveMode() { try { localStorage.setItem('nefrona.forma', MODE); } catch {} }
+
+const HELP = {
+  estirada: `<b class="t">Cómo leerla</b>
+    <p><span class="ms">touch_app</span><span>Suelta cada transportador sobre el <b>segmento</b> donde trabaja. Arriba va la <b>luz</b> (la orina que se forma), en medio las <b>células</b> y abajo la <b>sangre</b>.</span></p>
+    <p><span class="ms" style="color:var(--green-ink)">arrow_downward</span><span><b>Reabsorbe</b>: la flecha verde baja, se aleja de la luz del túbulo.</span></p>
+    <p><span class="ms" style="color:var(--red)">arrow_upward</span><span><b>Secreta</b>: la flecha coral sube hacia la luz del túbulo.</span></p>
+    <p><span class="ms">info</span><span>Toca un transportador ya colocado para verlo funcionar.</span></p>`,
+  anatomica: `<b class="t">Cómo leerla</b>
+    <p><span class="ms">touch_app</span><span>Suelta cada transportador sobre el <b>tramo del tubo</b> donde trabaja. Dentro va la luz (la orina que se forma); fuera, el intersticio y la sangre.</span></p>
+    <p><span class="ms" style="color:var(--green-ink)">arrow_forward</span><span><b>Reabsorbe</b>: la flecha verde se aleja del túbulo.</span></p>
+    <p><span class="ms" style="color:var(--red)">arrow_back</span><span><b>Secreta</b>: la flecha coral apunta al túbulo.</span></p>
+    <p><span class="ms">info</span><span>Toca un transportador ya colocado para verlo funcionar.</span></p>`
+};
+function setHelpMode() {
+  const br = MODE === 'estirada';
+  helpBtn.classList.toggle('br', br); helpPop.classList.toggle('br', br);
+  helpPop.innerHTML = HELP[MODE];
+}
+const formBtn = $('#formBtn');
+function updateFormBtn() {
+  const toAnat = MODE === 'estirada';
+  formBtn.innerHTML = `<span class="ms">${toAnat ? 'gesture' : 'straighten'}</span>${toAnat ? 'Anatómica' : 'Estirada'}`;
+  formBtn.title = toAnat ? 'Ver la nefrona con su forma anatómica' : 'Ver la nefrona estirada';
+}
+formBtn.addEventListener('click', () => morphTo(MODE === 'estirada' ? 'anatomica' : 'estirada'));
+
+/* ── El morph ──
+   1. Foto del tablero de ahora (se desvanece) y de dónde está cada transportador.
+   2. Se construye el tablero nuevo, invisible, y se mide.
+   3. Encima, una capa con el tubo anatómico cuyos puntos se interpolan entre la
+      línea recta (sobre la luz de la estirada) y sus curvas; los transportadores
+      vuelan de un sitio a otro y la tarjeta cambia de alto.
+   4. Aparece el tablero nuevo, idéntico a la capa, y la capa se va. */
+const NS = 'http://www.w3.org/2000/svg';
+const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const clamp01 = t => Math.max(0, Math.min(1, t));
+const lerp = (a, b, t) => a + (b - a) * t;
+
+function parsePath(d) {
+  const toks = d.match(/[MLC]|-?\d*\.?\d+/g), out = [];
+  for (let i = 0; i < toks.length;) {
+    if (/[MLC]/.test(toks[i])) out.push({c:toks[i++]});
+    else { out.push({x:+toks[i], y:+toks[i + 1]}); i += 2; }
+  }
+  return out;
+}
+function pathOf(items, pts) {
+  let k = 0;
+  return items.map(it => it.c ? it.c : `${pts[k][0].toFixed(1)} ${pts[k++][1].toFixed(1)}`).join(' ');
+}
+/* Dónde cae cada tramo en la estirada (en pantalla). Solo vale con la estirada montada. */
+function measureStretched() {
+  const z = id => board.querySelector(`[data-drop="seg"][data-zone="${id}"]`).getBoundingClientRect();
+  const r = {tcp:z('tcp'), desc:z('desc'), aag:z('aag'), tcd:z('tcd'), colp:z('colp'), coli:z('coli')};
+  const g = board.querySelector('.glom-svg').getBoundingClientRect();
+  const lum = board.querySelector('.lumen').getBoundingClientRect();
+  const mid = (p, q) => (p.right + q.left) / 2;
+  return {
+    y:lum.top + lum.height * 0.58,
+    glom:{x:g.left + g.width / 2, y:g.top + g.height / 2, r:g.width * 0.43},
+    xs:{
+      tcp:[g.right - g.width * 0.12, mid(r.tcp, r.desc)], desc:[mid(r.tcp, r.desc), mid(r.desc, r.aag)],
+      aag:[mid(r.desc, r.aag), mid(r.aag, r.tcd)], tcd:[mid(r.aag, r.tcd), mid(r.tcd, r.colp)],
+      colp:[mid(r.tcd, r.colp), (r.colp.right + r.coli.left) / 2], coli:[(r.colp.right + r.coli.left) / 2, r.coli.right - 6]
+    }
+  };
+}
+/* …y lo mismo pasado a coordenadas del lienzo anatómico (1430 × 800). */
+function toAnatCoords(m, anatRect) {
+  const kx = 1430 / anatRect.width, ky = 800 / anatRect.height;
+  const X = sx => (sx - anatRect.left) * kx, Y = sy => (sy - anatRect.top) * ky;
+  const out = {y:Y(m.y), glom:{x:X(m.glom.x), y:Y(m.glom.y), r:m.glom.r * kx}, xs:{}};
+  for (const k in m.xs) out.xs[k] = [X(m.xs[k][0]), X(m.xs[k][1])];
+  return out;
+}
+/* Cada tubo: sus puntos curvos y los mismos puntos repartidos sobre la recta. */
+function tubeShapes(line) {
+  return TUBES.map(t => {
+    const items = parsePath(t.d), pts = items.filter(it => !it.c).map(p => [p.x, p.y]);
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const [x0, x1] = line.xs[t.zone], total = cum[cum.length - 1] || 1;
+    const flat = pts.map((p, i) => [lerp(x0, x1, cum[i] / total), line.y]);
+    return {t, items, curvy:pts, flat};
+  });
+}
+function chipRects() {
+  const o = {};
+  SLOT_IDS.forEach(id => { if (S.placed[id]) o[id] = slotBtn(id).getBoundingClientRect(); });
+  return o;
+}
+
+function morphTo(next) {
+  if (morphing || next === MODE) return;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  closeInfo(); clearSelection(); $('.pop-veil')?.remove(); $('.pop')?.remove(); setHelp(false);
+  if (reduce) { MODE = next; saveMode(); buildBoard(); setHelpMode(); updateFormBtn(); return; }
+  morphing = true;
+  const card = $('.board-card'), D = 1250 * (window.MORPH_LENTO || 1);   // MORPH_LENTO: solo para revisar fotogramas
+  const fs = document.body.classList.contains('fs');
+  const toAnat = next === 'anatomica';
+
+  // 1. foto del tablero actual y medidas que solo existen mientras está montado
+  const oldH = card.offsetHeight;
+  const oldBoardRect = board.getBoundingClientRect();
+  const oldChips = chipRects();
+  const oldZoom = board.style.zoom;
+  const stretchedScreen = toAnat ? measureStretched() : null;     // la estirada es la de ahora
+  const ghost = board.cloneNode(true);
+  ghost.removeAttribute('id');
+  ghost.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+  ghost.querySelectorAll('.slot.filled').forEach(e => e.style.visibility = 'hidden');
+
+  // 2. tablero nuevo, invisible; la tarjeta mantiene su alto mientras tanto
+  MODE = next; saveMode();
+  buildBoard(); setHelpMode(); updateFormBtn();
+  card.style.height = '';
+  const newH = card.offsetHeight;
+  if (!fs) card.style.height = oldH + 'px';
+  fitBoard();
+  const newBoardRect = board.getBoundingClientRect();
+  const newChips = chipRects();
+  board.style.opacity = '0';
+  board.style.pointerEvents = 'none';
+  const anatRect = toAnat ? newBoardRect : oldBoardRect;
+  const line = toAnatCoords(toAnat ? stretchedScreen : measureStretched(), anatRect);
+
+  const cardR = card.getBoundingClientRect();
+  const layer = document.createElement('div');
+  layer.className = 'morph-layer';
+  card.appendChild(layer);
+  const gw = document.createElement('div');
+  gw.style.left = (oldBoardRect.left - cardR.left) + 'px';
+  gw.style.top = (oldBoardRect.top - cardR.top) + 'px';
+  ghost.style.zoom = oldZoom; ghost.style.opacity = '1'; ghost.style.margin = '0';
+  gw.appendChild(ghost);
+  layer.appendChild(gw);
+
+  // 3. capa del tubo
+  const shapes = tubeShapes(line);
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 1430 800');
+  Object.assign(svg.style, {left:(anatRect.left - cardR.left) + 'px', top:(anatRect.top - cardR.top) + 'px',
+    width:anatRect.width + 'px', height:anatRect.height + 'px', overflow:'visible'});
+  const mk = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+  const layers = [];
+  const pass = (stroke, dw, extra = {}) => shapes.forEach(sh => {
+    const p = mk('path', {fill:'none', stroke:stroke === 'fill' ? sh.t.fill : stroke, 'stroke-width':sh.t.w + dw,
+      'stroke-linecap':'round', 'stroke-linejoin':'round', ...extra});
+    svg.appendChild(p); layers.push([p, sh]);
+  });
+  pass('#2c3e50', 5); pass('fill', 0);
+  pass('#7f8b84', -7, {'stroke-dasharray':'6 5', opacity:'.85', 'stroke-linecap':'butt'});
+  pass('fill', -11);
+  const gl = line.glom, GA = {x:110, y:150, r:60};
+  const glomC = mk('circle', {fill:'#FBE6DF', stroke:'#2c3e50', 'stroke-width':2.8});
+  const glomS = mk('circle', {fill:'none', stroke:'#7f8b84', 'stroke-width':2.2, 'stroke-dasharray':'6 4'});
+  svg.append(glomC, glomS);
+  layer.appendChild(svg);
+
+  // transportadores que vuelan
+  const flyers = [];
+  const newZoom = +board.style.zoom || 1;
+  for (const id in newChips) {
+    const o = oldChips[id], n = newChips[id]; if (!o) continue;
+    const w = document.createElement('div');
+    w.className = toAnat ? 'morph-chip anat' : 'morph-chip';
+    Object.assign(w.style, {left:(n.left - cardR.left) + 'px', top:(n.top - cardR.top) + 'px', width:n.width + 'px', height:n.height + 'px'});
+    const c = slotBtn(id).cloneNode(true);
+    c.removeAttribute('data-slot'); c.removeAttribute('data-drop'); c.classList.remove('current', 'hover');
+    Object.assign(c.style, {zoom:newZoom, width:(n.width / newZoom) + 'px', height:(n.height / newZoom) + 'px'});
+    w.appendChild(c); layer.appendChild(w);
+    flyers.push({w, from:`translate(${o.left - n.left}px, ${o.top - n.top}px) scale(${o.width / n.width}, ${o.height / n.height})`});
+  }
+
+  const draw = s => {
+    for (const [p, sh] of layers) {
+      const pts = sh.curvy.map((c, i) => [lerp(sh.flat[i][0], c[0], s), lerp(sh.flat[i][1], c[1], s)]);
+      p.setAttribute('d', pathOf(sh.items, pts));
+    }
+    const x = lerp(gl.x, GA.x, s), y = lerp(gl.y, GA.y, s), r = lerp(gl.r, GA.r, s);
+    glomC.setAttribute('cx', x); glomC.setAttribute('cy', y); glomC.setAttribute('r', r);
+    glomS.setAttribute('cx', x); glomS.setAttribute('cy', y); glomS.setAttribute('r', Math.max(1, r * 0.87));
+  };
+  draw(toAnat ? 0 : 1);
+
+  // animaciones
+  const anim = (el, kf, start, len, easing = 'ease') => el.animate(kf, {duration:D * len, delay:D * start, easing, fill:'both'});
+  anim(gw, [{opacity:1}, {opacity:0}], toAnat ? 0 : 0.05, 0.3);
+  if (toAnat) anim(svg, [{opacity:0}, {opacity:1}], 0, 0.22);
+  else anim(svg, [{opacity:1}, {opacity:0}], 0.72, 0.28);
+  flyers.forEach(f => anim(f.w, [{transform:f.from}, {transform:'none'}], 0.08, 0.8, 'cubic-bezier(.65,0,.35,1)'));
+  const reveal = anim(board, [{opacity:0}, {opacity:1}], 0.72, 0.28);
+  if (!fs) anim(card, [{height:oldH + 'px'}, {height:newH + 'px'}], 0, 0.85, 'cubic-bezier(.65,0,.35,1)');
+
+  const t0 = performance.now();
+  (function frame(now) {
+    const t = clamp01((now - t0) / D);
+    const s = toAnat ? ease(clamp01((t - 0.1) / 0.75)) : 1 - ease(clamp01((t - 0.06) / 0.72));
+    draw(s);
+    if (t < 1) requestAnimationFrame(frame);
+  })(t0);
+
+  reveal.finished.then(() => {
+    layer.remove();
+    board.getAnimations().forEach(a => a.cancel());
+    card.getAnimations().forEach(a => a.cancel());
+    board.style.opacity = ''; board.style.pointerEvents = '';
+    card.style.height = '';
+    morphing = false;
+    fitBoard();
+    say(toAnat ? 'Nefrona <b>anatómica</b>: suelta cada transportador sobre su tramo del tubo.' : 'Nefrona <b>estirada</b>: luz arriba, células en medio y sangre abajo.');
+  });
+}
+/* ── Pantalla completa: solo el juego ── */
+const fsBtn = $('#fsBtn');
+function setFs(on) {
+  document.body.classList.toggle('fs', on);
+  fsBtn.querySelector('.ms').textContent = on ? 'fullscreen_exit' : 'fullscreen';
+  fsBtn.title = on ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa';
+  fsBtn.setAttribute('aria-label', fsBtn.title);
+  fsBtn.setAttribute('aria-pressed', String(on));
+  closeInfo();
+  requestAnimationFrame(fitBoard);
+}
+fsBtn.addEventListener('click', async () => {
+  const on = !document.body.classList.contains('fs');
+  setFs(on);
+  try {
+    if (on) await document.documentElement.requestFullscreen?.({navigationUI:'hide'});
+    else if (document.fullscreenElement) await document.exitFullscreen();
+  } catch { /* sin permiso: se queda el modo sin distracciones dentro de la ventana */ }
+});
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && document.body.classList.contains('fs')) setFs(false);
+  requestAnimationFrame(fitBoard);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.body.classList.contains('fs') && !document.fullscreenElement && !infoCard && !$('.pop') && !$('.confirm-pop')) setFs(false);
+});
+
+document.fonts?.ready.then(fitBoard);
+if (loadGame()) {
+  hist.undo = []; hist.redo = []; updateHist();
+  buildBoard(); setHelpMode(); updateFormBtn();
+  renderHud(); renderTray();
+  if (Object.keys(S.placed).length) say('Partida recuperada: sigues donde lo dejaste.');
+} else init();
+</script>
+</body>
+</html>
