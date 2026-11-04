@@ -22,6 +22,14 @@ const MINI_GAMES: ReadonlyArray<MiniGame> = [
     description: 'Clasifica antibióticos por su espectro de cobertura deslizando la tarjeta en la dirección correcta.',
     badge: 'Antibióticos',
   },
+  {
+    id: 'nefrona',
+    href: '/studio/minijuegos/nefrona',
+    icon: 'water_drop',
+    title: 'Cose la nefrona',
+    description: 'Coloca los transportadores en su segmento, di qué iones mueven y engancha los fármacos que los activan o bloquean.',
+    badge: 'Nefrología',
+  },
 ]
 
 export default function MinijuegosPage() {
