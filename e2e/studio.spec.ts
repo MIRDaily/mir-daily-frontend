@@ -117,8 +117,11 @@ test('flashcards: crear, estudiar y deshacer', async ({ page }) => {
   await expect(page.getByText('Anverso e2e')).toBeVisible()
   await expect(page.getByRole('button', { name: /Deshacer/ })).toBeDisabled()
   await page.getByRole('button', { name: 'Mostrar respuesta' }).last().click()
+  // Semáforo por defecto (etapa B2): «No me la sabía» / «Me costó» / «Me la sabía».
+  await expect(page.getByRole('button', { name: /^Me costó/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Fácil/ })).toHaveCount(0)
   const repaso = page.waitForResponse((r) => r.url().endsWith('/log') && r.request().method() === 'POST')
-  await page.getByRole('button', { name: /Otra vez/ }).click()
+  await page.getByRole('button', { name: /^No me la sabía/ }).click()
   expect((await repaso).status()).toBe(200)
   await expect(page.getByText('1 repasadas')).toBeVisible()
 
@@ -128,7 +131,23 @@ test('flashcards: crear, estudiar y deshacer', async ({ page }) => {
   expect((await deshacer).status()).toBe(200)
   await expect(page.getByText('0 repasadas')).toBeVisible()
   await expect(page.getByRole('button', { name: /Deshacer/ })).toBeDisabled()
-  await expect(page.getByRole('button', { name: /Otra vez/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^No me la sabía/ })).toBeVisible()
+
+  // Los botones de Anki como preferencia (se guarda en el servidor) y vuelta al semáforo.
+  await page.getByRole('button', { name: 'Salir del repaso' }).click()
+  await page.getByRole('button', { name: /Estudiar/ }).first().click()
+  const dialogo = page.getByRole('dialog', { name: 'Ajustes de la sesión' })
+  const guardar4 = page.waitForResponse((r) => r.url().endsWith('/flashcard-preferencias') && r.request().method() === 'PATCH')
+  await dialogo.getByRole('radio', { name: /Como Anki/ }).click()
+  expect((await guardar4).status()).toBe(200)
+  await dialogo.getByRole('button', { name: 'Empezar' }).click()
+  await page.getByRole('button', { name: 'Mostrar respuesta' }).last().click()
+  await expect(page.getByRole('button', { name: /^Fácil/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Salir del repaso' }).click()
+  await page.getByRole('button', { name: /Estudiar/ }).first().click()
+  const guardar3 = page.waitForResponse((r) => r.url().endsWith('/flashcard-preferencias') && r.request().method() === 'PATCH')
+  await page.getByRole('dialog', { name: 'Ajustes de la sesión' }).getByRole('radio', { name: /Semáforo/ }).click()
+  expect((await guardar3).status()).toBe(200)
 })
 
 test('resumen activo: crear grupo, estudiar un párrafo y terminar', async ({ page, token }) => {

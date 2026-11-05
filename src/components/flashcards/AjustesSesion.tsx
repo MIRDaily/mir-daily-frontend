@@ -17,6 +17,7 @@ import {
   type AjustesSesion,
 } from '@/lib/flashcards/sesion'
 import { INK } from '@/components/flashcards/ui'
+import type { NumBotones } from '@/lib/flashcards/botones'
 
 const chip = (on: boolean, color = '#E8A598') => ({
   border: `2px solid ${on ? color : '#EDE6DE'}`,
@@ -29,6 +30,8 @@ export function AjustesSesionDialogo({
   cards,
   inicial,
   escalera,
+  botones,
+  onBotones,
   onEmpezar,
   onCerrar,
 }: {
@@ -37,6 +40,9 @@ export function AjustesSesionDialogo({
   inicial: AjustesSesion
   /** Foto de la escalera del grupo (para que el número que se avisa cuente con ella). */
   escalera: Escalera | null
+  /** Botones al responder (preferencia del usuario, en el servidor): 3 = semáforo, 4 = Anki. */
+  botones: NumBotones
+  onBotones: (n: NumBotones) => void
   onEmpezar: (a: AjustesSesion) => void
   onCerrar: () => void
 }) {
@@ -223,6 +229,29 @@ export function AjustesSesionDialogo({
               </label>
             </>
           ) : null}
+
+          <p className="mt-5 text-xs font-bold uppercase tracking-wide text-[#7D8A96]">Al responder</p>
+          <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Botones al responder">
+            {(
+              [
+                { n: 3, titulo: 'Semáforo', descripcion: 'No me la sabía · Me costó · Me la sabía' },
+                { n: 4, titulo: 'Como Anki', descripcion: 'Otra vez · Difícil · Bien · Fácil' },
+              ] as const
+            ).map((o) => (
+              <button
+                key={o.n}
+                type="button"
+                role="radio"
+                aria-checked={botones === o.n}
+                onClick={() => onBotones(o.n)}
+                className="rounded-2xl bg-white px-3 py-2 text-left"
+                style={{ border: `2px solid ${botones === o.n ? '#E8A598' : 'transparent'}` }}
+              >
+                <span className="block text-sm font-extrabold text-[#2C3E50]">{o.titulo}</span>
+                <span className="block text-[0.72rem] text-[#7D8A96]">{o.descripcion}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <footer className="border-t border-[#7D8A96]/15 bg-white px-6 py-4">

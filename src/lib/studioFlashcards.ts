@@ -418,6 +418,31 @@ export async function deleteFlashcard(
 }
 
 // ---------------------------------------------------------------------------
+// Preferencias de estudio (etapa B2): botones del semáforo (3) o de Anki (4). En el servidor, para que la
+// web y la app digan lo mismo. Si no se pueden leer, el semáforo.
+// ---------------------------------------------------------------------------
+
+export type FlashcardPrefs = { botones: 3 | 4 }
+
+export async function fetchFlashcardPrefs(token: string): Promise<FlashcardPrefs> {
+  const res = await fetch(`${apiBase()}/api/studio/flashcard-preferencias`, { headers: authHeaders(token) })
+  if (!res.ok) throw new Error(await readError(res, 'No se pudieron cargar tus preferencias'))
+  const payload = (await res.json().catch(() => null)) as { botones?: unknown } | null
+  return { botones: payload?.botones === 4 ? 4 : 3 }
+}
+
+export async function saveFlashcardPrefs(token: string, prefs: Partial<FlashcardPrefs>): Promise<FlashcardPrefs> {
+  const res = await fetch(`${apiBase()}/api/studio/flashcard-preferencias`, {
+    method: 'PATCH',
+    headers: authHeaders(token, true),
+    body: JSON.stringify(prefs),
+  })
+  if (!res.ok) throw new Error(await readError(res, 'No se pudo guardar la preferencia'))
+  const payload = (await res.json().catch(() => null)) as { botones?: unknown } | null
+  return { botones: payload?.botones === 4 ? 4 : 3 }
+}
+
+// ---------------------------------------------------------------------------
 // Estudio SRS (reutiliza los endpoints de sesion de los mazos)
 // ---------------------------------------------------------------------------
 
