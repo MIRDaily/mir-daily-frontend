@@ -26,6 +26,8 @@ import {
   deleteFlashcard,
   endFlashcardSession,
   fetchFlashcardLadder,
+  fetchFlashcardPrefs,
+  saveFlashcardPrefs,
   fetchFlashcards,
   logFlashcard,
   nextFlashcard,
@@ -53,6 +55,7 @@ import {
   type AjustesSesion,
 } from '@/lib/flashcards/sesion'
 import GradeButtons from '@/components/flashcards/GradeButtons'
+import { POR_DEFECTO as BOTONES_POR_DEFECTO, repartoDe, teclaAGrado, type NumBotones } from '@/lib/flashcards/botones'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
 
 type Mode = 'manage' | 'study'
@@ -110,6 +113,9 @@ export default function FlashcardDeckPage() {
   // desde el que se leen los intervalos previstos.
   const [shownAt, setShownAt] = useState(() => new Date())
   const shownAtRef = useRef(Date.now())
+  // Botones al responder: semáforo (3) o Anki (4). Preferencia del usuario en el servidor; si no se puede
+  // leer, el semáforo.
+  const [botones, setBotones] = useState<NumBotones>(BOTONES_POR_DEFECTO)
 
   const { setBackAction, setHidden } = useHeaderUI()
 
@@ -175,6 +181,9 @@ export default function FlashcardDeckPage() {
         return
       }
       setToken(accessToken)
+      void fetchFlashcardPrefs(accessToken)
+        .then((p) => mounted && setBotones(p.botones))
+        .catch(() => {})
       await load(accessToken)
     })()
     return () => {
@@ -268,6 +277,15 @@ export default function FlashcardDeckPage() {
   )
 
   const conNivel = cards.some((c) => c.level)
+
+  // Cambiar de botones se nota al momento; se guarda en el servidor por detrás (y se avisa si falla).
+  const cambiarBotones = useCallback(
+    (n: NumBotones) => {
+      setBotones(n)
+      void saveFlashcardPrefs(token, { botones: n }).catch(() => setError('No se pudo guardar qué botones prefieres.'))
+    },
+    [token],
+  )
 
   const handleStartStudy = async (a: AjustesSesion = ajustes) => {
     if (busy || cards.length === 0) return
@@ -471,7 +489,7 @@ export default function FlashcardDeckPage() {
     await load(token)
   }
 
-  // Atajos de teclado en modo estudio: Espacio = girar, 1 = fallo, 2 = acierto.
+  // Atajos de teclado en modo estudio: Espacio = girar, 1-3 (o 1-4 con los botones de Anki) = responder.
   useEffect(() => {
     if (mode !== 'study') return
     const onKey = (e: KeyboardEvent) => {
@@ -490,9 +508,9 @@ export default function FlashcardDeckPage() {
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault()
         setRevealed((v) => !v)
-      } else if (revealed && ['1', '2', '3', '4'].includes(e.key)) {
+      } else if (revealed && teclaAGrado(e.key, botones)) {
         e.preventDefault()
-        void handleRate(Number(e.key) as Grade)
+        void handleRate(teclaAGrado(e.key, botones) as Grade)
       } else if (e.key === 'e' || e.key === 'E') {
         e.preventDefault()
         startEditStudy()
@@ -503,7 +521,7 @@ export default function FlashcardDeckPage() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [mode, finishState, current, revealed, handleRate, handleUndo, editStudy, startEditStudy])
+  }, [mode, finishState, current, revealed, handleRate, handleUndo, editStudy, startEditStudy, botones])
 
   // Indicador de scroll: muestra un degradado al pie de la tarjeta 3D cuando
   // el texto no cabe entero, para avisar de que hay más contenido debajo.
@@ -658,24 +676,17 @@ export default function FlashcardDeckPage() {
               ) : null}
 
               {studied > 0 ? (
-                <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
-                  {(
-                    [
-                      { g: 1, label: 'Otra vez', fg: '#C4655A', bg: '#FFF1EE' },
-                      { g: 2, label: 'Difícil', fg: '#B4831F', bg: '#FBF3E1' },
-                      { g: 3, label: 'Bien', fg: '#5C7A59', bg: '#EAF2E8' },
-                      { g: 4, label: 'Fácil', fg: '#4E7C9B', bg: '#E7F0F6' },
-                    ] as const
-                  ).map((t) => (
+                <div className={`grid w-full gap-2 ${repartoDe(byGrade, botones).length === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
+                  {repartoDe(byGrade, botones).map(({ boton: t, total }) => (
                     <div
-                      key={t.g}
+                      key={t.grade}
                       className="flex flex-col items-center rounded-2xl border-2 px-3 py-2"
                       style={{ background: t.bg, borderColor: t.fg }}
                     >
                       <span className="text-xl font-black tabular-nums" style={{ color: t.fg }}>
-                        {byGrade[t.g] ?? 0}
+                        {total}
                       </span>
-                      <span className="text-[10px] font-bold uppercase tracking-wide text-[#7D8A96]/80">
+                      <span className="text-center text-[10px] font-bold uppercase tracking-wide text-[#7D8A96]/80">
                         {t.label}
                       </span>
                     </div>
@@ -881,6 +892,7 @@ export default function FlashcardDeckPage() {
                   preview={current.preview}
                   now={shownAt}
                   disabled={busy}
+                  botones={botones}
                   onGrade={(g) => void handleRate(g)}
                 />
               )}
@@ -1226,6 +1238,8 @@ export default function FlashcardDeckPage() {
           cards={cards}
           inicial={ajustes}
           escalera={ladder}
+          botones={botones}
+          onBotones={cambiarBotones}
           onEmpezar={(a) => void handleStartStudy(a)}
           onCerrar={() => setAjustesAbierto(false)}
         />

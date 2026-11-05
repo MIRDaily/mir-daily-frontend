@@ -1,22 +1,16 @@
 'use client'
 
-// Los cuatro botones de respuesta, cada uno con el intervalo que le tocaría a la
-// tarjeta si lo eliges. Es lo que convierte el repaso en una decisión informada:
-// antes eran dos botones y no había forma de saber qué implicaba cada uno.
+// Los botones de respuesta, cada uno con el intervalo que le tocaría a la tarjeta si lo eliges. Por defecto
+// el semáforo de tres («No me la sabía» / «Me costó» / «Me la sabía»); con la preferencia de Anki, los cuatro
+// de siempre. Ver lib/flashcards/botones.ts.
 //
 // Los intervalos NO se calculan aquí: llegan ya resueltos desde el servidor con
 // cada tarjeta. Si se calcularan en el cliente habría que mantener los mismos
 // parámetros de FSRS en los dos lados, y en cuanto se desincronizaran el botón
 // prometería una fecha que el servidor no va a cumplir.
 
-import { GRADE, type Grade, type GradePreview } from '@/lib/studioFlashcards'
-
-const BOTONES: { grade: Grade; label: string; icon: string; fg: string; bg: string }[] = [
-  { grade: GRADE.again, label: 'Otra vez', icon: 'replay', fg: '#C4655A', bg: '#FFF1EE' },
-  { grade: GRADE.hard, label: 'Difícil', icon: 'trending_down', fg: '#B4831F', bg: '#FBF3E1' },
-  { grade: GRADE.good, label: 'Bien', icon: 'check', fg: '#5C7A59', bg: '#EAF2E8' },
-  { grade: GRADE.easy, label: 'Fácil', icon: 'bolt', fg: '#4E7C9B', bg: '#E7F0F6' },
-]
+import type { Grade, GradePreview } from '@/lib/studioFlashcards'
+import { botonesDe, POR_DEFECTO, type NumBotones } from '@/lib/flashcards/botones'
 
 /**
  * Intervalo en la forma corta de Anki. Por debajo de un día se dan minutos u
@@ -44,34 +38,42 @@ export default function GradeButtons({
   preview,
   now,
   disabled,
+  botones = POR_DEFECTO,
   onGrade,
 }: {
   preview?: Record<string, GradePreview>
   now: Date
   disabled?: boolean
+  /** 3 = semáforo (por defecto), 4 = los de Anki. */
+  botones?: NumBotones
   onGrade: (grade: Grade) => void
 }) {
+  const lista = botonesDe(botones)
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {BOTONES.map((b) => (
-        <button
-          key={b.grade}
-          type="button"
-          onClick={() => onGrade(b.grade)}
-          disabled={disabled}
-          className="flex flex-col items-center gap-1 rounded-2xl border-2 border-[#2c3e50] px-3 py-3 transition-transform hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
-          style={{ background: b.bg, boxShadow: `4px 4px 0 0 ${b.fg}` }}
-        >
-          <span className="flex items-center gap-1.5 text-sm font-black" style={{ color: b.fg }}>
-            <span className="material-symbols-outlined text-lg">{b.icon}</span>
-            {b.label}
-          </span>
-          <span className="text-xs font-black tabular-nums text-[#2C3E50]">
-            {formatInterval(preview?.[String(b.grade)], now)}
-          </span>
-          <kbd className="kbd text-[10px]">{b.grade}</kbd>
-        </button>
-      ))}
+    <div className={`grid gap-2 ${botones === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
+      {lista.map((b) => {
+        const cuando = formatInterval(preview?.[String(b.grade)], now)
+        return (
+          <button
+            key={b.grade}
+            type="button"
+            onClick={() => onGrade(b.grade)}
+            disabled={disabled}
+            aria-label={`${b.label}: vuelve en ${cuando}`}
+            className="flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl border-2 border-[#2c3e50] px-2 py-3 transition-transform hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+            style={{ background: b.bg, boxShadow: `4px 4px 0 0 ${b.fg}` }}
+          >
+            <span className="flex items-center gap-1.5 text-center text-sm font-black leading-tight" style={{ color: b.fg }}>
+              <span aria-hidden className="inline-block">
+                <span className="material-symbols-outlined text-lg leading-none">{b.icon}</span>
+              </span>
+              {b.label}
+            </span>
+            <span className="text-[11px] font-bold tabular-nums text-[#2C3E50]/70">{cuando}</span>
+            <kbd className="kbd hidden text-[10px] sm:inline-flex">{b.grade}</kbd>
+          </button>
+        )
+      })}
     </div>
   )
 }
