@@ -422,24 +422,34 @@ export async function deleteFlashcard(
 // web y la app digan lo mismo. Si no se pueden leer, el semáforo.
 // ---------------------------------------------------------------------------
 
-export type FlashcardPrefs = { botones: 3 | 4 }
+/** Botones (B2) y cupo de nuevas al día con las ya empezadas hoy (B3; nuevasHoy lo cuenta el servidor). */
+export type FlashcardPrefs = { botones: 3 | 4; nuevasDia: number; nuevasHoy: number }
+
+export const PREFS_POR_DEFECTO: FlashcardPrefs = { botones: 3, nuevasDia: 20, nuevasHoy: 0 }
+
+function sanearPrefs(raw: unknown): FlashcardPrefs {
+  const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const entero = (v: unknown, def: number) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : def)
+  return { botones: r.botones === 4 ? 4 : 3, nuevasDia: entero(r.nuevasDia, 20), nuevasHoy: entero(r.nuevasHoy, 0) }
+}
 
 export async function fetchFlashcardPrefs(token: string): Promise<FlashcardPrefs> {
   const res = await fetch(`${apiBase()}/api/studio/flashcard-preferencias`, { headers: authHeaders(token) })
   if (!res.ok) throw new Error(await readError(res, 'No se pudieron cargar tus preferencias'))
-  const payload = (await res.json().catch(() => null)) as { botones?: unknown } | null
-  return { botones: payload?.botones === 4 ? 4 : 3 }
+  return sanearPrefs(await res.json().catch(() => null))
 }
 
-export async function saveFlashcardPrefs(token: string, prefs: Partial<FlashcardPrefs>): Promise<FlashcardPrefs> {
+export async function saveFlashcardPrefs(
+  token: string,
+  prefs: Partial<Pick<FlashcardPrefs, 'botones' | 'nuevasDia'>>,
+): Promise<FlashcardPrefs> {
   const res = await fetch(`${apiBase()}/api/studio/flashcard-preferencias`, {
     method: 'PATCH',
     headers: authHeaders(token, true),
     body: JSON.stringify(prefs),
   })
   if (!res.ok) throw new Error(await readError(res, 'No se pudo guardar la preferencia'))
-  const payload = (await res.json().catch(() => null)) as { botones?: unknown } | null
-  return { botones: payload?.botones === 4 ? 4 : 3 }
+  return sanearPrefs(await res.json().catch(() => null))
 }
 
 // ---------------------------------------------------------------------------
@@ -459,8 +469,10 @@ export async function startFlashcardSession(
     levels?: FlashcardLevel[] | null
     ladder?: boolean
     topics?: string[]
-    onlyStatus?: 'failed' | 'due' | 'new'
+    onlyStatus?: 'failed' | 'due' | 'new' | 'hoy'
     cardLimit?: number
+    /** «Repaso libre»: práctica, no cambia cuándo vuelven (etapa B3). */
+    practica?: boolean
   } = {},
 ): Promise<string> {
   const { levels, ladder = true, ...resto } = opciones

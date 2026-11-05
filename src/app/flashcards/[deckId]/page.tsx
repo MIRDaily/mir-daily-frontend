@@ -116,6 +116,9 @@ export default function FlashcardDeckPage() {
   // Botones al responder: semáforo (3) o Anki (4). Preferencia del usuario en el servidor; si no se puede
   // leer, el semáforo.
   const [botones, setBotones] = useState<NumBotones>(BOTONES_POR_DEFECTO)
+  // Cupo de nuevas al día y las ya empezadas hoy (etapa B3): para «Lo de hoy». Se releen al acabar.
+  const [nuevasDia, setNuevasDia] = useState(20)
+  const [nuevasHoy, setNuevasHoy] = useState(0)
 
   const { setBackAction, setHidden } = useHeaderUI()
 
@@ -182,7 +185,12 @@ export default function FlashcardDeckPage() {
       }
       setToken(accessToken)
       void fetchFlashcardPrefs(accessToken)
-        .then((p) => mounted && setBotones(p.botones))
+        .then((p) => {
+          if (!mounted) return
+          setBotones(p.botones)
+          setNuevasDia(p.nuevasDia)
+          setNuevasHoy(p.nuevasHoy)
+        })
         .catch(() => {})
       await load(accessToken)
     })()
@@ -286,6 +294,20 @@ export default function FlashcardDeckPage() {
     },
     [token],
   )
+  const cambiarNuevasDia = useCallback(
+    (n: number) => {
+      setNuevasDia(n)
+      void saveFlashcardPrefs(token, { nuevasDia: n }).catch(() => setError('No se pudo guardar cuántas nuevas quieres al día.'))
+    },
+    [token],
+  )
+  // Tras una sesión, las nuevas empezadas hoy han cambiado.
+  const recargarNuevasHoy = useCallback(() => {
+    if (!token) return
+    void fetchFlashcardPrefs(token)
+      .then((p) => setNuevasHoy(p.nuevasHoy))
+      .catch(() => {})
+  }, [token])
 
   const handleStartStudy = async (a: AjustesSesion = ajustes) => {
     if (busy || cards.length === 0) return
@@ -306,7 +328,7 @@ export default function FlashcardDeckPage() {
       // volvía en 3 días. Con FSRS y las repeticiones dentro de la sesión, un
       // tope real evita sesiones que no se acaban nunca.
       // Los ajustes van en la sesión y los aplica la cola (cuántas, temas, qué tarjetas, niveles, escalera).
-      const { limit, opciones } = paraEmpezar(a, cards, conNivel, ladder)
+      const { limit, opciones } = paraEmpezar(a, cards, conNivel, ladder, Math.max(0, nuevasDia - nuevasHoy))
       // Foto de antes (la de ahora mismo: puede haber cambiado desde que se cargó la página).
       ladderAntes.current = opciones.ladder ? await fetchFlashcardLadder(token, deckId).catch(() => null) : null
       const sid = await startFlashcardSession(token, deckId, limit, opciones)
@@ -333,6 +355,10 @@ export default function FlashcardDeckPage() {
     setAjustes({ ...base, ...(niveles ? { niveles } : {}), ...(tema !== null ? { temas: [tema.slice(0, 120)] } : {}) })
     if (qs.get('study') === '1') setAutoStudy(true)
   }, [deckId])
+
+  useEffect(() => {
+    if (finishState) recargarNuevasHoy()
+  }, [finishState, recargarNuevasHoy])
 
   // Al terminar una sesión con escalera: la foto de después, y qué niveles se han abierto.
   useEffect(() => {
@@ -597,7 +623,9 @@ export default function FlashcardDeckPage() {
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-black leading-tight text-[#2C3E50]">{deckName}</p>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[#7D8A96]/60">Repaso</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#7D8A96]/60">
+                {ajustes.solo === 'libre' ? 'Repaso libre · no cambia cuándo vuelven' : ajustes.solo === 'hoy' ? 'Lo de hoy' : 'Repaso'}
+              </p>
             </div>
             <button
               type="button"
@@ -654,7 +682,9 @@ export default function FlashcardDeckPage() {
               </span>
               <h2 className="text-2xl font-black text-[#2C3E50]">
                 {finishState === 'done'
-                  ? '¡Sesión completada!'
+                  ? ajustes.solo === 'hoy'
+                    ? '¡Lo de hoy, hecho!'
+                    : '¡Sesión completada!'
                   : finishState === 'limit'
                     ? 'Límite de la sesión alcanzado'
                     : 'La sesión expiró'}
@@ -697,6 +727,11 @@ export default function FlashcardDeckPage() {
                 <StickerButton icon="replay" color="#8BA888" onClick={() => void handleStartStudy()}>
                   Repasar de nuevo
                 </StickerButton>
+                {finishState === 'done' && ajustes.solo === 'hoy' && cards.some((c) => c.status !== 'new') ? (
+                  <GhostButton icon="self_improvement" onClick={() => void handleStartStudy({ ...ajustes, solo: 'libre' })}>
+                    Repaso libre
+                  </GhostButton>
+                ) : null}
                 <GhostButton
                   icon="tune"
                   onClick={() => {
@@ -1240,6 +1275,9 @@ export default function FlashcardDeckPage() {
           escalera={ladder}
           botones={botones}
           onBotones={cambiarBotones}
+          nuevasDia={nuevasDia}
+          nuevasHoy={nuevasHoy}
+          onNuevasDia={cambiarNuevasDia}
           onEmpezar={(a) => void handleStartStudy(a)}
           onCerrar={() => setAjustesAbierto(false)}
         />

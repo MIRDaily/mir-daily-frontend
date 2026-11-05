@@ -12,6 +12,7 @@ import {
   CANTIDADES,
   coincideSolo,
   coinciden,
+  CUPOS_NUEVAS,
   OPCIONES_SOLO,
   temasDelGrupo,
   type AjustesSesion,
@@ -32,6 +33,9 @@ export function AjustesSesionDialogo({
   escalera,
   botones,
   onBotones,
+  nuevasDia,
+  nuevasHoy,
+  onNuevasDia,
   onEmpezar,
   onCerrar,
 }: {
@@ -43,6 +47,10 @@ export function AjustesSesionDialogo({
   /** Botones al responder (preferencia del usuario, en el servidor): 3 = semáforo, 4 = Anki. */
   botones: NumBotones
   onBotones: (n: NumBotones) => void
+  /** Cupo de nuevas al día (preferencia del usuario) y las ya empezadas hoy (las cuenta el servidor). */
+  nuevasDia: number
+  nuevasHoy: number
+  onNuevasDia: (n: number) => void
   onEmpezar: (a: AjustesSesion) => void
   onCerrar: () => void
 }) {
@@ -51,9 +59,15 @@ export function AjustesSesionDialogo({
   const conNivel = cards.some((c) => c.level)
   const conTemas = temas.length > 1
   const efectivos: AjustesSesion = { ...a, escalera: conNivel && a.escalera }
-  const salen = coinciden(cards, efectivos, escalera).length
+  const restantes = Math.max(0, nuevasDia - nuevasHoy)
+  const salen = coinciden(cards, efectivos, escalera, restantes).length
   const tarjetas = a.cantidad ? Math.min(a.cantidad, salen) : salen
-  const porSolo = (s: AjustesSesion['solo']) => cards.filter((c) => coincideSolo(c, s)).length
+  // En «Lo de hoy», las nuevas hasta el cupo; en el resto, todas las que encajan.
+  const porSolo = (s: AjustesSesion['solo']) =>
+    s === 'hoy'
+      ? cards.filter((c) => c.status !== 'new' && c.isDue).length + Math.min(restantes, cards.filter((c) => c.status === 'new').length)
+      : cards.filter((c) => coincideSolo(c, s)).length
+  const cupos = [...new Set<number>([...CUPOS_NUEVAS, nuevasDia])].sort((x, y) => x - y)
   const elegidos = a.temas ? new Set(a.temas) : null
 
   const alternarTema = (t: string) =>
@@ -230,6 +244,31 @@ export function AjustesSesionDialogo({
             </>
           ) : null}
 
+          <div className="mt-5 flex items-baseline justify-between gap-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-[#7D8A96]">Nuevas al día</p>
+            <p className="text-xs text-[#7D8A96]">
+              Hoy llevas <b className="text-[#2C3E50]">{nuevasHoy}</b> {nuevasHoy === 1 ? 'nueva' : 'nuevas'}
+            </p>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="Nuevas al día">
+            {cupos.map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={nuevasDia === n}
+                onClick={() => onNuevasDia(n)}
+                className="min-w-[3.4rem] rounded-xl px-3 py-1.5 text-sm font-extrabold"
+                style={chip(nuevasDia === n)}
+              >
+                {n === 0 ? 'Ninguna' : n}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[0.72rem] text-[#7D8A96]">
+            Para todos tus grupos juntos. Meter muchas nuevas en un día llena de repasos los siguientes.
+          </p>
+
           <p className="mt-5 text-xs font-bold uppercase tracking-wide text-[#7D8A96]">Al responder</p>
           <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Botones al responder">
             {(
@@ -259,8 +298,8 @@ export function AjustesSesionDialogo({
             {tarjetas > 0 ? (
               <>
                 Vas a estudiar <b>{tarjetas}</b> {tarjetas === 1 ? 'tarjeta' : 'tarjetas'}
-                {a.cantidad && salen > a.cantidad ? <span className="text-[#7D8A96]"> de {salen} que coinciden</span> : null}. Las que falles vuelven en la
-                misma sesión.
+                {a.cantidad && salen > a.cantidad ? <span className="text-[#7D8A96]"> de {salen} que coinciden</span> : null}.{' '}
+                {a.solo === 'libre' ? 'Es práctica: no cambia cuándo vuelven.' : 'Las que falles vuelven en la misma sesión.'}
               </>
             ) : (
               <span className="font-bold text-[#B04A5E]">Ninguna tarjeta coincide con estos ajustes.</span>

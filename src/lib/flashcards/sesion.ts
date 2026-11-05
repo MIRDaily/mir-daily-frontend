@@ -7,7 +7,9 @@
 import { FLASHCARD_LEVELS, isFlashcardLevel, type Flashcard, type FlashcardLevel } from '@/lib/studioFlashcards'
 import type { Escalera } from '@/lib/flashcards/escalera'
 
-export type SoloTarjetas = 'todas' | 'failed' | 'due' | 'new'
+// 'hoy' (etapa B3, por defecto): lo que toca y las nuevas hasta el cupo del día. 'libre': las ya vistas aunque
+// no toquen, como práctica (no cambia cuándo vuelven). Ya no hay «Todas»: era repasar antes de tiempo.
+export type SoloTarjetas = 'hoy' | 'due' | 'failed' | 'new' | 'libre'
 
 export type AjustesSesion = {
   /** Cuántas tarjetas distintas (null = todas las que coincidan). */
@@ -22,23 +24,31 @@ export type AjustesSesion = {
 export const CANTIDADES = [10, 20, 50] as const
 
 export const OPCIONES_SOLO: { id: SoloTarjetas; titulo: string; descripcion: string }[] = [
-  { id: 'todas', titulo: 'Todas', descripcion: 'Primero lo fallado y lo que toca repasar.' },
+  { id: 'hoy', titulo: 'Lo de hoy', descripcion: 'Lo que toca repasar y las nuevas de hoy.' },
   { id: 'due', titulo: 'Pendientes', descripcion: 'Las que ya has visto y toca repasar.' },
   { id: 'failed', titulo: 'Solo falladas', descripcion: 'Las que fallaste la última vez.' },
-  { id: 'new', titulo: 'Solo nuevas', descripcion: 'Las que aún no has estudiado.' },
+  { id: 'new', titulo: 'Solo nuevas', descripcion: 'Las que aún no has estudiado (sin cupo).' },
+  { id: 'libre', titulo: 'Repaso libre', descripcion: 'Las ya vistas, aunque no toquen. No cambia cuándo vuelven.' },
 ]
 
-export const AJUSTES_POR_DEFECTO: AjustesSesion = { cantidad: 20, solo: 'todas', temas: null, niveles: [...FLASHCARD_LEVELS], escalera: true }
+/** Cupos de nuevas al día que se ofrecen (preferencia del usuario, en el servidor). 0 = solo repasos. */
+export const CUPOS_NUEVAS = [0, 10, 20, 30, 50] as const
+
+export const AJUSTES_POR_DEFECTO: AjustesSesion = { cantidad: 20, solo: 'hoy', temas: null, niveles: [...FLASHCARD_LEVELS], escalera: true }
 
 /** El tema de una tarjeta como clave ('' = sin tema). */
 export const temaDe = (c: Pick<Flashcard, 'topic'>) => (c.topic ?? '').trim()
 
-/** ¿Entra la tarjeta en «qué tarjetas»? Las mismas definiciones que el servidor (flashcardStatus/IsDue). */
+/**
+ * ¿Entra la tarjeta en «qué tarjetas»? Las mismas definiciones que el servidor (estado y `isDue`, que manda él).
+ * En «Lo de hoy» entran todas las nuevas: el cupo del día lo aplica `coinciden`.
+ */
 export function coincideSolo(c: Pick<Flashcard, 'status' | 'isDue'>, solo: SoloTarjetas): boolean {
   if (solo === 'failed') return c.status === 'failed'
   if (solo === 'new') return c.status === 'new'
   if (solo === 'due') return c.status !== 'new' && c.isDue
-  return true
+  if (solo === 'libre') return c.status !== 'new'
+  return c.status === 'new' || c.isDue
 }
 
 /**
@@ -46,20 +56,30 @@ export function coincideSolo(c: Pick<Flashcard, 'status' | 'isDue'>, solo: SoloT
  * nivel no entran (como en la cola). Con escalera y su foto (`escalera`, la del servidor), las nuevas
  * de un nivel cerrado tampoco: así el número que se avisa es el que va a salir.
  */
-export function coinciden(cards: Flashcard[], a: AjustesSesion, escalera?: Escalera | null): Flashcard[] {
+export function coinciden(
+  cards: Flashcard[],
+  a: AjustesSesion,
+  escalera?: Escalera | null,
+  /** «Lo de hoy»: cuántas nuevas caben aún hoy (cupo − las ya empezadas). Sin dato, sin tope. */
+  nuevasRestantes: number = Infinity,
+): Flashcard[] {
   const todosNiveles = a.niveles.length === FLASHCARD_LEVELS.length
   const temas = a.temas ? new Set(a.temas) : null
   const cerrados = new Set<string>()
   if (a.escalera && escalera) {
     for (const t of escalera.topics) for (const l of t.levels) if (!l.unlocked) cerrados.add(`${(t.topic ?? '').trim()}|${l.level}`)
   }
-  return cards.filter(
+  const salen = cards.filter(
     (c) =>
       coincideSolo(c, a.solo) &&
       (!temas || temas.has(temaDe(c))) &&
       (todosNiveles || (c.level != null && a.niveles.includes(c.level))) &&
       !(c.status === 'new' && c.level != null && cerrados.has(`${temaDe(c)}|${c.level}`)),
   )
+  if (a.solo !== 'hoy') return salen
+  // El cupo: tantas nuevas como quepan (cuáles, lo decide el servidor; aquí solo importa cuántas).
+  let quedan = Math.max(0, nuevasRestantes)
+  return salen.filter((c) => c.status !== 'new' || quedan-- > 0)
 }
 
 /** Los temas del grupo con cuántas tarjetas tiene cada uno, por orden alfabético (sin tema, al final). */
@@ -75,8 +95,14 @@ export function temasDelGrupo(cards: Flashcard[]): { tema: string; total: number
  * Ajustes → lo que se manda al empezar: los filtros (solo los que filtran algo) y el tope de servidas
  * (con las repeticiones de las falladas: el doble de las tarjetas, entre 20 y 200).
  */
-export function paraEmpezar(a: AjustesSesion, cards: Flashcard[], conNivel: boolean, escalera?: Escalera | null) {
-  const n = coinciden(cards, { ...a, escalera: conNivel && a.escalera }, escalera).length
+export function paraEmpezar(
+  a: AjustesSesion,
+  cards: Flashcard[],
+  conNivel: boolean,
+  escalera?: Escalera | null,
+  nuevasRestantes: number = Infinity,
+) {
+  const n = coinciden(cards, { ...a, escalera: conNivel && a.escalera }, escalera, nuevasRestantes).length
   const tarjetas = a.cantidad ? Math.min(a.cantidad, n) : n
   const todosTemas = !a.temas || temasDelGrupo(cards).every((t) => a.temas!.includes(t.tema))
   return {
@@ -85,7 +111,7 @@ export function paraEmpezar(a: AjustesSesion, cards: Flashcard[], conNivel: bool
       ...(conNivel && a.niveles.length < FLASHCARD_LEVELS.length ? { levels: a.niveles } : {}),
       ladder: conNivel && a.escalera,
       ...(!todosTemas && a.temas?.length ? { topics: a.temas } : {}),
-      ...(a.solo !== 'todas' ? { onlyStatus: a.solo } : {}),
+      ...(a.solo === 'libre' ? { practica: true } : { onlyStatus: a.solo }),
       ...(a.cantidad ? { cardLimit: a.cantidad } : {}),
     },
   }
@@ -95,7 +121,8 @@ export function paraEmpezar(a: AjustesSesion, cards: Flashcard[], conNivel: bool
 export function sanearAjustes(raw: unknown): AjustesSesion {
   const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const cantidad = r.cantidad === null ? null : CANTIDADES.includes(r.cantidad as (typeof CANTIDADES)[number]) ? (r.cantidad as number) : AJUSTES_POR_DEFECTO.cantidad
-  const solo = OPCIONES_SOLO.some((o) => o.id === r.solo) ? (r.solo as SoloTarjetas) : 'todas'
+  // «Todas» (lo guardado antes de la etapa B3) y cualquier valor raro → «Lo de hoy».
+  const solo = OPCIONES_SOLO.some((o) => o.id === r.solo) ? (r.solo as SoloTarjetas) : 'hoy'
   const temas = Array.isArray(r.temas) ? r.temas.filter((t): t is string => typeof t === 'string').slice(0, 200) : null
   const niveles = Array.isArray(r.niveles) ? FLASHCARD_LEVELS.filter((n) => (r.niveles as unknown[]).some((x) => isFlashcardLevel(x) && x === n)) : []
   return {
