@@ -727,7 +727,9 @@ export default function FlashcardDeckPage() {
                 <StickerButton icon="replay" color="#8BA888" onClick={() => void handleStartStudy()}>
                   Repasar de nuevo
                 </StickerButton>
-                {finishState === 'done' && ajustes.solo === 'hoy' && cards.some((c) => c.status !== 'new') ? (
+                {/* Hay algo ya visto: lo repasado en esta sesión (la lista `cards` es de antes de empezar y no lo
+                    sabe) o lo de antes. Sin nada visto, el repaso libre saldría vacío. */}
+                {finishState === 'done' && ajustes.solo === 'hoy' && (studied > 0 || cards.some((c) => c.status !== 'new')) ? (
                   <GhostButton icon="self_improvement" onClick={() => void handleStartStudy({ ...ajustes, solo: 'libre' })}>
                     Repaso libre
                   </GhostButton>
