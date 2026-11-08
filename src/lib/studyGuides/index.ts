@@ -4,6 +4,7 @@ import { DERMATOLOGIA_GUIDE } from '@/lib/studyGuides/dermatologia'
 import { INMUNOLOGIA_GUIDE } from '@/lib/studyGuides/inmunologia'
 import { NEUROLOGIA_GUIDE } from '@/lib/studyGuides/neurologia'
 import { OFTALMOLOGIA_GUIDE } from '@/lib/studyGuides/oftalmologia'
+import { PEDIATRIA_GUIDE } from '@/lib/studyGuides/pediatria'
 import { REUMATOLOGIA_GUIDE } from '@/lib/studyGuides/reumatologia'
 import { TRAUMATOLOGIA_GUIDE } from '@/lib/studyGuides/traumatologia'
 import { UROLOGIA_GUIDE } from '@/lib/studyGuides/urologia'
@@ -21,6 +22,7 @@ const STUDY_GUIDES_BY_SUBJECT: Record<string, StudyGuide> = {
   urologia: UROLOGIA_GUIDE,
   dermatologia: DERMATOLOGIA_GUIDE,
   traumatologia: TRAUMATOLOGIA_GUIDE,
+  pediatria: PEDIATRIA_GUIDE,
 }
 
 /** Clave de la guía → id de la asignatura del catálogo en la que se enseña. */
@@ -33,6 +35,7 @@ export const ASIGNATURA_DE_GUIA: Readonly<Record<string, number>> = {
   urologia: 764, // Urología
   dermatologia: 1425, // Dermatología
   traumatologia: 4, // Traumatología y Cirugía Ortopédica
+  pediatria: 5, // Pediatría
 }
 
 /** La guía por su clave de texto (la de los reportes). */
