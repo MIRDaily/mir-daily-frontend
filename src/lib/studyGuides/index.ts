@@ -1,6 +1,7 @@
 import type { StudyGuide } from '@/types/studyGuide'
 import { CIRUGIA_GENERAL_GUIDE } from '@/lib/studyGuides/cirugia-general'
 import { DERMATOLOGIA_GUIDE } from '@/lib/studyGuides/dermatologia'
+import { ENDOCRINOLOGIA_GUIDE } from '@/lib/studyGuides/endocrinologia'
 import { INMUNOLOGIA_GUIDE } from '@/lib/studyGuides/inmunologia'
 import { NEUROLOGIA_GUIDE } from '@/lib/studyGuides/neurologia'
 import { OFTALMOLOGIA_GUIDE } from '@/lib/studyGuides/oftalmologia'
@@ -23,6 +24,7 @@ const STUDY_GUIDES_BY_SUBJECT: Record<string, StudyGuide> = {
   dermatologia: DERMATOLOGIA_GUIDE,
   traumatologia: TRAUMATOLOGIA_GUIDE,
   pediatria: PEDIATRIA_GUIDE,
+  endocrinologia: ENDOCRINOLOGIA_GUIDE,
 }
 
 /** Clave de la guía → id de la asignatura del catálogo en la que se enseña. */
@@ -36,6 +38,7 @@ export const ASIGNATURA_DE_GUIA: Readonly<Record<string, number>> = {
   dermatologia: 1425, // Dermatología
   traumatologia: 4, // Traumatología y Cirugía Ortopédica
   pediatria: 5, // Pediatría
+  endocrinologia: 6, // Endocrinología
 }
 
 /** La guía por su clave de texto (la de los reportes). */
