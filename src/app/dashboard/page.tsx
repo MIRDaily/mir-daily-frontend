@@ -2978,13 +2978,17 @@ export default function DashboardPage() {
               >
                 <header className="flex items-start justify-between gap-4">
                   <div>
-                    <h4
-                      className={`text-2xl font-semibold text-gray-800 leading-snug ${
-                        shouldClampMostFailedStatement ? 'max-h-32 overflow-y-auto pr-2' : ''
-                      }`}
-                    >
-                      {mostFailedWeek.statement}
-                    </h4>
+                    {/* AutoHeight: "Leer más/menos" estira la tarjeta con la misma
+                        curva que "Ver imagen", en vez de pegar el salto. */}
+                    <AutoHeight>
+                      <h4
+                        className={`text-2xl font-semibold text-gray-800 leading-snug ${
+                          shouldClampMostFailedStatement ? 'max-h-32 overflow-y-auto pr-2' : ''
+                        }`}
+                      >
+                        {mostFailedWeek.statement}
+                      </h4>
+                    </AutoHeight>
                     {(mostFailedWeek.statement?.length ?? 0) > 220 && (
                       <button
                         type="button"
@@ -2996,14 +3000,6 @@ export default function DashboardPage() {
                         {mostFailedStatementExpanded ? 'Leer menos' : 'Leer más'}
                       </button>
                     )}
-                    {mostFailedWeek.hasImage && mostFailedWeek.imageUrl ? (
-                      <div className="mt-4">
-                        <ZoomableImage
-                          url={mostFailedWeek.imageUrl}
-                          className="mx-auto max-h-72 w-auto max-w-full rounded-2xl border border-[#E9E4E1] bg-white object-contain"
-                        />
-                      </div>
-                    ) : null}
                     {!isMostFailedRevealed && (
                       <p className="text-[#7D8A96] text-sm mt-4">
                         ¿La volverías a acertar hoy?
@@ -3209,14 +3205,18 @@ export default function DashboardPage() {
                         </h5>
                       </div>
                     </div>
-                    <p
-                      className={`text-[#7D8A96] text-sm leading-relaxed mt-4 ${
-                        shouldClampMostFailedExplanation ? 'max-h-48 overflow-y-auto pr-2' : ''
-                      }`}
-                    >
-                      {mostFailedWeek.explanation ??
-                        'No hay explicación disponible para esta pregunta.'}
-                    </p>
+                    {/* El mt-4 va en AutoHeight y no en el <p>: dentro, su margen
+                        no entraría en la altura medida y se comería el final. */}
+                    <AutoHeight className="mt-4">
+                      <p
+                        className={`text-[#7D8A96] text-sm leading-relaxed ${
+                          shouldClampMostFailedExplanation ? 'max-h-48 overflow-y-auto pr-2' : ''
+                        }`}
+                      >
+                        {mostFailedWeek.explanation ??
+                          'No hay explicación disponible para esta pregunta.'}
+                      </p>
+                    </AutoHeight>
                     {(mostFailedWeek.explanation?.length ?? 0) > 320 && (
                       <button
                         type="button"
