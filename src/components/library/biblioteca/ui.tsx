@@ -8,6 +8,7 @@
 import Link from 'next/link'
 import type { CSSProperties, ReactNode } from 'react'
 import { INK } from '@/components/ui/sticker'
+import { ItemAnimado } from '@/components/ui/movimiento'
 import { subjectVisual } from '@/lib/subjectVisuals'
 import type { AsignaturaCatalogo } from '@/lib/carpetas/sugerir'
 import { rutasElemento, type Cuenta, type ElementoMaterial, type TipoElemento } from '@/lib/carpetas/biblioteca'
@@ -135,14 +136,21 @@ function fecha(iso: string | null) {
   return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 }
 
-/** Una fila de material: icono, título, cuántas tarjetas, abrir y estudiar; y lo que añada quien la usa. */
+/**
+ * Una fila de material: icono, título, cuántas tarjetas, abrir y estudiar; y lo que añada quien la usa.
+ * Es un `ItemAnimado`: dentro de una `RejillaAnimada as="ul"` entra en cascada y, al moverla de carpeta,
+ * sale hacia la derecha mientras las de debajo suben a su hueco.
+ */
 export function FilaElemento({
   e,
+  indice = 0,
   inicio,
   extra,
   acciones,
 }: {
   e: ElementoMaterial
+  /** Posición en la lista (escalonado de entrada). */
+  indice?: number
   /** Antes del icono (la casilla de selección). */
   inicio?: ReactNode
   /** Debajo del título (la sugerencia). */
@@ -161,7 +169,12 @@ export function FilaElemento({
     .filter(Boolean)
     .join(' · ')
   return (
-    <li className="flex flex-col gap-2 rounded-2xl border-2 border-[#EAE4E2] bg-white px-3 py-2.5 transition-colors hover:border-[#2c3e50]/40 sm:flex-row sm:items-center">
+    <ItemAnimado
+      as="li"
+      variante="fila"
+      indice={indice}
+      className="flex flex-col gap-2 rounded-2xl border-2 border-[#EAE4E2] bg-white px-3 py-2.5 transition-colors hover:border-[#2c3e50]/40 sm:flex-row sm:items-center"
+    >
       <div className="flex min-w-0 flex-1 items-center gap-3">
         {inicio}
         <span
@@ -185,7 +198,7 @@ export function FilaElemento({
         {acciones}
         <Link
           href={r.abrir}
-          className="inline-flex items-center gap-1 rounded-xl border-2 border-[#EAE4E2] bg-white px-2.5 py-1.5 text-xs font-extrabold text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2C3E50]"
+          className="inline-flex items-center gap-1 rounded-xl border-2 border-[#EAE4E2] bg-white px-2.5 py-1.5 text-xs font-extrabold text-[#7D8A96] transition-[color,border-color,translate] duration-150 hover:-translate-y-px hover:border-[#2c3e50] hover:text-[#2C3E50] active:translate-y-px motion-reduce:transition-none"
         >
           <span className="material-symbols-outlined text-[16px]">open_in_new</span>
           Abrir
@@ -193,15 +206,15 @@ export function FilaElemento({
         {r.estudiar ? (
           <Link
             href={r.estudiar}
-            className="inline-flex items-center gap-1 rounded-xl border-2 border-[#2c3e50] px-2.5 py-1.5 text-xs font-black text-white"
-            style={{ backgroundColor: t.color, boxShadow: `2px 2px 0 0 ${INK}` }}
+            className="inline-flex items-center gap-1 rounded-xl border-2 border-[#2c3e50] px-2.5 py-1.5 text-xs font-black text-white shadow-[2px_2px_0_0_#2c3e50] transition-[translate,box-shadow] duration-150 hover:-translate-x-px hover:-translate-y-px hover:shadow-[3px_3px_0_0_#2c3e50] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none motion-reduce:transition-none"
+            style={{ backgroundColor: t.color }}
           >
             <span className="material-symbols-outlined text-[16px]">play_arrow</span>
             Estudiar
           </Link>
         ) : null}
       </div>
-    </li>
+    </ItemAnimado>
   )
 }
 
