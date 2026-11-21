@@ -506,17 +506,54 @@ export async function nextFlashcard(
     { headers: authHeaders(token) },
   )
   if (!res.ok) throw new Error(await readError(res, 'No se pudo cargar la siguiente tarjeta'))
-  const payload = (await res.json().catch(() => null)) as {
-    item?: StudyFlashcard
-    done?: boolean
-    expired?: boolean
-    limitReached?: boolean
-  } | null
+  return aSiguiente((await res.json().catch(() => null)) as RespuestaSiguiente | null)
+}
 
+/** Lo que devuelven /next y la parte `next` de /answer. */
+type RespuestaSiguiente = {
+  item?: StudyFlashcard
+  done?: boolean
+  expired?: boolean
+  limitReached?: boolean
+}
+
+function aSiguiente(payload: RespuestaSiguiente | null | undefined): NextFlashcardResult {
   if (payload?.item) return { kind: 'card', card: payload.item }
   if (payload?.expired) return { kind: 'expired' }
   if (payload?.limitReached) return { kind: 'limit' }
   return { kind: 'done' }
+}
+
+/**
+ * Responder con /answer (registrar y traer la siguiente en una petición, etapa C2 del plan de flashcards) o
+ * con /log + /next como antes. Con NEXT_PUBLIC_FLASHCARDS_ANSWER=off se vuelve a lo de antes sin tocar el
+ * backend, que sigue sirviendo las dos rutas.
+ */
+export const USAR_ANSWER = process.env.NEXT_PUBLIC_FLASHCARDS_ANSWER !== 'off'
+
+/**
+ * Registra un repaso y trae la siguiente tarjeta en UNA petición: lo mismo que logFlashcard seguido de
+ * nextFlashcard, con un viaje en vez de dos (y dos a la base de datos en vez de nueve). Todo o nada en el
+ * servidor: si falla, no queda la respuesta a medias y se puede volver a pulsar.
+ */
+export async function answerFlashcard(
+  token: string,
+  deckId: string,
+  input: { deckItemId: number; grade: Grade; sessionId: string; timeSpent?: number },
+): Promise<{ srs: FlashcardSrs | null; next: NextFlashcardResult }> {
+  const res = await fetch(`${apiBase()}/api/studio/flashcard-decks/${deckId}/answer`, {
+    method: 'POST',
+    headers: authHeaders(token, true),
+    body: JSON.stringify({
+      deckItemId: input.deckItemId,
+      grade: input.grade,
+      sessionId: input.sessionId,
+      timeSpent: input.timeSpent ?? 0,
+    }),
+  })
+  if (!res.ok) throw new Error(await readError(res, 'No se pudo registrar la respuesta'))
+  const payload = (await res.json().catch(() => null)) as { srs?: FlashcardSrs; next?: RespuestaSiguiente } | null
+  return { srs: payload?.srs ?? null, next: aSiguiente(payload?.next) }
 }
 
 /**
