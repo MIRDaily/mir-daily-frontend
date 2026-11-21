@@ -120,7 +120,8 @@ test('flashcards: crear, estudiar y deshacer', async ({ page }) => {
   // Semáforo por defecto (etapa B2): «No me la sabía» / «Me costó» / «Me la sabía».
   await expect(page.getByRole('button', { name: /^Me costó/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /^Fácil/ })).toHaveCount(0)
-  const repaso = page.waitForResponse((r) => r.url().endsWith('/log') && r.request().method() === 'POST')
+  // Una petición: registra y trae la siguiente (etapa C2).
+  const repaso = page.waitForResponse((r) => r.url().endsWith('/answer') && r.request().method() === 'POST')
   await page.getByRole('button', { name: /^No me la sabía/ }).click()
   expect((await repaso).status()).toBe(200)
   await expect(page.getByText('1 repasadas')).toBeVisible()
