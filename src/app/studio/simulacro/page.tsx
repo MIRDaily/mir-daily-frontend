@@ -97,7 +97,9 @@ export default function SimulacroPage() {
   const [mode, setMode] = useState<SimulacroConfig['mode']>('immediate')
   // Asignatura visible en el runner (elegido en el creador; oculta por defecto).
   const [showSubject, setShowSubject] = useState(false)
-  const [questions, setQuestions] = useState<SimulacroQuestion[]>([])
+  // Año y nº de pregunta del MIR original (también desde el creador; ocultos por defecto).
+  const [showOrigin, setShowOrigin] = useState(false)
+  const [questions,setQuestions] = useState<SimulacroQuestion[]>([])
   const [answers, setAnswers] = useState<SimulacroAnswer[]>([])
   // Correcciones alineadas por índice de pregunta (null hasta que llegan).
   const [results, setResults] = useState<(SimulacroResult | null)[]>([])
@@ -168,6 +170,7 @@ export default function SimulacroPage() {
       setFlagged(new Set())
       setMode(config.mode)
       setShowSubject(config.showSubject === true)
+      setShowOrigin(config.showOrigin === true)
       sessionIdRef.current = crypto.randomUUID()
 
       // La transición tapa el cambio de fase, pero solo si llega a verse: si el
@@ -209,6 +212,7 @@ export default function SimulacroPage() {
     setFlagged(new Set())
     setMode(smartMode)
     setShowSubject(false)
+    setShowOrigin(false)
     sessionIdRef.current = crypto.randomUUID()
     setPendingConfig({ subjectIds: [], topicIds: [], count: smartQuestions.length, mode: smartMode })
     setGenerating(true)
@@ -564,7 +568,10 @@ export default function SimulacroPage() {
   }, [phase, router])
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#FAF7F4] text-[#7D8A96]">
+    // overflow-x-clip y no -hidden: `hidden` convierte este div en contenedor de
+    // scroll propio (el eje Y pasa a `auto`) y el resumen del creador, que es
+    // `sticky`, se quedaba pegado a él en vez de seguir al scroll de la ventana.
+    <div className="relative min-h-screen overflow-x-clip bg-[#FAF7F4] text-[#7D8A96]">
       {/* Fondo decorativo coherente con Studio */}
       <div className="pointer-events-none fixed inset-0 z-0 opacity-40 [background-image:radial-gradient(circle_at_20%_20%,rgba(125,138,150,0.08)_0,transparent_30%),radial-gradient(circle_at_80%_75%,rgba(232,165,152,0.08)_0,transparent_30%)]" />
       <div className="pointer-events-none fixed -bottom-[10%] -left-[5%] z-0 h-96 w-96 rounded-full bg-[#8BA888]/15 blur-3xl" />
@@ -613,6 +620,7 @@ export default function SimulacroPage() {
                 highlights={highlights}
                 onHighlightChange={handleHighlightChange}
                 showSubject={showSubject}
+                showOrigin={showOrigin}
                 flagged={flagged}
                 onToggleFlag={handleToggleFlag}
               />
