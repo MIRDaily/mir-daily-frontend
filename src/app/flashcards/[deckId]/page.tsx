@@ -23,6 +23,7 @@ import {
   tintedPaper,
 } from '@/components/flashcards/ui'
 import {
+  answerFlashcard,
   deleteFlashcard,
   endFlashcardSession,
   fetchFlashcardLadder,
@@ -36,9 +37,11 @@ import {
   updateFlashcard,
   FLASHCARD_LEVELS,
   LEVEL_INFO,
+  USAR_ANSWER,
   type Flashcard,
   type FlashcardLevel,
   type Grade,
+  type NextFlashcardResult,
   type StudyFlashcard,
 } from '@/lib/studioFlashcards'
 import { NivelBadge } from '@/components/flashcards/ia/NivelBadge'
@@ -256,32 +259,40 @@ export default function FlashcardDeckPage() {
 
   // ---- Estudio SRS ---------------------------------------------------------
 
+  // Enseña lo que viene después: la tarjeta siguiente o el final de la sesión. Lo usan /next (al empezar y
+  // en el modo de antes) y /answer, que ya trae la siguiente.
+  const mostrarSiguiente = useCallback(
+    (res: NextFlashcardResult, sid: string) => {
+      if (res.kind === 'card') {
+        setCurrent(res.card)
+        setRevealed(false)
+        // Momento en que llega la tarjeta: sirve para cronometrar la respuesta
+        // y como origen para leer los intervalos, que el servidor calculó
+        // justo al servirla.
+        const ahora = new Date()
+        shownAtRef.current = ahora.getTime()
+        setShownAt(ahora)
+      } else {
+        setCurrent(null)
+        setFinishState(res.kind)
+        void endFlashcardSession(token, sid)
+      }
+    },
+    [token],
+  )
+
   const advance = useCallback(
     async (sid: string) => {
       setBusy(true)
       try {
-        const res = await nextFlashcard(token, deckId, sid)
-        if (res.kind === 'card') {
-          setCurrent(res.card)
-          setRevealed(false)
-          // Momento en que llega la tarjeta: sirve para cronometrar la respuesta
-          // y como origen para leer los intervalos, que el servidor calculó
-          // justo al servirla.
-          const ahora = new Date()
-          shownAtRef.current = ahora.getTime()
-          setShownAt(ahora)
-        } else {
-          setCurrent(null)
-          setFinishState(res.kind)
-          void endFlashcardSession(token, sid)
-        }
+        mostrarSiguiente(await nextFlashcard(token, deckId, sid), sid)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'No se pudo cargar la siguiente tarjeta.')
       } finally {
         setBusy(false)
       }
     },
-    [token, deckId],
+    [token, deckId, mostrarSiguiente],
   )
 
   const conNivel = cards.some((c) => c.level)
@@ -395,25 +406,37 @@ export default function FlashcardDeckPage() {
     async (grade: Grade) => {
       if (busy || !current || !sessionId || !revealed) return
       setBusy(true)
-      try {
-        await logFlashcard(token, deckId, {
-          deckItemId: current.id,
-          grade,
-          sessionId,
-          timeSpent: Math.round((Date.now() - shownAtRef.current) / 1000),
-        })
+      const respuesta = {
+        deckItemId: current.id,
+        grade,
+        sessionId,
+        timeSpent: Math.round((Date.now() - shownAtRef.current) / 1000),
+      }
+      const apuntar = () => {
         setStudied((n) => n + 1)
         setByGrade((prev) => ({ ...prev, [grade]: (prev[grade] ?? 0) + 1 }))
         // Pila para deshacer: hay que guardar la tarjeta Y el grado, porque al
         // deshacer se descuenta del reparto del resumen.
         setUndoStack((prev) => [...prev, { card: current, grade }])
-        await advance(sessionId)
+      }
+      try {
+        if (USAR_ANSWER) {
+          // Una petición: registra y trae la siguiente (etapa C2).
+          const { next } = await answerFlashcard(token, deckId, respuesta)
+          apuntar()
+          mostrarSiguiente(next, sessionId)
+          setBusy(false)
+        } else {
+          await logFlashcard(token, deckId, respuesta)
+          apuntar()
+          await advance(sessionId)
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'No se pudo registrar la respuesta.')
         setBusy(false)
       }
     },
-    [busy, current, sessionId, revealed, token, deckId, advance],
+    [busy, current, sessionId, revealed, token, deckId, advance, mostrarSiguiente],
   )
 
   const handleUndo = useCallback(async () => {
