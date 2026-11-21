@@ -1,40 +1,63 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useHeaderUI } from '@/providers/HeaderUIProvider'
 import MoverACarpeta from '@/components/carpetas/MoverACarpeta'
 import MoverVarios from '@/components/carpetas/MoverVarios'
-import { cargarArbol, cargarSinClasificar, moverACarpeta } from '@/lib/carpetas/api'
+import AceptarSugerencias from '@/components/carpetas/AceptarSugerencias'
+import { moverACarpeta } from '@/lib/carpetas/api'
 import { nombreCarpeta, type Carpeta } from '@/lib/carpetas/sugerir'
-import { cuentaDe, rutaCarpeta, sugerenciaDe, textoCuenta, type ElementoMaterial } from '@/lib/carpetas/biblioteca'
-import { useCargaRecordada, useScrollRecordado } from '@/hooks/useMemoriaDePestana'
+import { cuentaDe, rutaCarpeta, textoCuenta, type ElementoMaterial } from '@/lib/carpetas/biblioteca'
+import { useScrollRecordado } from '@/hooks/useMemoriaDePestana'
+import { claveElemento as clave, useSinClasificar } from '@/components/library/biblioteca/useSinClasificar'
 import { FilaElemento, Hero, INK, SectionLabel, StickerButton, StickerCard, TEXTURA_LOMOS } from '@/components/library/biblioteca/ui'
+import { PildorasFiltro, type OpcionFiltro } from '@/components/ui/PildorasFiltro'
 import { Esqueleto, NumeroAnimado, PaginaConMovimiento, RejillaAnimada, SALIDA, TRANSICION, entrada } from '@/components/ui/movimiento'
 
 // «Sin clasificar» (§6): lo que no tiene carpeta. Cada elemento tiene «Mover a…» y, si el emparejador ve
 // a qué tema se parece (título, temas de sus tarjetas o párrafos, documento de origen), un atajo de un
 // clic «¿A Reumatología › Lupus?». Selección múltiple para mover varios a la vez. NUNCA se mueve nada solo.
+// Vistas: todo, solo lo que tiene sugerencia (agrupado por carpeta) o lo que parece de una asignatura; en
+// las dos últimas, «Aceptar las sugerencias» mueve cada cosa a la suya tras enseñar adónde va.
 // Movimiento: lo que se mueve sale hacia la derecha y lo de debajo sube a su hueco; el aviso y la barra
 // de selección entran y salen. Al volver, la lista está como se dejó (memoria de pestaña) y se refresca.
 
-const clave = (e: Pick<ElementoMaterial, 'tipo' | 'id'>) => `${e.tipo}:${e.id}`
 const mismas = (a: Carpeta, b: Carpeta) => a.subjectId === b.subjectId && a.topicId === b.topicId
 
+type Vista = 'todo' | 'sugeridas' | 'asignatura'
+
 export default function SinClasificarPage() {
+  // La vista puede venir en la URL (?ver=sugeridas o ?asignatura=2: desde la portada o una asignatura).
+  // useSearchParams pide un Suspense porque la ruta se prerenderiza; mientras, la misma pantalla con la
+  // vista por defecto (es lo que queda en el HTML estático). Al navegar dentro de la app llegan ya.
+  return (
+    <Suspense fallback={<SinClasificar />}>
+      <SinClasificarConUrl />
+    </Suspense>
+  )
+}
+
+function SinClasificarConUrl() {
+  const params = useSearchParams()
+  return <SinClasificar ver={params.get('ver')} asignatura={Number(params.get('asignatura')) || null} />
+}
+
+function SinClasificar({ ver = null, asignatura = null }: { ver?: string | null; asignatura?: number | null }) {
   const { setBackAction } = useHeaderUI()
-  const carga = useCargaRecordada('biblioteca:sin-clasificar', () => Promise.all([cargarArbol(), cargarSinClasificar()]))
+  const { carga, arbol, elementos, sugerencias } = useSinClasificar()
+  const [vista, setVista] = useState<Vista>(() => (asignatura ? 'asignatura' : ver === 'sugeridas' ? 'sugeridas' : 'todo'))
   const [error, setError] = useState<string | null>(null)
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
   const [moverUno, setMoverUno] = useState<ElementoMaterial | null>(null)
   const [moverVarios, setMoverVarios] = useState(false)
+  const [aceptarVista, setAceptarVista] = useState(false)
   const [ocupado, setOcupado] = useState<string | null>(null)
-  const [aviso, setAviso] = useState<{ texto: string; carpeta: Carpeta; n: number } | null>(null)
+  const [aviso, setAviso] = useState<{ texto: string; carpeta: Carpeta | null; n: number } | null>(null)
   const casillaTodas = useRef<HTMLInputElement>(null)
 
-  const arbol = carga.datos?.[0] ?? null
-  const elementos = carga.datos?.[1] ?? null
   const errorCarga = !carga.datos && carga.error ? (carga.error instanceof Error ? carga.error.message : 'No se pudo cargar') : null
 
   useEffect(() => {
@@ -44,20 +67,26 @@ export default function SinClasificarPage() {
 
   const raizScroll = useScrollRecordado('biblioteca:sin-clasificar', elementos !== null)
 
-  // La sugerencia se calcula al abrir, en el navegador y sin coste (lib/carpetas/sugerir.ts).
-  const sugerencias = useMemo(() => {
-    const m = new Map<string, Carpeta>()
-    if (!arbol || !elementos) return m
-    for (const e of elementos) {
-      const s = sugerenciaDe(arbol, e)
-      if (s) m.set(clave(e), s)
-    }
-    return m
-  }, [arbol, elementos])
+  const lista = useMemo(() => elementos ?? [], [elementos])
+  const asigFiltro = asignatura && arbol ? (arbol.find((a) => a.id === asignatura) ?? null) : null
+  const deAsignatura = useMemo(
+    () => (asignatura ? lista.filter((e) => sugerencias.get(clave(e))?.subjectId === asignatura).length : 0),
+    [lista, sugerencias, asignatura],
+  )
 
-  const lista = elementos ?? []
+  // Lo que se ve: todo, o lo que tiene sugerencia (de cualquier asignatura o de una), agrupado por carpeta.
+  const visibles = useMemo(() => {
+    if (vista === 'todo') return lista
+    const con = lista.filter((e) => {
+      const s = sugerencias.get(clave(e))
+      return !!s && (vista === 'sugeridas' || s.subjectId === asignatura)
+    })
+    const nombre = (e: ElementoMaterial) => nombreCarpeta(arbol, sugerencias.get(clave(e))!, { corto: true })
+    return [...con].sort((a, b) => nombre(a).localeCompare(nombre(b), 'es'))
+  }, [vista, lista, sugerencias, asignatura, arbol])
+
   const elegidos = lista.filter((e) => seleccion.has(clave(e)))
-  const todas = lista.length > 0 && elegidos.length === lista.length
+  const todas = visibles.length > 0 && visibles.every((e) => seleccion.has(clave(e)))
   useEffect(() => {
     if (casillaTodas.current) casillaTodas.current.indeterminate = elegidos.length > 0 && !todas
   }, [elegidos.length, todas])
@@ -68,11 +97,25 @@ export default function SinClasificarPage() {
     return ss.length > 0 && ss.every((s) => s && ss[0] && mismas(s, ss[0])) ? ss[0] : null
   }, [elegidos, sugerencias])
 
-  const quitar = (claves: string[], carpeta: Carpeta) => {
+  const opciones: OpcionFiltro<Vista>[] = [
+    { valor: 'todo', etiqueta: 'Todo', cuenta: elementos ? lista.length : null },
+    { valor: 'sugeridas', etiqueta: 'Con sugerencia', cuenta: elementos ? sugerencias.size : null },
+    ...(asignatura
+      ? [{ valor: 'asignatura' as const, etiqueta: asigFiltro?.nombreCorto ?? 'Asignatura', cuenta: elementos ? deAsignatura : null }]
+      : []),
+  ]
+  const cambiarVista = (v: Vista) => {
+    setVista(v)
+    // La selección es de lo que se ve: al cambiar de vista se empieza de cero.
+    setSeleccion(new Set())
+  }
+
+  const quitar = (claves: string[], carpeta: Carpeta, { avisar = true } = {}) => {
     const fuera = new Set(claves)
     // En la pantalla y en la memoria: al volver, lo movido ya no está.
     carga.mutar(([a, es]) => [a, es.filter((e) => !fuera.has(clave(e)))])
     setSeleccion((prev) => new Set([...prev].filter((k) => !fuera.has(k))))
+    if (!avisar) return
     const n = claves.length
     setAviso((prev) => ({ texto: `${n === 1 ? 'Movido' : `${n} movidos`} a ${nombreCarpeta(arbol, carpeta, { corto: true })}`, carpeta, n: (prev?.n ?? 0) + 1 }))
   }
@@ -139,7 +182,7 @@ export default function SinClasificarPage() {
                   <span className="material-symbols-outlined text-[18px]">check_circle</span>
                 </span>
                 <span className="min-w-0 flex-1">{aviso.texto}</span>
-                {aviso.carpeta.subjectId !== null ? (
+                {aviso.carpeta && aviso.carpeta.subjectId !== null ? (
                   <Link href={rutaCarpeta(aviso.carpeta.subjectId, aviso.carpeta.topicId)} className="font-black underline-offset-2 hover:underline">
                     Ver la carpeta
                   </Link>
@@ -180,21 +223,75 @@ export default function SinClasificarPage() {
             ) : lista.length > 0 ? (
               <motion.div key="lista" {...entrada(0.06)} exit={{ opacity: 0, transition: SALIDA }}>
                 <StickerCard as="section" className="flex flex-col gap-3 p-4 sm:p-5" depth={5}>
-                  <label className="flex cursor-pointer items-center gap-2 self-start text-sm font-extrabold text-[#2C3E50]">
-                    <input
-                      ref={casillaTodas}
-                      type="checkbox"
-                      checked={todas}
-                      onChange={() => setSeleccion(todas ? new Set() : new Set(lista.map(clave)))}
-                      aria-label="Seleccionar todo"
-                    />
-                    {elegidos.length ? `${elegidos.length} ${elegidos.length === 1 ? 'seleccionado' : 'seleccionados'}` : 'Seleccionar todo'}
-                  </label>
+                  <PildorasFiltro opciones={opciones} valor={vista} onElegir={cambiarVista} idPildora="sin-clasificar-vista" etiqueta="Qué enseñar" />
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm font-extrabold text-[#2C3E50]">
+                      <input
+                        ref={casillaTodas}
+                        type="checkbox"
+                        checked={todas}
+                        disabled={visibles.length === 0}
+                        onChange={() => setSeleccion(todas ? new Set() : new Set(visibles.map(clave)))}
+                        aria-label="Seleccionar todo lo que se ve"
+                      />
+                      {elegidos.length ? `${elegidos.length} ${elegidos.length === 1 ? 'seleccionado' : 'seleccionados'}` : 'Seleccionar todo'}
+                    </label>
+                    {/* En las vistas de sugerencias: moverlo todo a lo sugerido, tras enseñar adónde va cada grupo. */}
+                    <AnimatePresence initial={false}>
+                      {vista !== 'todo' && visibles.length > 0 && arbol ? (
+                        <motion.button
+                          key="aceptar"
+                          type="button"
+                          onClick={() => setAceptarVista(true)}
+                          className="group/acep inline-flex items-center gap-1.5 rounded-xl border-2 border-[#2c3e50] bg-[#E8A598] px-3 py-1.5 text-sm font-black text-white shadow-[3px_3px_0_0_#2c3e50] transition-[translate,box-shadow] duration-150 hover:-translate-x-px hover:-translate-y-px hover:shadow-[4px_4px_0_0_#2c3e50] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#2c3e50] motion-reduce:transition-none"
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.9 }}
+                          transition={{ type: 'spring', stiffness: 520, damping: 30 }}
+                        >
+                          <span
+                            className="inline-flex transition-[rotate,scale] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover/acep:rotate-12 group-hover/acep:scale-110 motion-reduce:transition-none"
+                            aria-hidden
+                          >
+                            <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+                          </span>
+                          {visibles.length === 1 ? (
+                            'Aceptar la sugerencia'
+                          ) : (
+                            <>
+                              Aceptar las <NumeroAnimado valor={visibles.length} /> sugerencias
+                            </>
+                          )}
+                        </motion.button>
+                      ) : null}
+                    </AnimatePresence>
+                  </div>
                   <SectionLabel>
-                    <NumeroAnimado valor={lista.length} /> sin carpeta
+                    <NumeroAnimado valor={visibles.length} />{' '}
+                    {vista === 'todo' ? 'sin carpeta' : vista === 'sugeridas' ? 'con sugerencia' : `para ${asigFiltro?.nombreCorto ?? 'esta asignatura'}`}
                   </SectionLabel>
+                  <AnimatePresence initial={false}>
+                    {visibles.length === 0 ? (
+                      <motion.div
+                        key="vista-vacia"
+                        className="flex flex-col items-center gap-2 py-6 text-center"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0, transition: { ...TRANSICION, delay: 0.1 } }}
+                        exit={{ opacity: 0 }}
+                      >
+                        <p className="text-sm font-bold text-[#7D8A96]">
+                          {vista === 'asignatura'
+                            ? `Ya no queda nada que parezca de ${asigFiltro?.nombreCorto ?? 'esta asignatura'}.`
+                            : 'Ya no queda nada con sugerencia.'}
+                        </p>
+                        <button type="button" onClick={() => cambiarVista('todo')} className="text-sm font-black text-[#C97D6F] hover:underline">
+                          Ver todo lo sin clasificar
+                        </button>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
                   <RejillaAnimada as="ul" className="flex flex-col gap-2" aria-label="Material sin carpeta">
-                    {lista.map((e, i) => {
+                    {visibles.map((e, i) => {
                       const k = clave(e)
                       const s = sugerencias.get(k)
                       return (
@@ -300,6 +397,30 @@ export default function SinClasificarPage() {
             onMovido={(c) => quitar([clave(moverUno)], c)}
           />
         ) : null}
+        <AnimatePresence>
+          {aceptarVista && arbol ? (
+            <AceptarSugerencias
+              key="aceptar"
+              elementos={visibles}
+              sugerencias={sugerencias}
+              clave={clave}
+              arbol={arbol}
+              onClose={() => setAceptarVista(false)}
+              onMovidos={(claves, c) => quitar(claves, c, { avisar: false })}
+              onTerminado={(n, carpetas) => {
+                if (!n) return
+                // A una sola carpeta: se nombra y se enlaza, como al mover uno; a varias, solo cuántas.
+                const una = carpetas.length === 1 ? carpetas[0] : null
+                const destino = una ? nombreCarpeta(arbol, una, { corto: true }) : `${carpetas.length} carpetas`
+                setAviso((prev) => ({
+                  texto: `${n === 1 ? 'Movido' : `${n} movidos`} a ${destino}`,
+                  carpeta: una,
+                  n: (prev?.n ?? 0) + 1,
+                }))
+              }}
+            />
+          ) : null}
+        </AnimatePresence>
         {moverVarios ? (
           <MoverVarios
             seleccion={elegidos.map(({ tipo, id }) => ({ tipo, id }))}

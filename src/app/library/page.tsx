@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useDeferredValue, useEffect, useMemo, useRef } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { useDeferredValue, useMemo, useRef } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { cargarArbol, cargarRecuento, useArbolCarpetas } from '@/lib/carpetas/api'
 import { normalizar, type AsignaturaCatalogo } from '@/lib/carpetas/sugerir'
 import { tarjetasAsignaturas, textoCuenta } from '@/lib/carpetas/biblioteca'
@@ -10,6 +10,8 @@ import { guiaDeAsignatura } from '@/lib/studyGuides'
 import { CATEGORY_LABEL, type SubjectCategory } from '@/lib/subjectVisuals'
 import { useCargaRecordada, useEstadoRecordado, useScrollRecordado } from '@/hooks/useMemoriaDePestana'
 import { useAciertoAsignaturas } from '@/components/library/biblioteca/useDatosAsignatura'
+import { useSinClasificar } from '@/components/library/biblioteca/useSinClasificar'
+import { PildorasFiltro } from '@/components/ui/PildorasFiltro'
 import {
   CifrasMaterial,
   CifrasPreguntas,
@@ -55,11 +57,13 @@ export default function LibraryPage() {
   const portada = useCargaRecordada('biblioteca:portada', () => Promise.all([cargarArbol(), cargarRecuento()]))
   // El acierto en preguntas es un añadido: si falla, la Biblioteca se enseña igual.
   const heatmap = useAciertoAsignaturas()
+  // Lo que no tiene carpeta y adónde parece ir: la portada lo resume (y la página de «Sin clasificar», que
+  // comparte la memoria, abre ya cargada).
+  const { sugerencias, porAsignatura } = useSinClasificar()
+  const sugeridas = sugerencias.size
   const [busca, setBusca] = useEstadoRecordado('biblioteca:busca', '')
   const [filtro, setFiltro] = useEstadoRecordado<Filtro>('biblioteca:filtro', 'TODAS')
-  const reducir = useReducedMotion()
   const campo = useRef<HTMLInputElement | null>(null)
-  const filtrosRef = useRef<HTMLDivElement | null>(null)
 
   const arbol = portada.datos?.[0] ?? null
   const recuento = portada.datos?.[1] ?? null
@@ -98,21 +102,6 @@ export default function LibraryPage() {
       porFiltro: cuenta,
     }
   }, [arbol, arbolContado, recuento, q, filtro])
-
-  // En móvil los filtros se desplazan en horizontal: el elegido se trae a la vista. Solo se mueve la tira
-  // (scrollIntoView también movería la página y pisaría el scroll recordado); al montar, sin animación.
-  const montado = useRef(false)
-  useEffect(() => {
-    const tira = filtrosRef.current
-    const boton = tira?.querySelector<HTMLElement>('[aria-pressed="true"]')
-    if (tira && boton) {
-      const izq = boton.offsetLeft - tira.offsetLeft
-      const der = izq + boton.offsetWidth
-      const destino = izq < tira.scrollLeft ? izq : der > tira.scrollLeft + tira.clientWidth ? der - tira.clientWidth : null
-      if (destino !== null) tira.scrollTo({ left: destino, behavior: montado.current && !reducir ? 'smooth' : 'instant' })
-    }
-    montado.current = true
-  }, [filtro, reducir])
 
   // Pulsar el filtro activo lo quita (vuelve a «Todas»).
   const elegirFiltro = (f: Filtro) => setFiltro((actual) => (actual === f && f !== 'TODAS' ? 'TODAS' : f))
@@ -158,7 +147,7 @@ export default function LibraryPage() {
           </AnimatePresence>
 
           <motion.div {...entrada(0.06)}>
-            <Link href="/library/sin-clasificar" className="group block rounded-3xl outline-none">
+            <Link href={sugeridas > 0 ? '/library/sin-clasificar?ver=sugeridas' : '/library/sin-clasificar'} className="group block rounded-3xl outline-none">
               <StickerCard
                 className={`flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:gap-5 ${PEGATINA_5}`}
                 style={{ boxShadow: undefined }}
@@ -199,10 +188,28 @@ export default function LibraryPage() {
                     >
                       {textoSin}
                     </motion.p>
+                    {/* Cuántos tienen ya carpeta sugerida: se revisan (y se aceptan) en «Sin clasificar». */}
+                    <AnimatePresence initial={false}>
+                      {sugeridas > 0 ? (
+                        <motion.span
+                          key="sugeridas"
+                          className="mt-2 inline-flex items-center gap-1 rounded-full border border-[#E8A598]/60 bg-[#FCEFEC] px-2.5 py-0.5 text-[11px] font-extrabold text-[#C97D6F]"
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          transition={TRANSICION}
+                        >
+                          <span className={`inline-flex ${GIRO_HOVER}`} aria-hidden>
+                            <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                          </span>
+                          <NumeroAnimado valor={sugeridas} /> con carpeta sugerida
+                        </motion.span>
+                      ) : null}
+                    </AnimatePresence>
                   </AlturaAnimada>
                 </div>
                 <span className="hidden shrink-0 items-center gap-1 text-sm font-black text-[#C97D6F] sm:inline-flex">
-                  Ordenar
+                  {sugeridas > 0 ? 'Revisar sugerencias' : 'Ordenar'}
                   <span className={EMPUJE_HOVER}>
                     <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
                   </span>
@@ -275,54 +282,13 @@ export default function LibraryPage() {
                   ) : null}
                 </AnimatePresence>
               </div>
-              <motion.div
-                ref={filtrosRef}
-                layoutScroll
-                className="no-scrollbar flex gap-2 overflow-x-auto pb-1"
-                role="group"
-                aria-label="Tipo de asignatura"
-              >
-                {FILTROS.map((f) => {
-                  const activo = filtro === f
-                  const n = porFiltro ? porFiltro[f] : null
-                  return (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => elegirFiltro(f)}
-                      aria-pressed={activo}
-                      className={`relative shrink-0 rounded-full border-2 px-4 py-1.5 text-sm font-extrabold transition-colors duration-200 motion-reduce:transition-none ${
-                        activo
-                          ? 'border-transparent text-white'
-                          : 'border-[#EAE4E2] bg-white text-[#7D8A96] hover:border-[#2c3e50] hover:text-[#2C3E50]'
-                      }`}
-                    >
-                      {/* La píldora oscura viaja de un filtro a otro; va por encima del fondo blanco de los demás
-                          (z-1) y por debajo de los textos (z-2), para que no la tape el botón por el que pasa. */}
-                      {activo ? (
-                        <motion.span
-                          layoutId="biblioteca-filtro-activo"
-                          className="absolute -inset-[2px] z-[1] rounded-full bg-[#2C3E50]"
-                          transition={{ type: 'spring', stiffness: 520, damping: 40 }}
-                          aria-hidden
-                        />
-                      ) : null}
-                      <span className="relative z-[2] inline-flex items-center gap-1.5 transition-transform duration-150 active:scale-95 motion-reduce:transition-none">
-                        {f === 'TODAS' ? 'Todas' : CATEGORY_LABEL[f]}
-                        {/* El hueco del contador existe siempre y con ancho fijo (en em, cabe «20»): la píldora no
-                            cambia de tamaño al llegar los datos ni al pasar de una a dos cifras, y la oscura no se mueve. */}
-                        <span
-                          className={`inline-flex w-[2.6em] justify-center rounded-full text-[11px] leading-[1.15rem] font-black transition-colors duration-200 ${
-                            activo ? 'bg-white/20 text-white' : n === 0 ? 'bg-[#F5F1EE] text-[#7D8A96]/50' : 'bg-[#F5F1EE] text-[#7D8A96]'
-                          }`}
-                        >
-                          {n === null ? <span className="opacity-40">–</span> : <NumeroAnimado valor={n} />}
-                        </span>
-                      </span>
-                    </button>
-                  )
-                })}
-              </motion.div>
+              <PildorasFiltro
+                opciones={FILTROS.map((f) => ({ valor: f, etiqueta: f === 'TODAS' ? 'Todas' : CATEGORY_LABEL[f], cuenta: porFiltro ? porFiltro[f] : null }))}
+                valor={filtro}
+                onElegir={elegirFiltro}
+                idPildora="biblioteca-filtro-activo"
+                etiqueta="Tipo de asignatura"
+              />
             </div>
 
             <p className="sr-only" role="status" aria-live="polite">
@@ -376,7 +342,28 @@ export default function LibraryPage() {
                           </div>
                           <div className="mt-auto flex flex-col gap-2 border-t-2 border-dashed border-[#EAE4E2] pt-3">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-[11px] font-black tracking-wide text-[#7D8A96]/70 uppercase">Tu material</span>
+                              <span className="flex items-center gap-1.5">
+                                <span className="text-[11px] font-black tracking-wide text-[#7D8A96]/70 uppercase">Tu material</span>
+                                {/* Lo sin clasificar que parece de esta asignatura: en la misma línea, sin cambiar el alto. */}
+                                <AnimatePresence initial={false}>
+                                  {porAsignatura.get(a.id) ? (
+                                    <motion.span
+                                      key="sugeridos"
+                                      className="inline-flex items-center gap-0.5 rounded-full bg-[#FCEFEC] px-1.5 text-[10px] leading-4 font-black text-[#C97D6F] tabular-nums"
+                                      title={`${porAsignatura.get(a.id)} sin clasificar ${porAsignatura.get(a.id) === 1 ? 'parece' : 'parecen'} de ${a.nombreCorto}`}
+                                      initial={{ opacity: 0, scale: 0.6 }}
+                                      animate={{ opacity: 1, scale: 1 }}
+                                      exit={{ opacity: 0, scale: 0.6 }}
+                                      transition={{ type: 'spring', stiffness: 520, damping: 28 }}
+                                    >
+                                      <span className="inline-flex" aria-hidden>
+                                        <span className="material-symbols-outlined text-[11px]">auto_awesome</span>
+                                      </span>
+                                      {porAsignatura.get(a.id)}
+                                    </motion.span>
+                                  ) : null}
+                                </AnimatePresence>
+                              </span>
                               <CifrasMaterial cuenta={cuenta} compacto />
                             </div>
                             {carpetas > 0 ? (

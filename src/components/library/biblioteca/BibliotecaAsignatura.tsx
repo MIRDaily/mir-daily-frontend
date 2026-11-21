@@ -10,6 +10,7 @@ import { useDatosAsignatura } from '@/components/library/biblioteca/useDatosAsig
 import { IndicadorDominio } from '@/components/library/biblioteca/dominioUi'
 import { estadoDominio, porcentaje, UMBRAL_BIEN_LLEVADO } from '@/lib/carpetas/dominio'
 import { useScrollRecordado } from '@/hooks/useMemoriaDePestana'
+import { useSinClasificar } from '@/components/library/biblioteca/useSinClasificar'
 import {
   CifrasMaterial,
   CifrasPreguntas,
@@ -23,6 +24,7 @@ import {
   colorAcierto,
 } from '@/components/library/biblioteca/ui'
 import {
+  AlturaAnimada,
   EMPUJE_HOVER,
   Esqueleto,
   GIRO_HOVER,
@@ -32,6 +34,7 @@ import {
   PEGATINA_4,
   PaginaConMovimiento,
   RejillaAnimada,
+  TRANSICION,
   entrada,
 } from '@/components/ui/movimiento'
 
@@ -64,6 +67,7 @@ export default function BibliotecaAsignatura({ subjectId }: { subjectId: number 
   // Las carpetas que pueden tener señal: las que tienen algún grupo de flashcards o de resúmenes.
   const medibles = carpetas.filter((c) => c.cuenta.flashcards + c.cuenta.resumenes > 0)
   const hayAcierto = general.acierto !== null && general.respondidas > 0
+  const sugeridos = useSinClasificar().porAsignatura.get(subjectId) ?? 0
 
   if (error) {
     return (
@@ -150,6 +154,36 @@ export default function BibliotecaAsignatura({ subjectId }: { subjectId: number 
             </motion.header>
           )}
 
+          {/* Lo sin clasificar que parece de esta asignatura: se revisa (y se acepta) en «Sin clasificar». */}
+          {/* Márgenes negativos: con el aviso oculto (alto 0) el hueco entre bloques no cambia, y la sombra dura
+              del aviso cabe dentro del recorte de la altura animada. */}
+          <AlturaAnimada className="-mx-2 -my-4 [@media(max-height:850px)]:-my-3">
+            <AnimatePresence initial={false}>
+              {asig && sugeridos > 0 ? (
+                <motion.div key="sugeridos" className="px-2 py-4 [@media(max-height:850px)]:py-3" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={TRANSICION}>
+                  <Link href={`/library/sin-clasificar?asignatura=${subjectId}`} className="group block rounded-2xl outline-none">
+                    <span
+                      className={`flex items-center gap-3 rounded-2xl border-2 border-[#2c3e50] bg-[#FCEFEC] px-4 py-3 text-sm text-[#2C3E50] ${PEGATINA_3}`}
+                    >
+                      <span className={`inline-flex shrink-0 text-[#C97D6F] ${GIRO_HOVER}`} aria-hidden>
+                        <span className="material-symbols-outlined text-[22px]">auto_awesome</span>
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <b className="font-black">
+                          {sugeridos} {sugeridos === 1 ? 'elemento sin clasificar parece' : 'elementos sin clasificar parecen'} de {asig.nombreCorto}.
+                        </b>{' '}
+                        <span className="text-[#7D8A96]">Revísalos y muévelos aquí de una vez.</span>
+                      </span>
+                      <span className={`shrink-0 font-black text-[#C97D6F] ${EMPUJE_HOVER}`}>
+                        <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+                      </span>
+                    </span>
+                  </Link>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </AlturaAnimada>
+
           <motion.section {...entrada(0.08)}>
             <SectionLabel>Tus carpetas</SectionLabel>
             {datos && asig && carpetas.length === 0 ? (
@@ -160,7 +194,10 @@ export default function BibliotecaAsignatura({ subjectId }: { subjectId: number 
                     Aún no tienes material en {asig.nombreCorto}. Cuando guardes aquí un mapa, un grupo de flashcards o de resúmenes, sus temas
                     aparecerán en esta página, cada uno junto a sus preguntas MIR.
                   </p>
-                  <Link href="/library/sin-clasificar" className="text-sm font-black text-[#C97D6F] hover:underline">
+                  <Link
+                    href={sugeridos > 0 ? `/library/sin-clasificar?asignatura=${subjectId}` : '/library/sin-clasificar'}
+                    className="text-sm font-black text-[#C97D6F] hover:underline"
+                  >
                     Ordenar lo que tienes sin clasificar
                   </Link>
                 </StickerCard>
