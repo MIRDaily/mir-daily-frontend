@@ -1,7 +1,15 @@
 'use client'
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { motion, useReducedMotion, useSpring, useTransform } from 'framer-motion'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
+import {
+  animate,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+  useTransform,
+  type MotionValue,
+} from 'framer-motion'
 import { fetchSubjects, fetchTopics } from '@/lib/simulacro/queries'
 import SimulacroTopicPicker from '@/components/simulacro/SimulacroTopicPicker'
 import { GhostButton, Hero, StepBadge, StickerCard } from '@/components/ui/sticker'
@@ -98,8 +106,15 @@ export default function SimulacroBuilder({
   // Mostrar la asignatura en cada pregunta. Apagado por defecto y sin
   // recordar: saberla acota la respuesta y el simulacro imita al examen.
   const [showSubject, setShowSubject] = useState(false)
+  // Año y nº de pregunta del MIR original. Mismo criterio: apagado y sin recordar.
+  const [showOrigin, setShowOrigin] = useState(false)
   // Reparto ponderado por peso en el MIR (botón "MIR").
   const [weighted, setWeighted] = useState(false)
+
+  // El resumen flota a media pantalla mientras se ajustan las tarjetas.
+  const summaryColumnRef = useRef<HTMLElement>(null)
+  const summaryCardRef = useRef<HTMLDivElement>(null)
+  const summaryY = useFollowScroll(summaryColumnRef, summaryCardRef)
 
   useEffect(() => {
     let active = true
@@ -303,6 +318,7 @@ export default function SimulacroBuilder({
       count,
       mode,
       showSubject,
+      showOrigin,
       weights: weighted ? allocateByWeight(count, chosen) : undefined,
     })
   }
@@ -602,58 +618,55 @@ export default function SimulacroBuilder({
             })}
           </div>
 
-          {/* Asignatura visible u oculta durante el test */}
-          <button
-            type="button"
-            role="switch"
-            aria-checked={showSubject}
-            onClick={() => setShowSubject((v) => !v)}
-            className="mt-4 flex w-full items-center gap-3 rounded-2xl border-2 border-[#EAE4E2] bg-white p-4 text-left transition-colors hover:border-[#2c3e50]"
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F2EFED] text-[#7D8A96]">
-              <span className="material-symbols-outlined text-xl">
-                {showSubject ? 'label' : 'label_off'}
-              </span>
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-black text-[#2c3e50]">Mostrar la asignatura</span>
-              <span className="mt-0.5 block text-xs text-[#7D8A96]">
-                Saberla acota la respuesta antes de leer el caso. En el MIR no la ves.
-              </span>
-            </span>
-            <span
-              className={`relative h-7 w-12 shrink-0 rounded-full border-2 border-[#2c3e50] transition-colors ${
-                showSubject ? 'bg-[#8BA888]' : 'bg-[#F2EFED]'
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 h-5 w-5 rounded-full border-2 border-[#2c3e50] bg-white transition-all ${
-                  showSubject ? 'left-[calc(100%-1.375rem)]' : 'left-0.5'
-                }`}
-              />
-            </span>
-          </button>
+          {/* Lo que se ve de cada pregunta durante el test */}
+          <div className="mt-4 flex flex-col gap-3">
+            <ToggleRow
+              checked={showSubject}
+              onChange={setShowSubject}
+              icon={showSubject ? 'label' : 'label_off'}
+              title="Mostrar la asignatura"
+              description="Saberla acota la respuesta antes de leer el caso. En el MIR no la ves."
+            />
+            <ToggleRow
+              checked={showOrigin}
+              onChange={setShowOrigin}
+              icon={showOrigin ? 'event_note' : 'event_busy'}
+              title="Mostrar año y nº de pregunta"
+              description="De qué MIR sale cada pregunta y qué número tenía en ese examen."
+            />
+          </div>
         </StickerCard>
         </div>
 
-        {/* Resumen: lo que vas a generar, siempre a la vista */}
-        <aside className="lg:sticky lg:top-6">
-          <StickerCard className="overflow-hidden" depth={6}>
-            <div className="border-b-2 border-[#2c3e50] bg-[#FFF5F2] px-5 py-3">
+        {/* Resumen: lo que vas a generar, siempre a la vista. La columna ocupa
+            todo el alto de la fila y la tarjeta se desplaza dentro de ella
+            (useFollowScroll). Nunca pasa del alto visible: si no cabe (reparto
+            MIR en un portátil), lo que encoge es la lista del reparto, nunca
+            el botón. */}
+        <aside ref={summaryColumnRef} className="lg:self-stretch">
+          <motion.div
+            ref={summaryCardRef}
+            className="lg:flex lg:max-h-[calc(100dvh-var(--sim-sticky-top)-1.25rem)] lg:flex-col"
+            style={{ y: summaryY }}
+          >
+          <StickerCard className="overflow-hidden lg:flex lg:min-h-0 lg:flex-col" depth={6}>
+            <div className="border-b-2 border-[#2c3e50] bg-[#FFF5F2] px-5 py-3 [@media(max-height:850px)]:py-2">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d18d80]">
                 Tu simulacro
               </p>
             </div>
 
-            <div className="flex flex-col gap-4 p-5">
+            {/* En pantallas bajas se compacta (como el runner) para que quepa
+                entero; y si ni así, el cuerpo hace scroll antes que cortar el botón. */}
+            <div className="flex flex-col gap-4 p-5 lg:min-h-0 lg:overflow-y-auto [@media(max-height:850px)]:gap-3 [@media(max-height:850px)]:p-4">
               <div className="text-center">
-                <p className="text-5xl font-black leading-none text-[#2c3e50] tabular-nums">{count}</p>
+                <p className="text-5xl font-black leading-none text-[#2c3e50] tabular-nums [@media(max-height:850px)]:text-4xl">{count}</p>
                 <p className="mt-1 text-xs font-bold uppercase tracking-wider text-[#7D8A96]/70">
                   {count === 1 ? 'pregunta' : 'preguntas'}
                 </p>
               </div>
 
-              <dl className="flex flex-col gap-2 text-sm">
+              <dl className="flex flex-col gap-2 text-sm [@media(max-height:850px)]:gap-1">
                 <div className="flex items-baseline justify-between gap-3">
                   <dt className="text-[#7D8A96]">Asignaturas</dt>
                   <dd className="font-black text-[#2c3e50]">
@@ -688,13 +701,19 @@ export default function SimulacroBuilder({
                     {showSubject ? 'Visible' : 'Oculta'}
                   </dd>
                 </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[#7D8A96]">Año y nº</dt>
+                  <dd className="text-right font-black text-[#2c3e50]">
+                    {showOrigin ? 'Visibles' : 'Ocultos'}
+                  </dd>
+                </div>
               </dl>
 
               {/* Reparto real: si se quita una asignatura, los pesos se
                   reajustan sobre las que quedan y aquí se ve al momento. */}
               {weighted && mirBreakdown.length > 0 ? (
                 <motion.div
-                  className="rounded-2xl border-2 border-[#EAE4E2] bg-[#FAF7F4] p-3"
+                  className="rounded-2xl border-2 border-[#EAE4E2] bg-[#FAF7F4] p-3 lg:flex lg:min-h-22 lg:flex-col"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, ease: 'easeOut' }}
@@ -702,7 +721,7 @@ export default function SimulacroBuilder({
                   <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-[#7D8A96]/70">
                     Preguntas por asignatura
                   </p>
-                  <ul className="flex max-h-52 flex-col gap-1 overflow-y-auto pr-1">
+                  <ul className="flex max-h-52 flex-col gap-1 overflow-y-auto pr-1 lg:min-h-0 lg:flex-1">
                     {mirBreakdown.map((row) => (
                       <li key={row.name} className="flex items-baseline justify-between gap-2 text-xs">
                         <span className="min-w-0 truncate text-[#7D8A96]">{row.name}</span>
@@ -748,9 +767,145 @@ export default function SimulacroBuilder({
               ) : null}
             </div>
           </StickerCard>
+          </motion.div>
         </aside>
       </div>
     </motion.div>
+  )
+}
+
+/** Pausa entre el scroll y que el resumen empiece a moverse. */
+const FOLLOW_DELAY_MS = 110
+/**
+ * Muelle lento y un poco flojo (amortiguamiento ~0,67): arranca suave, frena
+ * suave y se pasa apenas un 5-6 % antes de asentarse, en algo más de un segundo.
+ */
+const FOLLOW_SPRING = { stiffness: 26, damping: 7.5, mass: 1.2 } as const
+/** Scroll a lo largo del cual el resumen pasa de su sitio a flotar. */
+const FOLLOW_ENGAGE_PX = 160
+/** Hueco mínimo entre la cabecera global y el resumen. */
+const FOLLOW_HEADER_GAP_PX = 16
+
+/**
+ * Desplazamiento vertical del resumen del creador dentro de su columna.
+ *
+ * Arriba del todo la tarjeta se queda en su sitio, alineada con la primera
+ * tarjeta de la izquierda. Al bajar, busca el centro de lo que se ve por debajo
+ * de la cabecera global (sticky, ~128 px con migas, por eso se mide), sin salirse
+ * nunca de su columna: al final de la página se queda apoyada abajo. El destino
+ * se calcula en cada scroll y se le pasa al muelle con un poco de retardo, así
+ * que la tarjeta no va clavada a la rueda sino que la sigue y se posa.
+ *
+ * Solo en escritorio (lg): en móvil el resumen va debajo de todo y no se mueve.
+ * Con "reducir movimiento" se coloca sin muelle ni retardo.
+ */
+function useFollowScroll(
+  columnRef: RefObject<HTMLElement | null>,
+  cardRef: RefObject<HTMLElement | null>,
+): MotionValue<number> {
+  const reduceMotion = useReducedMotion()
+  const target = useMotionValue(0)
+  const spring = useSpring(target, FOLLOW_SPRING)
+
+  useEffect(() => {
+    const column = columnRef.current
+    const card = cardRef.current
+    if (!column || !card) return
+    const header = document.querySelector<HTMLElement>('nav.sticky.top-0')
+    const desktop = window.matchMedia('(min-width: 64rem)')
+    const timers = new Set<number>()
+
+    const update = () => {
+      const headerBottom = header ? Math.max(0, header.getBoundingClientRect().bottom) : 0
+      const topLimit = Math.round(headerBottom) + FOLLOW_HEADER_GAP_PX
+      // Tope de alto de la tarjeta (clase lg:max-h-[…] del envoltorio).
+      column.style.setProperty('--sim-sticky-top', `${topLimit}px`)
+
+      let offset = 0
+      if (desktop.matches) {
+        const cardHeight = card.offsetHeight
+        const centered = headerBottom + (window.innerHeight - headerBottom - cardHeight) / 2
+        const desiredTop = Math.max(topLimit, centered)
+        const room = Math.max(0, column.clientHeight - cardHeight)
+        const engage = Math.min(1, window.scrollY / FOLLOW_ENGAGE_PX)
+        const wanted = Math.max(0, desiredTop - column.getBoundingClientRect().top) * engage
+        offset = Math.min(room, wanted)
+      }
+
+      if (reduceMotion) {
+        target.jump(offset)
+        return
+      }
+      const id = window.setTimeout(() => {
+        timers.delete(id)
+        target.set(offset)
+      }, FOLLOW_DELAY_MS)
+      timers.add(id)
+    }
+
+    update()
+    window.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    desktop.addEventListener('change', update)
+    // La columna crece al elegir temas y la tarjeta al salir el reparto MIR.
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    observer?.observe(column)
+    observer?.observe(card)
+    if (header) observer?.observe(header)
+
+    return () => {
+      window.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+      desktop.removeEventListener('change', update)
+      observer?.disconnect()
+      timers.forEach((id) => window.clearTimeout(id))
+    }
+  }, [columnRef, cardRef, reduceMotion, target])
+
+  return reduceMotion ? target : spring
+}
+
+/** Interruptor con icono, título y explicación (opciones de lo que se ve en el test). */
+function ToggleRow({
+  checked,
+  onChange,
+  icon,
+  title,
+  description,
+}: {
+  checked: boolean
+  onChange: (next: boolean) => void
+  icon: string
+  title: string
+  description: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="flex w-full items-center gap-3 rounded-2xl border-2 border-[#EAE4E2] bg-white p-4 text-left transition-colors hover:border-[#2c3e50]"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F2EFED] text-[#7D8A96]">
+        <span className="material-symbols-outlined text-xl">{icon}</span>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-black text-[#2c3e50]">{title}</span>
+        <span className="mt-0.5 block text-xs text-[#7D8A96]">{description}</span>
+      </span>
+      <span
+        className={`relative h-7 w-12 shrink-0 rounded-full border-2 border-[#2c3e50] transition-colors ${
+          checked ? 'bg-[#8BA888]' : 'bg-[#F2EFED]'
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 h-5 w-5 rounded-full border-2 border-[#2c3e50] bg-white transition-all ${
+            checked ? 'left-[calc(100%-1.375rem)]' : 'left-0.5'
+          }`}
+        />
+      </span>
+    </button>
   )
 }
 
@@ -786,6 +941,45 @@ function QuickPick({
   )
 }
 
+/** Muelle del deslizador: rápido y con un rebote del ~5,7 % del recorrido. */
+const SLIDER_SPRING = { stiffness: 210, damping: 18, mass: 0.85 } as const
+/**
+ * Lo más que la bola puede pasarse de un extremo de la pista, en preguntas
+ * (~8 px en escritorio). Es justo lo que asoma por la izquierda al ir de 210 a
+ * 10 con el muelle normal, así que ese movimiento no cambia y el de 10 a 210
+ * queda igual que él.
+ */
+const SLIDER_EDGE_OVERSHOOT = 2.4
+
+/** Fracción del recorrido que se pasa el muelle normal partiendo de parado. */
+const SLIDER_NATURAL_OVERSHOOT = (() => {
+  const { stiffness, damping, mass } = SLIDER_SPRING
+  const zeta = damping / (2 * Math.sqrt(stiffness * mass))
+  return Math.exp((-Math.PI * zeta) / Math.sqrt(1 - zeta ** 2))
+})()
+
+/**
+ * Amortiguación para ir de `from` a `to` sin pasarse del extremo de la pista
+ * más de SLIDER_EDGE_OVERSHOOT.
+ *
+ * El muelle se pasa del destino lo mismo en los dos sentidos, pero 210 es el
+ * final de la pista y 10 no es del todo el principio: hacia 210 todo el rebote
+ * caía fuera (40 px) y hacia 10 casi todo quedaba dentro (asomaban 8). Recortar
+ * la posición en el borde hacía que la bola se estampara contra una pared; en
+ * cambio, subir un poco la amortiguación de ESE movimiento deja un rebote
+ * natural, solo que más corto. Los movimientos que no llegan a un extremo usan
+ * el muelle de siempre.
+ */
+function sliderDampingFor(from: number, to: number): number {
+  const travel = Math.abs(to - from)
+  const room = (to > from ? MAX_COUNT - to : to - 1) + SLIDER_EDGE_OVERSHOOT
+  if (travel === 0 || SLIDER_NATURAL_OVERSHOOT * travel <= room) return SLIDER_SPRING.damping
+  // Rebote buscado = room / travel; de ahí sale el coeficiente de amortiguación.
+  const lnRatio = Math.log(room / travel)
+  const zeta = -lnRatio / Math.sqrt(Math.PI ** 2 + lnRatio ** 2)
+  return 2 * zeta * Math.sqrt(SLIDER_SPRING.stiffness * SLIDER_SPRING.mass)
+}
+
 /**
  * Deslizador del número de preguntas.
  *
@@ -796,10 +990,18 @@ function QuickPick({
  * ni la accesibilidad, que es lo que se suele romper al hacer esto a mano.
  */
 function CountSlider({ value, onChange }: { value: number; onChange: (n: number) => void }) {
-  const progress = useSpring(value, { stiffness: 210, damping: 18, mass: 0.85 })
+  const progress = useMotionValue(value)
 
+  // Cada cambio lanza su propio muelle (con la amortiguación que le toque) y
+  // arranca desde donde esté la bola, con su velocidad: si se cambia a mitad
+  // de un viaje, no da tirones.
   useEffect(() => {
-    progress.set(value)
+    const controls = animate(progress, value, {
+      type: 'spring',
+      ...SLIDER_SPRING,
+      damping: sliderDampingFor(progress.get(), value),
+    })
+    return () => controls.stop()
   }, [value, progress])
 
   const width = useTransform(progress, (v) => `${((v - 1) / (MAX_COUNT - 1)) * 100}%`)

@@ -38,6 +38,9 @@ type SimulacroRunnerProps = {
   /** Mostrar la asignatura sobre el enunciado. Apagado por defecto: saberla
    *  acota la respuesta antes de leer el caso (como en la app). */
   showSubject: boolean
+  /** Mostrar de qué MIR sale la pregunta y su número en ese examen. Apagado
+   *  por defecto; se enciende en el creador. */
+  showOrigin: boolean
   /** Preguntas marcadas "para revisar" (por índice). Viven en la página. */
   flagged: ReadonlySet<number>
   onToggleFlag: (questionIndex: number) => void
@@ -69,6 +72,7 @@ export default function SimulacroRunner({
   highlights,
   onHighlightChange,
   showSubject,
+  showOrigin,
   flagged,
   onToggleFlag,
 }: SimulacroRunnerProps) {
@@ -491,12 +495,23 @@ export default function SimulacroRunner({
 
       <div className="w-full space-y-8 [@media(max-height:850px)]:space-y-5">
         <div className="relative">
-          {/* La asignatura solo ocupa fila si se muestra. */}
-          {showSubject && current?.subject ? (
-            <div className="mb-4 [@media(max-height:850px)]:mb-3">
-              <span className="inline-block rounded-full border-2 border-[#EAE4E2] bg-white px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#7D8A96]">
-                {current.subject}
-              </span>
+          {/* Asignatura y procedencia: la fila solo existe si hay algo que enseñar. */}
+          {(showSubject && current?.subject) || (showOrigin && current?.year) ? (
+            <div className="mb-4 flex flex-wrap items-center gap-2 [@media(max-height:850px)]:mb-3">
+              {showSubject && current?.subject ? (
+                <span className="inline-block rounded-full border-2 border-[#EAE4E2] bg-white px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#7D8A96]">
+                  {current.subject}
+                </span>
+              ) : null}
+              {showOrigin && current?.year ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border-2 border-[#EAE4E2] bg-white px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#7D8A96]">
+                  <span className="material-symbols-outlined text-sm text-[#d18d80]">event_note</span>
+                  MIR {current.year}
+                  {current.question_number ? (
+                    <span className="text-[#2c3e50]">· Pregunta {current.question_number}</span>
+                  ) : null}
+                </span>
+              ) : null}
             </div>
           ) : null}
           <h1 className="text-[1.75rem] font-black leading-tight tracking-tight text-[#2C3E50] md:text-[clamp(1.6rem,2.22vw,2rem)]">

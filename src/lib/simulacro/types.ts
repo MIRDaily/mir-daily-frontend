@@ -23,6 +23,8 @@ export interface SimulacroConfig {
   mode: SimulacroMode
   /** Mostrar la asignatura en cada pregunta (apagado por defecto). */
   showSubject?: boolean
+  /** Mostrar el año y el nº de pregunta en el MIR original (apagado por defecto). */
+  showOrigin?: boolean
   /**
    * Cuota de preguntas por asignatura (botón "MIR"). Si viene, manda sobre
    * `count` y `topicIds`: el simulacro se compone pidiendo cada asignatura por
@@ -47,6 +49,9 @@ export interface SmartSimulacroPlan {
 // explicación. Esos datos solo se revelan tras corregir en el servidor (/check).
 export interface SimulacroQuestion {
   id: number
+  /** Convocatoria del MIR de la que sale la pregunta y su número en ese examen. */
+  year?: number | null
+  question_number?: number | null
   statement: string
   subject: string | null
   topic: string | null
