@@ -37,17 +37,18 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       lastExamReserve: 0,
       pages: 13,
       focus:
-        'El tema que más pesa (23 preguntas de 2015 a 2026) y el más regular: al menos una cada año de 2015 a 2025, hasta el cero de 2026. Desde 2016, lo más preguntado es la fisiología básica (8: ventilación y perfusión en bipedestación, vasoconstricción hipóxica, mecánica, control de la respiración y hemoglobina), seguida de la gasometría y los mecanismos de hipoxemia (6), la inhalación de humo con monóxido de carbono y cianuro (4, de 2019 a 2024) y las pruebas funcionales (3). No lo dejes por el cero de 2026: la vasoconstricción hipóxica, que cayó aquí en 2022 y 2024, fue la respuesta de la 159, la de hipertensión pulmonar.',
+        'El tema que más pesa (23 preguntas de 2015 a 2026) y el más regular: al menos una cada año de 2015 a 2025, hasta el cero de 2026. Desde 2016, lo más preguntado es la fisiología básica (8: ventilación y perfusión en bipedestación, vasoconstricción hipóxica, espacio muerto, mecánica, control de la respiración y hemoglobina), seguida de la gasometría y los mecanismos de hipoxemia (6), la inhalación de humo con monóxido de carbono y cianuro (4, de 2019 a 2024) y las pruebas funcionales (3). No lo dejes por el cero de 2026: la vasoconstricción hipóxica, que cayó aquí en 2022 y 2024, fue la respuesta de la 159, la de hipertensión pulmonar.',
       hotspots: [
         { name: 'Mecanismos de hipoxemia y gradiente alveoloarterial', heat: 3 },
-        { name: 'Ventilación y perfusión en bipedestación', heat: 3 },
         { name: 'Humo de incendio: monóxido de carbono y cianuro', heat: 3 },
+        { name: 'Ventilación y perfusión en bipedestación', heat: 2 },
         { name: 'Gasometría: tipo de insuficiencia respiratoria', heat: 2 },
         { name: 'Vasoconstricción pulmonar hipóxica', heat: 2 },
         { name: 'Curva de la hemoglobina y 2,3-BPG', heat: 2 },
         { name: 'Patrones espirométricos y DLCO', heat: 2 },
         { name: 'Mecánica ventilatoria y presiones', heat: 1 },
         { name: 'Control químico de la respiración', heat: 1 },
+        { name: 'Espacio muerto', heat: 1 },
       ],
       keys: [
         'Mecanismos de hipoxemia: el más frecuente es el desequilibrio ventilación/perfusión (2024). Los separan el gradiente alveoloarterial de oxígeno y la respuesta al oxígeno: la hipoventilación tiene el gradiente normal e hipercapnia (2017: PaO2 de 54, PaCO2 de 65 y gradiente de 14, una enfermedad neuromuscular); el desequilibrio V/Q y el shunt lo tienen aumentado, y solo el shunt no se corrige con oxígeno al 100 % (2016: atelectasia de dos tercios de un pulmón). Tras un traumatismo torácico, la contusión pulmonar empeora la oxigenación a las horas (2020).',
@@ -73,18 +74,19 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
         '22 preguntas de 2015 a 2026, pero a la baja: 17 de 2015 a 2021 y solo 5 en los últimos cinco MIR, con ninguna en 2022 y una al año desde 2024. Desde 2016, lo más preguntado es la clínica y la radiología (7: atelectasias, acropaquias, parálisis recurrencial e histología), seguido de la estadificación y el tratamiento del no microcítico (6), el microcítico (3, la última el síndrome de vena cava superior de 2026) y la biología molecular (2: EGFR y KRAS). Siete de las 19 llevaban imagen. Sigue siendo el segundo tema por volumen: domina el tratamiento por estadios y aprende a leer una atelectasia.',
       hotspots: [
         { name: 'Tratamiento por estadios: cirugía y adyuvancia', heat: 3 },
-        { name: 'Atelectasia en la radiografía', heat: 3 },
+        { name: 'Atelectasia en la radiografía', heat: 2 },
         { name: 'Microcítico: quimiorradioterapia y vena cava superior', heat: 2 },
         { name: 'PET-TC y estadificación ganglionar', heat: 2 },
         { name: 'Acropaquias y síndromes paraneoplásicos', heat: 2 },
         { name: 'Mutaciones: EGFR, ALK y KRAS', heat: 2 },
+        { name: 'Histología y parálisis recurrencial', heat: 2 },
         { name: 'Paciente no operable: radioterapia estereotáctica', heat: 1 },
         { name: 'Tumor de Pancoast', heat: 1 },
         { name: 'Tumores de la pared torácica', heat: 1 },
       ],
       keys: [
         'Clínica: tos, hemoptisis, disnea y síndrome constitucional. La disfonía por parálisis del recurrente izquierdo indica afectación de la ventana aortopulmonar (2016). Unas acropaquias recientes en un fumador o en un EPOC obligan a descartar un cáncer de pulmón, porque la EPOC por sí sola no las produce (2016); también aparecen en bronquiectasias, fibrosis pulmonar, cardiopatías cianosantes, endocarditis y hepatopatías, pero no en la coartación de aorta (2017).',
-        'Atelectasia: opacidad con pérdida de volumen, desplazamiento de cisuras, hilio y mediastino hacia el lado afectado y elevación del hemidiafragma. En un adulto fumador, la primera sospecha es un carcinoma que obstruye el bronquio (2019: lóbulo superior derecho). Cayó con imagen en 2017, 2019 y 2023, esta última del lóbulo inferior izquierdo, que se esconde tras el corazón. Una atelectasia no se drena: se busca la causa con broncoscopia (2017).',
+        'Atelectasia: opacidad con pérdida de volumen, desplazamiento de cisuras, hilio y mediastino hacia el lado afectado y elevación del hemidiafragma. En un adulto fumador, la primera sospecha es un carcinoma que obstruye el bronquio (2019: lóbulo superior derecho). Cayó con imagen en 2017, 2019 y 2023, esta última del lóbulo inferior izquierdo, que se esconde tras el corazón. Una atelectasia no se drena: se busca la causa con broncoscopia (2017, en Pleura).',
         'Histología: el adenocarcinoma es el más frecuente, también en no fumadores y mujeres, y suele ser periférico. El epidermoide es central, se cavita y da hipercalcemia por PTHrP (2017, con la imagen de la biopsia). El microcítico es central, muy agresivo y el de los síndromes paraneoplásicos: SIADH, Cushing ectópico y Lambert-Eaton.',
         'Estadificación: TC con contraste y PET-TC con FDG; las adenopatías mediastínicas que captan se confirman con EBUS o mediastinoscopia antes de descartar la cirugía. Un nódulo de 1 cm sin captación ganglionar ni a distancia es T1N0M0 (2023), y un nódulo con adenopatías hiliares ipsilaterales que captan, N1 (2021).',
         'Tratamiento del no microcítico: los estadios I y II y parte del IIIA se operan (lobectomía con linfadenectomía), y desde el estadio II se añade quimioterapia adyuvante: un tumor de 4 cm que invade la pleura visceral con ganglios hiliares (2017) o uno de 8 cm con ganglios hiliares (2018). Hoy se suman la inmunoterapia perioperatoria y la terapia dirigida adyuvante (osimertinib si hay EGFR). El estadio III irresecable recibe quimiorradioterapia y durvalumab. Si no es operable por su función pulmonar (consumo máximo de oxígeno por debajo de 10 ml/kg/min), radioterapia estereotáctica (2025).',
@@ -109,20 +111,20 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       hotspots: [
         { name: 'Exudado o trasudado: criterios de Light', heat: 3 },
         { name: 'Neumotórax: drenaje y cuándo operar', heat: 3 },
-        { name: 'Derrame tuberculoso: ADA y linfocitos', heat: 2 },
         { name: 'Paraneumónico complicado y empiema', heat: 2 },
         { name: 'Derrame maligno: citología y toracoscopia', heat: 2 },
         { name: 'Quilotórax: causas y tratamiento', heat: 2 },
+        { name: 'Derrame tuberculoso: ADA y linfocitos', heat: 1 },
         { name: 'Hemotórax masivo', heat: 1 },
         { name: 'Mesotelioma y asbesto', heat: 1 },
       ],
       keys: [
         'Ante un derrame sin causa clara, toracocentesis (2017: fiebre y dolor pleurítico que no ceden con antibiótico). Es un exudado si cumple al menos un criterio de Light: proteínas líquido/suero por encima de 0,5, LDH líquido/suero por encima de 0,6 o LDH del líquido por encima de dos tercios del límite alto del suero. En 2022, cocientes de 0,64 y 1,7: exudado, del que hay que buscar la causa. Trasudados: insuficiencia cardiaca (la causa más frecuente de derrame), cirrosis y síndrome nefrótico; en el cardiópata con diuréticos y un exudado limítrofe, un gradiente de albúmina mayor de 1,2 g/dl confirma el trasudado.',
         'Derrame tuberculoso: exudado linfocítico con ADA alta (por encima de 40-45 U/l) en un joven (2020: ADA de 59). El cultivo del líquido casi siempre es negativo; si hay dudas, biopsia pleural. Se trata como una tuberculosis pulmonar.',
-        'Derrame maligno: la causa más frecuente de exudado hemático, sobre todo por cáncer de pulmón, de mama y linfomas. Primero, citología del líquido; si es negativa, biopsia pleural con aguja o toracoscopia (2017: linfoma con exudado serohemorrágico; 2022: engrosamiento pleural nodular tras exponerse al asbesto). En 2026, un exudado hemático en una paciente operada de un cáncer de mama era una metástasis (pregunta anulada).',
+        'Derrame maligno: la causa más frecuente de derrame hemático no traumático, sobre todo por cáncer de pulmón, de mama y linfomas. Primero, citología del líquido; si es negativa, biopsia pleural con aguja o toracoscopia (2017: linfoma con exudado serohemorrágico; 2022: engrosamiento pleural nodular tras exponerse al asbesto). En 2026, un exudado hemático en una paciente operada de un cáncer de mama era una metástasis (pregunta anulada).',
         'Paraneumónico complicado o empiema: drenaje con tubo si hay pus, pH por debajo de 7,20, glucosa por debajo de 60 mg/dl o gérmenes en el Gram o el cultivo (2017: pH de 6,7; 2021: empiema en una EPOC con neumonía). Si está tabicado, fibrinolíticos por el tubo (2023, en un niño) y, si fracasan, cirugía videotoracoscópica.',
         'Quilotórax: líquido lechoso con triglicéridos por encima de 110 mg/dl. La causa más frecuente es el traumatismo, sobre todo quirúrgico (2016); entre las demás, el linfoma. Tubo de drenaje, dieta con triglicéridos de cadena media o nutrición parenteral y octreótido; cirugía si persiste el débito (2019).',
-        'Neumotórax espontáneo primario: varón joven, alto, delgado y fumador, por rotura de bullas apicales. Si es pequeño y estable, observación con oxígeno; si es grande o da síntomas, aspiración o drenaje fino. A tensión (hipotensión, taquicardia, desviación de la tráquea), descompresión y drenaje inmediatos (2018 y 2020, con imagen). Se opera, por videotoracoscopia con resección de bullas y pleurodesis, en la recidiva (2026), con fuga aérea persistente, si es bilateral o en profesiones de riesgo.',
+        'Neumotórax espontáneo primario: varón joven, alto, delgado y fumador, por rotura de bullas apicales. Si es pequeño y estable, observación con oxígeno; si es grande o da síntomas, aspiración o drenaje fino. Con inestabilidad (hipotensión, taquicardia), drenaje torácico inmediato (2018 y 2020, con imagen); si es a tensión, con la tráquea desviada, descompresión con aguja sin esperar a la radiografía. Se opera, por videotoracoscopia con resección de bullas y pleurodesis, en la recidiva (2026), con fuga aérea persistente, si es bilateral o en profesiones de riesgo.',
         'El drenaje se introduce por el borde superior de la costilla inferior, para no lesionar el paquete vasculonervioso; por delante, en el segundo o tercer espacio en la línea medioclavicular, atraviesa piel, subcutáneo, pectorales, intercostales y pleura parietal (2019).',
         'Hemotórax masivo tras un traumatismo (más de 1.500 ml al drenar o más de 200 ml/h durante 2-4 horas) o con inestabilidad: transfusión y toracotomía urgente (2021).',
         'Mesotelioma: tumor pleural maligno ligado al asbesto, con décadas de latencia, engrosamiento pleural difuso o nodular y derrame (2019, con imágenes). Las placas pleurales calcificadas solo indican exposición, y un derrame en un expuesto no es por sí mismo un mesotelioma (2023, en Intersticiales de causa conocida).',
@@ -142,11 +144,12 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
         '20 preguntas de 2015 a 2026 y presente todos los años salvo 2021. Desde 2016, lo más preguntado es el tratamiento farmacológico (5, tres de ellas desde 2025: cuándo la triple terapia y cuándo mantener el corticoide inhalado), seguido de lo que cambia la evolución (4: tabaco, oxigenoterapia, cirugía de reducción de volumen y lo que no sirve), el diagnóstico y la función pulmonar (3), las agudizaciones (2) y los índices BODE y BODEx (1). Las dos de 2026 fueron de clasificación y eosinófilos: es el algoritmo que hay que dominar.',
       hotspots: [
         { name: 'GOLD: grado espirométrico y grupo ABE', heat: 3 },
-        { name: 'Eosinófilos y corticoide inhalado: la triple terapia', heat: 3 },
-        { name: 'Oxigenoterapia crónica domiciliaria', heat: 2 },
+        { name: 'Lo que cambia la evolución', heat: 3 },
+        { name: 'Eosinófilos y corticoide inhalado: la triple terapia', heat: 2 },
         { name: 'Agudización: corticoides 5 días y ventilación no invasiva', heat: 2 },
-        { name: 'Lo que cambia la evolución', heat: 2 },
         { name: 'Enfisema: DLCO baja', heat: 2 },
+        { name: 'Oxigenoterapia crónica domiciliaria', heat: 1 },
+        { name: 'Corticoide oral: nunca de mantenimiento', heat: 1 },
         { name: 'Fenotipos y riesgo de GesEPOC', heat: 1 },
         { name: 'Tabaquismo: tratamiento', heat: 1 },
         { name: 'BODE y BODEx', heat: 1 },
@@ -174,18 +177,18 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       lastExamReserve: 0,
       pages: 8,
       focus:
-        '11 preguntas de 2015 a 2026 y casi fijo: una al año de 2015 a 2025 salvo en 2021, con dos en 2025, aunque en 2026 no cayó ninguna. Desde 2016, la mitad son de diagnóstico (5: cuándo dímero D y cuándo angio-TC, el infarto pulmonar y el TEP en el paciente con cáncer), seguidas del tratamiento según el riesgo (4: anticoagulación, fibrinólisis y filtro de vena cava) y de los factores de riesgo (1). Cuatro de las 10 llevaban imagen. Con su media de una al año, conviene tenerlo bien atado.',
+        '11 preguntas de 2015 a 2026 y casi fijo: una al año de 2015 a 2025 salvo en 2021, con dos en 2025, aunque en 2026 no cayó ninguna. Desde 2016, la mitad son de diagnóstico (5: cuándo dímero D y cuándo angio-TC, el infarto pulmonar y el TEP en el paciente con cáncer), seguidas del tratamiento según el riesgo (4: estratificación, anticoagulación, fibrinólisis y filtro de vena cava) y de los factores de riesgo (1). Cuatro de las 10 llevaban imagen. Con su media de una al año, conviene tenerlo bien atado.',
       hotspots: [
         { name: 'Probabilidad clínica, dímero D y angio-TC', heat: 3 },
-        { name: 'Estratificación: hipotensión y ventrículo derecho', heat: 3 },
-        { name: 'TEP de alto riesgo: fibrinólisis', heat: 2 },
-        { name: 'Sin anticoagulación posible: filtro de vena cava', heat: 2 },
-        { name: 'Factores de riesgo', heat: 2 },
-        { name: 'Infarto pulmonar y ECG', heat: 1 },
-        { name: 'Duración de la anticoagulación', heat: 1 },
+        { name: 'Estratificación: hipotensión y ventrículo derecho', heat: 2 },
+        { name: 'Infarto pulmonar y ECG', heat: 2 },
+        { name: 'TEP de alto riesgo: fibrinólisis', heat: 1 },
+        { name: 'Sin anticoagulación posible: filtro de vena cava', heat: 1 },
+        { name: 'Anticoagulación en el paciente estable', heat: 1 },
+        { name: 'Factores de riesgo', heat: 1 },
       ],
       keys: [
-        'Diagnóstico: se parte de la probabilidad clínica (escalas de Wells o Ginebra). Si es baja o intermedia, dímero D, que si es normal descarta el TEP (2025: disnea en una paciente con lupus y TTPA alargado, el dímero D antes que nada); si es alta, angio-TC directamente (2022). Tras una fractura de fémur, disnea con hipoxemia, fiebre, confusión y trombopenia hace pensar también en una embolia grasa, pero la prueba de más rendimiento ante la sospecha de embolia pulmonar sigue siendo la angio-TC (2025). La gammagrafía de ventilación/perfusión queda para la alergia al contraste, la insuficiencia renal o el embarazo.',
+        'Diagnóstico: se parte de la probabilidad clínica (escalas de Wells o Ginebra). Si es baja o intermedia, dímero D, que si es normal descarta el TEP (2025: disnea en una paciente con lupus y TTPA alargado, el dímero D antes que nada); si el dímero D sale alto o la probabilidad es alta, angio-TC (2022: dolor pleurítico con dímero D de 1.630 ng/ml). Tras una fractura de fémur, disnea con hipoxemia, fiebre, confusión y trombopenia hace pensar también en una embolia grasa, pero la prueba de más rendimiento ante la sospecha de embolia pulmonar sigue siendo la angio-TC (2025). La gammagrafía de ventilación/perfusión queda para la alergia al contraste, la insuficiencia renal o el embarazo.',
         'Factores de riesgo: cirugía e inmovilización recientes, fractura de cadera o de las piernas, cáncer activo o reciente, trombosis previa, embarazo, anticonceptivos y trombofilias. La osteoporosis no lo es (2016). El dato clínico de más peso es una trombosis venosa profunda: pierna edematosa y dolorosa.',
         'Imagen y ECG: la radiografía suele ser normal o casi; el infarto pulmonar da una opacidad periférica triangular con base pleural, con dolor pleurítico y a veces hemoptisis (2017, con imagen, tras un viaje largo). En el ECG, taquicardia sinusal; el S1Q3T3 y el bloqueo de rama derecha indican sobrecarga del ventrículo derecho (2020, con ECG, en un paciente con cáncer).',
         'Estratificación: alto riesgo si hay hipotensión mantenida (sistólica por debajo de 90 mmHg) o shock (2024: disfunción del ventrículo derecho con sistólica por debajo de 90); riesgo intermedio si no hay hipotensión pero sí disfunción del ventrículo derecho en la imagen, troponina alta o un PESI alto (intermedio-alto si hay disfunción y troponina); bajo riesgo sin nada de eso, con posibilidad de alta precoz.',
@@ -207,17 +210,17 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       focus:
         '9 preguntas de 2015 a 2026 y al alza: una cada año desde 2022, cinco en los últimos cinco MIR frente a cuatro en los siete anteriores. Desde 2016, más de la mitad son de la crisis asmática (5: signos de gravedad, gasometría y tratamiento en urgencias y en atención primaria, la de 2026 incluida), y el resto del diagnóstico con metacolina (1) y del mantenimiento: embarazo y biológicos (2). Estudia la crisis por gravedad, de la leve a la de riesgo vital, y los escalones de mantenimiento.',
       hotspots: [
-        { name: 'Gravedad de la crisis y signos de riesgo vital', heat: 3 },
-        { name: 'Tratamiento de la crisis', heat: 3 },
-        { name: 'Gasometría en la crisis', heat: 2 },
-        { name: 'Asma grave eosinofílica: biológicos', heat: 2 },
-        { name: 'Mantenimiento: corticoide inhalado con formoterol', heat: 2 },
+        { name: 'Crisis asmática: gravedad y tratamiento', heat: 3 },
+        { name: 'Signos de riesgo vital: silencio auscultatorio', heat: 2 },
+        { name: 'Tratamiento de la crisis en urgencias', heat: 2 },
+        { name: 'Gasometría en la crisis', heat: 1 },
+        { name: 'Asma grave eosinofílica: biológicos', heat: 1 },
         { name: 'Diagnóstico: broncodilatación y metacolina', heat: 1 },
         { name: 'Asma y embarazo', heat: 1 },
       ],
       keys: [
         'Diagnóstico: síntomas variables (sibilancias, tos, disnea, opresión) con obstrucción reversible: prueba broncodilatadora positiva (el FEV1 sube un 12 % y 200 ml) o pico de flujo variable. Si la espirometría es normal y la sospecha alta, provocación con metacolina (2016: tos y sibilancias nocturnas con espirometría normal). Un FeNO alto apoya la inflamación eosinofílica.',
-        'Gravedad de la crisis (GEMA): leve, con habla en párrafos, frecuencia cardiaca por debajo de 100 y saturación por encima del 95 % (2026); moderada, con habla en frases, 100-120 latidos y saturación del 90-95 %; grave, con habla en palabras, musculatura accesoria, más de 120 latidos y saturación por debajo del 90 %; riesgo vital, con silencio auscultatorio (el signo de peor pronóstico, 2017), cianosis, bradicardia, hipotensión, confusión o hipercapnia. En 2023 se anuló una pregunta que pedía un único signo de gravedad entre pulso paradójico, taquipnea, silencio auscultatorio y cianosis.',
+        'Gravedad de la crisis (GEMA, que agrupa la moderada y la grave): leve, con habla en párrafos, sin musculatura accesoria, frecuencia cardiaca por debajo de 100, saturación por encima del 95 % y pico de flujo por encima del 70 % (2026); moderada-grave, con habla en frases o palabras, musculatura accesoria, frecuencia cardiaca por encima de 100-120, pulso paradójico, saturación del 90-95 % y pico de flujo por debajo del 70 %; parada respiratoria inminente, con silencio auscultatorio (el signo de peor pronóstico, 2017), bradicardia, movimiento toracoabdominal paradójico, conciencia disminuida, saturación por debajo del 90 % e hipercapnia. En 2023 se anuló una pregunta que pedía un único signo de gravedad entre pulso paradójico, taquipnea, silencio auscultatorio y cianosis.',
         'Gasometría: al principio, PaO2 normal o algo baja con hipocapnia y alcalosis respiratoria por la hiperventilación (2022). Una PaCO2 normal o alta en plena crisis indica agotamiento y riesgo de parada.',
         'Tratamiento de la crisis: salbutamol repetido (con cámara en la leve; a dosis altas o nebulizado, con bromuro de ipratropio, en la moderada o grave), corticoide sistémico precoz y oxígeno si hay hipoxemia. Si no responde, sulfato de magnesio intravenoso y valorar ventilación (2024: crisis tras una tormenta, nebulizaciones urgentes y corticoide intravenoso). Al alta, prednisona oral 5-7 días, mantenimiento con corticoide inhalado (casi siempre con LABA), plan de acción por escrito y revisión (2026).',
         'Mantenimiento (GEMA y GINA): hoy se prefiere el corticoide inhalado con formoterol, a demanda en el asma leve y como mantenimiento y rescate en los escalones siguientes, antes que el salbutamol solo. El LABA nunca va sin corticoide inhalado. Se sube de escalón si no hay control y se baja tras unos 3 meses controlado.',
@@ -238,11 +241,9 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       focus:
         '8 preguntas de 2015 a 2026 y al alza: cinco en los últimos cinco MIR frente a tres en los siete anteriores. Desde 2016, la mitad son de la fibrosis pulmonar idiopática (4: exploración, TC con panal y antifibróticos), y el resto de los patrones histológicos (2: neumonía intersticial usual y no específica) y de la broncoscopia en las intersticiales (2: la criobiopsia en 2024 y el lavado broncoalveolar en 2026). Con la fibrosis pulmonar idiopática y la tabla del lavado tienes casi todo.',
       hotspots: [
-        { name: 'FPI: clínica y TC con panal basal', heat: 3 },
-        { name: 'Lavado broncoalveolar: qué diagnostica', heat: 2 },
-        { name: 'Antifibróticos: pirfenidona y nintedanib', heat: 2 },
-        { name: 'Neumonía intersticial usual y no específica', heat: 2 },
-        { name: 'Criobiopsia y biopsia quirúrgica', heat: 1 },
+        { name: 'Fibrosis pulmonar idiopática: clínica, TC y tratamiento', heat: 3 },
+        { name: 'Lavado broncoalveolar y biopsia', heat: 2 },
+        { name: 'Neumonía intersticial usual y no específica', heat: 1 },
       ],
       keys: [
         'Fibrosis pulmonar idiopática: mayor de 60 años, a menudo exfumador, con disnea de esfuerzo progresiva, tos seca, crepitantes secos basales «en velcro» y acropaquias (2016); las sibilancias son lo menos esperable (2025). Patrón restrictivo con DLCO baja y desaturación al esfuerzo. Mal pronóstico, con una mediana de 3-5 años.',
@@ -263,13 +264,12 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       lastExamReserve: 0,
       pages: 4,
       focus:
-        '7 preguntas de 2015 a 2026 en solo 4 páginas, todas desde 2018. La mayoría son de la definición y el mecanismo (5: criterios de Berlín, lesión de la membrana alveolocapilar, causa más frecuente y la fisiopatología de 2026), y el resto del manejo con ventilación protectora y decúbito prono (2). Muy rentable: la definición con sus cifras y los números de la ventilación protectora.',
+        '7 preguntas de 2015 a 2026 en solo 4 páginas, todas desde 2018. La mayoría son de la definición y el mecanismo (5: criterios de Berlín, lesión de la membrana alveolocapilar, causa más frecuente, el SDRA por COVID-19 y la fisiopatología de 2026), y el resto del manejo con ventilación protectora y decúbito prono (2). Muy rentable: la definición con sus cifras y los números de la ventilación protectora.',
       hotspots: [
-        { name: 'Definición de Berlín y definición global', heat: 3 },
-        { name: 'Fisiopatología: shunt y distensibilidad baja', heat: 3 },
-        { name: 'Ventilación protectora', heat: 2 },
-        { name: 'Decúbito prono: cuándo', heat: 2 },
-        { name: 'Causas: neumonía y sepsis', heat: 1 },
+        { name: 'Definición y fisiopatología: shunt y PaO2/FiO2', heat: 3 },
+        { name: 'Causas: neumonía y sepsis', heat: 2 },
+        { name: 'Ventilación protectora', heat: 1 },
+        { name: 'Decúbito prono: cuándo', heat: 1 },
       ],
       keys: [
         'Definición de Berlín: comienzo en la primera semana tras la agresión, opacidades bilaterales que no se explican por derrame, atelectasia o nódulos, edema que no se explica solo por insuficiencia cardiaca o sobrecarga de volumen, y PaO2/FiO2 de 300 o menos con una PEEP de al menos 5 cmH2O (leve, 200-300; moderado, 100-200; grave, 100 o menos). No hace falta medir la presión de enclavamiento: en 2018 lo incorrecto era exigir que pasara de 18 mmHg. La definición global de 2023 admite la saturación (SpO2/FiO2 de 315 o menos), a los pacientes con oxigenoterapia de alto flujo y la ecografía pulmonar.',
@@ -292,10 +292,10 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       focus:
         '5 preguntas de 2015 a 2026, todas desde 2022: dos en 2022, dos en 2024 y una en 2026. Tres son de apnea obstructiva del sueño (cómo se ve una hipopnea en la poligrafía, cuándo bastan las medidas generales y cuándo la CPAP), una de apnea central con respiración periódica en la insuficiencia cardiaca y otra de hipoventilación en la ELA. Ha entrado con fuerza en el MIR reciente: aprende a quién se pone CPAP y a quién ventilación no invasiva.',
       hotspots: [
-        { name: 'Apnea obstructiva: cuándo CPAP', heat: 3 },
-        { name: 'Poligrafía: apnea frente a hipopnea', heat: 2 },
-        { name: 'Apnea central en la insuficiencia cardiaca', heat: 2 },
-        { name: 'Hipoventilación neuromuscular: ventilación no invasiva', heat: 2 },
+        { name: 'Apnea obstructiva: cuándo CPAP', heat: 2 },
+        { name: 'Poligrafía: apnea frente a hipopnea', heat: 1 },
+        { name: 'Apnea central en la insuficiencia cardiaca', heat: 1 },
+        { name: 'Hipoventilación neuromuscular: ventilación no invasiva', heat: 1 },
         { name: 'Obesidad-hipoventilación', heat: 1 },
       ],
       keys: [
@@ -320,9 +320,9 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
         '10 preguntas de 2015 a 2026, pero a la baja: nueve de 2015 a 2021 y solo una desde entonces (proteinosis alveolar en 2025). Desde 2016, casi la mitad son de sarcoidosis (4: estadios radiológicos, lavado y la radiografía típica), y el resto de linfangioleiomiomatosis (2), proteinosis alveolar (2) y aspergilosis broncopulmonar alérgica (1). La sarcoidosis sigue siendo lo que más rinde del tema.',
       hotspots: [
         { name: 'Sarcoidosis: adenopatías hiliares y estadios', heat: 3 },
-        { name: 'Sarcoidosis: lavado y diagnóstico', heat: 2 },
         { name: 'Linfangioleiomiomatosis', heat: 2 },
         { name: 'Proteinosis alveolar', heat: 2 },
+        { name: 'Sarcoidosis: lavado y diagnóstico', heat: 1 },
         { name: 'ABPA: IgE frente a Aspergillus fumigatus', heat: 1 },
         { name: 'Histiocitosis X', heat: 1 },
         { name: 'Eosinofilias pulmonares', heat: 1 },
@@ -350,8 +350,8 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       focus:
         '6 preguntas de 2015 a 2026 en una sola página, la última en 2022. Desde 2016, todas piden reconocer la exploración: dos de derrame pleural, dos de neumotórax (uno a tensión) y una de crisis asmática grave. Es una tabla que hay que saberse: murmullo, vibraciones vocales, percusión y hacia dónde se va la tráquea.',
       hotspots: [
-        { name: 'Derrame: matidez y vibraciones abolidas', heat: 3 },
-        { name: 'Neumotórax: timpanismo y vibraciones abolidas', heat: 3 },
+        { name: 'Derrame: matidez y vibraciones abolidas', heat: 2 },
+        { name: 'Neumotórax: timpanismo y vibraciones abolidas', heat: 2 },
         { name: 'Desviación de la tráquea', heat: 2 },
         { name: 'Crisis asmática grave', heat: 1 },
         { name: 'Condensación y atelectasia', heat: 1 },
@@ -376,9 +376,9 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       focus:
         '5 preguntas de 2015 a 2026, la última en 2023. Desde 2016, dos de neumonitis por hipersensibilidad (qué apoya el diagnóstico y un humidificador como causa), una de toxicidad pulmonar por amiodarona y otra de las enfermedades por asbesto. Cuatro páginas: basta con la neumonitis por hipersensibilidad, el asbesto y los fármacos que dañan el pulmón.',
       hotspots: [
-        { name: 'Neumonitis por hipersensibilidad: retirar el antígeno', heat: 3 },
-        { name: 'Asbesto: placas, asbestosis y mesotelioma', heat: 2 },
-        { name: 'Pulmón por amiodarona', heat: 2 },
+        { name: 'Neumonitis por hipersensibilidad: retirar el antígeno', heat: 2 },
+        { name: 'Asbesto: placas, asbestosis y mesotelioma', heat: 1 },
+        { name: 'Pulmón por amiodarona', heat: 1 },
         { name: 'Silicosis', heat: 1 },
       ],
       keys: [
@@ -401,10 +401,9 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       focus:
         '4 preguntas de 2015 a 2026, todas en dos años: dos en 2018 (la definición y los fármacos) y dos en 2026 (la definición actual y la hipertensión pulmonar del EPOC), tras siete MIR sin ninguna. Pocas, pero siempre de lo mismo: la definición hemodinámica, que cambió en 2022, y la clasificación en cinco grupos.',
       hotspots: [
-        { name: 'Definición: presión media por encima de 20 mmHg', heat: 3 },
-        { name: 'Los cinco grupos y su mecanismo', heat: 3 },
-        { name: 'Grupo 3: vasoconstricción hipóxica', heat: 2 },
-        { name: 'Precapilar o poscapilar: la presión de enclavamiento', heat: 2 },
+        { name: 'Definición: presión media por encima de 20 mmHg', heat: 2 },
+        { name: 'Los cinco grupos y su mecanismo', heat: 2 },
+        { name: 'Grupo 3: vasoconstricción hipóxica', heat: 1 },
         { name: 'Fármacos de la hipertensión arterial pulmonar', heat: 1 },
         { name: 'Tromboembólica crónica', heat: 1 },
       ],
@@ -429,10 +428,10 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       focus:
         '3 preguntas de 2015 a 2026, todas desde 2023: el caso típico con TC (2023), el paciente con expectoración diaria y agudizaciones (2025) y la función de la CFTR en la fibrosis quística (2026). Dos páginas que han pasado de no preguntarse a caer casi cada año.',
       hotspots: [
-        { name: 'Clínica: broncorrea, agudizaciones y hemoptisis', heat: 3 },
-        { name: 'TC de alta resolución', heat: 2 },
-        { name: 'Fibrosis quística: CFTR y test del sudor', heat: 2 },
-        { name: 'Causas: FQ, discinesia ciliar, inmunodeficiencias, ABPA', heat: 2 },
+        { name: 'Clínica: broncorrea, agudizaciones y hemoptisis', heat: 2 },
+        { name: 'TC de alta resolución', heat: 1 },
+        { name: 'Fibrosis quística: CFTR y test del sudor', heat: 1 },
+        { name: 'Causas: FQ, discinesia ciliar, inmunodeficiencias, ABPA', heat: 1 },
         { name: 'Tratamiento: fisioterapia y antibióticos', heat: 1 },
       ],
       keys: [
@@ -455,8 +454,8 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       focus:
         '3 preguntas de 2015 a 2026: dos en 2015 y una en 2021, un timoma por su histología, con imagen. Basta con saber qué hay en cada compartimento.',
       hotspots: [
-        { name: 'Masas por compartimento', heat: 3 },
-        { name: 'Timoma y miastenia gravis', heat: 2 },
+        { name: 'Timoma y miastenia gravis', heat: 1 },
+        { name: 'Masas por compartimento', heat: 1 },
         { name: 'Mediastinitis aguda', heat: 1 },
       ],
       keys: [
@@ -478,12 +477,12 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       focus:
         '2 preguntas de 2015 a 2026, ambas en 2019 y ambas con radiografía: dónde está una lesión endobronquial y una sonda nasogástrica mal colocada. Repasa el árbol bronquial y la radiografía de tórax normal.',
       hotspots: [
-        { name: 'Árbol bronquial y segmentos', heat: 2 },
-        { name: 'Radiografía de tórax: sondas y vías', heat: 2 },
+        { name: 'Árbol bronquial y segmentos', heat: 1 },
+        { name: 'Radiografía de tórax: sondas y vías', heat: 1 },
       ],
       keys: [
         'El bronquio principal derecho es más corto, ancho y vertical que el izquierdo, y por eso los cuerpos extraños y las aspiraciones van más a la derecha. Tras salir el lobar superior derecho sigue el bronquio intermediario, que da el lobar medio y el inferior (2019, con imagen de una lesión en el intermediario).',
-        'Una sonda nasogástrica bien colocada baja por la línea media, cruza el diafragma y acaba en el estómago; si sigue el trayecto de un bronquio, se retira y se vuelve a colocar antes de dar nada por ella (2019).',
+        'Una sonda nasogástrica bien colocada baja por la línea media, cruza el diafragma y acaba en el estómago; si la radiografía no la muestra ahí (por ejemplo, porque se ha ido a la vía aérea), se retira y se vuelve a colocar antes de dar nada por ella (2019).',
       ],
       trap: 'Si una sonda nasogástrica dibuja un bronquio, no se usa: se retira y se vuelve a colocar.',
     },
@@ -499,8 +498,8 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       focus:
         '2 preguntas de 2015 a 2026 (2017 y 2022): cómo funciona la presión de soporte y qué hace la CPAP en el edema agudo de pulmón. Lo básico de la ventilación mecánica y no invasiva.',
       hotspots: [
-        { name: 'Modos: presión de soporte', heat: 2 },
-        { name: 'CPAP y ventilación no invasiva', heat: 2 },
+        { name: 'Modos: presión de soporte', heat: 1 },
+        { name: 'CPAP y ventilación no invasiva', heat: 1 },
         { name: 'Dispositivos de oxígeno', heat: 1 },
       ],
       keys: [
@@ -522,7 +521,7 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       focus:
         'Una sola pregunta de 2015 a 2026 (2025): una neumonía organizada criptogénica en la TC de un exfumador. Son dos páginas sobre las bronquiolitis del adulto: repasa las del fumador y la neumonía organizada.',
       hotspots: [
-        { name: 'Neumonía organizada criptogénica', heat: 2 },
+        { name: 'Neumonía organizada criptogénica', heat: 1 },
         { name: 'Bronquiolitis del fumador', heat: 1 },
         { name: 'Bronquiolitis obliterante', heat: 1 },
       ],
@@ -543,11 +542,11 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       pages: 1,
       focus: 'Una sola pregunta de 2015 a 2026 (2016): una hernia de Bochdalek en una adulta, con radiografía. Una página.',
       hotspots: [
-        { name: 'Hernias de Bochdalek y Morgagni', heat: 2 },
+        { name: 'Hernias de Bochdalek y Morgagni', heat: 1 },
         { name: 'Parálisis diafragmática', heat: 1 },
       ],
       keys: [
-        'Hernia de Bochdalek: posterolateral y casi siempre izquierda; en el recién nacido produce hipoplasia pulmonar y dificultad respiratoria grave, y en el adulto puede ser un hallazgo casual (2016, en la base derecha). Hernia de Morgagni: anterior, retroesternal y más a menudo derecha.',
+        'Hernia de Bochdalek: posterolateral y casi siempre izquierda; en el recién nacido produce hipoplasia pulmonar y dificultad respiratoria grave, y en el adulto da pocos síntomas o se descubre por casualidad (2016: disnea y dolor pleurítico leve en una mujer de 42 años, con menos murmullo en la base derecha). Hernia de Morgagni: anterior, retroesternal y más a menudo derecha.',
         'Parálisis diafragmática: la unilateral suele no dar síntomas (hemidiafragma elevado por lesión del frénico, por un tumor o tras una cirugía); la bilateral da ortopnea y respiración paradójica, con una FVC que cae al tumbarse.',
       ],
       trap: 'Bochdalek, posterior y casi siempre izquierda; Morgagni, anterior y más a menudo derecha.',
@@ -562,7 +561,7 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
     {
       icon: 'trending_up',
       title: 'La vía aérea y el sueño, al alza',
-      body: 'Asma, una pregunta cada año desde 2022; Trastornos de la ventilación, cinco desde 2022 y ninguna antes; Bronquiectasias, tres desde 2023; y la fibrosis pulmonar idiopática, cinco en los últimos cinco MIR. En EPOC, el tratamiento según los eosinófilos ya suma tres preguntas desde 2025. Son temas cortos y muy rentables de cara al MIR 2027.',
+      body: 'Asma, una pregunta cada año desde 2022; Trastornos de la ventilación, cinco desde 2022 y ninguna antes; Bronquiectasias, tres desde 2023; e Intersticiales 1 (neumonitis idiopáticas), cinco en los últimos cinco MIR. En EPOC, el tratamiento según los eosinófilos ya suma tres preguntas desde 2025. Son temas cortos y muy rentables de cara al MIR 2027.',
     },
     {
       icon: 'pulmonology',
@@ -572,12 +571,12 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
     {
       icon: 'trending_down',
       title: 'El cáncer de pulmón pierde peso',
-      body: 'Neoplasias pasó de 17 preguntas de 2015 a 2021 a 5 en los últimos cinco MIR, y Pleura, de 15 a 5. Siguen entre los temas más grandes, pero ya no copan el examen: estudia el tratamiento por estadios y el derrame sin perderte en los detalles. Las intersticiales de procesos no bien conocidos, con la sarcoidosis al frente, caen todavía más: de 9 a 1.',
+      body: 'Neoplasias pasó de 17 preguntas de 2015 a 2021 a 5 en los últimos cinco MIR, y Pleura, de 15 a 5. Siguen entre los temas más grandes, pero ya no copan el examen: estudia el tratamiento por estadios y el derrame sin perderte en los detalles. Intersticiales 3 (procesos no bien conocidos), con la sarcoidosis al frente, cae todavía más: de 9 a 1.',
     },
     {
       icon: 'event_busy',
       title: 'Lo que no salió',
-      body: 'Fisiología, sin pregunta por primera vez desde 2015, y Tromboembolismo pulmonar, que había caído todos los años desde 2016 salvo en 2021. Tampoco las intersticiales distintas de la fibrosis (sarcoidosis, neumonitis por hipersensibilidad), Semiología, Mediastino ni la ventilación mecánica. Lo que volvió fue la hipertensión pulmonar, con dos preguntas tras siete MIR sin ninguna, y Pleura, con dos tras dos años en blanco.',
+      body: 'Fisiología, sin pregunta por primera vez desde 2015, y Tromboembolismo pulmonar, que había caído todos los años desde 2016 salvo en 2021. Tampoco Intersticiales 2 y 3 (neumonitis por hipersensibilidad, sarcoidosis), Semiología, Mediastino ni Oxigenoterapia y ventilación mecánica. Lo que volvió fue la hipertensión pulmonar, con dos preguntas tras siete MIR sin ninguna, y Pleura, con dos tras dos años en blanco.',
     },
     {
       icon: 'hub',
