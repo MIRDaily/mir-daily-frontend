@@ -582,7 +582,7 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
     {
       icon: 'hub',
       title: 'Neumología también en otras asignaturas',
-      body: 'La 162, cuándo hacer el estudio etiológico de una neumonía adquirida en la comunidad, se preguntó en el bloque de Neumología, pero cuenta en Infecciosas, que es donde están las neumonías del banco de preguntas. También tocaron el pulmón el síndrome de dificultad respiratoria del prematuro (47) y la bronquiolitis del lactante (48) en Pediatría, las vasculitis pulmonares (184) en Reumatología y las micobacterias y la nocardia en el lavado broncoalveolar (36 y 39) en Infecciosas.',
+      body: 'La 162 (cuándo hacer el estudio etiológico de una neumonía adquirida en la comunidad) salió en el bloque de Neumología, pero las neumonías se estudian en Infecciosas. La tienes comentada al final de la guía, en «También en otras asignaturas».',
     },
   ],
   plan: [
