@@ -696,7 +696,7 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       ],
       correct: 4,
       explanation:
-        'Alto riesgo (un ingreso en el último año y mMRC 2) y agudizador eosinofílico (más de 300/µl): el corticoide inhalado es lo que reduce sus agudizaciones, así que se mantiene la triple terapia y se le explica por qué.',
+        'Alto riesgo (un ingreso en el último año y mMRC 2) y agudizador eosinofílico (más de 300/µl): el corticoide inhalado reduce sus agudizaciones y la triple terapia mejora el pronóstico, así que se mantiene y se le explica por qué.',
     },
     {
       number: 156,
@@ -728,7 +728,7 @@ export const NEUMOLOGIA_GUIDE: StudyGuide = {
       ],
       correct: 4,
       explanation:
-        'Se prioriza con un índice de apneas-hipopneas de 15 o más y somnolencia (Epworth por encima de 10) u otra repercusión, o con comorbilidad cardiovascular. Sin síntomas, no se trata a todos.',
+        'Se prioriza con un índice de apneas-hipopneas de 15 o más y somnolencia (Epworth por encima de 10), mala calidad de vida relacionada con el sueño o hipertensión arterial. Sin síntomas, no se trata a todos.',
     },
     {
       number: 158,
