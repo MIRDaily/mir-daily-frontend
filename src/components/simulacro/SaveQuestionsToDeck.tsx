@@ -14,11 +14,15 @@ import {
   type StudioDeckError,
   addQuestionsToDeck,
   createStudioDeck,
-  fetchDeckSelector,
-  isAutoFailedDeck,
-  markDeckUsed,
-  sortDecksByLastUse,
 } from '@/lib/studioDecks'
+import {
+  hasFreshPickerDecks,
+  loadPickerDecks,
+  markPickerDeckUsed,
+  markPickerDecksStale,
+  sortPickerDecks,
+  usePickerDecks,
+} from '@/lib/studio/deckPickerStore'
 import { markQuestionInDeck } from '@/lib/studio/savedQuestionsStore'
 
 type Props = {
@@ -36,7 +40,8 @@ function defaultDeckName(): string {
 export default function SaveQuestionsToDeck({ failedIds, blankIds }: Props) {
   const [open, setOpen] = useState(false)
   const [includeBlank, setIncludeBlank] = useState(false)
-  const [decks, setDecks] = useState<StudioDeck[] | null>(null)
+  // La misma lista que el resto de selectores de la pestaña (deckPickerStore).
+  const decks = usePickerDecks()
   const [loading, setLoading] = useState(false)
   const [busyDeck, setBusyDeck] = useState<string | null>(null)
   const [newName, setNewName] = useState(defaultDeckName)
@@ -75,14 +80,14 @@ export default function SaveQuestionsToDeck({ failedIds, blankIds }: Props) {
       setOpen(false)
       return
     }
-    // Los mazos se piden una vez; al volver a abrir, lo guardado entretanto sube
-    // arriba (con el menú abierto el orden no cambia: ver markDeckUsed).
-    setDecks((prev) => (prev ? sortDecksByLastUse(prev) : prev))
+    // Al abrir, lo guardado entretanto sube arriba (con el menú abierto el
+    // orden no cambia: ver markPickerDeckUsed).
+    sortPickerDecks()
     setOpen(true)
     setFeedback(null)
     // Si no hay fallos pero sí blancos, se ofrece directamente con blancos.
     if (failedIds.length === 0 && blankIds.length > 0) setIncludeBlank(true)
-    if (decks) return
+    if (hasFreshPickerDecks()) return
     const token = await getToken()
     if (!token) {
       setFeedback({ ok: false, text: 'Inicia sesión para guardar preguntas.' })
@@ -91,8 +96,7 @@ export default function SaveQuestionsToDeck({ failedIds, blankIds }: Props) {
     try {
       setLoading(true)
       // Ya ordenados por último uso: el último mazo en el que se guardó, arriba.
-      const list = await fetchDeckSelector(token)
-      setDecks(list.filter((d) => d.deleted_at == null && !isAutoFailedDeck(d)))
+      await loadPickerDecks(token)
     } catch {
       setFeedback({ ok: false, text: 'No se pudieron cargar los mazos.' })
     } finally {
@@ -109,7 +113,7 @@ export default function SaveQuestionsToDeck({ failedIds, blankIds }: Props) {
       for (const [qid, itemId] of Object.entries(res.items)) {
         markQuestionInDeck(qid, deckId, itemId)
       }
-      setDecks((prev) => (prev ? markDeckUsed(prev, deckId) : prev))
+      markPickerDeckUsed(deckId)
       setFeedback({
         ok: true,
         text:
@@ -121,6 +125,13 @@ export default function SaveQuestionsToDeck({ failedIds, blankIds }: Props) {
       })
     } catch (err) {
       const e = err as StudioDeckError | null
+      // Borrado en otra pestaña o dispositivo: se vuelve a pedir la lista.
+      if (e?.status === 404) {
+        markPickerDecksStale()
+        void loadPickerDecks(token).catch(() => {})
+        setFeedback({ ok: false, text: `«${deckName}» ya no existe.` })
+        return
+      }
       setFeedback({
         ok: false,
         text: e?.limitReached ? (err as Error).message : 'No se pudieron guardar las preguntas.',
@@ -155,8 +166,8 @@ export default function SaveQuestionsToDeck({ failedIds, blankIds }: Props) {
       setBusyDeck(null)
       return
     }
+    // createStudioDeck ya lo ha puesto arriba de la lista compartida.
     const createdDeck = deck
-    setDecks((prev) => [createdDeck, ...(prev ?? [])])
     await doSave(token, String(createdDeck.id), createdDeck.name || name)
     setNewName(defaultDeckName())
   }
