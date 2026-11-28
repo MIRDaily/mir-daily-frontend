@@ -14,9 +14,11 @@ import {
   type StudioDeckError,
   addQuestionToDeck,
   createStudioDeck,
-  fetchStudioDecks,
+  fetchDeckSelector,
   isAutoFailedDeck,
+  markDeckUsed,
   removeQuestionFromDeck,
+  sortDecksByLastUse,
 } from '@/lib/studioDecks'
 
 type SaveToDeckButtonProps = {
@@ -165,7 +167,7 @@ export default function SaveToDeckButton({
   }, [])
 
   // Los mazos ya vienen anotados con `saved_item_id` (una sola peticion, ver
-  // fetchStudioDecks). Antes esto lanzaba una peticion POR MAZO y buscaba la
+  // fetchDeckSelector). Antes esto lanzaba una peticion POR MAZO y buscaba la
   // pregunta en el cliente.
   const applyMembership = useCallback(
     (deckList: StudioDeck[]) => {
@@ -184,6 +186,10 @@ export default function SaveToDeckButton({
       setOpen(false)
       return
     }
+    // Lo guardado desde la última apertura sube arriba, en el mismo render en
+    // que se abre (así no se ve el orden viejo ni un salto). Con el selector
+    // abierto el orden ya no cambia: ver markDeckUsed.
+    setDecks((prev) => (prev ? sortDecksByLastUse(prev) : prev))
     setOpen(true)
     const token = await getToken()
     if (!token) {
@@ -193,10 +199,10 @@ export default function SaveToDeckButton({
     setAuthed(true)
     try {
       setLoadingDecks(true)
-      // Una peticion para todo. Solo se repite si cambia la pregunta; si ya se
-      // sabe donde esta, se reutiliza lo que hay.
+      // Una peticion para todo, ya ordenada por ultimo uso. Solo se repite si
+      // cambia la pregunta; si ya se sabe donde esta, se reutiliza lo que hay.
       if (loadedForRef.current !== qid || !decks) {
-        const deckList = (await fetchStudioDecks(token, { questionId: qid })).filter(
+        const deckList = (await fetchDeckSelector(token, { questionId: qid })).filter(
           (deck) => deck.deleted_at == null && !isAutoFailedDeck(deck),
         )
         setDecks(deckList)
@@ -226,7 +232,7 @@ export default function SaveToDeckButton({
           // Si el POST no devolvió el id de la fila, se busca antes de borrar:
           // sin él la pregunta se quedaba en el mazo aunque dijera "Eliminada".
           if (!itemId) {
-            const annotated = await fetchStudioDecks(token, { questionId: qid })
+            const annotated = await fetchDeckSelector(token, { questionId: qid })
             const saved = annotated.find((deck) => String(deck.id) === deckId)?.saved_item_id
             itemId = saved != null ? String(saved) : null
           }
@@ -240,6 +246,7 @@ export default function SaveToDeckButton({
         // el mazo entero solo para poder deshacer.
         const savedItemId = await addQuestionToDeck(token, deckId, qid)
         markQuestionInDeck(qid, deckId, savedItemId ?? null)
+        setDecks((prev) => (prev ? markDeckUsed(prev, deckId) : prev))
         showFeedback('success', `Añadida a ${deckName}`)
       } catch (err) {
         console.error(err)
@@ -271,7 +278,8 @@ export default function SaveToDeckButton({
     try {
       setCreating(true)
       const created = (await createStudioDeck(token, trimmed)) as { deck?: StudioDeck } | null
-      const deckList = (await fetchStudioDecks(token, { questionId: qid })).filter(
+      // El mazo nuevo sale arriba: aún sin guardados, cuenta desde su creación.
+      const deckList = (await fetchDeckSelector(token, { questionId: qid })).filter(
         (deck) => deck.deleted_at == null && !isAutoFailedDeck(deck),
       )
       setDecks(deckList)
@@ -283,6 +291,7 @@ export default function SaveToDeckButton({
         const deckId = String(created.deck.id)
         const savedItemId = await addQuestionToDeck(token, deckId, qid)
         markQuestionInDeck(qid, deckId, savedItemId ?? null)
+        setDecks((prev) => (prev ? markDeckUsed(prev, deckId) : prev))
         showFeedback('success', `Añadida a ${created.deck.name || trimmed}`)
       } else {
         showFeedback('success', 'Mazo creado')
