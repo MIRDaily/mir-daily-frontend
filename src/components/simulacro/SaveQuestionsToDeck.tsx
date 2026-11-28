@@ -14,8 +14,10 @@ import {
   type StudioDeckError,
   addQuestionsToDeck,
   createStudioDeck,
-  fetchStudioDecks,
+  fetchDeckSelector,
   isAutoFailedDeck,
+  markDeckUsed,
+  sortDecksByLastUse,
 } from '@/lib/studioDecks'
 import { markQuestionInDeck } from '@/lib/studio/savedQuestionsStore'
 
@@ -73,6 +75,9 @@ export default function SaveQuestionsToDeck({ failedIds, blankIds }: Props) {
       setOpen(false)
       return
     }
+    // Los mazos se piden una vez; al volver a abrir, lo guardado entretanto sube
+    // arriba (con el menú abierto el orden no cambia: ver markDeckUsed).
+    setDecks((prev) => (prev ? sortDecksByLastUse(prev) : prev))
     setOpen(true)
     setFeedback(null)
     // Si no hay fallos pero sí blancos, se ofrece directamente con blancos.
@@ -85,7 +90,8 @@ export default function SaveQuestionsToDeck({ failedIds, blankIds }: Props) {
     }
     try {
       setLoading(true)
-      const list = await fetchStudioDecks(token)
+      // Ya ordenados por último uso: el último mazo en el que se guardó, arriba.
+      const list = await fetchDeckSelector(token)
       setDecks(list.filter((d) => d.deleted_at == null && !isAutoFailedDeck(d)))
     } catch {
       setFeedback({ ok: false, text: 'No se pudieron cargar los mazos.' })
@@ -103,6 +109,7 @@ export default function SaveQuestionsToDeck({ failedIds, blankIds }: Props) {
       for (const [qid, itemId] of Object.entries(res.items)) {
         markQuestionInDeck(qid, deckId, itemId)
       }
+      setDecks((prev) => (prev ? markDeckUsed(prev, deckId) : prev))
       setFeedback({
         ok: true,
         text:

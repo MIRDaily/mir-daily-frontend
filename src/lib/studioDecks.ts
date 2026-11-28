@@ -13,6 +13,9 @@ export type StudioDeck = {
   // esa pregunta ya esta guardada en este mazo, o null si no. Sin el parametro
   // el campo no existe.
   saved_item_id?: string | number | null
+  // Solo en el selector (fetchDeckSelector): último guardado en el mazo o, si
+  // nunca se guardó nada, su creación. Es lo que ordena el selector.
+  last_used_at?: string | null
 }
 
 // Límite de producto para la bio corta del mazo (la columna en BD es texto
@@ -72,6 +75,63 @@ export async function fetchStudioDecks(
   if (Array.isArray(payload)) return payload
   if (payload && Array.isArray(payload.decks)) return payload.decks
   return []
+}
+
+/**
+ * Mazos para el selector de «guardar en un mazo» (GET /api/studio/decks/selector):
+ * id, nombre y último uso, ya ordenados (el último mazo en el que se guardó,
+ * arriba) y sin el mazo de fallos. Con `questionId` cada mazo lleva además
+ * `saved_item_id`, como fetchStudioDecks.
+ *
+ * Es la versión ligera de fetchStudioDecks para lo que se abre en cada
+ * pregunta: aquella lee además las estadísticas que pinta la galería (repasos,
+ * precisión, recuento y asignaturas), unas siete llamadas a la base de datos
+ * por apertura; esta, como mucho tres.
+ */
+export async function fetchDeckSelector(
+  token: string,
+  options?: { questionId?: string | number | null },
+): Promise<StudioDeck[]> {
+  const questionId = options?.questionId
+  const qs =
+    questionId != null && String(questionId).trim() !== ''
+      ? `?questionId=${encodeURIComponent(String(questionId))}`
+      : ''
+
+  const res = await fetch(`${apiBase()}/api/studio/decks/selector${qs}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error('Error loading decks')
+
+  const payload = (await res.json().catch(() => null)) as StudioDecksPayload
+  if (Array.isArray(payload)) return payload
+  if (payload && Array.isArray(payload.decks)) return payload.decks
+  return []
+}
+
+function lastUseMs(deck: StudioDeck): number {
+  const ms = deck.last_used_at ? Date.parse(deck.last_used_at) : NaN
+  return Number.isNaN(ms) ? 0 : ms
+}
+
+/**
+ * El mismo orden que da el servidor (utils/selectorMazos.js del backend): el
+ * más reciente primero; a igualdad, el orden en que venían. Sirve para
+ * reordenar en local lo que ya se tiene, sin volver a pedirlo.
+ */
+export function sortDecksByLastUse(decks: StudioDeck[]): StudioDeck[] {
+  return [...decks].sort((a, b) => lastUseMs(b) - lastUseMs(a))
+}
+
+/**
+ * Apunta en local que se acaba de guardar en un mazo, SIN moverlo: mientras el
+ * selector está abierto el orden no cambia (si el mazo saltara arriba al
+ * pulsarlo, el siguiente clic caería en otro). Sube la próxima vez que se abra,
+ * al pasar la lista por sortDecksByLastUse.
+ */
+export function markDeckUsed(decks: StudioDeck[], deckId: string): StudioDeck[] {
+  const now = new Date().toISOString()
+  return decks.map((deck) => (String(deck.id) === deckId ? { ...deck, last_used_at: now } : deck))
 }
 
 export async function fetchStudioDeckItems(

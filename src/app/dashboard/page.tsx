@@ -20,10 +20,11 @@ import {
   type StudioDeckError,
   addQuestionToDeck,
   createStudioDeck,
-  fetchStudioDeckItems,
-  fetchStudioDecks,
+  fetchDeckSelector,
   isAutoFailedDeck,
+  markDeckUsed,
   removeQuestionFromDeck,
+  sortDecksByLastUse,
 } from '@/lib/studioDecks'
 import {
   markQuestionInDeck,
@@ -615,12 +616,10 @@ export default function DashboardPage() {
           let itemId: string | null = questionDeckItemIds[questionId]?.[deckId] ?? null
 
           if (!itemId) {
-            const items = await fetchStudioDeckItems(session.access_token, deckId)
-            const matched = items.find((item) => {
-              const itemQuestionId = item.question_id ?? item.questionId
-              return itemQuestionId != null && String(itemQuestionId) === questionId
-            })
-            itemId = matched ? String(matched.id) : null
+            // Una consulta ligera en vez de leerse el mazo entero para buscarla.
+            const annotated = await fetchDeckSelector(session.access_token, { questionId })
+            const saved = annotated.find((deck) => String(deck.id) === deckId)?.saved_item_id
+            itemId = saved != null ? String(saved) : null
           }
 
           if (!itemId) {
@@ -662,6 +661,8 @@ export default function DashboardPage() {
         const savedItemId = await addQuestionToDeck(session.access_token, deckId, questionId)
         // Lo guardado respondiendo sale ya marcado en la revisión del daily.
         markQuestionInDeck(questionId, deckId, savedItemId ?? null)
+        // Sube arriba la próxima vez que se abra el selector, no ahora.
+        setDecks((prev) => markDeckUsed(prev, deckId))
 
         setSavedQuestionIds((prev) => ({ ...prev, [questionId]: true }))
         setQuestionDeckMembership((prev) => ({
@@ -717,7 +718,7 @@ export default function DashboardPage() {
         // contesta "en que mazos esta esta pregunta". Antes se pedian los
         // items de CADA mazo y se buscaba en el cliente, asi que abrir el
         // selector costaba tantas peticiones como mazos tuviera el usuario.
-        const annotated = await fetchStudioDecks(session.access_token, { questionId })
+        const annotated = await fetchDeckSelector(session.access_token, { questionId })
 
         const results = annotated
           .filter((deck) => deck.deleted_at == null && !isAutoFailedDeck(deck))
@@ -763,6 +764,9 @@ export default function DashboardPage() {
         return
       }
 
+      // Lo guardado desde la última apertura sube arriba, en el mismo render en
+      // que se abre; con el selector abierto el orden ya no cambia.
+      setDecks((prev) => sortDecksByLastUse(prev))
       setShowSelectorFor(questionId)
       await loadQuestionMembership(questionId)
     },
@@ -787,7 +791,7 @@ export default function DashboardPage() {
       const created = (await createStudioDeck(session.access_token, trimmedName)) as
         | { deck?: { id: string | number; name?: string } }
         | null
-      const loadedDecks = await fetchStudioDecks(session.access_token)
+      const loadedDecks = await fetchDeckSelector(session.access_token)
       setDecks(loadedDecks.filter((deck) => deck.deleted_at == null))
       setNewDeckNameFromPopup('')
       setShowCreateDeckForm(false)
@@ -849,7 +853,8 @@ export default function DashboardPage() {
 
         if (!session || cancelled) return
 
-        const loadedDecks = await fetchStudioDecks(session.access_token)
+        // Solo para el selector de guardar: la versión ligera, ya ordenada.
+        const loadedDecks = await fetchDeckSelector(session.access_token)
         if (cancelled) return
 
         setDecks(loadedDecks.filter((deck) => deck.deleted_at == null))
