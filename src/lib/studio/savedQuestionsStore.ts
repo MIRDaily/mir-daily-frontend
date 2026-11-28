@@ -17,7 +17,6 @@
 // preguntas de los mazos, olvida las confirmaciones (src/app/decks/layout.tsx).
 
 import { useSyncExternalStore } from 'react'
-import { supabase } from '@/lib/supabaseBrowser'
 
 /** deckId -> itemId de la pregunta dentro de ese mazo. */
 export type DeckItemIds = Record<string, string>
@@ -28,7 +27,23 @@ const EMPTY: DeckItemIds = {}
 const byQuestion = new Map<string, DeckItemIds>()
 // Pregunta -> cuándo llegó del servidor la respuesta completa.
 const confirmedAt = new Map<string, number>()
+// Pregunta -> nº de cambios. Sube con cada escritura (del servidor o local):
+// la carga en lote (membershipBatch) lo apunta al salir y, si al volver ha
+// cambiado, no pisa esa pregunta con lo que trae, que ya es viejo.
+const version = new Map<string, number>()
+// Sube al vaciarlo todo (cambio de cuenta): lo que estuviera en vuelo era de
+// la cuenta anterior y no vale para ninguna pregunta.
+let generation = 0
 const listeners = new Set<() => void>()
+
+function bump(questionId: string) {
+  version.set(questionId, (version.get(questionId) ?? 0) + 1)
+}
+
+/** Huella de la pregunta en este almacén: cambia con cada escritura y al cambiar de cuenta. */
+export function getMembershipVersion(questionId: string): string {
+  return `${generation}:${version.get(questionId) ?? 0}`
+}
 
 function emit() {
   for (const listener of listeners) listener()
@@ -45,6 +60,19 @@ function subscribe(listener: () => void) {
 export function setQuestionDecks(questionId: string, itemIds: DeckItemIds) {
   byQuestion.set(questionId, itemIds)
   confirmedAt.set(questionId, Date.now())
+  bump(questionId)
+  emit()
+}
+
+/** Lo mismo para varias preguntas a la vez, con un solo aviso a React. */
+export function setManyQuestionDecks(entries: Array<[string, DeckItemIds]>) {
+  if (entries.length === 0) return
+  const now = Date.now()
+  for (const [questionId, itemIds] of entries) {
+    byQuestion.set(questionId, itemIds)
+    confirmedAt.set(questionId, now)
+    bump(questionId)
+  }
   emit()
 }
 
@@ -72,11 +100,13 @@ export function forgetConfirmedMemberships() {
 export function markQuestionInDeck(questionId: string, deckId: string, itemId: string | null) {
   const prev = byQuestion.get(questionId) ?? EMPTY
   byQuestion.set(questionId, { ...prev, [deckId]: itemId ?? '' })
+  bump(questionId)
   emit()
 }
 
 export function unmarkQuestionInDeck(questionId: string, deckId: string) {
   const prev = byQuestion.get(questionId)
+  bump(questionId)
   if (!prev || !(deckId in prev)) return
   const next = { ...prev }
   delete next[deckId]
@@ -93,20 +123,28 @@ export function useQuestionDecks(questionId: string): DeckItemIds {
   )
 }
 
+/** Olvida todo (cambio de cuenta). */
+export function resetSavedQuestions() {
+  confirmedAt.clear()
+  // Una carga en lote aún en vuelo verá otra huella y no aplicará nada.
+  generation += 1
+  if (byQuestion.size > 0) {
+    byQuestion.clear()
+    emit()
+  }
+}
+
 // Al cambiar de cuenta (o cerrar sesión) lo apuntado era de otro usuario. Se
 // mira el id y no el evento: supabase repite SIGNED_IN al volver a la pestaña,
-// y eso no debe borrar nada.
+// y eso no debe borrar nada. El cliente se importa aquí dentro para que el
+// módulo se pueda probar en Node sin variables de Supabase.
 if (typeof window !== 'undefined') {
-  let currentUserId: string | null | undefined
-  supabase.auth.onAuthStateChange((_event, session) => {
-    const userId = session?.user?.id ?? null
-    if (currentUserId !== undefined && userId !== currentUserId) {
-      confirmedAt.clear()
-      if (byQuestion.size > 0) {
-        byQuestion.clear()
-        emit()
-      }
-    }
-    currentUserId = userId
+  void import('@/lib/supabaseBrowser').then(({ supabase }) => {
+    let currentUserId: string | null | undefined
+    supabase.auth.onAuthStateChange((_event, session) => {
+      const userId = session?.user?.id ?? null
+      if (currentUserId !== undefined && userId !== currentUserId) resetSavedQuestions()
+      currentUserId = userId
+    })
   })
 }
