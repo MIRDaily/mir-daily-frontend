@@ -20,17 +20,28 @@ import {
   type StudioDeckError,
   addQuestionToDeck,
   createStudioDeck,
-  fetchDeckSelector,
+  fetchQuestionMembership,
   isAutoFailedDeck,
-  markDeckUsed,
   removeQuestionFromDeck,
-  sortDecksByLastUse,
 } from '@/lib/studioDecks'
 import {
+  hasFreshPickerDecks,
+  loadPickerDecks,
+  markPickerDeckUsed,
+  markPickerDecksStale,
+  sortPickerDecks,
+  usePickerDecks,
+} from '@/lib/studio/deckPickerStore'
+import {
+  getQuestionDecks,
+  isQuestionMembershipKnown,
   markQuestionInDeck,
   setQuestionDecks,
   unmarkQuestionInDeck,
 } from '@/lib/studio/savedQuestionsStore'
+
+// Referencia estable mientras la lista de mazos no se ha cargado.
+const NO_DECKS: StudioDeck[] = []
 import { parseApiError } from '@/lib/profile'
 import { getOnboardingDeferredFlag } from '@/lib/onboarding'
 import { useTutorialReady } from '@/providers/TutorialProvider'
@@ -401,7 +412,9 @@ export default function DashboardPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [authMessage, setAuthMessage] = useState<string | null>(null)
-  const [decks, setDecks] = useState<StudioDeck[]>([])
+  // Lista de mazos del selector de guardar: compartida con el resto de
+  // selectores de la pestaña y pedida una sola vez (deckPickerStore).
+  const decks = usePickerDecks() ?? NO_DECKS
   const [showSelectorFor, setShowSelectorFor] = useState<string | null>(null)
   // Guardado por mazo (clave `questionId::deckId`): permite guardar en varios
   // mazos a la vez, cada uno con su propio spinner, sin bloquear el popup.
@@ -617,9 +630,8 @@ export default function DashboardPage() {
 
           if (!itemId) {
             // Una consulta ligera en vez de leerse el mazo entero para buscarla.
-            const annotated = await fetchDeckSelector(session.access_token, { questionId })
-            const saved = annotated.find((deck) => String(deck.id) === deckId)?.saved_item_id
-            itemId = saved != null ? String(saved) : null
+            const items = await fetchQuestionMembership(session.access_token, questionId)
+            itemId = items[deckId] ?? null
           }
 
           if (!itemId) {
@@ -662,7 +674,7 @@ export default function DashboardPage() {
         // Lo guardado respondiendo sale ya marcado en la revisión del daily.
         markQuestionInDeck(questionId, deckId, savedItemId ?? null)
         // Sube arriba la próxima vez que se abra el selector, no ahora.
-        setDecks((prev) => markDeckUsed(prev, deckId))
+        markPickerDeckUsed(deckId)
 
         setSavedQuestionIds((prev) => ({ ...prev, [questionId]: true }))
         setQuestionDeckMembership((prev) => ({
@@ -684,6 +696,13 @@ export default function DashboardPage() {
         showSaveQuestionFeedback('success', `Añadida a ${deckName}`)
       } catch (err) {
         console.error(err)
+        // Borrado en otra pestaña o dispositivo: la próxima apertura vuelve a
+        // pedir la lista y ya no saldrá.
+        if ((err as StudioDeckError | null)?.status === 404) {
+          markPickerDecksStale()
+          showSaveQuestionFeedback('error', `${deckName} ya no existe`)
+          return
+        }
         // Mazo lleno: se dice, con el limite real que manda el servidor, en vez
         // de un "error" generico que no explica nada.
         const motivo = (err as StudioDeckError | null)?.limitReached
@@ -703,8 +722,32 @@ export default function DashboardPage() {
 
   const loadQuestionMembership = useCallback(
     async (questionId: string) => {
-      if (!user || decks.length === 0) return
+      if (!user) return
       if (questionDeckMembership[questionId]) return
+
+      // deckId -> itemId a los mapas del daily. Un itemId vacío es "está, pero
+      // sin id de fila" (lo apuntado en local): cuenta como guardada y, al
+      // quitarla, se busca el id.
+      const applyItemIds = (known: Record<string, string>) => {
+        const membershipMap = Object.fromEntries(
+          Object.keys(known).map((deckId) => [deckId, true]),
+        ) as Record<string, boolean>
+        const itemIdMap = Object.fromEntries(
+          Object.entries(known).filter(([, itemId]) => Boolean(itemId)),
+        ) as Record<string, string>
+        setQuestionDeckMembership((prev) => ({ ...prev, [questionId]: membershipMap }))
+        setQuestionDeckItemIds((prev) => ({ ...prev, [questionId]: itemIdMap }))
+        setSavedQuestionIds((prev) => ({
+          ...prev,
+          [questionId]: Object.keys(membershipMap).length > 0,
+        }))
+      }
+
+      // Ya se sabe por el servidor (p. ej. desde la revisión): sin petición.
+      if (isQuestionMembershipKnown(questionId)) {
+        applyItemIds(getQuestionDecks(questionId))
+        return
+      }
 
       try {
         setCheckingMembershipQuestionId(questionId)
@@ -714,48 +757,36 @@ export default function DashboardPage() {
 
         if (!session) return
 
-        // Los mazos vuelven anotados con `saved_item_id`: una sola peticion
-        // contesta "en que mazos esta esta pregunta". Antes se pedian los
-        // items de CADA mazo y se buscaba en el cliente, asi que abrir el
-        // selector costaba tantas peticiones como mazos tuviera el usuario.
-        const annotated = await fetchDeckSelector(session.access_token, { questionId })
-
-        const results = annotated
-          .filter((deck) => deck.deleted_at == null && !isAutoFailedDeck(deck))
-          .map((deck) => {
-            const deckId = String(deck.id)
-            const savedItemId = deck.saved_item_id
-            return [deckId, savedItemId != null ? String(savedItemId) : null] as const
-          })
-
-        const membershipMap = Object.fromEntries(
-          results.map(([deckId, itemId]) => [deckId, Boolean(itemId)]),
-        ) as Record<string, boolean>
-        const itemIdMap = Object.fromEntries(
-          results.filter(([, itemId]) => Boolean(itemId)) as Array<[string, string]>,
-        )
-
-        setQuestionDeckMembership((prev) => ({
-          ...prev,
-          [questionId]: membershipMap,
-        }))
+        // Solo dónde está la pregunta (una consulta): la lista de mazos ya la
+        // tiene deckPickerStore.
+        const itemIdMap = await fetchQuestionMembership(session.access_token, questionId)
         setQuestionDecks(questionId, itemIdMap)
-        setQuestionDeckItemIds((prev) => ({
-          ...prev,
-          [questionId]: itemIdMap,
-        }))
-        setSavedQuestionIds((prev) => ({
-          ...prev,
-          [questionId]: Object.values(membershipMap).some(Boolean),
-        }))
+        applyItemIds(itemIdMap)
       } catch (err) {
         console.error(err)
       } finally {
         setCheckingMembershipQuestionId((prev) => (prev === questionId ? null : prev))
       }
     },
-    [decks, questionDeckMembership, user],
+    [questionDeckMembership, user],
   )
+
+  // La lista de mazos, si no está o caducó. Una vez para toda la pestaña.
+  const ensurePickerDecks = useCallback(async () => {
+    if (hasFreshPickerDecks()) return
+    try {
+      setLoadingDecks(true)
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session) return
+      await loadPickerDecks(session.access_token)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoadingDecks(false)
+    }
+  }, [])
 
   const handleToggleQuestionDeckSelector = useCallback(
     async (questionId: string) => {
@@ -766,11 +797,11 @@ export default function DashboardPage() {
 
       // Lo guardado desde la última apertura sube arriba, en el mismo render en
       // que se abre; con el selector abierto el orden ya no cambia.
-      setDecks((prev) => sortDecksByLastUse(prev))
+      sortPickerDecks()
       setShowSelectorFor(questionId)
-      await loadQuestionMembership(questionId)
+      await Promise.all([ensurePickerDecks(), loadQuestionMembership(questionId)])
     },
-    [loadQuestionMembership, showSelectorFor],
+    [ensurePickerDecks, loadQuestionMembership, showSelectorFor],
   )
 
   const handleCreateDeckFromPopup = useCallback(async () => {
@@ -788,11 +819,11 @@ export default function DashboardPage() {
         return
       }
 
+      // Entra arriba de la lista compartida sin volver a pedirla
+      // (createStudioDeck avisa a deckPickerStore).
       const created = (await createStudioDeck(session.access_token, trimmedName)) as
         | { deck?: { id: string | number; name?: string } }
         | null
-      const loadedDecks = await fetchDeckSelector(session.access_token)
-      setDecks(loadedDecks.filter((deck) => deck.deleted_at == null))
       setNewDeckNameFromPopup('')
       setShowCreateDeckForm(false)
       // Se crea para guardar la pregunta que se está viendo: sin añadirla aquí,
@@ -839,41 +870,13 @@ export default function DashboardPage() {
     setNewDeckNameFromPopup('')
   }, [showSelectorFor])
 
+  // Se adelanta la lista al empezar el daily para que el primer popup salga ya
+  // pintado. Si otro selector de la pestaña ya la tenía, no se pide nada.
   useEffect(() => {
     if (!showQuiz || authLoading || !user || hasLoadedDailyDecksRef.current) return
-
-    let cancelled = false
-
-    const loadDecksForBookmark = async () => {
-      try {
-        setLoadingDecks(true)
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-
-        if (!session || cancelled) return
-
-        // Solo para el selector de guardar: la versión ligera, ya ordenada.
-        const loadedDecks = await fetchDeckSelector(session.access_token)
-        if (cancelled) return
-
-        setDecks(loadedDecks.filter((deck) => deck.deleted_at == null))
-        hasLoadedDailyDecksRef.current = true
-      } catch (err) {
-        console.error(err)
-      } finally {
-        if (!cancelled) {
-          setLoadingDecks(false)
-        }
-      }
-    }
-
-    void loadDecksForBookmark()
-
-    return () => {
-      cancelled = true
-    }
-  }, [authLoading, showQuiz, user])
+    hasLoadedDailyDecksRef.current = true
+    void ensurePickerDecks()
+  }, [authLoading, ensurePickerDecks, showQuiz, user])
 
   if (!API_URL) {
     throw new Error('API_URL no definida: revisa variables de entorno')

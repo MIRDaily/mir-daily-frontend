@@ -4,6 +4,15 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom'
 import { supabase } from '@/lib/supabaseBrowser'
 import {
+  hasFreshPickerDecks,
+  loadPickerDecks,
+  markPickerDeckUsed,
+  markPickerDecksStale,
+  sortPickerDecks,
+  usePickerDecks,
+} from '@/lib/studio/deckPickerStore'
+import {
+  isQuestionMembershipKnown,
   markQuestionInDeck,
   setQuestionDecks,
   unmarkQuestionInDeck,
@@ -14,11 +23,8 @@ import {
   type StudioDeckError,
   addQuestionToDeck,
   createStudioDeck,
-  fetchDeckSelector,
-  isAutoFailedDeck,
-  markDeckUsed,
+  fetchQuestionMembership,
   removeQuestionFromDeck,
-  sortDecksByLastUse,
 } from '@/lib/studioDecks'
 
 type SaveToDeckButtonProps = {
@@ -39,14 +45,14 @@ export default function SaveToDeckButton({
   const qid = String(questionId)
 
   const [open, setOpen] = useState(false)
-  const [decks, setDecks] = useState<StudioDeck[] | null>(null)
+  // La lista de mazos es la misma para todos los selectores de la pestaña y se
+  // pide una vez (ver deckPickerStore), no en cada pregunta.
+  const decks = usePickerDecks()
   const [loadingDecks, setLoadingDecks] = useState(false)
   // En qué mazos está la pregunta. Vive fuera del botón (ver
   // savedQuestionsStore) para que el marcador no se pierda al cambiar de
   // pregunta y volver, ni al pasar del simulacro a los resultados.
   const knownDecks = useQuestionDecks(qid)
-  // Pregunta para la que ya se pidió el estado real al servidor.
-  const loadedForRef = useRef<string | null>(null)
   // Guardado por mazo (clave = deckId): permite guardar en varios a la vez,
   // cada uno con su spinner, sin bloquear el popup.
   const [pendingDecks, setPendingDecks] = useState<Record<string, boolean>>({})
@@ -75,7 +81,6 @@ export default function SaveToDeckButton({
   // Al cambiar de pregunta se cierra el popover (los mazos sí se cachean entre
   // preguntas, y lo sabido de cada pregunta está en el store).
   useEffect(() => {
-    loadedForRef.current = null
     setShowCreateForm(false)
     setNewDeckName('')
     setPendingDecks({})
@@ -166,21 +171,6 @@ export default function SaveToDeckButton({
     return session?.access_token ?? null
   }, [])
 
-  // Los mazos ya vienen anotados con `saved_item_id` (una sola peticion, ver
-  // fetchDeckSelector). Antes esto lanzaba una peticion POR MAZO y buscaba la
-  // pregunta en el cliente.
-  const applyMembership = useCallback(
-    (deckList: StudioDeck[]) => {
-      const itemIds: Record<string, string> = {}
-      for (const deck of deckList) {
-        if (deck.saved_item_id != null) itemIds[String(deck.id)] = String(deck.saved_item_id)
-      }
-      setQuestionDecks(qid, itemIds)
-      loadedForRef.current = qid
-    },
-    [qid],
-  )
-
   const handleToggleSelector = useCallback(async () => {
     if (open) {
       setOpen(false)
@@ -188,8 +178,8 @@ export default function SaveToDeckButton({
     }
     // Lo guardado desde la última apertura sube arriba, en el mismo render en
     // que se abre (así no se ve el orden viejo ni un salto). Con el selector
-    // abierto el orden ya no cambia: ver markDeckUsed.
-    setDecks((prev) => (prev ? sortDecksByLastUse(prev) : prev))
+    // abierto el orden ya no cambia: ver markPickerDeckUsed.
+    sortPickerDecks()
     setOpen(true)
     const token = await getToken()
     if (!token) {
@@ -197,24 +187,29 @@ export default function SaveToDeckButton({
       return
     }
     setAuthed(true)
+
+    // Solo se pide lo que falta: la lista, si no está o caducó (una vez para
+    // toda la pestaña), y dónde está ESTA pregunta, si no se sabe ya. Volver a
+    // abrir una pregunta ya consultada no cuesta ninguna petición.
+    const needDecks = !hasFreshPickerDecks()
+    const needMembership = !isQuestionMembershipKnown(qid)
+    if (!needDecks && !needMembership) return
+
     try {
       setLoadingDecks(true)
-      // Una peticion para todo, ya ordenada por ultimo uso. Solo se repite si
-      // cambia la pregunta; si ya se sabe donde esta, se reutiliza lo que hay.
-      if (loadedForRef.current !== qid || !decks) {
-        const deckList = (await fetchDeckSelector(token, { questionId: qid })).filter(
-          (deck) => deck.deleted_at == null && !isAutoFailedDeck(deck),
-        )
-        setDecks(deckList)
-        applyMembership(deckList)
-      }
+      await Promise.all([
+        needDecks ? loadPickerDecks(token) : null,
+        needMembership
+          ? fetchQuestionMembership(token, qid).then((items) => setQuestionDecks(qid, items))
+          : null,
+      ])
     } catch (err) {
       console.error(err)
       showFeedback('error', 'Error al cargar los mazos')
     } finally {
       setLoadingDecks(false)
     }
-  }, [open, decks, getToken, applyMembership, qid, showFeedback])
+  }, [open, getToken, qid, showFeedback])
 
   const handleToggleInDeck = useCallback(
     async (deckId: string, deckName: string) => {
@@ -232,9 +227,8 @@ export default function SaveToDeckButton({
           // Si el POST no devolvió el id de la fila, se busca antes de borrar:
           // sin él la pregunta se quedaba en el mazo aunque dijera "Eliminada".
           if (!itemId) {
-            const annotated = await fetchDeckSelector(token, { questionId: qid })
-            const saved = annotated.find((deck) => String(deck.id) === deckId)?.saved_item_id
-            itemId = saved != null ? String(saved) : null
+            const items = await fetchQuestionMembership(token, qid)
+            itemId = items[deckId] ?? null
           }
           if (itemId) await removeQuestionFromDeck(token, deckId, itemId)
           unmarkQuestionInDeck(qid, deckId)
@@ -246,15 +240,22 @@ export default function SaveToDeckButton({
         // el mazo entero solo para poder deshacer.
         const savedItemId = await addQuestionToDeck(token, deckId, qid)
         markQuestionInDeck(qid, deckId, savedItemId ?? null)
-        setDecks((prev) => (prev ? markDeckUsed(prev, deckId) : prev))
+        markPickerDeckUsed(deckId)
         showFeedback('success', `Añadida a ${deckName}`)
       } catch (err) {
         console.error(err)
+        const deckError = err as StudioDeckError | null
+        // Borrado en otra pestaña o dispositivo: la lista en memoria estaba
+        // vieja. Se vuelve a pedir para que desaparezca.
+        if (deckError?.status === 404) {
+          markPickerDecksStale()
+          void loadPickerDecks(token).catch(() => {})
+          showFeedback('error', `${deckName} ya no existe`)
+          return
+        }
         // El mazo lleno no es un fallo tecnico: se dice lo que pasa, con el
         // limite real que manda el servidor.
-        const motivo = (err as StudioDeckError | null)?.limitReached
-          ? (err as Error).message
-          : 'Error al actualizar el mazo'
+        const motivo = deckError?.limitReached ? (err as Error).message : 'Error al actualizar el mazo'
         showFeedback('error', motivo)
       } finally {
         setPendingDecks((prev) => {
@@ -277,12 +278,9 @@ export default function SaveToDeckButton({
     }
     try {
       setCreating(true)
+      // El mazo nuevo entra arriba de la lista compartida sin volver a pedirla
+      // (createStudioDeck avisa a deckPickerStore).
       const created = (await createStudioDeck(token, trimmed)) as { deck?: StudioDeck } | null
-      // El mazo nuevo sale arriba: aún sin guardados, cuenta desde su creación.
-      const deckList = (await fetchDeckSelector(token, { questionId: qid })).filter(
-        (deck) => deck.deleted_at == null && !isAutoFailedDeck(deck),
-      )
-      setDecks(deckList)
       setNewDeckName('')
       setShowCreateForm(false)
       // Se crea para guardar esta pregunta: sin añadirla, el aviso decía
@@ -291,7 +289,7 @@ export default function SaveToDeckButton({
         const deckId = String(created.deck.id)
         const savedItemId = await addQuestionToDeck(token, deckId, qid)
         markQuestionInDeck(qid, deckId, savedItemId ?? null)
-        setDecks((prev) => (prev ? markDeckUsed(prev, deckId) : prev))
+        markPickerDeckUsed(deckId)
         showFeedback('success', `Añadida a ${created.deck.name || trimmed}`)
       } else {
         showFeedback('success', 'Mazo creado')

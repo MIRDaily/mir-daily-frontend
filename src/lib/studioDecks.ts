@@ -153,7 +153,9 @@ export async function fetchStudioDeckItems(
 // solo sabia "ha fallado algo": el tope del mazo (400 con limitReached) se
 // mostraba igual que una caida de red, asi que el usuario veia "error al
 // actualizar el mazo" sin entender que su mazo estaba lleno.
-export type StudioDeckError = Error & { limitReached?: boolean }
+// `status` permite distinguir un mazo que ya no existe (404: se borró en otra
+// pestaña o dispositivo) para refrescar la lista del selector.
+export type StudioDeckError = Error & { limitReached?: boolean; status?: number }
 
 async function throwStudioError(res: Response, fallback: string): Promise<never> {
   const payload = (await res.json().catch(() => null)) as {
@@ -167,8 +169,48 @@ async function throwStudioError(res: Response, fallback: string): Promise<never>
   const err = new Error(payload?.error?.trim() || fallback) as StudioDeckError
 
   if (payload?.limitReached) err.limitReached = true
+  err.status = res.status
 
   throw err
+}
+
+/**
+ * En qué mazos está una pregunta (GET /api/studio/decks/membership): deckId ->
+ * id de la fila. Solo eso, sin la lista de mazos, que el selector ya tiene en
+ * memoria (deckPickerStore). Una consulta a la base de datos en el servidor.
+ */
+export async function fetchQuestionMembership(
+  token: string,
+  questionId: string | number,
+): Promise<Record<string, string>> {
+  const res = await fetch(
+    `${apiBase()}/api/studio/decks/membership?questionId=${encodeURIComponent(String(questionId))}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  )
+  if (!res.ok) throw new Error('Error loading deck membership')
+
+  const payload = (await res.json().catch(() => null)) as {
+    items?: Record<string, string | number>
+  } | null
+
+  const items: Record<string, string> = {}
+  for (const [deckId, itemId] of Object.entries(payload?.items ?? {})) {
+    if (itemId != null) items[deckId] = String(itemId)
+  }
+  return items
+}
+
+// Aviso de que se ha creado un mazo desde aquí, para que la lista del selector
+// en memoria (deckPickerStore) lo añada sin volver a pedirla. Va por oyentes y
+// no por import directo para no crear un ciclo entre los dos módulos.
+type DeckCreatedListener = (deck: StudioDeck) => void
+const deckCreatedListeners = new Set<DeckCreatedListener>()
+
+export function onStudioDeckCreated(listener: DeckCreatedListener): () => void {
+  deckCreatedListeners.add(listener)
+  return () => {
+    deckCreatedListeners.delete(listener)
+  }
 }
 
 export async function addQuestionToDeck(
@@ -301,5 +343,9 @@ export async function createStudioDeck(token: string, name: string) {
     body: JSON.stringify({ name }),
   })
   if (!res.ok) throw new Error('Error creating deck')
-  return res.json().catch(() => null)
+  const payload = (await res.json().catch(() => null)) as { deck?: StudioDeck } | null
+  if (payload?.deck) {
+    for (const listener of deckCreatedListeners) listener(payload.deck)
+  }
+  return payload
 }
