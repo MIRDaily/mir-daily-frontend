@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { MAX_SECONDS_PER_QUESTION, SLEEP_GAP_MS } from '@/lib/useQuestionStopwatch'
@@ -80,6 +80,9 @@ export default function SimulacroRunner({
 
   const total = questions.length
   const current = questions[index]
+  // Para el marcador de guardar: la primera apertura pregunta de una vez por
+  // todas las del simulacro (ver SaveToDeckButton / membershipBatch).
+  const questionIds = useMemo(() => questions.map((q) => String(q.id)), [questions])
   const selected = answers[index]?.selectedIndex ?? null
   const blanked = answers[index]?.blank === true
   const result = results[index] ?? null
@@ -376,7 +379,7 @@ export default function SimulacroRunner({
                   flag
                 </span>
               </button>
-              <SaveToDeckButton questionId={current.id} compact />
+              <SaveToDeckButton questionId={current.id} batchQuestionIds={questionIds} compact />
               {/* Hasta corregirla no ha visto la clave: en modo examen, o
                   antes de "Comprobar", cuenta como sin responder. */}
               <ReportButton

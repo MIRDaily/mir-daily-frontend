@@ -11,6 +11,7 @@ import {
   sortPickerDecks,
   usePickerDecks,
 } from '@/lib/studio/deckPickerStore'
+import { loadMembershipBatch } from '@/lib/studio/membershipBatch'
 import {
   isQuestionMembershipKnown,
   markQuestionInDeck,
@@ -32,6 +33,13 @@ type SaveToDeckButtonProps = {
   className?: string
   /** Más pequeño (36 px), para colocarlo en una barra. */
   compact?: boolean
+  /**
+   * Todas las preguntas de la pantalla (las del simulacro, de la revisión...).
+   * Con ellas, la primera apertura pregunta de una vez en qué mazos está cada
+   * una (membershipBatch) y las demás aperturas no piden nada. Sin ellas, se
+   * pregunta solo por esta.
+   */
+  batchQuestionIds?: readonly string[]
 }
 
 // Botón "guardar pregunta en un mazo" reutilizable (misma UX que el daily del
@@ -41,6 +49,7 @@ export default function SaveToDeckButton({
   questionId,
   className,
   compact = false,
+  batchQuestionIds,
 }: SaveToDeckButtonProps) {
   const qid = String(questionId)
 
@@ -195,13 +204,26 @@ export default function SaveToDeckButton({
     const needMembership = !isQuestionMembershipKnown(qid)
     if (!needDecks && !needMembership) return
 
+    // Con las preguntas de la pantalla, de golpe las de todo el simulacro. Si
+    // el lote falla, o esta pregunta cambió con él en vuelo (y por eso no se
+    // aplicó), se pregunta solo por ella.
+    const loadMembership = async () => {
+      if (batchQuestionIds && batchQuestionIds.length > 1) {
+        try {
+          await loadMembershipBatch(token, [qid, ...batchQuestionIds])
+        } catch (err) {
+          console.error(err)
+        }
+        if (isQuestionMembershipKnown(qid)) return
+      }
+      setQuestionDecks(qid, await fetchQuestionMembership(token, qid))
+    }
+
     try {
       setLoadingDecks(true)
       await Promise.all([
         needDecks ? loadPickerDecks(token) : null,
-        needMembership
-          ? fetchQuestionMembership(token, qid).then((items) => setQuestionDecks(qid, items))
-          : null,
+        needMembership ? loadMembership() : null,
       ])
     } catch (err) {
       console.error(err)
@@ -209,7 +231,7 @@ export default function SaveToDeckButton({
     } finally {
       setLoadingDecks(false)
     }
-  }, [open, getToken, qid, showFeedback])
+  }, [open, getToken, qid, showFeedback, batchQuestionIds])
 
   const handleToggleInDeck = useCallback(
     async (deckId: string, deckName: string) => {

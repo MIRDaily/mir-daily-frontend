@@ -149,6 +149,10 @@ export default function SimulacroResultsGrid({
     [questions, answers, results],
   )
 
+  // Para el marcador de guardar: la primera apertura pregunta de una vez por
+  // todas las del simulacro (ver SaveToDeckButton / membershipBatch).
+  const questionIds = useMemo(() => questions.map((q) => String(q.id)), [questions])
+
   const stats = useMemo(() => {
     const count = { correct: 0, incorrect: 0, empty: 0, annulled: 0 }
     for (const s of statuses) count[s] += 1
@@ -492,7 +496,7 @@ export default function SimulacroResultsGrid({
                 <div className="flex shrink-0 items-center gap-1">
                   {/* Guardar desde el repaso: es justo cuando se ve el fallo
                       y se decide que hay que volver a ella (como en la app). */}
-                  <SaveToDeckButton questionId={activeQuestion.id} />
+                  <SaveToDeckButton questionId={activeQuestion.id} batchQuestionIds={questionIds} />
                   <ReportButton
                     target={{ type: 'question', questionId: activeQuestion.id }}
                     context={{

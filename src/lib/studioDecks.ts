@@ -200,6 +200,42 @@ export async function fetchQuestionMembership(
   return items
 }
 
+// Tope del backend por petición (MAX_PREGUNTAS_POR_LOTE): un MIR son 210.
+export const MEMBERSHIP_BATCH_MAX = 250
+
+/**
+ * En qué mazos está cada pregunta de una lista (POST
+ * /api/studio/decks/membership/batch): questionId -> (deckId -> id de la fila).
+ * Las que no están en ningún mazo no aparecen. Un simulacro de hasta 250
+ * preguntas es una sola petición; si hubiera más, se trocea aquí.
+ */
+export async function fetchQuestionsMembership(
+  token: string,
+  questionIds: Array<string | number>,
+): Promise<Record<string, Record<string, string>>> {
+  const ids = [...new Set(questionIds.map((id) => String(id)))]
+  const out: Record<string, Record<string, string>> = {}
+  for (let i = 0; i < ids.length; i += MEMBERSHIP_BATCH_MAX) {
+    const res = await fetch(`${apiBase()}/api/studio/decks/membership/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ questionIds: ids.slice(i, i + MEMBERSHIP_BATCH_MAX) }),
+    })
+    if (!res.ok) throw new Error('Error loading deck membership')
+    const payload = (await res.json().catch(() => null)) as {
+      items?: Record<string, Record<string, string | number>>
+    } | null
+    for (const [questionId, decks] of Object.entries(payload?.items ?? {})) {
+      const items: Record<string, string> = {}
+      for (const [deckId, itemId] of Object.entries(decks ?? {})) {
+        if (itemId != null) items[deckId] = String(itemId)
+      }
+      out[questionId] = items
+    }
+  }
+  return out
+}
+
 // Aviso de que se ha creado un mazo desde aquí, para que la lista del selector
 // en memoria (deckPickerStore) lo añada sin volver a pedirla. Va por oyentes y
 // no por import directo para no crear un ciclo entre los dos módulos.
